@@ -1,0 +1,25 @@
+{
+  "id": "1f58b8d4-3229-4d77-bbdc-074e688022c9",
+  "version": "0.1.0",
+  "platform": "all",
+  "arch": "all",
+  "name": "Media Preview Server",
+  "description": "A local media server for your Eagle library.",
+  "logo": "/plugin/assets/icon_on.png",
+  "keywords": ["viewer", "lan", "server", "nas"],
+  "devTools": false,
+  "main": {
+    "serviceMode": true,
+    "url": "plugin/index.html",
+    "width": 600,
+    "height": 600,
+    "minWidth": 600,
+    "minHeight": 600,
+    "frame": false,
+    "resizable": false,
+    "maximizable": false,
+    "fullscreenable": false,
+    "multiple": false,
+    "backgroundColor": "#f6f8fb"
+  }
+}

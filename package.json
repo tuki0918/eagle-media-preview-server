@@ -1,0 +1,15 @@
+{
+  "name": "eagle-media-preview-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "qrcode-generator": "^1.4.4"
+  }
+}
