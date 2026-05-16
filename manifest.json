@@ -4,7 +4,7 @@
   "platform": "all",
   "arch": "all",
   "name": "Media Preview Server",
-  "description": "A local media server for your Eagle library.",
+  "description": "A local media preview server for your Eagle library.",
   "logo": "/plugin/assets/icon_on.png",
   "keywords": ["viewer", "lan", "server", "nas"],
   "devTools": false,
