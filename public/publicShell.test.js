@@ -175,6 +175,17 @@ test("public grid thumbnail hover icon uses play for video and audio", async () 
   assert.doesNotMatch(app, /mediaType === "image" \? "maximize-2"/);
 });
 
+test("public status line no longer renders page count UI", async () => {
+  const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
+  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
+  const css = await readFile(new URL("./styles.css", import.meta.url), "utf8");
+
+  assert.doesNotMatch(html, /id="pageInfo"/);
+  assert.doesNotMatch(app, /pageInfo:\s*document\.querySelector\("#pageInfo"\)/);
+  assert.doesNotMatch(app, /els\.pageInfo\.textContent/);
+  assert.doesNotMatch(css, /#pageInfo/);
+});
+
 test("public shell uses Media Preview Server branding and serves a favicon", async () => {
   const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
   await access(new URL("./favicon.ico", import.meta.url));

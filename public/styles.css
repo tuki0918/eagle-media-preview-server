@@ -358,10 +358,6 @@ select:hover {
   justify-self: end;
 }
 
-#pageInfo {
-  justify-self: center;
-}
-
 .status-actions .view-toggle {
   justify-self: end;
 }
@@ -1716,12 +1712,6 @@ select:hover {
     justify-content: flex-end;
     gap: 8px;
     min-width: 0;
-  }
-
-  #pageInfo {
-    justify-self: center;
-    text-align: center;
-    white-space: nowrap;
   }
 
   #resultCount {

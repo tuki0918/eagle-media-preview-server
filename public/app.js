@@ -101,7 +101,6 @@ const els = {
   gridViewButton: document.querySelector("#gridViewButton"),
   tableViewButton: document.querySelector("#tableViewButton"),
   resultCount: document.querySelector("#resultCount"),
-  pageInfo: document.querySelector("#pageInfo"),
   libraryFooterName: document.querySelector("#libraryFooterName"),
   grid: document.querySelector("#grid"),
   prevButton: document.querySelector("#prevButton"),
@@ -1080,9 +1079,7 @@ function updateItemInState(id, patch) {
 }
 
 function updateStatus() {
-  const totalPages = Math.max(1, Math.ceil(state.total / state.limit));
   els.resultCount.textContent = `${state.total.toLocaleString()} items`;
-  els.pageInfo.textContent = `Page ${currentPage()} of ${totalPages}`;
 }
 
 function updatePager() {
