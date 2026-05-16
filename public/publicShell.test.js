@@ -267,6 +267,21 @@ test("public UI labels media extensions as type", async () => {
   assert.doesNotMatch(app, /label: "Extension"/);
 });
 
+test("public extension pills use varied colors for common text formats", async () => {
+  const css = await readFile(new URL("./styles.css", import.meta.url), "utf8");
+
+  assert.match(css, /\.ext-pill\[data-ext="html"\]\s*\{[^}]*background:\s*#fff7ed;[^}]*color:\s*#c2410c;/s);
+  assert.match(css, /\.ext-pill\[data-ext="css"\]\s*\{[^}]*background:\s*#eff6ff;[^}]*color:\s*#2563eb;/s);
+  assert.match(css, /\.ext-pill\[data-ext="js"\],[\s\S]*\.ext-pill\[data-ext="mjs"\],[\s\S]*\.ext-pill\[data-ext="cjs"\]\s*\{[^}]*background:\s*#fefce8;[^}]*color:\s*#a16207;/s);
+  assert.match(css, /\.ext-pill\[data-ext="md"\]\s*\{[^}]*background:\s*#f8fafc;[^}]*color:\s*#475569;/s);
+  assert.match(css, /\.ext-pill\[data-ext="txt"\],[\s\S]*\.ext-pill\[data-ext="log"\]\s*\{[^}]*background:\s*#f1f5f9;[^}]*color:\s*#334155;/s);
+  assert.match(css, /\.file-badge\[data-ext="html"\]\s*\{[^}]*background:\s*#fff7ed;[^}]*color:\s*#c2410c;/s);
+  assert.match(css, /\.file-badge\[data-ext="css"\]\s*\{[^}]*background:\s*#eff6ff;[^}]*color:\s*#2563eb;/s);
+  assert.match(css, /\.file-badge\[data-ext="js"\],[\s\S]*\.file-badge\[data-ext="mjs"\],[\s\S]*\.file-badge\[data-ext="cjs"\]\s*\{[^}]*background:\s*#fefce8;[^}]*color:\s*#a16207;/s);
+  assert.match(css, /\.file-badge\[data-ext="md"\]\s*\{[^}]*background:\s*#f8fafc;[^}]*color:\s*#475569;/s);
+  assert.match(css, /\.file-badge\[data-ext="txt"\],[\s\S]*\.file-badge\[data-ext="log"\]\s*\{[^}]*background:\s*#f1f5f9;[^}]*color:\s*#334155;/s);
+});
+
 test("public UI syncs filters, pagination, and preview state into the URL history", async () => {
   const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
 

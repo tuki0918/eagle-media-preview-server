@@ -571,6 +571,50 @@ select:hover {
   background: rgba(20, 99, 243, 0.92);
 }
 
+.file-badge[data-ext="html"] {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.file-badge[data-ext="css"] {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.file-badge[data-ext="js"],
+.file-badge[data-ext="mjs"],
+.file-badge[data-ext="cjs"] {
+  background: #fefce8;
+  color: #a16207;
+}
+
+.file-badge[data-ext="ts"],
+.file-badge[data-ext="tsx"],
+.file-badge[data-ext="jsx"] {
+  background: #eef2ff;
+  color: #4338ca;
+}
+
+.file-badge[data-ext="md"] {
+  background: #f8fafc;
+  color: #475569;
+}
+
+.file-badge[data-ext="txt"],
+.file-badge[data-ext="log"] {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.file-badge[data-ext="json"],
+.file-badge[data-ext="xml"],
+.file-badge[data-ext="csv"],
+.file-badge[data-ext="yml"],
+.file-badge[data-ext="yaml"] {
+  background: #ecfdf5;
+  color: #047857;
+}
+
 .file-badge[data-ext="gif"],
 .file-badge[data-ext="webp"] {
   background: rgba(14, 165, 233, 0.92);
@@ -816,6 +860,57 @@ select:hover {
   border-color: #bfdbfe;
   background: #eff6ff;
   color: #2563eb;
+}
+
+.ext-pill[data-ext="html"] {
+  border-color: #fed7aa;
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.ext-pill[data-ext="css"] {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.ext-pill[data-ext="js"],
+.ext-pill[data-ext="mjs"],
+.ext-pill[data-ext="cjs"] {
+  border-color: #fde68a;
+  background: #fefce8;
+  color: #a16207;
+}
+
+.ext-pill[data-ext="ts"],
+.ext-pill[data-ext="tsx"],
+.ext-pill[data-ext="jsx"] {
+  border-color: #c7d2fe;
+  background: #eef2ff;
+  color: #4338ca;
+}
+
+.ext-pill[data-ext="md"] {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #475569;
+}
+
+.ext-pill[data-ext="txt"],
+.ext-pill[data-ext="log"] {
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.ext-pill[data-ext="json"],
+.ext-pill[data-ext="xml"],
+.ext-pill[data-ext="csv"],
+.ext-pill[data-ext="yml"],
+.ext-pill[data-ext="yaml"] {
+  border-color: #a7f3d0;
+  background: #ecfdf5;
+  color: #047857;
 }
 
 .ext-pill[data-ext="mp4"],
