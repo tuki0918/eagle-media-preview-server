@@ -116,7 +116,7 @@ test("public UI exposes direct original file URLs for each media item", async ()
   assert.match(app, /function directFileUrl\(item\)/);
   assert.match(app, /function previewFileName\(item\)/);
   assert.match(app, /function directFileLink\(item\)/);
-  assert.match(directFileUrlSource, /return new URL\(`\/file\/\$\{encodeURIComponent\(item\.id\)\}\/\$\{encodeURIComponent\(previewFileName\(item\)\)\}`,\s*window\.location\.href\)\.href;/);
+  assert.match(directFileUrlSource, /return new URL\(`\/file\/\$\{encodeURIComponent\(item\.id\)\}`,\s*window\.location\.href\)\.href;/);
   assert.match(directFileLinkSource, /link\.className = "direct-file-link"/);
   assert.match(directFileLinkSource, /link\.textContent = "Open file"/);
   assert.doesNotMatch(directFileUrlSource, /connectionId/);

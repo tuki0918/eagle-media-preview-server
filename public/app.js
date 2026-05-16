@@ -1169,7 +1169,7 @@ function extensionPill(item) {
 }
 
 function directFileUrl(item) {
-  return new URL(`/file/${encodeURIComponent(item.id)}/${encodeURIComponent(previewFileName(item))}`, window.location.href).href;
+  return new URL(`/file/${encodeURIComponent(item.id)}`, window.location.href).href;
 }
 
 function previewFileName(item) {
