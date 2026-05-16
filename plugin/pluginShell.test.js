@@ -7,7 +7,7 @@ test("manifest declares an Eagle background service management window", async ()
   const manifest = JSON.parse(await readFile(new URL("../manifest.json", import.meta.url), "utf8"));
 
   assert.equal(manifest.name, "Media Preview Server");
-  assert.equal(manifest.description, "A local media server for your Eagle library.");
+  assert.equal(manifest.description, "A local media preview server for your Eagle library.");
   assert.equal(manifest.logo, "/plugin/assets/icon_on.png");
   assert.equal(manifest.main.serviceMode, true);
   assert.equal(manifest.main.url, "plugin/index.html");
