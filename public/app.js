@@ -74,6 +74,7 @@ const lucideIcons = {
   maximize: '<path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>',
   "minus": '<path d="M5 12h14"/>',
   move: '<path d="M12 2v20"/><path d="m15 19-3 3-3-3"/><path d="m19 9 3 3-3 3"/><path d="M2 12h20"/><path d="m5 9-3 3 3 3"/><path d="m9 5 3-3 3 3"/>',
+  "move-diagonal": '<polyline points="13 5 19 5 19 11"/><polyline points="11 19 5 19 5 13"/><line x1="19" x2="5" y1="5" y2="19"/>',
   "panel-left": '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/>',
   play: '<path d="M8 5v14l11-7z"/>',
   plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
@@ -522,7 +523,7 @@ function decorateThumbButton(button, overlayIcon, item) {
   button.dataset.mediaType = mediaType;
   button.setAttribute("aria-label", mediaType === "video" || mediaType === "audio" ? `Play ${item.name || item.id}` : `Open ${item.name || item.id}`);
   if (!overlayIcon) return;
-  const icon = mediaType === "document" ? "file-text" : mediaType === "image" ? "maximize-2" : "play";
+  const icon = mediaType === "video" || mediaType === "audio" ? "play" : "move-diagonal";
   overlayIcon.replaceChildren(iconNode(icon));
 }
 
@@ -530,7 +531,7 @@ function openPreview(item, { skipHistory = false } = {}) {
   state.previewItemId = item.id;
   els.previewMeta.textContent = itemMeta(item);
   els.previewBody.replaceChildren();
-  els.dialog.classList.remove("video-mode", "image-mode", "audio-mode", "text-mode", "pdf-mode", "unsupported-mode", "info-open");
+  els.dialog.classList.remove("video-mode", "image-mode", "audio-mode", "text-mode", "unsupported-mode", "info-open");
   els.toggleInfoPreview.setAttribute("aria-expanded", state.previewInfoOpen ? "true" : "false");
   renderRating(els.previewRating, item, { interactive: true });
   renderPreviewDetails(item);
@@ -570,8 +571,8 @@ function openPreview(item, { skipHistory = false } = {}) {
     els.dialog.classList.add("text-mode");
     renderTextPreview(item);
   } else if (pdfPreviewExts.has(ext)) {
-    els.dialog.classList.add("pdf-mode");
-    renderPdfPreview(item);
+    els.dialog.classList.add("image-mode");
+    renderImagePreview(item, { srcKind: "thumb" });
   } else if (isTimedMedia(item)) {
     els.dialog.classList.add("unsupported-mode");
     const image = document.createElement("img");
@@ -611,15 +612,7 @@ function renderTextPreview(item) {
   })();
 }
 
-function renderPdfPreview(item) {
-  const viewer = document.createElement("iframe");
-  viewer.className = "pdf-preview";
-  viewer.src = directFileUrl(item);
-  viewer.title = item.name || item.id;
-  els.previewBody.append(viewer);
-}
-
-function renderImagePreview(item) {
+function renderImagePreview(item, { srcKind = "file" } = {}) {
   const viewport = document.createElement("div");
   viewport.className = "image-viewport";
   const status = document.createElement("div");
@@ -627,7 +620,7 @@ function renderImagePreview(item) {
   status.hidden = true;
   const image = document.createElement("img");
   image.className = "preview-image";
-  image.src = mediaUrl(item.id, "file");
+  image.src = mediaUrl(item.id, srcKind);
   image.alt = item.name || item.id;
   image.draggable = false;
   viewport.append(image, status);

@@ -125,7 +125,7 @@ test("public image modal no longer exposes metadata editing controls", async () 
   assert.doesNotMatch(css, /\.metadata-editor-message/);
 });
 
-test("public preview renders text-like files and PDFs without the image viewer", async () => {
+test("public preview renders text-like files and PDFs from their thumbnails", async () => {
   const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
   const css = await readFile(new URL("./styles.css", import.meta.url), "utf8");
   const server = await readFile(new URL("../plugin/service/viewerServer.cjs", import.meta.url), "utf8");
@@ -138,22 +138,33 @@ test("public preview renders text-like files and PDFs without the image viewer",
   assert.match(app, /function renderTextPreview\(item\) \{/);
   assert.match(app, /const response = await fetch\(mediaUrl\(item\.id, "file"\)\);/);
   assert.match(app, /code\.textContent = text;/);
-  assert.match(app, /function renderPdfPreview\(item\) \{/);
-  assert.match(app, /viewer\.className = "pdf-preview";/);
-  assert.match(app, /viewer\.src = directFileUrl\(item\);/);
+  assert.match(app, /renderImagePreview\(item,\s*\{\s*srcKind:\s*"thumb"\s*\}\);/);
+  assert.match(app, /function renderImagePreview\(item,\s*\{\s*srcKind = "file"\s*\} = \{\}\) \{/);
+  assert.match(app, /image\.src = mediaUrl\(item\.id, srcKind\);/);
+  assert.doesNotMatch(app, /function renderPdfPreview\(item\) \{/);
+  assert.doesNotMatch(app, /viewer\.src = directFileUrl\(item\);/);
   assert.match(app, /function previewFileName\(item\) \{/);
   assert.match(app, /text-mode/);
-  assert.match(app, /pdf-mode/);
+  assert.doesNotMatch(app, /pdf-mode/);
   assert.match(css, /\.text-mode \.preview-body/);
   assert.match(css, /\.text-preview/);
-  assert.match(css, /\.pdf-mode \.preview-body/);
-  assert.match(css, /\.pdf-preview/);
+  assert.doesNotMatch(css, /\.pdf-mode \.preview-body/);
+  assert.doesNotMatch(css, /\.pdf-preview/);
   assert.match(server, /"\.html": "text\/html; charset=utf-8"/);
   assert.match(server, /"\.css": "text\/css; charset=utf-8"/);
   assert.match(server, /"\.js": "text\/javascript; charset=utf-8"/);
   assert.match(server, /"\.txt": "text\/plain; charset=utf-8"/);
   assert.match(server, /"\.md": "text\/plain; charset=utf-8"/);
   assert.match(server, /"\.pdf": "application\/pdf"/);
+});
+
+test("public grid thumbnail hover icon uses play for video and audio", async () => {
+  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
+
+  assert.match(app, /"move-diagonal":/);
+  assert.match(app, /const icon = mediaType === "video" \|\| mediaType === "audio" \? "play" : "move-diagonal";/);
+  assert.doesNotMatch(app, /mediaType === "document" \? "file-text"/);
+  assert.doesNotMatch(app, /mediaType === "image" \? "maximize-2"/);
 });
 
 test("public shell uses Media Preview Server branding and serves a favicon", async () => {
