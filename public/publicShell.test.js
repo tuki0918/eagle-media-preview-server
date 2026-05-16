@@ -48,7 +48,7 @@ test("public UI no longer shows connect lock icon or connection settings button"
   assert.match(css, /\.connect-message\s*\{[^}]*display:\s*none;[^}]*position:\s*fixed;[^}]*left:\s*50%;[^}]*bottom:\s*max\(24px,\s*env\(safe-area-inset-bottom\)\);[^}]*transform:\s*translateX\(-50%\);/s);
   assert.match(css, /\.login-panel \.connect-message\s*\{[^}]*text-align:\s*center;[^}]*white-space:\s*normal;/s);
   assert.match(css, /\.connect-message:not\(:empty\)\s*\{[^}]*display:\s*block;/s);
-  assert.match(html, /<option value="30" selected>30<\/option>/);
+  assert.match(html, /<option value="30" selected>30 items<\/option>/);
   assert.match(app, /limit:\s*30,/);
   assert.match(app, /if \(state\.limit !== DEFAULT_PAGE_SIZE\) params\.set\("limit", String\(state\.limit\)\);/);
   assert.match(app, /const parsed = Number\.parseInt\(value \|\| "30", 10\);/);
@@ -276,11 +276,14 @@ test("public UI labels media extensions as type", async () => {
   const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
   const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
 
-  assert.match(html, /<span>Type<\/span>\s*<select id="extSelect" aria-label="Type">/);
-  assert.match(html, /<option value="">All<\/option>/);
-  assert.match(html, /<span>Rating<\/span>\s*<select id="ratingSelect" aria-label="Rating">/);
-  assert.match(html, /<option value="">All<\/option>/);
-  assert.match(app, /<span>Type<\/span>/);
+  assert.match(html, /<select id="folderSelect" aria-label="Folder">[\s\S]*?<option value="">All folders<\/option>/);
+  assert.match(html, /<select id="extSelect" aria-label="Type">[\s\S]*?<option value="">All types<\/option>/);
+  assert.match(html, /<select id="ratingSelect" aria-label="Rating">[\s\S]*?<option value="">All ratings<\/option>/);
+  assert.match(html, /<select id="pageSizeSelect" aria-label="Page size">[\s\S]*?<option value="30" selected>30 items<\/option>/);
+  assert.doesNotMatch(html, /<span>Folder<\/span>/);
+  assert.doesNotMatch(html, /<span>Type<\/span>\s*<select id="extSelect"/);
+  assert.doesNotMatch(html, /<span>Rating<\/span>/);
+  assert.doesNotMatch(html, /<span>Page Size<\/span>/);
   assert.match(app, /{ label: "Type", value: mediaTypeLabel\(item\) }/);
   assert.doesNotMatch(html, />Extension</);
   assert.doesNotMatch(app, /label: "Extension"/);
