@@ -120,7 +120,7 @@ Settings path:
 - Fetch items page by page
 - Filter by folder, uncategorized state, extension, rating, and keyword
 - Switch between grid and table views
-- Preview images, videos, audio, and unsupported media
+- Preview images, videos, audio, text-like files, PDFs, and unsupported media
 - Change rating from the preview panel
 - Open the original file in a new tab
 - Sync search filters, page, view mode, and preview state into the URL
@@ -152,11 +152,15 @@ Settings path:
   - Playable extensions: `mp3`, `wav`, `m4a`, `aac`, `ogg`
   - Uses native browser controls
   - Attempts autoplay after opening
+- Text-like files
+  - Preview extensions: `txt`, `md`, `js`, `css`, `html`, `json`, `xml`, `csv`, `log`, `ts`, `tsx`, `jsx`, `mjs`, `cjs`, `yml`, `yaml`
+  - Fetches the original file from `/file/:id`
+  - Displays source content as escaped plain text in a dedicated text preview
+- PDF
+  - Preview extension: `pdf`
+  - Embeds the original file from `/file/:id` with the browser's native PDF viewer
 - Unsupported timed media
   - Shows the thumbnail and an unsupported-format message
-- Text and Markdown
-  - No dedicated modal preview
-  - `/file/:id` serves them inline as `text/plain; charset=utf-8`
 
 ## HTTP Server
 
@@ -203,7 +207,7 @@ Settings path:
 - Sends `Content-Disposition: inline`
 - Sends `Cache-Control: private, max-age=3600`
 - Sends `X-Content-Type-Options: nosniff`
-- Returns MIME types for common images, videos, audio, and text files
+- Returns MIME types for common images, videos, audio, PDF, and text files
 
 ## Authentication
 

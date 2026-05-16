@@ -41,6 +41,11 @@ const DATE_KEYS_MODIFIED = Object.freeze(["modifiedAt", "modificationTime", "mti
 
 const playableVideoExts = new Set(["mp4", "webm", "mov", "m4v"]);
 const playableAudioExts = new Set(["mp3", "wav", "m4a", "aac", "ogg"]);
+const textPreviewExts = new Set([
+  "txt", "md", "js", "css", "html", "json", "xml", "csv", "log",
+  "ts", "tsx", "jsx", "mjs", "cjs", "yml", "yaml",
+]);
+const pdfPreviewExts = new Set(["pdf"]);
 const videoExts = new Set([...playableVideoExts, "avi", "mkv"]);
 const audioExts = new Set([...playableAudioExts, "flac", "wma"]);
 const IMAGE_FIT_MARGIN = 0.96;
@@ -63,6 +68,7 @@ const lucideIcons = {
   "chevron-up": '<path d="m18 15-6-6-6 6"/>',
   copy: '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
   "external-link": '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+  "file-text": '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
   gauge: '<path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/>',
   "maximize-2": '<polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" x2="14" y1="3" y2="10"/><line x1="3" x2="10" y1="21" y2="14"/>',
   maximize: '<path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>',
@@ -510,18 +516,21 @@ function decorateThumbButton(button, overlayIcon, item) {
     ? "video"
     : playableAudioExts.has(ext)
       ? "audio"
-      : "image";
+      : textPreviewExts.has(ext) || pdfPreviewExts.has(ext)
+        ? "document"
+        : "image";
   button.dataset.mediaType = mediaType;
-  button.setAttribute("aria-label", mediaType === "image" ? `Open ${item.name || item.id}` : `Play ${item.name || item.id}`);
+  button.setAttribute("aria-label", mediaType === "video" || mediaType === "audio" ? `Play ${item.name || item.id}` : `Open ${item.name || item.id}`);
   if (!overlayIcon) return;
-  overlayIcon.replaceChildren(iconNode(mediaType === "image" ? "maximize-2" : "play"));
+  const icon = mediaType === "document" ? "file-text" : mediaType === "image" ? "maximize-2" : "play";
+  overlayIcon.replaceChildren(iconNode(icon));
 }
 
 function openPreview(item, { skipHistory = false } = {}) {
   state.previewItemId = item.id;
   els.previewMeta.textContent = itemMeta(item);
   els.previewBody.replaceChildren();
-  els.dialog.classList.remove("video-mode", "image-mode", "audio-mode", "unsupported-mode", "info-open");
+  els.dialog.classList.remove("video-mode", "image-mode", "audio-mode", "text-mode", "pdf-mode", "unsupported-mode", "info-open");
   els.toggleInfoPreview.setAttribute("aria-expanded", state.previewInfoOpen ? "true" : "false");
   renderRating(els.previewRating, item, { interactive: true });
   renderPreviewDetails(item);
@@ -557,6 +566,12 @@ function openPreview(item, { skipHistory = false } = {}) {
     if (!skipHistory) syncUrlState();
     audio.play().catch(() => {});
     return;
+  } else if (textPreviewExts.has(ext)) {
+    els.dialog.classList.add("text-mode");
+    renderTextPreview(item);
+  } else if (pdfPreviewExts.has(ext)) {
+    els.dialog.classList.add("pdf-mode");
+    renderPdfPreview(item);
   } else if (isTimedMedia(item)) {
     els.dialog.classList.add("unsupported-mode");
     const image = document.createElement("img");
@@ -574,6 +589,34 @@ function openPreview(item, { skipHistory = false } = {}) {
 
   showPreviewDialog();
   if (!skipHistory) syncUrlState();
+}
+
+function renderTextPreview(item) {
+  const preview = document.createElement("pre");
+  preview.className = "text-preview";
+  const code = document.createElement("code");
+  code.textContent = "Loading...";
+  preview.append(code);
+  els.previewBody.append(preview);
+
+  (async () => {
+    try {
+      const response = await fetch(mediaUrl(item.id, "file"));
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const text = await response.text();
+      code.textContent = text;
+    } catch (error) {
+      code.textContent = `Unable to load preview: ${error.message}`;
+    }
+  })();
+}
+
+function renderPdfPreview(item) {
+  const viewer = document.createElement("iframe");
+  viewer.className = "pdf-preview";
+  viewer.src = directFileUrl(item);
+  viewer.title = item.name || item.id;
+  els.previewBody.append(viewer);
 }
 
 function renderImagePreview(item) {
@@ -1118,7 +1161,14 @@ function extensionPill(item) {
 }
 
 function directFileUrl(item) {
-  return new URL(`/file/${encodeURIComponent(item.id)}`, window.location.href).href;
+  return new URL(`/file/${encodeURIComponent(item.id)}/${encodeURIComponent(previewFileName(item))}`, window.location.href).href;
+}
+
+function previewFileName(item) {
+  const name = String(item.name || item.id || "file").trim() || "file";
+  const ext = String(item.ext || "").trim().replace(/^\./, "");
+  if (!ext || name.toLowerCase().endsWith(`.${ext.toLowerCase()}`)) return name;
+  return `${name}.${ext}`;
 }
 
 function directFileLink(item) {

@@ -32,6 +32,7 @@ const mimeTypes = {
   ".flac": "audio/flac",
   ".aac": "audio/aac",
   ".ogg": "audio/ogg",
+  ".pdf": "application/pdf",
   ".txt": "text/plain; charset=utf-8",
   ".md": "text/plain; charset=utf-8",
 };
@@ -88,7 +89,7 @@ function createViewerServer({
         });
         return;
       }
-      const fileMatch = url.pathname.match(/^\/file\/([^/]+)$/);
+      const fileMatch = url.pathname.match(/^\/file\/([^/]+)(?:\/[^/]+)?$/);
       if (fileMatch) {
         attachRequestCounter(res, () => {
           requestCount += 1;
@@ -415,7 +416,7 @@ async function streamItemMedia(id, kind, req, res, session) {
   }
 
   const info = await stat(filePath);
-  const contentType = mimeTypes[extname(filePath).toLowerCase()] || "application/octet-stream";
+  const contentType = mediaContentType(filePath, itemData);
   const range = parseRange(req.headers.range, info.size);
 
   if (req.headers.range && !range) {
@@ -431,7 +432,7 @@ async function streamItemMedia(id, kind, req, res, session) {
   const commonHeaders = {
     "Content-Type": contentType,
     "Accept-Ranges": "bytes",
-    "Content-Disposition": "inline",
+    "Content-Disposition": contentDisposition(contentType, itemData, filePath),
     "Cache-Control": "private, max-age=3600",
     "Last-Modified": info.mtime.toUTCString(),
     "X-Content-Type-Options": "nosniff",
@@ -460,6 +461,33 @@ async function streamItemMedia(id, kind, req, res, session) {
     return;
   }
   createReadStream(filePath).pipe(res);
+}
+
+function mediaContentType(filePath, item) {
+  const pathExt = extname(filePath).toLowerCase();
+  const itemExt = item?.ext ? `.${String(item.ext).toLowerCase().replace(/^\./, "")}` : "";
+  return mimeTypes[pathExt] || mimeTypes[itemExt] || "application/octet-stream";
+}
+
+function contentDisposition(contentType, item, filePath) {
+  if (contentType !== "application/pdf") return "inline";
+  const name = mediaFileName(item, filePath);
+  const asciiName = name.replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "_");
+  return `inline; filename="${asciiName}"; filename*=UTF-8''${encodeRFC5987ValueChars(name)}`;
+}
+
+function mediaFileName(item, filePath) {
+  const rawName = String(item?.name || item?.title || "").trim();
+  const ext = String(item?.ext || extname(filePath).replace(/^\./, "") || "").trim().replace(/^\./, "");
+  const fallbackName = rawName || `file${ext ? `.${ext}` : ""}`;
+  if (!ext || fallbackName.toLowerCase().endsWith(`.${ext.toLowerCase()}`)) return fallbackName;
+  return `${fallbackName}.${ext}`;
+}
+
+function encodeRFC5987ValueChars(value) {
+  return encodeURIComponent(value)
+    .replace(/['()]/g, escape)
+    .replace(/\*/g, "%2A");
 }
 
 async function serveStatic(pathname, res, publicDir) {

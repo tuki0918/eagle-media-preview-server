@@ -96,8 +96,9 @@ test("public UI exposes direct original file URLs for each media item", async ()
 
   assert.doesNotMatch(html, /class="direct-file-link"/);
   assert.match(app, /function directFileUrl\(item\)/);
+  assert.match(app, /function previewFileName\(item\)/);
   assert.match(app, /function directFileLink\(item\)/);
-  assert.match(directFileUrlSource, /return new URL\(`\/file\/\$\{encodeURIComponent\(item\.id\)\}`,\s*window\.location\.href\)\.href;/);
+  assert.match(directFileUrlSource, /return new URL\(`\/file\/\$\{encodeURIComponent\(item\.id\)\}\/\$\{encodeURIComponent\(previewFileName\(item\)\)\}`,\s*window\.location\.href\)\.href;/);
   assert.match(directFileLinkSource, /link\.className = "direct-file-link"/);
   assert.match(directFileLinkSource, /link\.textContent = "Open file"/);
   assert.doesNotMatch(directFileUrlSource, /connectionId/);
@@ -124,22 +125,35 @@ test("public image modal no longer exposes metadata editing controls", async () 
   assert.doesNotMatch(css, /\.metadata-editor-message/);
 });
 
-test("public preview no longer special-cases txt and md files in the modal", async () => {
+test("public preview renders text-like files and PDFs without the image viewer", async () => {
   const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
   const css = await readFile(new URL("./styles.css", import.meta.url), "utf8");
   const server = await readFile(new URL("../plugin/service/viewerServer.cjs", import.meta.url), "utf8");
 
-  assert.doesNotMatch(app, /textPreviewExts/);
-  assert.doesNotMatch(app, /renderTextPreview/);
-  assert.doesNotMatch(app, /preview\.textContent = await getText\(mediaUrl\(item\.id, "file"\)\)/);
-  assert.doesNotMatch(app, /text-mode/);
-  assert.doesNotMatch(css, /\.text-mode \.preview-body/);
-  assert.doesNotMatch(css, /\.preview-text/);
+  assert.match(app, /const textPreviewExts = new Set\(\[/);
+  assert.match(app, /"txt", "md", "js", "css", "html", "json"/);
+  assert.match(app, /const pdfPreviewExts = new Set\(\["pdf"\]\);/);
+  assert.match(app, /textPreviewExts\.has\(ext\)/);
+  assert.match(app, /pdfPreviewExts\.has\(ext\)/);
+  assert.match(app, /function renderTextPreview\(item\) \{/);
+  assert.match(app, /const response = await fetch\(mediaUrl\(item\.id, "file"\)\);/);
+  assert.match(app, /code\.textContent = text;/);
+  assert.match(app, /function renderPdfPreview\(item\) \{/);
+  assert.match(app, /viewer\.className = "pdf-preview";/);
+  assert.match(app, /viewer\.src = directFileUrl\(item\);/);
+  assert.match(app, /function previewFileName\(item\) \{/);
+  assert.match(app, /text-mode/);
+  assert.match(app, /pdf-mode/);
+  assert.match(css, /\.text-mode \.preview-body/);
+  assert.match(css, /\.text-preview/);
+  assert.match(css, /\.pdf-mode \.preview-body/);
+  assert.match(css, /\.pdf-preview/);
   assert.match(server, /"\.html": "text\/html; charset=utf-8"/);
   assert.match(server, /"\.css": "text\/css; charset=utf-8"/);
   assert.match(server, /"\.js": "text\/javascript; charset=utf-8"/);
   assert.match(server, /"\.txt": "text\/plain; charset=utf-8"/);
   assert.match(server, /"\.md": "text\/plain; charset=utf-8"/);
+  assert.match(server, /"\.pdf": "application\/pdf"/);
 });
 
 test("public shell uses Media Preview Server branding and serves a favicon", async () => {

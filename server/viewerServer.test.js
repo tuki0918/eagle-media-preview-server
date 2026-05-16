@@ -147,3 +147,42 @@ test("createViewerServer serves text and markdown direct file routes inline as r
 
   await viewer.stop();
 });
+
+test("createViewerServer uses Eagle item extension as a PDF MIME fallback", async () => {
+  const root = join(tmpdir(), `eagle-media-preview-server-pdf-${Date.now()}`);
+  await mkdir(root, { recursive: true });
+  const filePath = join(root, "original");
+  await writeFile(filePath, "%PDF-1.1\n%%EOF\n");
+
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: root, name: "Test Library" };
+      },
+      async itemById(id) {
+        return {
+          data: [{ id, filePath, name: "sample", ext: "pdf" }],
+        };
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const response = await fetch(`http://127.0.0.1:${status.port}/file/PDF123/sample.pdf`);
+
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("content-type"), "application/pdf");
+    assert.match(response.headers.get("content-disposition") || "", /^inline;/);
+    assert.match(response.headers.get("content-disposition") || "", /filename="sample\.pdf"/);
+    assert.equal(await response.text(), "%PDF-1.1\n%%EOF\n");
+  } finally {
+    await viewer.stop();
+  }
+});
