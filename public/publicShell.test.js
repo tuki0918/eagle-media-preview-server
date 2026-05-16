@@ -99,6 +99,13 @@ test("public video preview reserves top space for floating action buttons", asyn
   assert.match(css, /\.preview-video\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;/s);
 });
 
+test("public audio preview uses video-style dark action buttons", async () => {
+  const css = await readFile(new URL("./styles.css", import.meta.url), "utf8");
+
+  assert.match(css, /\.video-mode \.dialog-actions \.icon-button,\s*\.audio-mode \.dialog-actions \.icon-button\s*\{[^}]*background:\s*rgba\(15,\s*23,\s*42,\s*0\.62\);[^}]*color:\s*#fff;/s);
+  assert.match(css, /\.video-mode \.dialog-actions \.icon-button:hover,\s*\.audio-mode \.dialog-actions \.icon-button:hover\s*\{[^}]*background:\s*rgba\(15,\s*23,\s*42,\s*0\.82\);[^}]*color:\s*#fff;/s);
+});
+
 test("public UI exposes direct original file URLs for each media item", async () => {
   const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
   const app = await readFile(new URL("./app.js", import.meta.url), "utf8");

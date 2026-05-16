@@ -1366,14 +1366,16 @@ select:hover {
   border-color: rgba(37, 99, 235, 0.28);
 }
 
-.video-mode .dialog-actions .icon-button {
+.video-mode .dialog-actions .icon-button,
+.audio-mode .dialog-actions .icon-button {
   background: rgba(15, 23, 42, 0.62);
   color: #fff;
   border-color: rgba(255, 255, 255, 0.2);
   backdrop-filter: blur(12px);
 }
 
-.video-mode .dialog-actions .icon-button:hover {
+.video-mode .dialog-actions .icon-button:hover,
+.audio-mode .dialog-actions .icon-button:hover {
   background: rgba(15, 23, 42, 0.82);
   color: #fff;
   border-color: rgba(255, 255, 255, 0.38);
