@@ -175,6 +175,7 @@ async function init() {
   els.backPreview.addEventListener("click", () => closePreview());
   els.toggleInfoPreview.addEventListener("click", () => togglePreviewInfo());
   els.fullscreenPreview.addEventListener("click", () => toggleFullscreen());
+  els.dialog.addEventListener("pointerdown", closePreviewInfoFromOutside);
   els.dialog.addEventListener("close", () => {
     clearPreviewContents();
     document.body.classList.remove("modal-open");
@@ -858,7 +859,17 @@ function closePreview({ skipHistory = false } = {}) {
 }
 
 function togglePreviewInfo() {
-  const isOpen = els.dialog.classList.toggle("info-open");
+  setPreviewInfoOpen(!state.previewInfoOpen);
+}
+
+function closePreviewInfoFromOutside(event) {
+  if (!state.previewInfoOpen) return;
+  if (event.target.closest(".preview-info, #toggleInfoPreview")) return;
+  setPreviewInfoOpen(false);
+}
+
+function setPreviewInfoOpen(isOpen) {
+  els.dialog.classList.toggle("info-open", isOpen);
   els.toggleInfoPreview.setAttribute("aria-expanded", isOpen ? "true" : "false");
   state.previewInfoOpen = isOpen;
   syncUrlState();

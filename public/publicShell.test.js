@@ -243,6 +243,16 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.doesNotMatch(css, /\.preview-info-cta\s*\{[^}]*linear-gradient/s);
 });
 
+test("public preview info closes when pressing outside the side menu", async () => {
+  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
+
+  assert.match(app, /els\.dialog\.addEventListener\("pointerdown", closePreviewInfoFromOutside\);/);
+  assert.match(app, /function closePreviewInfoFromOutside\(event\) \{/);
+  assert.match(app, /if \(!state\.previewInfoOpen\) return;/);
+  assert.match(app, /if \(event\.target\.closest\("\.preview-info, #toggleInfoPreview"\)\) return;/);
+  assert.match(app, /setPreviewInfoOpen\(false\);/);
+});
+
 test("public UI labels media extensions as type", async () => {
   const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
   const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
