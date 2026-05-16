@@ -1493,8 +1493,26 @@ select:hover {
   align-items: center;
   min-height: 32px;
   gap: 18px;
-  padding: 8px 8px 22px;
+  padding: 0 8px 0;
+}
+
+.preview-original-name-section {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  min-height: 32px;
+  padding: 8px 8px 14px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.preview-original-name-value {
+  width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.4;
 }
 
 .preview-rating-section .rating-control {
@@ -1815,7 +1833,12 @@ select:hover {
   .preview-rating-section {
     grid-template-columns: minmax(96px, 112px) minmax(0, 1fr);
     gap: 12px;
-    padding: 6px 8px 12px;
+    padding: 0 8px 0;
+  }
+
+  .preview-original-name-section {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 6px 8px 14px;
   }
 
   .preview-detail-value {

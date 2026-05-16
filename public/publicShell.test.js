@@ -226,6 +226,25 @@ test("public ratings are static in grid and table but editable in the preview mo
   assert.match(css, /cursor:\s*default;/);
 });
 
+test("public file names expose original names in truncated views and preview info", async () => {
+  const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
+  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
+  const css = await readFile(new URL("./styles.css", import.meta.url), "utf8");
+
+  assert.match(app, /function originalFileName\(item\) \{/);
+  assert.match(app, /title\.title = originalFileName\(item\);/);
+  assert.match(app, /name\.title = originalFileName\(item\);/);
+  assert.match(html, /<section class="preview-original-name-section">\s*<div id="previewOriginalName" class="preview-original-name-value"><\/div>\s*<\/section>\s*<section class="preview-rating-section">/);
+  assert.doesNotMatch(html, /File Name/);
+  assert.match(app, /previewOriginalName: document\.querySelector\("#previewOriginalName"\),/);
+  assert.match(app, /els\.previewOriginalName\.textContent = originalFileName\(item\);/);
+  assert.match(css, /\.preview-original-name-section\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\);[^}]*padding:\s*8px 8px 14px;[^}]*border-bottom:\s*1px solid rgba\(148,\s*163,\s*184,\s*0\.18\);/s);
+  assert.match(css, /@media \(max-width: 540px\)[\s\S]*\.preview-original-name-section\s*\{[^}]*padding:\s*6px 8px 14px;/);
+  assert.match(css, /\.preview-rating-section\s*\{[^}]*padding:\s*0 8px 0;/s);
+  assert.doesNotMatch(css, /\.preview-rating-section\s*\{[^}]*border-bottom:/s);
+  assert.match(css, /\.preview-original-name-value\s*\{[^}]*width:\s*100%;[^}]*overflow-wrap:\s*anywhere;[^}]*white-space:\s*normal;/s);
+});
+
 test("public preview info uses chip lists and a full-width open file CTA", async () => {
   const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
   const css = await readFile(new URL("./styles.css", import.meta.url), "utf8");

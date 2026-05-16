@@ -111,6 +111,7 @@ const els = {
   previewMeta: document.querySelector("#previewMeta"),
   previewBody: document.querySelector("#previewBody"),
   backPreview: document.querySelector("#backPreview"),
+  previewOriginalName: document.querySelector("#previewOriginalName"),
   previewRating: document.querySelector("#previewRating"),
   previewDetails: document.querySelector("#previewDetails"),
   previewActions: document.querySelector("#previewActions"),
@@ -416,6 +417,7 @@ function gridCard(item) {
   populateThumb({ img, badge, duration, item });
   decorateThumbButton(button, overlayIcon, item);
   title.textContent = item.name || item.id;
+  title.title = originalFileName(item);
   metaLine.hidden = true;
   renderRating(rating, item, { interactive: false });
   button.append(rating);
@@ -470,6 +472,7 @@ function tableNameCell(item) {
   const name = document.createElement("span");
   name.className = "row-file-name";
   name.textContent = item.name || item.id;
+  name.title = originalFileName(item);
   const meta = document.createElement("span");
   meta.className = "table-mobile-meta";
   meta.textContent = [
@@ -530,6 +533,8 @@ function decorateThumbButton(button, overlayIcon, item) {
 function openPreview(item, { skipHistory = false } = {}) {
   state.previewItemId = item.id;
   els.previewMeta.textContent = itemMeta(item);
+  els.previewOriginalName.textContent = originalFileName(item);
+  els.previewOriginalName.title = originalFileName(item);
   els.previewBody.replaceChildren();
   els.dialog.classList.remove("video-mode", "image-mode", "audio-mode", "text-mode", "unsupported-mode", "info-open");
   els.toggleInfoPreview.setAttribute("aria-expanded", state.previewInfoOpen ? "true" : "false");
@@ -1010,6 +1015,8 @@ function syncPreviewFromState() {
 
 function clearPreviewContents() {
   els.previewBody.replaceChildren();
+  els.previewOriginalName.textContent = "";
+  els.previewOriginalName.removeAttribute("title");
   els.previewRating.replaceChildren();
   els.previewDetails.replaceChildren();
   els.previewActions.replaceChildren();
@@ -1166,6 +1173,10 @@ function directFileUrl(item) {
 }
 
 function previewFileName(item) {
+  return originalFileName(item);
+}
+
+function originalFileName(item) {
   const name = String(item.name || item.id || "file").trim() || "file";
   const ext = String(item.ext || "").trim().replace(/^\./, "");
   if (!ext || name.toLowerCase().endsWith(`.${ext.toLowerCase()}`)) return name;
