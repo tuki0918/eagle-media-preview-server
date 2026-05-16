@@ -48,6 +48,9 @@ test("public UI no longer shows connect lock icon or connection settings button"
   assert.match(css, /\.connect-message\s*\{[^}]*display:\s*none;[^}]*position:\s*fixed;[^}]*left:\s*50%;[^}]*bottom:\s*max\(24px,\s*env\(safe-area-inset-bottom\)\);[^}]*transform:\s*translateX\(-50%\);/s);
   assert.match(css, /\.login-panel \.connect-message\s*\{[^}]*text-align:\s*center;[^}]*white-space:\s*normal;/s);
   assert.match(css, /\.connect-message:not\(:empty\)\s*\{[^}]*display:\s*block;/s);
+  assert.match(css, /\.status-line\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) auto;/s);
+  assert.match(css, /\.status-actions\s*\{[^}]*margin-left:\s*auto;[^}]*justify-self:\s*end;/s);
+  assert.match(css, /@media \(max-width: 540px\)[\s\S]*\.status-line\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) auto;/s);
   assert.match(html, /<option value="30" selected>30 items<\/option>/);
   assert.match(app, /limit:\s*30,/);
   assert.match(app, /if \(state\.limit !== DEFAULT_PAGE_SIZE\) params\.set\("limit", String\(state\.limit\)\);/);

@@ -340,7 +340,7 @@ select:hover {
 
 .status-line {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   padding: 16px 0;
@@ -355,6 +355,7 @@ select:hover {
 
 .status-actions {
   display: inline-flex;
+  margin-left: auto;
   justify-self: end;
 }
 
@@ -1699,7 +1700,7 @@ select:hover {
   }
 
   .status-line {
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 8px;
     align-items: center;
     font-size: 12px;
