@@ -88,6 +88,14 @@ test("public image preview fit mode scales to the viewport and refreshes on resi
   assert.match(css, /\.preview-body img:not\(\.preview-image\),\s*\.preview-body video/);
 });
 
+test("public video preview reserves top space for floating action buttons", async () => {
+  const css = await readFile(new URL("./styles.css", import.meta.url), "utf8");
+
+  assert.match(css, /#previewDialog\.video-mode \.preview-layout\s*\{[^}]*padding-top:\s*calc\(60px \+ env\(safe-area-inset-top\)\);[^}]*background:\s*#05070a;/s);
+  assert.match(css, /\.video-mode \.preview-body\s*\{[^}]*min-height:\s*0;[^}]*height:\s*100%;/s);
+  assert.match(css, /\.preview-video\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;/s);
+});
+
 test("public UI exposes direct original file URLs for each media item", async () => {
   const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
   const app = await readFile(new URL("./app.js", import.meta.url), "utf8");

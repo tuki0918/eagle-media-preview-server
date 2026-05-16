@@ -1382,13 +1382,17 @@ select:hover {
   border-color: rgba(255, 255, 255, 0.38);
 }
 
-.video-mode .preview-layout {
+#previewDialog.video-mode .preview-layout {
   grid-template-columns: minmax(0, 1fr);
   height: 100dvh;
   max-height: 100dvh;
+  padding-top: calc(60px + env(safe-area-inset-top));
+  background: #05070a;
 }
 
 .video-mode .preview-body {
+  min-height: 0;
+  height: 100%;
   background: #05070a;
 }
 
