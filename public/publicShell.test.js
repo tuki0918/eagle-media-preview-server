@@ -62,6 +62,7 @@ test("public thumbnails lazy-load with visible loading states", async () => {
   assert.match(app, /img\.loading = "lazy";/);
   assert.match(app, /button\?\.classList\.add\("thumb-loading"\);/);
   assert.match(app, /button\?\.classList\.remove\("thumb-loading"\);/);
+  assert.match(css, /\.thumb-button\s*\{[^}]*aspect-ratio:\s*3\s*\/\s*2;/s);
   assert.match(css, /\.thumb-button\.thumb-loading::after,\s*\.row-thumb\.thumb-loading::after/);
   assert.match(css, /animation:\s*thumb-spinner 0\.75s linear infinite;/);
 });
