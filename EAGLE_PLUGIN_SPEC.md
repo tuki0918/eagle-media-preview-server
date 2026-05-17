@@ -6,11 +6,11 @@ Eagle | Media Preview Server is an Eagle plugin that starts a local HTTP server 
 
 The product has two user-facing surfaces:
 
-- `Plugin management window`
+- `Server management window`
   - Runs inside Eagle
   - Manages server start, stop, settings, Endpoint URL, and QR code
 - `Browser viewer`
-  - Runs in a phone, tablet, or another computer's browser
+  - Opens in a phone, tablet, or another computer's browser
   - Handles library search, filters, pagination, and previews
 
 External devices connect to the plugin server, not directly to Eagle's Web API.
@@ -31,7 +31,7 @@ External devices connect to the plugin server, not directly to Eagle's Web API.
 - Folder-level or item-level ACLs
 - Full Eagle metadata editing
 - Persistent request logs or a log viewer screen
-- Custom video transcoding, audio transcoding, or thumbnail generation
+- Custom video transcoding or audio transcoding
 
 ## Runtime Model
 
@@ -55,9 +55,10 @@ Defaults:
 - Eagle API host: `127.0.0.1`
 - Eagle API port: `41595`
 - BasicAuth: disabled
+- Public Network: disabled
 - Auto start: disabled
 
-## Plugin Management Window
+## Server Management Window
 
 ### Responsibilities
 
@@ -252,7 +253,7 @@ Main status fields:
 
 ### First-time setup
 
-1. Open the plugin management window in Eagle
+1. Open the server management window in Eagle
 2. Enable `Public Network`
 3. If needed, enable `BasicAuth protection` and set User and Password
 4. Confirm the Port setting
@@ -263,7 +264,7 @@ Main status fields:
 ### Daily use
 
 1. If Auto start is enabled, the server starts when Eagle launches
-2. Confirm `Running` in the plugin management window
+2. Confirm `Running` in the server management window
 3. Open the browser viewer from the Endpoint URL or QR code
 4. Search, filter, and preview media
 
