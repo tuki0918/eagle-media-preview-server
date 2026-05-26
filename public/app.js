@@ -12,6 +12,8 @@ const state = {
   filtersOpen: false,
   folders: [],
   viewMode: "grid",
+  tilesLoadingMore: false,
+  tilesObserver: null,
   requestId: 0,
   previewTransform: {
     scale: 1,
@@ -36,7 +38,8 @@ const DEFAULT_EAGLE_CONNECTION = Object.freeze({
 });
 const DEFAULT_PAGE_SIZE = 30;
 const MAX_PAGE_SIZE = 1000;
-const DEFAULT_VIEW_MODE = "grid";
+const DEFAULT_VIEW_MODE = "tiles";
+const TILE_PREFETCH_PAGES = 3;
 const LIBRARY_EMPTY_LABEL = "No library";
 const EAGLE_UNAVAILABLE_LABEL = "Eagle unavailable";
 const DATE_KEYS_MODIFIED = Object.freeze(["modifiedAt", "modificationTime", "mtime", "lastModified"]);
@@ -103,10 +106,13 @@ const els = {
   ratingSelect: document.querySelector("#ratingSelect"),
   pageSizeSelect: document.querySelector("#pageSizeSelect"),
   gridViewButton: document.querySelector("#gridViewButton"),
+  tilesViewButton: document.querySelector("#tilesViewButton"),
   tableViewButton: document.querySelector("#tableViewButton"),
   resultCount: document.querySelector("#resultCount"),
   libraryFooterName: document.querySelector("#libraryFooterName"),
   grid: document.querySelector("#grid"),
+  tilesSentinel: document.querySelector("#tilesSentinel"),
+  pager: document.querySelector(".pager"),
   prevButton: document.querySelector("#prevButton"),
   nextButton: document.querySelector("#nextButton"),
   pageButtons: document.querySelector("#pageButtons"),
@@ -187,6 +193,7 @@ async function init() {
     applyFilterChange({ limit: Number(els.pageSizeSelect.value) });
   });
   els.gridViewButton.addEventListener("click", () => setViewMode("grid"));
+  els.tilesViewButton.addEventListener("click", () => setViewMode("tiles"));
   els.tableViewButton.addEventListener("click", () => setViewMode("table"));
   els.closePreview.addEventListener("click", () => closePreview());
   els.backPreview.addEventListener("click", () => closePreview());
@@ -286,14 +293,22 @@ async function loadFolders() {
   }
 }
 
-async function loadItems() {
+async function loadItems({ append = false } = {}) {
   const requestId = ++state.requestId;
-  els.grid.replaceChildren(messageNode("Loading"));
+  if (append) {
+    state.tilesLoadingMore = true;
+    els.tilesSentinel.textContent = "Loading more";
+  } else {
+    resetTileAutoLoading();
+    state.tilesLoadingMore = false;
+    state.items = [];
+    els.grid.replaceChildren(messageNode("Loading"));
+  }
   updatePager();
 
   const params = new URLSearchParams({
     offset: String(state.offset),
-    limit: String(state.limit),
+    limit: String(currentFetchLimit()),
   });
   if (state.query) params.set("q", state.query);
   for (const tag of state.tags) params.append("tags", tag);
@@ -304,17 +319,33 @@ async function loadItems() {
   try {
     const data = await getJson(`/api/items?${params.toString()}`);
     if (requestId !== state.requestId) return;
+    const items = data.items || [];
     state.total = data.total;
-    state.items = data.items;
-    render();
+    state.items = append ? [...state.items, ...items] : items;
+    state.tilesLoadingMore = false;
+    if (append) {
+      appendRenderedItems(items);
+    } else {
+      render();
+      if (state.viewMode === "tiles" && new URLSearchParams(window.location.search).has("page")) {
+        syncUrlState({ replace: true });
+      }
+    }
     syncPreviewFromState();
   } catch (error) {
     if (requestId !== state.requestId) return;
+    state.tilesLoadingMore = false;
+    if (append) {
+      els.tilesSentinel.textContent = error.message;
+      updatePager();
+      return;
+    }
     state.items = [];
     state.total = 0;
     els.grid.replaceChildren(messageNode(error.message, "error"));
     updateStatus();
     updatePager();
+    setupTileAutoLoading();
   }
 }
 
@@ -322,13 +353,14 @@ function render() {
   const fragment = document.createDocumentFragment();
   els.grid.classList.toggle("media-table", state.viewMode === "table");
   els.grid.classList.toggle("media-grid", state.viewMode === "grid");
+  els.grid.classList.toggle("media-tiles", state.viewMode === "tiles");
   els.grid.classList.toggle("is-empty", !state.items.length);
 
   if (state.viewMode === "table" && state.items.length) {
     fragment.append(tableHeader());
   }
   for (const item of state.items) {
-    fragment.append(state.viewMode === "table" ? tableRow(item) : gridCard(item));
+    fragment.append(resultItemNode(item));
   }
 
   if (!state.items.length) {
@@ -338,6 +370,23 @@ function render() {
   els.grid.replaceChildren(fragment);
   updateStatus();
   updatePager();
+  setupTileAutoLoading();
+  updateViewToggle();
+}
+
+function resultItemNode(item) {
+  return state.viewMode === "table" ? tableRow(item) : state.viewMode === "tiles" ? tileItem(item) : gridCard(item);
+}
+
+function appendRenderedItems(items) {
+  const fragment = document.createDocumentFragment();
+  for (const item of items) {
+    fragment.append(resultItemNode(item));
+  }
+  els.grid.append(fragment);
+  updateStatus();
+  updatePager();
+  setupTileAutoLoading();
   updateViewToggle();
 }
 
@@ -441,6 +490,35 @@ function gridCard(item) {
   button.append(rating);
   bindPreviewTrigger(button, item);
   return node;
+}
+
+function tileItem(item) {
+  const button = document.createElement("button");
+  button.className = "tile-item";
+  button.type = "button";
+  const img = document.createElement("img");
+  const overlay = document.createElement("span");
+  overlay.className = "thumb-overlay";
+  overlay.setAttribute("aria-hidden", "true");
+  const overlayIcon = document.createElement("span");
+  overlayIcon.className = "thumb-overlay-icon";
+  overlay.append(overlayIcon);
+  const badge = document.createElement("span");
+  badge.className = "file-badge";
+  const duration = document.createElement("span");
+  duration.className = "duration-badge";
+  const rating = document.createElement("div");
+  rating.className = "rating-control tile-rating";
+  rating.ariaLabel = "Rating";
+  const width = Number(item.width);
+  const height = Number(item.height);
+  button.style.aspectRatio = width > 0 && height > 0 ? `${width} / ${height}` : "1 / 1";
+  renderRating(rating, item, { interactive: false });
+  button.append(img, overlay, badge, duration, rating);
+  populateThumb({ img, badge, duration, item });
+  decorateThumbButton(button, overlayIcon, item);
+  bindPreviewTrigger(button, item);
+  return button;
 }
 
 function tableHeader() {
@@ -842,15 +920,25 @@ function videoErrorMessage(error) {
 }
 
 function setViewMode(mode) {
+  if (!["grid", "tiles", "table"].includes(mode)) return;
   if (state.viewMode === mode) return;
+  const previousMode = state.viewMode;
   state.viewMode = mode;
   localStorage.setItem("eagleViewMode", mode);
+  if (mode === "tiles" || previousMode === "tiles") {
+    state.offset = 0;
+    resetPreviewState();
+    syncUrlState();
+    loadItems();
+    return;
+  }
   syncUrlState();
   render();
 }
 
 function updateViewToggle() {
   els.gridViewButton.setAttribute("aria-pressed", state.viewMode === "grid" ? "true" : "false");
+  els.tilesViewButton.setAttribute("aria-pressed", state.viewMode === "tiles" ? "true" : "false");
   els.tableViewButton.setAttribute("aria-pressed", state.viewMode === "table" ? "true" : "false");
 }
 
@@ -860,7 +948,7 @@ function restoreViewMode() {
     return;
   }
   const saved = localStorage.getItem("eagleViewMode");
-  state.viewMode = saved === "table" ? "table" : DEFAULT_VIEW_MODE;
+  state.viewMode = ["grid", "tiles", "table"].includes(saved) ? saved : DEFAULT_VIEW_MODE;
   updateViewToggle();
 }
 
@@ -946,8 +1034,8 @@ function restoreUrlState() {
     state.rating = params.get("rating") || "";
     state.filtersOpen = params.get("filters") === "1";
     state.limit = clampPageSize(params.get("limit"));
-    state.viewMode = params.get("view") === "table" ? "table" : DEFAULT_VIEW_MODE;
-    state.offset = (Math.max(1, Number.parseInt(params.get("page") || "1", 10)) - 1) * state.limit;
+    state.viewMode = params.get("view") === "tiles" ? "tiles" : params.get("view") === "table" ? "table" : DEFAULT_VIEW_MODE;
+    state.offset = state.viewMode === "tiles" ? 0 : (Math.max(1, Number.parseInt(params.get("page") || "1", 10)) - 1) * state.limit;
     state.previewItemId = params.get("item") || "";
     state.previewInfoOpen = params.get("info") === "1";
   } finally {
@@ -984,7 +1072,7 @@ function syncUrlState({ replace = false } = {}) {
   if (state.filtersOpen) params.set("filters", "1");
   if (state.limit !== DEFAULT_PAGE_SIZE) params.set("limit", String(state.limit));
   if (state.viewMode !== DEFAULT_VIEW_MODE) params.set("view", state.viewMode);
-  params.set("page", String(currentPage()));
+  if (state.viewMode !== "tiles") params.set("page", String(currentPage()));
   if (state.previewItemId) params.set("item", state.previewItemId);
   if (state.previewInfoOpen) params.set("info", "1");
   const nextUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ""}`;
@@ -1223,9 +1311,45 @@ function updateStatus() {
 }
 
 function updatePager() {
+  const isTiles = state.viewMode === "tiles";
+  els.pager.hidden = isTiles;
+  els.tilesSentinel.hidden = !isTiles || !state.items.length || state.items.length >= state.total;
+  if (isTiles) {
+    els.tilesSentinel.textContent = state.tilesLoadingMore ? "Loading more" : "Scroll to load more";
+    return;
+  }
   els.prevButton.disabled = state.offset <= 0;
   els.nextButton.disabled = state.offset + state.limit >= state.total;
   renderPageButtons();
+}
+
+function setupTileAutoLoading() {
+  resetTileAutoLoading();
+  if (state.viewMode !== "tiles" || !state.items.length || state.items.length >= state.total || typeof IntersectionObserver === "undefined") return;
+  state.tilesObserver = new IntersectionObserver((entries) => {
+    if (!entries.some((entry) => entry.isIntersecting)) return;
+    loadMoreTiles();
+  }, { rootMargin: "600px 0px" });
+  state.tilesObserver.observe(els.tilesSentinel);
+}
+
+function resetTileAutoLoading() {
+  if (state.tilesObserver) {
+    state.tilesObserver.disconnect();
+    state.tilesObserver = null;
+  }
+}
+
+function loadMoreTiles() {
+  if (state.viewMode !== "tiles" || state.tilesLoadingMore || !state.items.length || state.items.length >= state.total) return;
+  state.offset = state.items.length;
+  syncUrlState({ replace: true });
+  loadItems({ append: true });
+}
+
+function currentFetchLimit() {
+  if (state.viewMode !== "tiles" || state.tags.length) return state.limit;
+  return Math.min(state.limit * TILE_PREFETCH_PAGES, MAX_PAGE_SIZE);
 }
 
 function renderPageButtons() {

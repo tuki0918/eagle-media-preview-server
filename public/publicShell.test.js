@@ -352,6 +352,54 @@ test("public UI supports tag filter chips", async () => {
   assert.match(css, /\.tag-chip\s*\{/);
 });
 
+test("public UI adds a masonry tiles view with infinite loading", async () => {
+  const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
+  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
+  const css = await readFile(new URL("./styles.css", import.meta.url), "utf8");
+
+  assert.match(html, /id="tilesViewButton"/);
+  assert.match(html, /<button id="tilesViewButton" type="button" aria-pressed="true">Tiles<\/button>[\s\S]*<button id="gridViewButton" type="button" aria-pressed="false">Grid<\/button>/);
+  assert.match(html, /id="tilesSentinel"/);
+  assert.match(app, /const DEFAULT_VIEW_MODE = "tiles";/);
+  assert.match(app, /const TILE_PREFETCH_PAGES = 3;/);
+  assert.match(app, /tilesViewButton: document\.querySelector\("#tilesViewButton"\),/);
+  assert.match(app, /tilesSentinel: document\.querySelector\("#tilesSentinel"\),/);
+  assert.match(app, /state\.viewMode === "tiles"/);
+  assert.match(app, /function tileItem\(item\) \{/);
+  assert.match(app, /button\.style\.aspectRatio = width > 0 && height > 0 \? `\$\{width\} \/ \$\{height\}` : "1 \/ 1";/);
+  assert.match(app, /rating\.className = "rating-control tile-rating";/);
+  assert.match(app, /renderRating\(rating, item, \{ interactive: false \}\);/);
+  assert.match(app, /button\.append\(img, overlay, badge, duration, rating\);/);
+  assert.match(app, /populateThumb\(\{ img, badge, duration, item \}\);/);
+  assert.match(app, /decorateThumbButton\(button, overlayIcon, item\);/);
+  assert.match(app, /function appendRenderedItems\(items\) \{/);
+  assert.match(app, /els\.grid\.append\(fragment\);/);
+  assert.match(app, /function setupTileAutoLoading\(\) \{/);
+  assert.match(app, /resetTileAutoLoading\(\);/);
+  assert.match(app, /function resetTileAutoLoading\(\) \{/);
+  assert.match(app, /state\.items = \[\];/);
+  assert.match(app, /new IntersectionObserver/);
+  assert.match(app, /!state\.items\.length/);
+  assert.match(app, /loadItems\(\{ append: true \}\)/);
+  assert.match(app, /limit: String\(currentFetchLimit\(\)\),/);
+  assert.match(app, /state\.offset = state\.items\.length;/);
+  assert.match(app, /function currentFetchLimit\(\) \{/);
+  assert.match(app, /if \(state\.viewMode !== "tiles" \|\| state\.tags\.length\) return state\.limit;/);
+  assert.match(app, /return Math\.min\(state\.limit \* TILE_PREFETCH_PAGES, MAX_PAGE_SIZE\);/);
+  assert.match(app, /params\.get\("view"\) === "tiles"/);
+  assert.match(css, /\.media-tiles\s*\{/);
+  assert.match(css, /\.tile-item\s*\{/);
+  assert.match(css, /\.tile-item\s*\{[^}]*position:\s*relative;/s);
+  assert.match(css, /\.tile-item\s*\{[^}]*contain:\s*layout paint;/s);
+  assert.match(css, /\.tile-item img\s*\{[^}]*height:\s*100%;/s);
+  assert.match(css, /\.tile-item\.thumb-loading::before\s*\{/);
+  assert.match(css, /animation:\s*tile-skeleton 1\.1s ease-in-out infinite;/);
+  assert.match(css, /@keyframes tile-skeleton/);
+  assert.match(css, /\.tile-item \.tile-rating\s*\{/);
+  assert.match(css, /\.media-tiles \.tile-item\s*\{[^}]*border-radius:\s*0;/s);
+  assert.match(css, /\.tiles-sentinel\s*\{/);
+});
+
 test("public extension pills use varied colors for common text formats", async () => {
   const css = await readFile(new URL("./styles.css", import.meta.url), "utf8");
 
@@ -372,7 +420,10 @@ test("public UI syncs filters, pagination, and preview state into the URL histor
 
   assert.match(app, /window\.addEventListener\("popstate"/);
   assert.match(app, /pushState/);
-  assert.match(app, /params\.set\("page"/);
+  assert.match(app, /if \(state\.viewMode !== "tiles"\) params\.set\("page", String\(currentPage\(\)\)\);/);
+  assert.match(app, /state\.offset = state\.viewMode === "tiles" \? 0 : \(Math\.max\(1, Number\.parseInt\(params\.get\("page"\) \|\| "1", 10\)\) - 1\) \* state\.limit;/);
+  assert.match(app, /state\.viewMode === "tiles" && new URLSearchParams\(window\.location\.search\)\.has\("page"\)/);
+  assert.match(app, /syncUrlState\(\{ replace: true \}\);/);
   assert.match(app, /params\.set\("item"/);
   assert.match(app, /params\.set\("info", "1"\)/);
 });
@@ -387,7 +438,7 @@ test("public results status and empty states stay concise and consistent across 
   assert.match(css, /\.media-grid,\s*\.media-table\s*\{[\s\S]*align-content:\s*start;/);
   assert.doesNotMatch(css, /\.media-grid\s*\{[^}]*min-height:\s*320px;/s);
   assert.doesNotMatch(css, /\.media-table\s*\{[^}]*min-height:\s*320px;/s);
-  assert.match(css, /\.media-table\.is-empty\s*\{[\s\S]*border:\s*0;[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/);
+  assert.match(css, /\.media-grid\.is-empty,\s*\.media-table\.is-empty,\s*\.media-tiles\.is-empty\s*\{[\s\S]*display:\s*block;[\s\S]*column-width:\s*auto;[\s\S]*border:\s*0;[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/);
   assert.match(css, /\.empty-state\s*\{[\s\S]*min-height:\s*320px;/);
 });
 
