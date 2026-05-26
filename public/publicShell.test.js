@@ -325,12 +325,19 @@ test("public UI supports tag filter chips", async () => {
 
   assert.match(html, /id="tagChips"/);
   assert.match(html, /id="tagSuggestions"/);
-  assert.match(html, /<div class="search-box"[\s\S]*id="tagChips"[\s\S]*id="searchInput"[\s\S]*id="tagSuggestions"[\s\S]*<\/div>[\s\S]*<button[\s\S]*id="toggleFiltersButton"/);
+  assert.match(html, /<div class="search-box"[\s\S]*id="tagChips"[\s\S]*id="searchInput"[\s\S]*id="tagSuggestions"[\s\S]*<\/div>[\s\S]*id="resetFiltersButton"[\s\S]*id="toggleFiltersButton"/);
+  assert.match(html, /id="resetFiltersButton"[\s\S]*aria-label="Reset filters"[\s\S]*disabled/);
+  assert.match(html, /id="resetFiltersButton"[\s\S]*data-lucide="funnel-x"/);
   assert.doesNotMatch(html, /id="tagInput"/);
   assert.doesNotMatch(html, /id="advancedFilters"[\s\S]*id="tagChips"/);
   assert.match(app, /tags:\s*\[\]/);
   assert.match(app, /tagChips: document\.querySelector\("#tagChips"\),/);
   assert.match(app, /tagSuggestions: document\.querySelector\("#tagSuggestions"\),/);
+  assert.match(app, /resetFiltersButton: document\.querySelector\("#resetFiltersButton"\),/);
+  assert.match(app, /"funnel-x": '<path d="M12\.531 3H3/);
+  assert.match(app, /els\.resetFiltersButton\.addEventListener\("click", resetFilters\);/);
+  assert.match(app, /function syncResetFiltersButton\(\) \{/);
+  assert.match(app, /els\.resetFiltersButton\.disabled = !hasActiveFilters\(\);/);
   assert.doesNotMatch(app, /tagInput:/);
   assert.match(app, /applyFilterChange\(\{ query: els\.searchInput\.value\.trim\(\) \}\);[\s\S]*loadTagSuggestions\(\);/);
   assert.match(app, /params\.getAll\("tag"\)/);
@@ -345,6 +352,9 @@ test("public UI supports tag filter chips", async () => {
   assert.match(app, /function renderTagChips\(\) \{/);
   assert.match(app, /state\.tags = \[\];/);
   assert.match(css, /\.search-composer\s*\{/);
+  assert.match(css, /\.search-row\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) auto auto;/s);
+  assert.match(css, /\.filter-reset-button,\s*\.filter-toggle-button\s*\{/);
+  assert.match(css, /\.filter-reset-button:disabled\s*\{/);
   assert.match(css, /\.unified-search-input\s*\{/);
   assert.doesNotMatch(css, /\.tag-input\s*\{/);
   assert.match(css, /\.tag-suggestions\s*\{/);

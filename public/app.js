@@ -74,6 +74,7 @@ const lucideIcons = {
   copy: '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
   "external-link": '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
   "file-text": '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+  "funnel-x": '<path d="M12.531 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14v6a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341l.427-.473"/><path d="m16.5 3.5 5 5"/><path d="m21.5 3.5-5 5"/>',
   gauge: '<path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/>',
   "maximize-2": '<polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" x2="14" y1="3" y2="10"/><line x1="3" x2="10" y1="21" y2="14"/>',
   maximize: '<path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>',
@@ -99,6 +100,7 @@ const els = {
   searchInput: document.querySelector("#searchInput"),
   tagChips: document.querySelector("#tagChips"),
   tagSuggestions: document.querySelector("#tagSuggestions"),
+  resetFiltersButton: document.querySelector("#resetFiltersButton"),
   toggleFiltersButton: document.querySelector("#toggleFiltersButton"),
   advancedFilters: document.querySelector("#advancedFilters"),
   folderSelect: document.querySelector("#folderSelect"),
@@ -152,6 +154,7 @@ async function init() {
     syncAdvancedFiltersUi();
     syncUrlState();
   });
+  els.resetFiltersButton.addEventListener("click", resetFilters);
   els.prevButton.addEventListener("click", () => {
     state.offset = Math.max(0, state.offset - state.limit);
     resetPreviewState();
@@ -1051,12 +1054,14 @@ function applyControlsFromState() {
   els.ratingSelect.value = state.rating;
   els.pageSizeSelect.value = String(state.limit);
   syncAdvancedFiltersUi();
+  syncResetFiltersButton();
   updateViewToggle();
 }
 
 function applyFilterChange(patch) {
   Object.assign(state, patch, { offset: 0 });
   resetPreviewState();
+  syncResetFiltersButton();
   syncUrlState();
   loadItems();
 }
@@ -1120,6 +1125,7 @@ function renderTagChips() {
     fragment.append(chip);
   }
   els.tagChips.replaceChildren(fragment);
+  syncResetFiltersButton();
 }
 
 async function loadTagSuggestions() {
@@ -1200,6 +1206,10 @@ function syncAdvancedFiltersUi() {
   els.toggleFiltersButton.setAttribute("aria-expanded", String(state.filtersOpen));
   els.toggleFiltersButton.setAttribute("aria-label", label);
   els.toggleFiltersButton.title = label;
+}
+
+function syncResetFiltersButton() {
+  els.resetFiltersButton.disabled = !hasActiveFilters();
 }
 
 function currentPage() {
@@ -1622,6 +1632,7 @@ function hasActiveFilters() {
 }
 
 function resetFilters() {
+  if (!hasActiveFilters()) return;
   state.query = "";
   state.tags = [];
   state.folderId = "";
@@ -1633,6 +1644,7 @@ function resetFilters() {
   els.folderSelect.value = "";
   els.extSelect.value = "";
   els.ratingSelect.value = "";
+  syncResetFiltersButton();
   syncUrlState();
   loadItems();
 }

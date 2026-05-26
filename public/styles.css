@@ -220,7 +220,7 @@ main {
 
 .search-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 12px;
   align-items: stretch;
 }
@@ -284,11 +284,17 @@ main {
   font-weight: 760;
 }
 
+.filter-reset-button,
 .filter-toggle-button {
   width: 50px;
   min-width: 50px;
   min-height: 50px;
   align-self: stretch;
+}
+
+.filter-reset-button:disabled {
+  opacity: 0.42;
+  cursor: default;
 }
 
 .search-composer {
@@ -1946,7 +1952,8 @@ select:hover {
   }
 
   .search-row {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 8px;
   }
 
   .filter-row {
