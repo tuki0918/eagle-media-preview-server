@@ -231,8 +231,11 @@ async function handleApi(req, url, res, { getSession, setSession }) {
     const query = url.searchParams.get("q")?.trim();
     const offset = url.searchParams.get("offset") || 0;
     const limit = url.searchParams.get("limit") || 30;
+    const tags = [...url.searchParams.getAll("tags"), ...url.searchParams.getAll("tag")]
+      .map((tag) => tag.trim())
+      .filter(Boolean);
     const hasStructuredFilters = Boolean(
-      url.searchParams.get("folderId") || url.searchParams.get("ext") || url.searchParams.get("rating"),
+      url.searchParams.get("folderId") || url.searchParams.get("ext") || url.searchParams.get("rating") || tags.length,
     );
     const result = query && !hasStructuredFilters
       ? await session.client.searchItems({ query, offset, limit })
@@ -244,7 +247,16 @@ async function handleApi(req, url, res, { getSession, setSession }) {
           isUnfiled: url.searchParams.get("folderId") === "__uncategorized__",
           ext: url.searchParams.get("ext"),
           rating: url.searchParams.get("rating"),
+          tags,
         });
+    sendJson(res, 200, result);
+    return;
+  }
+
+  if (url.pathname === "/api/tags") {
+    const query = url.searchParams.get("q") || "";
+    const limit = url.searchParams.get("limit") || 20;
+    const result = await session.client.listTags({ query, limit });
     sendJson(res, 200, result);
     return;
   }

@@ -318,6 +318,40 @@ test("public UI labels media extensions as type", async () => {
   assert.doesNotMatch(app, /label: "Extension"/);
 });
 
+test("public UI supports tag filter chips", async () => {
+  const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
+  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
+  const css = await readFile(new URL("./styles.css", import.meta.url), "utf8");
+
+  assert.match(html, /id="tagChips"/);
+  assert.match(html, /id="tagSuggestions"/);
+  assert.match(html, /<div class="search-box"[\s\S]*id="tagChips"[\s\S]*id="searchInput"[\s\S]*id="tagSuggestions"[\s\S]*<\/div>[\s\S]*<button[\s\S]*id="toggleFiltersButton"/);
+  assert.doesNotMatch(html, /id="tagInput"/);
+  assert.doesNotMatch(html, /id="advancedFilters"[\s\S]*id="tagChips"/);
+  assert.match(app, /tags:\s*\[\]/);
+  assert.match(app, /tagChips: document\.querySelector\("#tagChips"\),/);
+  assert.match(app, /tagSuggestions: document\.querySelector\("#tagSuggestions"\),/);
+  assert.doesNotMatch(app, /tagInput:/);
+  assert.match(app, /applyFilterChange\(\{ query: els\.searchInput\.value\.trim\(\) \}\);[\s\S]*loadTagSuggestions\(\);/);
+  assert.match(app, /params\.getAll\("tag"\)/);
+  assert.match(app, /params\.append\("tag", tag\)/);
+  assert.match(app, /params\.append\("tags", tag\)/);
+  assert.match(app, /getJson\(`\/api\/tags\?\$\{params\.toString\(\)\}`\)/);
+  assert.match(app, /function loadTagSuggestions\(\) \{/);
+  assert.match(app, /function renderTagSuggestions\(items\) \{/);
+  assert.match(app, /function addTagFilter\(value\) \{/);
+  assert.match(app, /applyFilterChange\(\{ query: "", tags: \[\.\.\.state\.tags, tag\] \}\);/);
+  assert.match(app, /function removeTagFilter\(tag\) \{/);
+  assert.match(app, /function renderTagChips\(\) \{/);
+  assert.match(app, /state\.tags = \[\];/);
+  assert.match(css, /\.search-composer\s*\{/);
+  assert.match(css, /\.unified-search-input\s*\{/);
+  assert.doesNotMatch(css, /\.tag-input\s*\{/);
+  assert.match(css, /\.tag-suggestions\s*\{/);
+  assert.match(css, /\.tag-chips\s*\{/);
+  assert.match(css, /\.tag-chip\s*\{/);
+});
+
 test("public extension pills use varied colors for common text formats", async () => {
   const css = await readFile(new URL("./styles.css", import.meta.url), "utf8");
 

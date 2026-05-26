@@ -186,3 +186,78 @@ test("createViewerServer uses Eagle item extension as a PDF MIME fallback", asyn
     await viewer.stop();
   }
 });
+
+test("createViewerServer forwards repeated tag filters to item listing", async () => {
+  const calls = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    viewerPassword: "",
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/tmp/Test.library", name: "Test Library" };
+      },
+      async listItems(options) {
+        calls.push(options);
+        return { items: [], total: 0, offset: 0, limit: 30 };
+      },
+      async searchItems() {
+        throw new Error("searchItems should not be used when tag filters are present");
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const response = await fetch(`http://127.0.0.1:${status.port}/api/items?q=cat&tags=photo&tags=favorite`);
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { items: [], total: 0, offset: 0, limit: 30 });
+    assert.deepEqual(calls[0].tags, ["photo", "favorite"]);
+    assert.equal(calls[0].keywords, "cat");
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer serves tag autocomplete suggestions", async () => {
+  const calls = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    viewerPassword: "",
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/tmp/Test.library", name: "Test Library" };
+      },
+      async listTags(options) {
+        calls.push(options);
+        return { items: [{ name: "photo", count: 12 }], total: 1, offset: 0, limit: 20 };
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const response = await fetch(`http://127.0.0.1:${status.port}/api/tags?q=pho&limit=20`);
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      items: [{ name: "photo", count: 12 }],
+      total: 1,
+      offset: 0,
+      limit: 20,
+    });
+    assert.deepEqual(calls[0], { query: "pho", limit: "20" });
+  } finally {
+    await viewer.stop();
+  }
+});

@@ -4,6 +4,8 @@ const state = {
   total: 0,
   items: [],
   query: "",
+  tags: [],
+  tagSuggestionsRequestId: 0,
   folderId: "",
   ext: "",
   rating: "",
@@ -92,6 +94,8 @@ const els = {
   connectButton: document.querySelector("#connectButton"),
   connectMessage: document.querySelector("#connectMessage"),
   searchInput: document.querySelector("#searchInput"),
+  tagChips: document.querySelector("#tagChips"),
+  tagSuggestions: document.querySelector("#tagSuggestions"),
   toggleFiltersButton: document.querySelector("#toggleFiltersButton"),
   advancedFilters: document.querySelector("#advancedFilters"),
   folderSelect: document.querySelector("#folderSelect"),
@@ -156,7 +160,20 @@ async function init() {
   });
   els.searchInput.addEventListener("input", debounce(() => {
     applyFilterChange({ query: els.searchInput.value.trim() });
-  }, 280));
+    loadTagSuggestions();
+  }, 220));
+  els.searchInput.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      hideTagSuggestions();
+    }
+  });
+  els.searchInput.addEventListener("focus", () => {
+    if (els.searchInput.value.trim()) loadTagSuggestions();
+  });
+  document.addEventListener("pointerdown", (event) => {
+    if (event.target.closest(".search-box")) return;
+    hideTagSuggestions();
+  });
   els.folderSelect.addEventListener("change", () => {
     applyFilterChange({ folderId: els.folderSelect.value });
   });
@@ -279,6 +296,7 @@ async function loadItems() {
     limit: String(state.limit),
   });
   if (state.query) params.set("q", state.query);
+  for (const tag of state.tags) params.append("tags", tag);
   if (state.folderId) params.set("folderId", state.folderId);
   if (state.ext) params.set("ext", state.ext);
   if (state.rating !== "") params.set("rating", state.rating);
@@ -922,6 +940,7 @@ function restoreUrlState() {
   try {
     const params = new URLSearchParams(window.location.search);
     state.query = params.get("q") || "";
+    state.tags = uniqueTags(params.getAll("tag"));
     state.folderId = params.get("folder") || "";
     state.ext = params.get("ext") || "";
     state.rating = params.get("rating") || "";
@@ -938,6 +957,7 @@ function restoreUrlState() {
 
 function applyControlsFromState() {
   els.searchInput.value = state.query;
+  renderTagChips();
   els.folderSelect.value = state.folderId;
   els.extSelect.value = state.ext;
   els.ratingSelect.value = state.rating;
@@ -957,6 +977,7 @@ function syncUrlState({ replace = false } = {}) {
   if (state.restoringHistory) return;
   const params = new URLSearchParams();
   if (state.query) params.set("q", state.query);
+  for (const tag of state.tags) params.append("tag", tag);
   if (state.folderId) params.set("folder", state.folderId);
   if (state.ext) params.set("ext", state.ext);
   if (state.rating !== "") params.set("rating", state.rating);
@@ -971,6 +992,118 @@ function syncUrlState({ replace = false } = {}) {
   if (nextUrl === currentUrl) return;
   const method = replace ? "replaceState" : "pushState";
   history[method](null, "", nextUrl);
+}
+
+function addTagFilter(value) {
+  const tag = normalizeTag(value);
+  if (!tag || state.tags.includes(tag)) {
+    els.searchInput.value = "";
+    hideTagSuggestions();
+    return;
+  }
+  applyFilterChange({ query: "", tags: [...state.tags, tag] });
+  els.searchInput.value = "";
+  renderTagChips();
+  hideTagSuggestions();
+}
+
+function removeTagFilter(tag) {
+  applyFilterChange({ tags: state.tags.filter((entry) => entry !== tag) });
+  renderTagChips();
+}
+
+function renderTagChips() {
+  const fragment = document.createDocumentFragment();
+  for (const tag of state.tags) {
+    const chip = document.createElement("span");
+    chip.className = "tag-chip";
+
+    const label = document.createElement("span");
+    label.textContent = tag;
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.setAttribute("aria-label", `Remove tag ${tag}`);
+    button.title = `Remove tag ${tag}`;
+    button.append(iconNode("x"));
+    button.addEventListener("click", () => removeTagFilter(tag));
+
+    chip.append(label, button);
+    fragment.append(chip);
+  }
+  els.tagChips.replaceChildren(fragment);
+}
+
+async function loadTagSuggestions() {
+  const query = els.searchInput.value.trim();
+  const requestId = ++state.tagSuggestionsRequestId;
+  if (!query) {
+    hideTagSuggestions();
+    return;
+  }
+
+  const params = new URLSearchParams({ q: query, limit: "20" });
+  try {
+    const data = await getJson(`/api/tags?${params.toString()}`);
+    if (requestId !== state.tagSuggestionsRequestId) return;
+    const items = Array.isArray(data.items) ? data.items : [];
+    renderTagSuggestions(items.filter((item) => item?.name && !state.tags.includes(item.name)));
+  } catch {
+    if (requestId === state.tagSuggestionsRequestId) hideTagSuggestions();
+  }
+}
+
+function renderTagSuggestions(items) {
+  if (!items.length) {
+    hideTagSuggestions();
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  for (const item of items) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "tag-suggestion";
+    button.setAttribute("role", "option");
+    button.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      addTagFilter(item.name);
+    });
+
+    const name = document.createElement("span");
+    name.textContent = item.name;
+    button.append(name);
+
+    if (Number.isFinite(item.count)) {
+      const count = document.createElement("span");
+      count.className = "tag-suggestion-count";
+      count.textContent = item.count.toLocaleString();
+      button.append(count);
+    }
+
+    fragment.append(button);
+  }
+
+  els.tagSuggestions.replaceChildren(fragment);
+  els.tagSuggestions.hidden = false;
+}
+
+function hideTagSuggestions() {
+  state.tagSuggestionsRequestId += 1;
+  els.tagSuggestions.hidden = true;
+  els.tagSuggestions.replaceChildren();
+}
+
+function normalizeTag(value) {
+  return String(value || "").trim();
+}
+
+function uniqueTags(tags) {
+  const unique = [];
+  for (const tag of tags.map(normalizeTag).filter(Boolean)) {
+    if (!unique.includes(tag)) unique.push(tag);
+  }
+  return unique;
 }
 
 function syncAdvancedFiltersUi() {
@@ -1361,16 +1494,18 @@ function emptyStateNode() {
 }
 
 function hasActiveFilters() {
-  return Boolean(state.query || state.folderId || state.ext || state.rating !== "");
+  return Boolean(state.query || state.tags.length || state.folderId || state.ext || state.rating !== "");
 }
 
 function resetFilters() {
   state.query = "";
+  state.tags = [];
   state.folderId = "";
   state.ext = "";
   state.rating = "";
   state.offset = 0;
   els.searchInput.value = "";
+  renderTagChips();
   els.folderSelect.value = "";
   els.extSelect.value = "";
   els.ratingSelect.value = "";

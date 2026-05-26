@@ -31,10 +31,14 @@
     <main>
       <section class="controls" aria-label="Search and filters">
         <div class="search-row">
-          <label class="search-box">
+          <div class="search-box">
             <span data-lucide="search"></span>
-            <input id="searchInput" type="search" placeholder="Search name, tags, notes" autocomplete="off" />
-          </label>
+            <div class="search-composer">
+              <div id="tagChips" class="tag-chips" aria-label="Selected tag filters"></div>
+              <input id="searchInput" class="unified-search-input" type="search" placeholder="Search title or tag" autocomplete="off" aria-label="Search text or tag" />
+            </div>
+            <div id="tagSuggestions" class="tag-suggestions" role="listbox" aria-label="Tag suggestions" hidden></div>
+          </div>
           <button
             id="toggleFiltersButton"
             class="icon-button filter-toggle-button"

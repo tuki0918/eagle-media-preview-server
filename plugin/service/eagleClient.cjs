@@ -46,6 +46,12 @@ function normalizeOffset(value) {
   return parsed;
 }
 
+function clampTagLimit(value) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 20;
+  return Math.min(parsed, 100);
+}
+
 function createEagleClient({
   baseUrl = process.env.EAGLE_BASE_URL || "http://localhost:41595",
   token = process.env.EAGLE_TOKEN || "",
@@ -109,7 +115,7 @@ function createEagleClient({
       );
     },
 
-    async listItems({ offset = 0, limit = 30, folderId, isUnfiled = false, ext, rating, keywords } = {}) {
+    async listItems({ offset = 0, limit = 30, folderId, isUnfiled = false, ext, rating, keywords, tags } = {}) {
       const body = {
         offset: normalizeOffset(offset),
         limit: clampLimit(limit),
@@ -123,6 +129,8 @@ function createEagleClient({
       if (ext) body.ext = ext;
       if (rating !== undefined && rating !== null && rating !== "") body.rating = Number(rating);
       if (keywords) body.keywords = Array.isArray(keywords) ? keywords : [keywords];
+      const cleanTags = (Array.isArray(tags) ? tags : [tags]).map((tag) => String(tag || "").trim()).filter(Boolean);
+      if (cleanTags.length) body.tags = cleanTags;
 
       return normalizePaginatedResponse(
         await request("/api/v2/item/get", { method: "POST", body }),
@@ -134,6 +142,18 @@ function createEagleClient({
         await request("/api/v2/item/query", {
           method: "POST",
           body: { query, offset: normalizeOffset(offset), limit: clampLimit(limit) },
+        }),
+      );
+    },
+
+    async listTags({ query = "", offset = 0, limit = 20 } = {}) {
+      return normalizePaginatedResponse(
+        await request("/api/v2/tag/get", {
+          searchParams: {
+            name: String(query || "").trim(),
+            offset: normalizeOffset(offset),
+            limit: clampTagLimit(limit),
+          },
         }),
       );
     },

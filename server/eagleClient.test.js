@@ -100,6 +100,26 @@ test("listItems omits rating when the filter is not specified", async () => {
   assert.equal(Object.hasOwn(JSON.parse(calls[0].init.body), "rating"), false);
 });
 
+test("listItems sends multiple tag filters with keywords", async () => {
+  const calls = [];
+  const client = createEagleClient({
+    baseUrl: "http://eagle.local:41595",
+    fetchImpl: async (url, init) => {
+      calls.push({ url, init });
+      return jsonResponse({
+        status: "success",
+        data: { data: [], total: 0, offset: 0, limit: 60 },
+      });
+    },
+  });
+
+  await client.listItems({ keywords: "cat", tags: ["photo", "favorite"] });
+
+  const body = JSON.parse(calls[0].init.body);
+  assert.deepEqual(body.keywords, ["cat"]);
+  assert.deepEqual(body.tags, ["photo", "favorite"]);
+});
+
 test("listItems supports uncategorized filtering without folder ids", async () => {
   const calls = [];
   const client = createEagleClient({
@@ -174,6 +194,27 @@ test("searchItems uses V2 item/query", async () => {
     offset: 0,
     limit: 50,
   });
+});
+
+test("listTags uses V2 tag/get with a bounded name query", async () => {
+  const calls = [];
+  const client = createEagleClient({
+    baseUrl: "http://localhost:41595",
+    fetchImpl: async (url, init) => {
+      calls.push({ url, init });
+      return jsonResponse({
+        status: "success",
+        data: { data: [{ name: "photo", count: 12 }], total: 1, offset: 0, limit: 20 },
+      });
+    },
+  });
+
+  const result = await client.listTags({ query: " pho ", limit: 20 });
+
+  assert.deepEqual(result.items, [{ name: "photo", count: 12 }]);
+  assert.equal(result.total, 1);
+  assert.equal(calls[0].url, "http://localhost:41595/api/v2/tag/get?name=pho&offset=0&limit=20");
+  assert.equal(calls[0].init.method, "GET");
 });
 
 test("libraryHistory uses the legacy library history endpoint", async () => {
