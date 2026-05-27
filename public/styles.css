@@ -2174,6 +2174,16 @@ select:hover {
     gap: 12px;
   }
 
+  .media-tiles {
+    column-count: 3;
+    column-width: auto;
+    column-gap: 3px;
+  }
+
+  .media-tiles .tile-item {
+    margin-bottom: 3px;
+  }
+
   .status-line {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 8px;

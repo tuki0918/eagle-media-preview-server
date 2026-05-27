@@ -447,6 +447,7 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   assert.match(css, /@keyframes tile-skeleton/);
   assert.match(css, /\.tile-item \.tile-rating\s*\{/);
   assert.match(css, /\.media-tiles \.tile-item\s*\{[^}]*border-radius:\s*0;/s);
+  assert.match(css, /@media \(max-width: 540px\)[\s\S]*\.media-tiles\s*\{[^}]*column-count:\s*3;[^}]*column-width:\s*auto;/);
   assert.match(css, /\.tiles-sentinel\s*\{/);
 });
 
