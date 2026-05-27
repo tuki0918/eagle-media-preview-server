@@ -43,6 +43,9 @@ const TILE_PREFETCH_PAGES = 3;
 const LIBRARY_EMPTY_LABEL = "No library";
 const EAGLE_UNAVAILABLE_LABEL = "Eagle unavailable";
 const DATE_KEYS_MODIFIED = Object.freeze(["modifiedAt", "modificationTime", "mtime", "lastModified"]);
+const RECENT_TAGS_STORAGE_KEY = "eagleRecentTags";
+const RECENT_FOLDERS_STORAGE_KEY = "eagleRecentFolders";
+const RECENT_METADATA_LIMIT = 10;
 
 const playableVideoExts = new Set(["mp4", "webm", "mov", "m4v"]);
 const playableAudioExts = new Set(["mp3", "wav", "m4a", "aac", "ogg"]);
@@ -1470,8 +1473,6 @@ function renderPreviewDetails(item) {
     { label: "Size", value: formatBytes(item.size) },
     { label: "Dimensions", value: item.width && item.height ? `${item.width} x ${item.height}` : "" },
     { label: "Duration", value: isTimedMedia(item) ? formatDuration(item.duration) : "" },
-    { label: "Tags", value: Array.isArray(item.tags) ? item.tags.filter(Boolean) : [], chips: true, always: true },
-    { label: "Folders", value: folderDisplayNames(item.folders), chips: true, always: true },
     { label: "ID", value: item.id },
     { label: "Date Modified", value: formatItemDate(item, DATE_KEYS_MODIFIED) || "-" },
   ].filter(({ value, chips, always }) => always || (chips ? value.length > 0 : Boolean(value)));
@@ -1497,12 +1498,264 @@ function renderPreviewDetails(item) {
     detailsSection.append(row);
   }
 
+  detailsSection.append(previewMetadataEditor(item));
+
   const link = directFileLink(item);
   link.classList.add("preview-info-cta");
   link.prepend(iconNode("external-link"));
 
   els.previewDetails.replaceChildren(detailsSection);
   els.previewActions.replaceChildren(link);
+}
+
+function previewMetadataEditor(item) {
+  const form = document.createElement("form");
+  form.className = "preview-edit-form";
+
+  const tagPicker = metadataChipPicker({
+    kind: "tag",
+    initialValues: itemTags(item),
+    placeholder: "Add tag",
+    inputLabel: "Add tag",
+    labelForValue: (value) => value,
+    getSuggestions: tagSuggestionItems,
+    normalizeValue: normalizeTag,
+  });
+  const categoryPicker = metadataChipPicker({
+    kind: "category",
+    initialValues: folderIds(item.folders),
+    placeholder: "Add category",
+    inputLabel: "Add category",
+    labelForValue: folderLabel,
+    getSuggestions: folderSuggestionItems,
+    normalizeValue: (value) => String(value || "").trim(),
+  });
+
+  const saveButton = document.createElement("button");
+  saveButton.type = "submit";
+  saveButton.className = "text-button preview-edit-save";
+  saveButton.textContent = "Save";
+
+  const status = document.createElement("span");
+  status.className = "preview-edit-status";
+  status.setAttribute("role", "status");
+
+  form.append(
+    previewEditField("Tags", tagPicker.element),
+    previewEditField("Categories", categoryPicker.element),
+    previewEditActions(saveButton, status),
+  );
+  const submitMetadata = (event) => {
+    event.preventDefault();
+    savePreviewMetadata(item, {
+      tags: tagPicker.values(),
+      folders: categoryPicker.values(),
+      saveButton,
+      status,
+    });
+  };
+  form.addEventListener("submit", submitMetadata);
+  saveButton.addEventListener("click", submitMetadata);
+  return form;
+}
+
+function metadataChipPicker({
+  kind,
+  initialValues,
+  placeholder,
+  inputLabel,
+  labelForValue,
+  getSuggestions,
+  normalizeValue,
+}) {
+  let selected = uniqueValues((initialValues || []).map(normalizeValue).filter(Boolean));
+  let currentSuggestions = [];
+  let requestId = 0;
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "preview-chip-editor";
+  wrapper.dataset.kind = kind;
+
+  const chipList = document.createElement("div");
+  chipList.className = "preview-edit-chip-list";
+
+  const inputWrap = document.createElement("div");
+  inputWrap.className = "preview-chip-input-wrap";
+
+  const input = document.createElement("input");
+  input.className = "preview-chip-input";
+  input.type = "text";
+  input.placeholder = placeholder;
+  input.setAttribute("aria-label", inputLabel);
+  input.setAttribute("autocomplete", "off");
+
+  const suggestions = document.createElement("div");
+  suggestions.className = "preview-chip-suggestions";
+  suggestions.setAttribute("role", "listbox");
+  suggestions.hidden = true;
+
+  inputWrap.append(input, suggestions);
+  wrapper.append(chipList, inputWrap);
+
+  const addValue = (value) => {
+    const normalized = normalizeValue(value);
+    if (!normalized || selected.includes(normalized)) return;
+    selected = [...selected, normalized];
+    input.value = "";
+    renderSelected();
+    hideSuggestions();
+  };
+
+  const removeValue = (value) => {
+    selected = selected.filter((entry) => entry !== value);
+    renderSelected();
+    updateSuggestions();
+  };
+
+  const hideSuggestions = () => {
+    requestId += 1;
+    suggestions.hidden = true;
+    suggestions.replaceChildren();
+    currentSuggestions = [];
+  };
+
+  const renderSuggestions = (items) => {
+    currentSuggestions = items;
+    if (!items.length) {
+      suggestions.hidden = true;
+      suggestions.replaceChildren();
+      return;
+    }
+    const fragment = document.createDocumentFragment();
+    for (const item of items) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "preview-chip-suggestion";
+      button.setAttribute("role", "option");
+      button.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        addValue(item.value);
+      });
+
+      const label = document.createElement("span");
+      label.textContent = item.label;
+      button.append(label);
+
+      if (item.meta) {
+        const meta = document.createElement("span");
+        meta.className = "preview-chip-suggestion-meta";
+        meta.textContent = item.meta;
+        button.append(meta);
+      }
+
+      fragment.append(button);
+    }
+    suggestions.replaceChildren(fragment);
+    suggestions.hidden = false;
+  };
+
+  const updateSuggestions = async () => {
+    const query = input.value.trim();
+    const currentRequest = ++requestId;
+    try {
+      const items = await getSuggestions(query, selected);
+      if (currentRequest !== requestId) return;
+      renderSuggestions(items);
+    } catch {
+      if (currentRequest === requestId) hideSuggestions();
+    }
+  };
+
+  const renderSelected = () => {
+    const fragment = document.createDocumentFragment();
+    for (const value of selected) {
+      const chip = document.createElement("span");
+      chip.className = "preview-edit-chip";
+
+      const label = document.createElement("span");
+      label.textContent = labelForValue(value);
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.title = `Remove ${label.textContent}`;
+      button.setAttribute("aria-label", `Remove ${label.textContent}`);
+      button.append(iconNode("x"));
+      button.addEventListener("click", () => removeValue(value));
+
+      chip.append(label, button);
+      fragment.append(chip);
+    }
+    chipList.replaceChildren(fragment);
+  };
+
+  input.addEventListener("input", debounce(updateSuggestions, 160));
+  input.addEventListener("pointerdown", updateSuggestions);
+  input.addEventListener("focus", updateSuggestions);
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      hideSuggestions();
+      return;
+    }
+    if (event.key !== "Enter" && event.key !== ",") return;
+    event.preventDefault();
+    const value = input.value.trim();
+    if (value && kind === "tag") {
+      addValue(value);
+      return;
+    }
+    if (currentSuggestions[0]) addValue(currentSuggestions[0].value);
+  });
+  wrapper.addEventListener("focusout", (event) => {
+    if (wrapper.contains(event.relatedTarget)) return;
+    window.setTimeout(hideSuggestions, 120);
+  });
+  wrapper.addEventListener("pointerdown", (event) => event.stopPropagation());
+
+  renderSelected();
+
+  return {
+    element: wrapper,
+    values: () => selected.slice(),
+  };
+}
+
+function previewEditField(label, control) {
+  const row = document.createElement("div");
+  row.className = "preview-edit-row";
+  const labelNode = document.createElement("span");
+  labelNode.className = "preview-detail-label";
+  labelNode.textContent = label;
+  row.append(labelNode, control);
+  return row;
+}
+
+function previewEditActions(saveButton, status) {
+  const row = document.createElement("div");
+  row.className = "preview-edit-actions";
+  row.append(saveButton, status);
+  return row;
+}
+
+async function savePreviewMetadata(item, { tags, folders, saveButton, status }) {
+  saveButton.disabled = true;
+  status.textContent = "Saving";
+  try {
+    const data = await postJson(`/api/items/${encodeURIComponent(item.id)}/metadata`, { tags, folders });
+    const patch = {
+      tags: Array.isArray(data.tags) ? data.tags : tags,
+      folders: Array.isArray(data.folders) ? data.folders : folders,
+    };
+    rememberRecentValues(RECENT_TAGS_STORAGE_KEY, patch.tags);
+    rememberRecentValues(RECENT_FOLDERS_STORAGE_KEY, patch.folders);
+    Object.assign(item, patch);
+    updateItemInState(item.id, patch);
+    render();
+    if (status.isConnected) status.textContent = "Saved";
+  } catch (error) {
+    status.textContent = error.message;
+  } finally {
+    saveButton.disabled = false;
+  }
 }
 
 function previewChipList(values) {
@@ -1515,6 +1768,106 @@ function previewChipList(values) {
     list.append(chip);
   }
   return list;
+}
+
+function itemTags(item) {
+  return Array.isArray(item.tags) ? item.tags.map(normalizeTag).filter(Boolean) : [];
+}
+
+function tagSuggestionItems(query, selectedValues) {
+  const selected = new Set(selectedValues);
+  const recent = readRecentList(RECENT_TAGS_STORAGE_KEY)
+    .filter((tag) => !selected.has(tag) && matchesQuery(tag, query))
+    .map((tag) => ({ value: tag, label: tag, meta: "Recent" }));
+  if (!query) return recent;
+
+  const params = new URLSearchParams({ q: query, limit: "20" });
+  return getJson(`/api/tags?${params.toString()}`)
+    .then((data) => {
+      const remote = Array.isArray(data.items) ? data.items : [];
+      return dedupeSuggestions([
+        ...recent,
+        ...remote
+          .map((item) => ({
+            value: normalizeTag(item?.name),
+            label: normalizeTag(item?.name),
+            meta: Number.isFinite(item?.count) ? item.count.toLocaleString() : "",
+          }))
+          .filter((item) => item.value && !selected.has(item.value)),
+      ]);
+    })
+    .catch(() => recent);
+}
+
+function folderSuggestionItems(query, selectedValues) {
+  const selected = new Set(selectedValues);
+  const recent = readRecentList(RECENT_FOLDERS_STORAGE_KEY)
+    .filter((id) => !selected.has(id) && matchesQuery(folderLabel(id), query))
+    .map((id) => ({ value: id, label: folderLabel(id), meta: "Recent" }));
+  const folders = state.folders
+    .filter((folder) => !selected.has(folder.id) && matchesQuery(folder.name, query))
+    .map((folder) => ({
+      value: folder.id,
+      label: folderLabel(folder.id),
+      meta: Number.isFinite(folder.imageCount) ? `${folder.imageCount.toLocaleString()} items` : "",
+    }));
+  return dedupeSuggestions([...recent, ...folders]).slice(0, 20);
+}
+
+function dedupeSuggestions(items) {
+  const seen = new Set();
+  const output = [];
+  for (const item of items) {
+    if (!item.value || seen.has(item.value)) continue;
+    seen.add(item.value);
+    output.push(item);
+  }
+  return output;
+}
+
+function matchesQuery(value, query) {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return true;
+  return String(value || "").toLowerCase().includes(needle);
+}
+
+function folderLabel(id) {
+  const folder = state.folders.find((entry) => entry.id === id);
+  if (!folder) return id;
+  return `${folder.depth ? "  ".repeat(folder.depth) : ""}${folder.name}`;
+}
+
+function readRecentList(key) {
+  try {
+    const values = JSON.parse(localStorage.getItem(key) || "[]");
+    return Array.isArray(values) ? uniqueValues(values.map((value) => String(value || "").trim()).filter(Boolean)) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeRecentList(key, values) {
+  try {
+    localStorage.setItem(key, JSON.stringify(uniqueValues(values).slice(0, RECENT_METADATA_LIMIT)));
+  } catch {
+    // Recent metadata is a convenience cache; saving metadata itself should not fail because of storage limits.
+  }
+}
+
+function rememberRecentValues(key, values) {
+  const next = uniqueValues([
+    ...(values || []).map((value) => String(value || "").trim()).filter(Boolean),
+    ...readRecentList(key),
+  ]);
+  writeRecentList(key, next);
+}
+
+function uniqueValues(values) {
+  const unique = [];
+  for (const value of values) {
+    if (value && !unique.includes(value)) unique.push(value);
+  }
+  return unique;
 }
 
 function mediaTypeLabel(item) {

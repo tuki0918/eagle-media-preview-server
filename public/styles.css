@@ -1818,6 +1818,177 @@ select:hover {
   font-weight: 500;
 }
 
+.preview-edit-form {
+  display: grid;
+  gap: 10px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.preview-edit-row {
+  display: grid;
+  grid-template-columns: minmax(96px, 112px) minmax(0, 1fr);
+  align-items: start;
+  min-height: 32px;
+  gap: 18px;
+}
+
+.preview-chip-editor {
+  width: 100%;
+  min-width: 0;
+  position: relative;
+  display: grid;
+  gap: 8px;
+}
+
+.preview-edit-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 0;
+}
+
+.preview-edit-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 26px;
+  padding: 0 6px 0 9px;
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 560;
+}
+
+.preview-edit-chip > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-edit-chip button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.preview-edit-chip button:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.preview-edit-chip svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.preview-chip-input-wrap {
+  position: relative;
+}
+
+.preview-chip-input {
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  font: inherit;
+}
+
+.preview-chip-input:focus {
+  outline: 2px solid rgba(37, 99, 235, 0.22);
+  border-color: rgba(37, 99, 235, 0.58);
+}
+
+.preview-chip-suggestions {
+  position: absolute;
+  z-index: 8;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  display: grid;
+  max-height: 184px;
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.16);
+}
+
+.preview-chip-suggestion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #0f172a;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+}
+
+.preview-chip-suggestion:hover,
+.preview-chip-suggestion:focus-visible {
+  background: #eff6ff;
+  outline: none;
+}
+
+.preview-chip-suggestion span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-chip-suggestion-meta {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.preview-edit-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.preview-edit-save {
+  min-height: 34px;
+  padding: 0 12px;
+}
+
+.preview-edit-status {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .preview-info-actions {
   padding: 12px 8px 0;
   border-top: 1px solid rgba(148, 163, 184, 0.22);
@@ -1954,6 +2125,48 @@ select:hover {
   .search-row {
     grid-template-columns: minmax(0, 1fr) auto auto;
     gap: 8px;
+  }
+
+  .search-box {
+    min-height: 44px;
+    padding: 5px 10px;
+    gap: 8px;
+  }
+
+  .search-composer {
+    flex-wrap: nowrap;
+    overflow: hidden;
+    gap: 6px;
+  }
+
+  .tag-chips {
+    flex: 0 1 auto;
+    flex-wrap: nowrap;
+    max-width: 58%;
+    min-height: 24px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .tag-chips::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tag-chip {
+    flex: 0 0 auto;
+    max-width: 132px;
+  }
+
+  .unified-search-input {
+    min-width: 0;
+    flex-basis: 72px;
+  }
+
+  .filter-reset-button,
+  .filter-toggle-button {
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
   }
 
   .filter-row {
