@@ -7,7 +7,7 @@ const distDir = resolve("dist");
 
 function copyPluginPackageAssets() {
   const includeRuntimeAsset = (sourcePath: string) => !/\.test\.(?:cjs|js|ts|tsx)$/.test(sourcePath)
-    && !/\.(?:ts|tsx)$/.test(sourcePath);
+    && !/\.(?:cts|mts|ts|tsx)$/.test(sourcePath);
 
   return {
     name: "copy-plugin-package-assets",

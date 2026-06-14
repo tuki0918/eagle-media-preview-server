@@ -120,7 +120,7 @@ test("plugin server serves text and markdown media as inline raw text", async ()
   assert.match(source, /"\.txt": "text\/plain; charset=utf-8"/);
   assert.match(source, /"\.md": "text\/plain; charset=utf-8"/);
   assert.match(source, /"Content-Disposition": contentDisposition\(contentType, itemData, filePath\)/);
-  assert.match(source, /if \(contentType !== "application\/pdf"\) return "inline";/);
+  assert.match(source, /if \(contentType !== "application\/pdf"\)\s*return "inline";/);
 });
 
 test("plugin app resolves CommonJS runtime from the plugin file location", async () => {

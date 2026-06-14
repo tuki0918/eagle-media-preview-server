@@ -4,10 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vite build",
+    "build": "npm run build:cjs && vite build",
+    "build:cjs": "tsc -p tsconfig.cjs.json",
     "dev": "vite --host 127.0.0.1",
-    "test": "vitest run",
-    "typecheck": "tsc --noEmit",
+    "test": "npm run build:cjs && vitest run",
+    "typecheck": "tsc --noEmit && npm run typecheck:cjs",
+    "typecheck:cjs": "tsc -p tsconfig.cjs.json --noEmit",
     "verify": "npm run typecheck && npm run build && npm test"
   },
   "engines": {
