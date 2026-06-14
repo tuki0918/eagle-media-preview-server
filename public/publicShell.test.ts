@@ -15,6 +15,7 @@ async function readViewerSources() {
     "../src/viewer/media.ts",
     "../src/viewer/metadata.ts",
     "../src/viewer/pagination.ts",
+    "../src/viewer/previewDialogState.ts",
     "../src/viewer/previewDetails.ts",
     "../src/viewer/previewTransform.ts",
     "../src/viewer/shellActions.ts",
@@ -241,7 +242,7 @@ test("public preview renders text-like files and PDFs from their thumbnails", as
   assert.doesNotMatch(app, /function renderPdfPreview\(item\) \{/);
   assert.doesNotMatch(app, /viewer\.src = directFileUrl\(item\);/);
   assert.match(app, /function previewFileName\(item[^)]*\) \{/);
-  assert.match(app, /text-mode/);
+  assert.match(app, /PreviewDialogMode = "" \| "audio" \| "image" \| "text" \| "unsupported" \| "video"/);
   assert.doesNotMatch(app, /pdf-mode/);
   assert.match(css, /\.text-mode \.preview-body/);
   assert.match(css, /\.text-preview/);
@@ -414,6 +415,15 @@ test("public preview info closes when pressing outside the side menu", async () 
   const app = await readViewerSources();
 
   assert.match(html, /onPointerDown=\{handlePreviewPointerDown\}/);
+  assert.match(html, /useSyncExternalStore\(subscribePreviewDialogState, getPreviewDialogState, getPreviewDialogState\)/);
+  assert.match(html, /previewDialogState\.mode \? `\$\{previewDialogState\.mode\}-mode` : ""/);
+  assert.match(html, /aria-expanded=\{previewDialogState\.infoOpen\}/);
+  assert.match(app, /setPreviewDialogState\(\{/);
+  assert.match(app, /setPreviewDialogInfoOpen\(isOpen\);/);
+  assert.match(app, /resetPreviewDialogState\(\);/);
+  assert.doesNotMatch(app, /els\.dialog\.classList/);
+  assert.doesNotMatch(app, /toggleInfoPreview: document\.querySelector\("#toggleInfoPreview"\),/);
+  assert.doesNotMatch(app, /els\.toggleInfoPreview\.setAttribute/);
   assert.match(app, /previewPointerDown:\s*closePreviewInfoFromOutside,/);
   assert.match(app, /function closePreviewInfoFromOutside\(target: EventTarget \| null\) \{/);
   assert.match(app, /if \(!state\.previewInfoOpen\) return;/);

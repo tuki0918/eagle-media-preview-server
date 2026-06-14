@@ -68,6 +68,11 @@ import {
   renderTagSuggestionsView,
 } from "./viewer/components/TagSuggestions";
 import { previewDetailRows } from "./viewer/previewDetails";
+import {
+  resetPreviewDialogState,
+  setPreviewDialogInfoOpen,
+  setPreviewDialogState,
+} from "./viewer/previewDialogState";
 import { clearRatingView, renderRatingView } from "./viewer/components/RatingStars";
 import { setViewerShellActions } from "./viewer/shellActions";
 import { getShellView, setShellView } from "./viewer/shellVisibility";
@@ -331,8 +336,6 @@ function openPreview(item: EagleItem, { skipHistory = false }: OpenPreviewOption
   renderPreviewMetaView(els.previewMetaHost, { value: itemMeta(item) });
   renderPreviewOriginalNameView(els.previewOriginalNameHost, { value: originalFileName(item) });
   clearPreviewBodyView(els.previewBody);
-  els.dialog.classList.remove("video-mode", "image-mode", "audio-mode", "text-mode", "unsupported-mode", "info-open");
-  els.toggleInfoPreview.setAttribute("aria-expanded", state.previewInfoOpen ? "true" : "false");
   renderRatingView(els.previewRating, {
     className: "rating-control inline-flex items-center gap-px",
     interactive: true,
@@ -340,12 +343,12 @@ function openPreview(item: EagleItem, { skipHistory = false }: OpenPreviewOption
     onSelect: (star) => setItemStar(item, star),
   });
   renderPreviewDetails(item);
-  if (state.previewInfoOpen) {
-    els.dialog.classList.add("info-open");
-  }
 
   const { kind, srcKind } = previewBodyForItem(item);
-  els.dialog.classList.add(`${kind}-mode`);
+  setPreviewDialogState({
+    infoOpen: state.previewInfoOpen,
+    mode: kind,
+  });
   renderPreviewBodyView(els.previewBody, { item, kind, srcKind });
 
   showPreviewDialog();
@@ -390,8 +393,7 @@ function restoreViewMode() {
 }
 
 function closePreview({ skipHistory = false }: OpenPreviewOptions = {}) {
-  els.dialog.classList.remove("video-mode", "image-mode", "audio-mode", "text-mode", "unsupported-mode", "info-open");
-  els.toggleInfoPreview.setAttribute("aria-expanded", "false");
+  resetPreviewDialogState();
   state.previewItemId = "";
   state.previewInfoOpen = false;
   document.body.classList.remove("modal-open");
@@ -416,9 +418,8 @@ function closePreviewInfoFromOutside(target: EventTarget | null) {
 }
 
 function setPreviewInfoOpen(isOpen: boolean) {
-  els.dialog.classList.toggle("info-open", isOpen);
-  els.toggleInfoPreview.setAttribute("aria-expanded", isOpen ? "true" : "false");
   state.previewInfoOpen = isOpen;
+  setPreviewDialogInfoOpen(isOpen);
   syncUrlState();
 }
 

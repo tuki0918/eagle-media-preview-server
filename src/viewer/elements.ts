@@ -20,7 +20,6 @@ export interface ViewerElements {
   previewRating: HTMLElement;
   previewDetails: HTMLElement;
   previewActions: HTMLElement;
-  toggleInfoPreview: HTMLButtonElement;
 }
 
 export function getViewerElements(): ViewerElements {
@@ -46,7 +45,6 @@ export function getViewerElements(): ViewerElements {
     previewRating: document.querySelector("#previewRating"),
     previewDetails: document.querySelector("#previewDetails"),
     previewActions: document.querySelector("#previewActions"),
-    toggleInfoPreview: document.querySelector("#toggleInfoPreview"),
   };
   for (const [name, element] of Object.entries(elements)) {
     if (!element) throw new Error(`Missing viewer element: ${name}`);

@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from "react";
 import {
   closePreview,
   handlePreviewClose,
@@ -6,13 +7,21 @@ import {
   toggleFullscreen,
   togglePreviewInfo,
 } from "../shellActions";
+import { getPreviewDialogState, subscribePreviewDialogState } from "../previewDialogState";
 import { PreviewMeta, PreviewOriginalName } from "./PreviewText";
 
 export function PreviewDialog() {
+  const previewDialogState = useSyncExternalStore(subscribePreviewDialogState, getPreviewDialogState, getPreviewDialogState);
+  const dialogClassName = [
+    "h-dvh max-h-dvh w-screen max-w-full rounded-none border-0 bg-app-surface p-0 text-app-text",
+    previewDialogState.mode ? `${previewDialogState.mode}-mode` : "",
+    previewDialogState.infoOpen ? "info-open" : "",
+  ].filter(Boolean).join(" ");
+
   return (
     <dialog
       id="previewDialog"
-      className="h-dvh max-h-dvh w-screen max-w-full rounded-none border-0 bg-app-surface p-0 text-app-text"
+      className={dialogClassName}
       onClose={handlePreviewClose}
       onDoubleClick={handlePreviewDoubleClick}
       onPointerDown={handlePreviewPointerDown}
@@ -29,7 +38,7 @@ export function PreviewDialog() {
           </span>
         </div>
         <div className="dialog-actions flex items-center justify-end gap-2">
-          <button id="toggleInfoPreview" className="icon-button inline-grid min-h-10 w-10 flex-[0_0_40px] place-items-center rounded-app border border-app-border bg-app-surface text-app-text" aria-label="Media information" title="Media information" onClick={togglePreviewInfo}>
+          <button id="toggleInfoPreview" className="icon-button inline-grid min-h-10 w-10 flex-[0_0_40px] place-items-center rounded-app border border-app-border bg-app-surface text-app-text" aria-label="Media information" aria-expanded={previewDialogState.infoOpen} title="Media information" onClick={togglePreviewInfo}>
             <span data-lucide="panel-left" />
           </button>
           <button id="fullscreenPreview" className="icon-button inline-grid min-h-10 w-10 flex-[0_0_40px] place-items-center rounded-app border border-app-border bg-app-surface text-app-text" aria-label="Fullscreen" title="Fullscreen" onClick={toggleFullscreen}>
