@@ -7,7 +7,7 @@ test("public login no longer renders advanced Eagle connection settings", async 
   const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
 
   assert.match(html, /import iconOnUrl from "\.\/assets\/icon_on\.svg";/);
-  assert.match(html, /class="app-logo" src="\$\{iconOnUrl\}"/);
+  assert.match(html, /className="app-logo" src=\{iconOnUrl\}/);
   assert.match(html, /<h1>Media Preview Server<\/h1>/);
   assert.match(html, /A local media server for your Eagle library\./);
   assert.doesNotMatch(html, /id="viewerPasswordField"/);
@@ -52,7 +52,7 @@ test("public UI no longer shows connect lock icon or connection settings button"
   assert.match(css, /\.status-line\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) auto;/s);
   assert.match(css, /\.status-actions\s*\{[^}]*margin-left:\s*auto;[^}]*justify-self:\s*end;/s);
   assert.match(css, /@media \(max-width: 540px\)[\s\S]*\.status-line\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) auto;/s);
-  assert.match(html, /<option value="30" selected>30 items<\/option>/);
+  assert.match(html, /<select id="pageSizeSelect" aria-label="Page size" defaultValue="30">[\s\S]*<option value="30">30 items<\/option>/);
   assert.match(app, /limit:\s*30,/);
   assert.match(app, /if \(state\.limit !== DEFAULT_PAGE_SIZE\) params\.set\("limit", String\(state\.limit\)\);/);
   assert.match(app, /const parsed = Number\.parseInt\(value \|\| "30", 10\);/);
@@ -236,7 +236,7 @@ test("public file names expose original names in truncated views and preview inf
   assert.match(app, /function originalFileName\(item\) \{/);
   assert.match(app, /title\.title = originalFileName\(item\);/);
   assert.match(app, /name\.title = originalFileName\(item\);/);
-  assert.match(html, /<section class="preview-original-name-section">\s*<div id="previewOriginalName" class="preview-original-name-value"><\/div>\s*<\/section>\s*<section class="preview-rating-section">/);
+  assert.match(html, /<section className="preview-original-name-section">[\s\S]*<div id="previewOriginalName" className="preview-original-name-value" \/>[\s\S]*<\/section>[\s\S]*<section className="preview-rating-section">/);
   assert.doesNotMatch(html, /File Name/);
   assert.match(app, /previewOriginalName: document\.querySelector\("#previewOriginalName"\),/);
   assert.match(app, /els\.previewOriginalName\.textContent = originalFileName\(item\);/);
@@ -345,7 +345,7 @@ test("public UI labels media extensions as type", async () => {
   assert.match(html, /<select id="folderSelect" aria-label="Folder">[\s\S]*?<option value="">All folders<\/option>/);
   assert.match(html, /<select id="extSelect" aria-label="Type">[\s\S]*?<option value="">All types<\/option>/);
   assert.match(html, /<select id="ratingSelect" aria-label="Rating">[\s\S]*?<option value="">All ratings<\/option>/);
-  assert.match(html, /<select id="pageSizeSelect" aria-label="Page size">[\s\S]*?<option value="30" selected>30 items<\/option>/);
+  assert.match(html, /<select id="pageSizeSelect" aria-label="Page size" defaultValue="30">[\s\S]*?<option value="30">30 items<\/option>/);
   assert.doesNotMatch(html, /<span>Folder<\/span>/);
   assert.doesNotMatch(html, /<span>Type<\/span>\s*<select id="extSelect"/);
   assert.doesNotMatch(html, /<span>Rating<\/span>/);
@@ -362,7 +362,7 @@ test("public UI supports tag filter chips", async () => {
 
   assert.match(html, /id="tagChips"/);
   assert.match(html, /id="tagSuggestions"/);
-  assert.match(html, /<div class="search-box"[\s\S]*id="tagChips"[\s\S]*id="searchInput"[\s\S]*id="tagSuggestions"[\s\S]*<\/div>[\s\S]*id="resetFiltersButton"[\s\S]*id="toggleFiltersButton"/);
+  assert.match(html, /<div className="search-box"[\s\S]*id="tagChips"[\s\S]*id="searchInput"[\s\S]*id="tagSuggestions"[\s\S]*<\/div>[\s\S]*id="resetFiltersButton"[\s\S]*id="toggleFiltersButton"/);
   assert.match(html, /id="resetFiltersButton"[\s\S]*aria-label="Reset filters"[\s\S]*disabled/);
   assert.match(html, /id="resetFiltersButton"[\s\S]*data-lucide="funnel-x"/);
   assert.doesNotMatch(html, /id="tagInput"/);
@@ -410,7 +410,7 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(html, /id="tilesViewButton"/);
-  assert.match(html, /<button id="tilesViewButton" type="button" aria-pressed="true">Tiles<\/button>[\s\S]*<button id="gridViewButton" type="button" aria-pressed="false">Grid<\/button>/);
+  assert.match(html, /<button id="tilesViewButton" type="button" aria-pressed="true">[\s\S]*Tiles[\s\S]*<\/button>[\s\S]*<button id="gridViewButton" type="button" aria-pressed="false">[\s\S]*Grid[\s\S]*<\/button>/);
   assert.match(html, /id="tilesSentinel"/);
   assert.match(app, /const DEFAULT_VIEW_MODE = "tiles";/);
   assert.match(app, /const TILE_PREFETCH_PAGES = 3;/);
