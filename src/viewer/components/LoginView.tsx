@@ -14,9 +14,13 @@ interface ConnectMessageProps {
 const connectButtonRoots = new WeakMap<HTMLElement, Root>();
 const connectMessageRoots = new WeakMap<HTMLElement, Root>();
 
-export function LoginView() {
+interface LoginViewProps {
+  hidden?: boolean;
+}
+
+export function LoginView({ hidden = false }: LoginViewProps) {
   return (
-    <section id="loginView" className="login-view grid min-h-dvh place-items-center px-4 py-9">
+    <section id="loginView" className="login-view grid min-h-dvh place-items-center px-4 py-9" hidden={hidden}>
       <form
         id="connectForm"
         className="login-panel grid w-[min(320px,100%)] gap-[18px] rounded-[14px] border border-app-border bg-[rgba(255,255,255,0.95)] px-[30px] pb-[30px] pt-[42px] shadow-app backdrop-blur-xl"

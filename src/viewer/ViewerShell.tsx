@@ -1,11 +1,15 @@
+import { useSyncExternalStore } from "react";
 import { LoginView } from "./components/LoginView";
 import { ViewerShellLayout } from "./components/ViewerShellLayout";
+import { getShellView, subscribeShellView } from "./shellVisibility";
 
 export function ViewerAppShell() {
+  const shellView = useSyncExternalStore(subscribeShellView, getShellView, getShellView);
+
   return (
     <>
-      <LoginView />
-      <ViewerShellLayout />
+      <LoginView hidden={shellView !== "login"} />
+      <ViewerShellLayout hidden={shellView !== "viewer"} />
     </>
   );
 }

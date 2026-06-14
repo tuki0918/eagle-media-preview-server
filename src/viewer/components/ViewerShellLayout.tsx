@@ -6,9 +6,13 @@ import { ResultsStatus } from "./ResultsStatus";
 import { SearchControls } from "./SearchControls";
 import { TilesSentinel } from "./TilesSentinel";
 
-export function ViewerShellLayout() {
+interface ViewerShellLayoutProps {
+  hidden?: boolean;
+}
+
+export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
   return (
-    <div id="viewerShell" hidden>
+    <div id="viewerShell" hidden={hidden}>
       <main>
         <SearchControls />
         <div id="resultsStatusHost">

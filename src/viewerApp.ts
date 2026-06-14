@@ -70,6 +70,7 @@ import {
 import { previewDetailRows } from "./viewer/previewDetails";
 import { clearRatingView, renderRatingView } from "./viewer/components/RatingStars";
 import { setViewerShellActions } from "./viewer/shellActions";
+import { getShellView, setShellView } from "./viewer/shellVisibility";
 import { state } from "./viewer/state";
 import {
   canLoadMoreTiles,
@@ -168,7 +169,7 @@ async function init() {
   window.addEventListener("popstate", () => {
     restoreUrlState();
     applyControlsFromState();
-    if (els.viewerShell.hidden) return;
+    if (getShellView() !== "viewer") return;
     loadItems();
   });
   document.addEventListener("pointerdown", (event) => {
@@ -203,13 +204,11 @@ async function connect() {
 }
 
 function showLogin() {
-  els.loginView.hidden = false;
-  els.viewerShell.hidden = true;
+  setShellView("login");
 }
 
 function showViewer(data: ConnectResponse) {
-  els.loginView.hidden = true;
-  els.viewerShell.hidden = false;
+  setShellView("viewer");
   renderLibraryFooterView(els.libraryFooterNameHost, { name: libraryLabel(data) });
   renderSearchControlButtons();
   state.total = 0;

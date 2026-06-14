@@ -18,6 +18,7 @@ async function readViewerSources() {
     "../src/viewer/previewDetails.ts",
     "../src/viewer/previewTransform.ts",
     "../src/viewer/shellActions.ts",
+    "../src/viewer/shellVisibility.ts",
     "../src/viewer/state.ts",
     "../src/viewer/tileLoading.ts",
     "../src/viewer/urlState.ts",
@@ -97,6 +98,16 @@ test("public UI no longer shows connect lock icon or connection settings button"
   assert.match(app, /renderLoginConnectView\(els\.connectButtonHost, els\.connectMessageHost, \{/);
   assert.doesNotMatch(app, /els\.connectMessage\.textContent/);
   assert.doesNotMatch(app, /els\.connectMessage\.classList/);
+  assert.match(app, /import \{ getShellView, setShellView \} from "\.\/viewer\/shellVisibility";/);
+  assert.match(html, /useSyncExternalStore\(subscribeShellView, getShellView, getShellView\)/);
+  assert.match(html, /<LoginView hidden=\{shellView !== "login"\} \/>/);
+  assert.match(html, /<ViewerShellLayout hidden=\{shellView !== "viewer"\} \/>/);
+  assert.doesNotMatch(app, /loginView: document\.querySelector\("#loginView"\),/);
+  assert.doesNotMatch(app, /viewerShell: document\.querySelector\("#viewerShell"\),/);
+  assert.doesNotMatch(app, /els\.loginView\.hidden/);
+  assert.doesNotMatch(app, /els\.viewerShell\.hidden/);
+  assert.match(app, /setShellView\("login"\);/);
+  assert.match(app, /setShellView\("viewer"\);/);
   assert.match(html, /id="libraryFooterNameHost"[\s\S]*<LibraryFooter \/>/);
   assert.match(app, /libraryFooterNameHost: document\.querySelector\("#libraryFooterNameHost"\),/);
   assert.doesNotMatch(app, /libraryFooterName: document\.querySelector\("#libraryFooterName"\),/);
