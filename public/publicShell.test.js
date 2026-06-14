@@ -15,11 +15,20 @@ async function readViewerSources() {
   return sources.join("\n");
 }
 
+async function readAppSources() {
+  const files = [
+    "../src/App.tsx",
+    "../src/viewer/ViewerShell.tsx",
+  ];
+  const sources = await Promise.all(files.map((file) => readFile(new URL(file, import.meta.url), "utf8")));
+  return sources.join("\n");
+}
+
 test("public login no longer renders advanced Eagle connection settings", async () => {
-  const html = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const html = await readAppSources();
   const app = await readViewerSources();
 
-  assert.match(html, /import iconOnUrl from "\.\/assets\/icon_on\.svg";/);
+  assert.match(html, /import iconOnUrl from "\.\.\/assets\/icon_on\.svg";/);
   assert.match(html, /className="app-logo" src=\{iconOnUrl\}/);
   assert.match(html, /<h1>Media Preview Server<\/h1>/);
   assert.match(html, /A local media server for your Eagle library\./);
@@ -41,7 +50,7 @@ test("public login no longer renders advanced Eagle connection settings", async 
 });
 
 test("public UI no longer shows connect lock icon or connection settings button", async () => {
-  const html = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const html = await readAppSources();
   const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
@@ -121,7 +130,7 @@ test("public audio preview uses video-style dark action buttons", async () => {
 });
 
 test("public UI exposes direct original file URLs for each media item", async () => {
-  const html = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const html = await readAppSources();
   const app = await readViewerSources();
   const directFileUrlSource = app.match(/function directFileUrl\(item\) \{[\s\S]*?\n\}/)?.[0] || "";
   const directFileLinkSource = app.match(/function directFileLink\(item\) \{[\s\S]*?\n\}/)?.[0] || "";
@@ -200,7 +209,7 @@ test("public grid thumbnail hover icon uses play for video and audio", async () 
 });
 
 test("public status line no longer renders page count UI", async () => {
-  const html = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const html = await readAppSources();
   const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
@@ -212,7 +221,7 @@ test("public status line no longer renders page count UI", async () => {
 
 test("public shell uses Media Preview Server branding and serves a favicon", async () => {
   const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
-  const appComponent = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const appComponent = await readAppSources();
   await access(new URL("./favicon.ico", import.meta.url));
 
   assert.match(html, /<title>Media Preview Server - Eagle<\/title>/);
@@ -242,7 +251,7 @@ test("public ratings are static in grid and table but editable in the preview mo
 });
 
 test("public file names expose original names in truncated views and preview info", async () => {
-  const html = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const html = await readAppSources();
   const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
@@ -352,7 +361,7 @@ test("public preview info closes when pressing outside the side menu", async () 
 });
 
 test("public UI labels media extensions as type", async () => {
-  const html = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const html = await readAppSources();
   const app = await readViewerSources();
 
   assert.match(html, /<select id="folderSelect" aria-label="Folder">[\s\S]*?<option value="">All folders<\/option>/);
@@ -369,7 +378,7 @@ test("public UI labels media extensions as type", async () => {
 });
 
 test("public UI supports tag filter chips", async () => {
-  const html = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const html = await readAppSources();
   const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
@@ -418,7 +427,7 @@ test("public UI supports tag filter chips", async () => {
 });
 
 test("public UI adds a masonry tiles view with infinite loading", async () => {
-  const html = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const html = await readAppSources();
   const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
@@ -509,7 +518,7 @@ test("public results status and empty states stay concise and consistent across 
 });
 
 test("public UI exposes collapsible advanced filters without sort controls", async () => {
-  const html = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const html = await readAppSources();
   const app = await readViewerSources();
 
   assert.match(html, /id="toggleFiltersButton"/);
