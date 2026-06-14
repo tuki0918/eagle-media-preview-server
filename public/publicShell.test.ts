@@ -37,6 +37,7 @@ async function readAppSources() {
     "../src/viewer/components/LoginView.tsx",
     "../src/viewer/components/Pager.tsx",
     "../src/viewer/components/PreviewDialog.tsx",
+    "../src/viewer/components/ResultList.tsx",
     "../src/viewer/components/ResultsStatus.tsx",
     "../src/viewer/components/SearchControls.tsx",
     "../src/viewer/components/TagChips.tsx",
@@ -107,12 +108,13 @@ test("public UI no longer shows connect lock icon or connection settings button"
 });
 
 test("public thumbnails lazy-load with visible loading states", async () => {
-  const app = await readViewerSources();
+  const html = await readAppSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
-  assert.match(app, /img\.loading = "lazy";/);
-  assert.match(app, /button\?\.classList\.add\("thumb-loading"\);/);
-  assert.match(app, /button\?\.classList\.remove\("thumb-loading"\);/);
+  assert.match(html, /loading="lazy"/);
+  assert.match(html, /loading \? "thumb-loading" : ""/);
+  assert.match(html, /onLoad=\{\(\) => \{\s*setLoading\(false\);\s*setMissing\(false\);\s*\}\}/);
+  assert.match(html, /onError=\{\(\) => \{\s*setLoading\(false\);\s*setMissing\(true\);\s*\}\}/);
   assert.match(css, /\.thumb-button\s*\{[^}]*aspect-ratio:\s*3\s*\/\s*2;/s);
   assert.match(css, /\.thumb-button\.thumb-loading::after,\s*\.row-thumb\.thumb-loading::after/);
   assert.match(css, /animation:\s*thumb-spinner 0\.75s linear infinite;/);
@@ -226,11 +228,12 @@ test("public preview renders text-like files and PDFs from their thumbnails", as
 
 test("public grid thumbnail hover icon uses play for video and audio", async () => {
   const app = await readViewerSources();
+  const html = await readAppSources();
 
-  assert.match(app, /"move-diagonal":/);
+  assert.match(html, /"move-diagonal":/);
   assert.match(app, /function thumbnailOverlayIcon\(mediaType[^)]*\)/);
   assert.match(app, /return mediaType === "video" \|\| mediaType === "audio" \? "play" : "move-diagonal";/);
-  assert.match(app, /overlayIcon\.replaceChildren\(iconNode\(thumbnailOverlayIcon\(mediaType\)\)\);/);
+  assert.match(html, /overlayIconPaths\[thumbnailOverlayIcon\(mediaType\)\]/);
   assert.doesNotMatch(app, /mediaType === "document" \? "file-text"/);
   assert.doesNotMatch(app, /mediaType === "image" \? "maximize-2"/);
 });
@@ -265,10 +268,13 @@ test("public audio preview attempts autoplay when the modal opens", async () => 
 });
 
 test("public ratings are static in grid and table but editable in the preview modal", async () => {
+  const html = await readAppSources();
   const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
-  assert.match(app, /renderRating\(rating, item, \{ interactive: false \}\);/);
+  assert.match(html, /function RatingStars\(\{ className, item \}/);
+  assert.match(html, /className="rating-star rating-star-static"/);
+  assert.match(html, /data-active=\{value <= current \? "true" : "false"\}/);
   assert.match(app, /renderRating\(els\.previewRating, item, \{ interactive: true, onSelect:/);
   assert.match(app, /function renderRating\(container[^,]*,\s*item[^,]*,\s*\{ interactive = false, onSelect \}[^)]*\)/);
   assert.match(app, /const star = document\.createElement\(interactive \? "button" : "span"\);/);
@@ -283,8 +289,8 @@ test("public file names expose original names in truncated views and preview inf
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(app, /function originalFileName\(item[^)]*\) \{/);
-  assert.match(app, /title\.title = originalFileName\(item\);/);
-  assert.match(app, /name\.title = originalFileName\(item\);/);
+  assert.match(html, /<strong title=\{originalFileName\(item\)\}>/);
+  assert.match(html, /<span className="row-file-name" title=\{originalFileName\(item\)\}>/);
   assert.match(html, /<section className="[^"]*\bpreview-original-name-section\b[^"]*">[\s\S]*<div id="previewOriginalName" className="[^"]*\bpreview-original-name-value\b[^"]*" \/>[\s\S]*<\/section>[\s\S]*<section className="[^"]*\bpreview-rating-section\b[^"]*">/);
   assert.doesNotMatch(html, /File Name/);
   assert.match(app, /previewOriginalName: document\.querySelector\("#previewOriginalName"\),/);
@@ -472,15 +478,12 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   assert.match(app, /tilesViewButton: document\.querySelector\("#tilesViewButton"\),/);
   assert.match(app, /tilesSentinel: document\.querySelector\("#tilesSentinel"\),/);
   assert.match(app, /state\.viewMode === "tiles"/);
-  assert.match(app, /function tileItem\(item[^)]*\) \{/);
-  assert.match(app, /button\.style\.aspectRatio = width > 0 && height > 0 \? `\$\{width\} \/ \$\{height\}` : "1 \/ 1";/);
-  assert.match(app, /rating\.className = "rating-control tile-rating";/);
-  assert.match(app, /renderRating\(rating, item, \{ interactive: false \}\);/);
-  assert.match(app, /button\.append\(img, overlay, badge, duration, rating\);/);
-  assert.match(app, /populateThumb\(\{ img, badge, duration, item \}\);/);
-  assert.match(app, /decorateThumbButton\(button, overlayIcon, item\);/);
-  assert.match(app, /function appendRenderedItems\(items[^)]*\) \{/);
-  assert.match(app, /els\.grid\.append\(fragment\);/);
+  assert.match(html, /export function ResultList\(\{ items, viewMode, onOpenPreview \}[^)]*\) \{/);
+  assert.match(html, /style=\{\{ aspectRatio: width > 0 && height > 0 \? `\$\{width\} \/ \$\{height\}` : "1 \/ 1" \}\}/);
+  assert.match(html, /<RatingStars item=\{item\} className="rating-control tile-rating" \/>/);
+  assert.match(html, /onPointerDown=\{trigger\.onPointerDown\}/);
+  assert.match(html, /onClick=\{trigger\.onClick\}/);
+  assert.match(app, /renderResultListView\(els\.grid, \{/);
   assert.match(app, /function setupTileAutoLoading\(\) \{/);
   assert.match(app, /resetTileAutoLoading\(\);/);
   assert.match(app, /function resetTileAutoLoading\(\) \{/);

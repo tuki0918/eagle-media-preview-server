@@ -6,6 +6,7 @@ import {
   PageButtons,
   Pager,
   PreviewDialog,
+  ResultList,
   ResultStateView,
   ResultsStatus,
   SearchControls,
@@ -132,5 +133,19 @@ describe("ViewerAppShell", () => {
 
     expect(message).toContain("Loading");
     expect(empty).toContain("Clear filters");
+  });
+
+  test("renders result list as reusable media items", () => {
+    const html = renderToStaticMarkup(
+      <ResultList
+        items={[{ id: "item-1", name: "Sample.jpg", ext: "jpg", width: 120, height: 80, star: 4 }]}
+        viewMode="tiles"
+        onOpenPreview={() => {}}
+      />,
+    );
+
+    expect(html).toContain('class="tile-item thumb-loading"');
+    expect(html).toContain('data-ext="jpg"');
+    expect(html).toContain('data-active="true"');
   });
 });

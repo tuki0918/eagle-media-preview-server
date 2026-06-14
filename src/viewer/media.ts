@@ -4,10 +4,10 @@ import {
   playableVideoExts,
   textPreviewExts,
 } from "./constants";
-import type { IconName } from "./icons";
 import type { EagleItem } from "./types";
 
 export type ThumbnailMediaType = "video" | "audio" | "document" | "image";
+export type ThumbnailOverlayIcon = "play" | "move-diagonal";
 
 export function thumbnailMediaType(item: EagleItem): ThumbnailMediaType {
   const ext = String(item.ext || "").toLowerCase();
@@ -17,7 +17,7 @@ export function thumbnailMediaType(item: EagleItem): ThumbnailMediaType {
   return "image";
 }
 
-export function thumbnailOverlayIcon(mediaType: ThumbnailMediaType): IconName {
+export function thumbnailOverlayIcon(mediaType: ThumbnailMediaType): ThumbnailOverlayIcon {
   return mediaType === "video" || mediaType === "audio" ? "play" : "move-diagonal";
 }
 

@@ -13,35 +13,23 @@ import {
 import { debounce, getJson, mediaUrl, postJson } from "./viewer/api";
 import {
   directFileLink,
-  extensionPill,
   previewChipList,
-  tableCell,
 } from "./viewer/dom";
 import { getViewerElements } from "./viewer/elements";
 import {
   flattenFolders,
   folderIds,
-  formatBytes,
-  formatDate,
-  formatDateShort,
-  formatDimensions,
   formatDuration,
-  formatDurationCell,
+  isTimedMedia,
   itemMeta,
   itemTags,
   normalizeTag,
   originalFileName,
   previewFileName,
-  isTimedMedia,
 } from "./viewer/format";
 import { hasActiveFilters, resetFilterState } from "./viewer/filters";
 import { iconNode, renderLucideIcons, type IconName } from "./viewer/icons";
 import { itemQueryParams } from "./viewer/itemQuery";
-import {
-  thumbnailAriaLabel,
-  thumbnailMediaType,
-  thumbnailOverlayIcon,
-} from "./viewer/media";
 import {
   folderLabel,
   folderSuggestionItems as buildFolderSuggestionItems,
@@ -66,6 +54,10 @@ import {
   clearResultStateView,
   renderResultStateView,
 } from "./viewer/components/ResultState";
+import {
+  clearResultListView,
+  renderResultListView,
+} from "./viewer/components/ResultList";
 import { renderTagChipsView } from "./viewer/components/TagChips";
 import {
   clearTagSuggestionsView,
@@ -97,9 +89,7 @@ import type {
   LoadItemsOptions,
   LoadItemsResponse,
   OpenPreviewOptions,
-  PopulateThumbOptions,
   PreviewPoint,
-  PreviewTouchSession,
   RenderImagePreviewOptions,
   SavePreviewMetadataOptions,
   TagSuggestionApiItem,
@@ -301,7 +291,7 @@ async function loadItems({ append = false }: LoadItemsOptions = {}) {
     state.items = append ? [...state.items, ...items] : items;
     state.tilesLoadingMore = false;
     if (append) {
-      appendRenderedItems(items);
+      render();
     } else {
       render();
       if (state.viewMode === "tiles" && new URLSearchParams(window.location.search).has("page")) {
@@ -328,20 +318,13 @@ async function loadItems({ append = false }: LoadItemsOptions = {}) {
 
 function render() {
   clearResultStateView(els.grid);
-  const fragment = document.createDocumentFragment();
   els.grid.classList.toggle("media-table", state.viewMode === "table");
   els.grid.classList.toggle("media-grid", state.viewMode === "grid");
   els.grid.classList.toggle("media-tiles", state.viewMode === "tiles");
   els.grid.classList.toggle("is-empty", !state.items.length);
 
-  if (state.viewMode === "table" && state.items.length) {
-    fragment.append(tableHeader());
-  }
-  for (const item of state.items) {
-    fragment.append(resultItemNode(item));
-  }
-
   if (!state.items.length) {
+    clearResultListView(els.grid);
     renderEmptyState();
     updateStatus();
     updatePager();
@@ -350,242 +333,15 @@ function render() {
     return;
   }
 
-  els.grid.replaceChildren(fragment);
+  renderResultListView(els.grid, {
+    items: state.items,
+    viewMode: state.viewMode,
+    onOpenPreview: openPreview,
+  });
   updateStatus();
   updatePager();
   setupTileAutoLoading();
   updateViewToggle();
-}
-
-function resultItemNode(item: EagleItem) {
-  return state.viewMode === "table" ? tableRow(item) : state.viewMode === "tiles" ? tileItem(item) : gridCard(item);
-}
-
-function appendRenderedItems(items: readonly EagleItem[]) {
-  const fragment = document.createDocumentFragment();
-  for (const item of items) {
-    fragment.append(resultItemNode(item));
-  }
-  els.grid.append(fragment);
-  updateStatus();
-  updatePager();
-  setupTileAutoLoading();
-  updateViewToggle();
-}
-
-function bindPreviewTrigger(element: HTMLElement, item: EagleItem) {
-  let lastTriggerAt = 0;
-  let touchSession: PreviewTouchSession | null = null;
-  const TAP_MOVE_THRESHOLD = 10;
-  const TAP_HOLD_THRESHOLD_MS = 300;
-
-  const openFromPointer = (event?: PointerEvent | MouseEvent) => {
-    if (Date.now() - lastTriggerAt < 700) return;
-    if (event?.type === "touchend") {
-      event.preventDefault();
-    }
-    lastTriggerAt = Date.now();
-    openPreview(item);
-  };
-
-  element.addEventListener("click", (event) => {
-    if (Date.now() - lastTriggerAt < 700) {
-      event.preventDefault();
-      return;
-    }
-    openPreview(item);
-  });
-
-  element.addEventListener("pointerdown", (event) => {
-    if (event.pointerType !== "touch") return;
-    touchSession = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      startedAt: Date.now(),
-      moved: false,
-    };
-  });
-
-  element.addEventListener("pointermove", (event) => {
-    if (!touchSession || touchSession.pointerId !== event.pointerId) return;
-    const deltaX = Math.abs(event.clientX - touchSession.startX);
-    const deltaY = Math.abs(event.clientY - touchSession.startY);
-    if (deltaX > TAP_MOVE_THRESHOLD || deltaY > TAP_MOVE_THRESHOLD) {
-      touchSession.moved = true;
-    }
-  });
-
-  element.addEventListener("pointercancel", () => {
-    touchSession = null;
-  });
-
-  element.addEventListener("pointerup", (event) => {
-    if (event.pointerType !== "touch") return;
-    if (!touchSession || touchSession.pointerId !== event.pointerId) return;
-    const heldFor = Date.now() - touchSession.startedAt;
-    const shouldOpen = !touchSession.moved && heldFor <= TAP_HOLD_THRESHOLD_MS;
-    touchSession = null;
-    if (shouldOpen) {
-      openFromPointer(event);
-    }
-  });
-}
-
-function gridCard(item: EagleItem) {
-  const templateNode = els.template.content.firstElementChild;
-  if (!templateNode) throw new Error("Missing media card template content");
-  const node = templateNode.cloneNode(true) as HTMLElement;
-  const img = requiredChild<HTMLImageElement>(node, "img");
-  const button = requiredChild<HTMLButtonElement>(node, "button");
-  const badge = requiredChild<HTMLElement>(node, ".file-badge");
-  const duration = requiredChild<HTMLElement>(node, ".duration-badge");
-  const overlayIcon = requiredChild<HTMLElement>(node, ".thumb-overlay-icon");
-  const title = requiredChild<HTMLElement>(node, "strong");
-  const metaLine = requiredChild<HTMLElement>(node, ".card-meta span");
-  const rating = requiredChild<HTMLElement>(node, ".rating-control");
-
-  populateThumb({ img, badge, duration, item });
-  decorateThumbButton(button, overlayIcon, item);
-  title.textContent = item.name || item.id || "";
-  title.title = originalFileName(item);
-  metaLine.hidden = true;
-  renderRating(rating, item, { interactive: false });
-  button.append(rating);
-  bindPreviewTrigger(button, item);
-  return node;
-}
-
-function requiredChild<T extends Element>(parent: ParentNode, selector: string): T {
-  const element = parent.querySelector<T>(selector);
-  if (!element) throw new Error(`Missing template element: ${selector}`);
-  return element;
-}
-
-function tileItem(item: EagleItem) {
-  const button = document.createElement("button");
-  button.className = "tile-item";
-  button.type = "button";
-  const img = document.createElement("img");
-  const overlay = document.createElement("span");
-  overlay.className = "thumb-overlay";
-  overlay.setAttribute("aria-hidden", "true");
-  const overlayIcon = document.createElement("span");
-  overlayIcon.className = "thumb-overlay-icon";
-  overlay.append(overlayIcon);
-  const badge = document.createElement("span");
-  badge.className = "file-badge";
-  const duration = document.createElement("span");
-  duration.className = "duration-badge";
-  const rating = document.createElement("div");
-  rating.className = "rating-control tile-rating";
-  rating.ariaLabel = "Rating";
-  const width = Number(item.width);
-  const height = Number(item.height);
-  button.style.aspectRatio = width > 0 && height > 0 ? `${width} / ${height}` : "1 / 1";
-  renderRating(rating, item, { interactive: false });
-  button.append(img, overlay, badge, duration, rating);
-  populateThumb({ img, badge, duration, item });
-  decorateThumbButton(button, overlayIcon, item);
-  bindPreviewTrigger(button, item);
-  return button;
-}
-
-function tableHeader() {
-  const header = document.createElement("div");
-  header.className = "media-row media-row-header";
-  header.innerHTML = `
-    <span>Item</span>
-    <span>Name</span>
-    <span>Type</span>
-    <span>Size</span>
-    <span>Dimensions</span>
-    <span>Duration</span>
-    <span>Modified</span>
-  `;
-  return header;
-}
-
-function tableRow(item: EagleItem) {
-  const row = document.createElement("article");
-  row.className = "media-row";
-  const thumb = document.createElement("button");
-  thumb.className = "row-thumb";
-  thumb.type = "button";
-  const img = document.createElement("img");
-  img.loading = "lazy";
-  img.decoding = "async";
-  thumb.append(img);
-
-  populateThumb({ img, badge: null, duration: null, item });
-  decorateThumbButton(thumb, null, item);
-  bindPreviewTrigger(thumb, item);
-  row.append(
-    thumb,
-    tableNameCell(item),
-    extensionPill(item),
-    tableCell(formatBytes(item.size) || "-"),
-    tableCell(formatDimensions(item) || "-", "dimensions-cell"),
-    tableCell(formatDurationCell(item) || "-", "duration-cell"),
-    tableCell(formatDateShort(item.modificationTime) || "-", "modified-cell", formatDate(item.modificationTime) || ""),
-  );
-  return row;
-}
-
-function tableNameCell(item: EagleItem) {
-  const cell = document.createElement("span");
-  cell.className = "row-name-cell";
-  const name = document.createElement("span");
-  name.className = "row-file-name";
-  name.textContent = item.name || item.id || "";
-  name.title = originalFileName(item);
-  const meta = document.createElement("span");
-  meta.className = "table-mobile-meta";
-  meta.textContent = [
-    ((item.ext || "").toUpperCase() || "FILE"),
-    formatBytes(item.size),
-  ].filter(Boolean).join(" · ");
-  const rating = document.createElement("div");
-  rating.className = "rating-control";
-  rating.ariaLabel = "Rating";
-  renderRating(rating, item, { interactive: false });
-  cell.append(name, meta, rating);
-  return cell;
-}
-
-function populateThumb({ img, badge, duration, item }: PopulateThumbOptions) {
-  const button = img.closest("button");
-  button?.classList.add("thumb-loading");
-  img.loading = "lazy";
-  img.decoding = "async";
-  img.src = mediaUrl(String(item.id || ""), "thumb");
-  img.alt = item.name || item.id || "";
-  img.onload = () => {
-    button?.classList.remove("thumb-loading");
-    img.hidden = false;
-  };
-  img.onerror = () => {
-    button?.classList.remove("thumb-loading");
-    img.hidden = true;
-    button?.classList.add("thumb-missing");
-  };
-  if (badge) {
-    badge.textContent = (item.ext || "").toUpperCase();
-    badge.dataset.ext = (item.ext || "file").toLowerCase();
-  }
-  const formattedDuration = isTimedMedia(item) ? formatDuration(item.duration) : "";
-  if (duration) {
-    duration.textContent = formattedDuration;
-    duration.hidden = !formattedDuration;
-  }
-}
-
-function decorateThumbButton(button: HTMLElement, overlayIcon: HTMLElement | null, item: EagleItem) {
-  const mediaType = thumbnailMediaType(item);
-  button.dataset.mediaType = mediaType;
-  button.setAttribute("aria-label", thumbnailAriaLabel(item, mediaType));
-  if (!overlayIcon) return;
-  overlayIcon.replaceChildren(iconNode(thumbnailOverlayIcon(mediaType)));
 }
 
 function openPreview(item: EagleItem, { skipHistory = false }: OpenPreviewOptions = {}) {
@@ -1380,6 +1136,7 @@ function folderSuggestionItems(query: string, selectedValues: string[]) {
 }
 
 function renderMessage(text: string, className = "empty") {
+  clearResultListView(els.grid);
   renderResultStateView(els.grid, { kind: "message", text, className });
 }
 
