@@ -1,6 +1,7 @@
 import { audioExts, dateFormatter, dateTimeFormatter, videoExts } from "./constants";
+import type { EagleFolder, EagleItem } from "./types";
 
-export function itemMeta(item: any) {
+export function itemMeta(item: EagleItem) {
   const ext = (item.ext || "").toUpperCase() || "FILE";
   const dimensions = item.width && item.height ? `${item.width}x${item.height}` : "";
   const duration = isTimedMedia(item) ? formatDuration(item.duration) : "";
@@ -8,11 +9,11 @@ export function itemMeta(item: any) {
   return [ext, dimensions, duration, size].filter(Boolean).join(" · ");
 }
 
-export function formatDimensions(item: any) {
+export function formatDimensions(item: EagleItem) {
   return item.width && item.height ? `${item.width} x ${item.height}` : "";
 }
 
-export function formatDurationCell(item: any) {
+export function formatDurationCell(item: EagleItem) {
   return isTimedMedia(item) ? formatDuration(item.duration) : "";
 }
 
@@ -20,18 +21,18 @@ export function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-export function previewFileName(item: any) {
+export function previewFileName(item: EagleItem) {
   return originalFileName(item);
 }
 
-export function originalFileName(item: any) {
+export function originalFileName(item: EagleItem) {
   const name = String(item.name || item.id || "file").trim() || "file";
   const ext = String(item.ext || "").trim().replace(/^\./, "");
   if (!ext || name.toLowerCase().endsWith(`.${ext.toLowerCase()}`)) return name;
   return `${name}.${ext}`;
 }
 
-export function itemTags(item: any) {
+export function itemTags(item: EagleItem) {
   return Array.isArray(item.tags) ? item.tags.map(normalizeTag).filter(Boolean) : [];
 }
 
@@ -39,11 +40,11 @@ export function normalizeTag(value: unknown) {
   return String(value || "").trim();
 }
 
-export function mediaTypeLabel(item: any) {
+export function mediaTypeLabel(item: EagleItem) {
   return (item.ext || "").toUpperCase() || "FILE";
 }
 
-export function formatItemDate(item: any, keys: readonly string[]) {
+export function formatItemDate(item: EagleItem, keys: readonly string[]) {
   for (const key of keys) {
     const value = item[key];
     const formatted = formatDate(value);
@@ -60,15 +61,16 @@ export function folderIds(value: unknown) {
   }).filter(Boolean);
 }
 
-export function folderDisplayNames(value: unknown, folders: any[]) {
+export function folderDisplayNames(value: unknown, folders: EagleFolder[]) {
   const byId = new Map(folders.map((folder) => [folder.id, folder.name]));
   return folderIds(value).map((id) => byId.get(id) || id);
 }
 
-export function formatBytes(value: number) {
-  if (!Number.isFinite(value) || value <= 0) return "";
+export function formatBytes(value: unknown) {
+  const bytes = Number(value);
+  if (!Number.isFinite(bytes) || bytes <= 0) return "";
   const units = ["B", "KB", "MB", "GB"];
-  let size = value;
+  let size = bytes;
   let unit = 0;
   while (size >= 1024 && unit < units.length - 1) {
     size /= 1024;
@@ -102,13 +104,13 @@ export function formatDateShort(value: unknown) {
   return dateFormatter.format(new Date(timestamp));
 }
 
-export function isTimedMedia(item: any) {
+export function isTimedMedia(item: EagleItem) {
   const ext = (item.ext || "").toLowerCase();
   return videoExts.has(ext) || audioExts.has(ext);
 }
 
-export function flattenFolders(folders: any[], depth = 0): any[] {
-  const output: any[] = [];
+export function flattenFolders(folders: EagleFolder[] = [], depth = 0): EagleFolder[] {
+  const output: EagleFolder[] = [];
   for (const folder of folders || []) {
     output.push({ ...folder, depth });
     output.push(...flattenFolders(folder.children, depth + 1));
