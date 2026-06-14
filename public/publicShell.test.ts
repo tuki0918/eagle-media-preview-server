@@ -32,6 +32,7 @@ async function readAppSources() {
   const files = [
     "../src/App.tsx",
     "../src/viewer/ViewerShell.tsx",
+    "../src/viewer/shellClasses.ts",
     "../src/viewer/shellConfig.ts",
   ];
   const sources = await Promise.all(files.map((file) => readFile(new URL(file, import.meta.url), "utf8")));
@@ -43,7 +44,8 @@ test("public login no longer renders advanced Eagle connection settings", async 
   const app = await readViewerSources();
 
   assert.match(html, /import iconOnUrl from "\.\.\/assets\/icon_on\.svg";/);
-  assert.match(html, /className="app-logo" src=\{iconOnUrl\}/);
+  assert.match(html, /appLogo:\s*"[^"]*\bapp-logo\b/);
+  assert.match(html, /className=\{shellClasses\.appLogo\} src=\{iconOnUrl\}/);
   assert.match(html, /<h1>Media Preview Server<\/h1>/);
   assert.match(html, /A local media server for your Eagle library\./);
   assert.doesNotMatch(html, /id="viewerPasswordField"/);
@@ -275,7 +277,10 @@ test("public file names expose original names in truncated views and preview inf
   assert.match(app, /function originalFileName\(item[^)]*\) \{/);
   assert.match(app, /title\.title = originalFileName\(item\);/);
   assert.match(app, /name\.title = originalFileName\(item\);/);
-  assert.match(html, /<section className="preview-original-name-section">[\s\S]*<div id="previewOriginalName" className="preview-original-name-value" \/>[\s\S]*<\/section>[\s\S]*<section className="preview-rating-section">/);
+  assert.match(html, /previewOriginalNameSection:\s*"[^"]*\bpreview-original-name-section\b/);
+  assert.match(html, /previewOriginalNameValue:\s*"[^"]*\bpreview-original-name-value\b/);
+  assert.match(html, /previewRatingSection:\s*"[^"]*\bpreview-rating-section\b/);
+  assert.match(html, /<section className=\{shellClasses\.previewOriginalNameSection\}>[\s\S]*<div id="previewOriginalName" className=\{shellClasses\.previewOriginalNameValue\} \/>[\s\S]*<\/section>[\s\S]*<section className=\{shellClasses\.previewRatingSection\}>/);
   assert.doesNotMatch(html, /File Name/);
   assert.match(app, /previewOriginalName: document\.querySelector\("#previewOriginalName"\),/);
   assert.match(app, /els\.previewOriginalName\.textContent = originalFileName\(item\);/);
@@ -402,7 +407,7 @@ test("public UI supports tag filter chips", async () => {
 
   assert.match(html, /id="tagChips"/);
   assert.match(html, /id="tagSuggestions"/);
-  assert.match(html, /<div className="search-box"[\s\S]*id="tagChips"[\s\S]*id="searchInput"[\s\S]*id="tagSuggestions"[\s\S]*<\/div>[\s\S]*id="resetFiltersButton"[\s\S]*id="toggleFiltersButton"/);
+  assert.match(html, /className=\{shellClasses\.searchBox\}[\s\S]*id="tagChips"[\s\S]*id="searchInput"[\s\S]*id="tagSuggestions"[\s\S]*<\/div>[\s\S]*id="resetFiltersButton"[\s\S]*id="toggleFiltersButton"/);
   assert.match(html, /id="resetFiltersButton"[\s\S]*aria-label="Reset filters"[\s\S]*disabled/);
   assert.match(html, /id="resetFiltersButton"[\s\S]*data-lucide="funnel-x"/);
   assert.doesNotMatch(html, /id="tagInput"/);

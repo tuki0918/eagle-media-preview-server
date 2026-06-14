@@ -51,10 +51,10 @@ describe("ViewerAppShell", () => {
       expect(html).toContain(`id="${id}"`);
     }
 
-    expect(html).toContain('class="media-card"');
-    expect(html).toContain('class="thumb-button"');
-    expect(html).toContain('class="pager"');
-    expect(html).toContain('class="rating-control"');
+    expect(html).toMatch(/class="[^"]*\bmedia-card\b/);
+    expect(html).toMatch(/class="[^"]*\bthumb-button\b/);
+    expect(html).toMatch(/class="[^"]*\bpager\b/);
+    expect(html).toMatch(/class="[^"]*\brating-control\b/);
   });
 
   test("renders configured filter options", () => {

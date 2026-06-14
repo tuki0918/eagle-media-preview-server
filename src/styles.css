@@ -81,25 +81,12 @@
 }
 
 @layer components {
-  .login-view {
-    @apply grid min-h-dvh place-items-center px-4 py-9;
-  }
-
 .login-panel {
   width: min(320px, 100%);
   @apply grid gap-[18px] rounded-[14px] border border-app-border backdrop-blur-xl;
   padding: 42px 30px 30px;
   background: rgba(255, 255, 255, 0.95);
   box-shadow: var(--shadow);
-}
-
-.login-head {
-  @apply grid justify-items-center gap-3 text-center;
-}
-
-.app-logo {
-  @apply block h-[54px] w-[54px] rounded-xl object-cover;
-  box-shadow: 0 12px 28px rgba(20, 99, 243, 0.28);
 }
 
 .login-panel h1 {
@@ -115,10 +102,6 @@
   @apply text-xs text-app-muted;
   line-height: 1.35;
   white-space: nowrap;
-}
-
-.form-actions {
-  @apply grid grid-cols-1 gap-2.5;
 }
 
 .login-panel button {
@@ -1543,10 +1526,6 @@ select:hover {
 }
 
 @media (max-width: 540px) {
-  .form-actions {
-    @apply grid-cols-1;
-  }
-
   .search-row {
     grid-template-columns: minmax(0, 1fr) auto auto;
     gap: 8px;

@@ -1,24 +1,25 @@
 import iconOnUrl from "../assets/icon_on.svg";
+import { shellClasses } from "./shellClasses";
 import { MEDIA_TYPE_OPTIONS, PAGE_SIZE_OPTIONS, RATING_OPTIONS } from "./shellConfig";
 
 function LoginView() {
   return (
-    <section id="loginView" className="login-view">
-      <form id="connectForm" className="login-panel">
-        <div className="login-head">
-          <img className="app-logo" src={iconOnUrl} alt="" aria-hidden="true" />
+    <section id="loginView" className={shellClasses.loginView}>
+      <form id="connectForm" className={shellClasses.loginPanel}>
+        <div className={shellClasses.loginHead}>
+          <img className={shellClasses.appLogo} src={iconOnUrl} alt="" aria-hidden="true" />
           <h1>Media Preview Server</h1>
-          <p>A local media server for your Eagle library.</p>
+          <p className={shellClasses.loginText}>A local media server for your Eagle library.</p>
         </div>
 
         <div className="login-primary">
-          <div className="form-actions">
-            <button id="connectButton" type="submit">
+          <div className={shellClasses.formActions}>
+            <button id="connectButton" className={shellClasses.connectButton} type="submit">
               <span>Connect</span>
             </button>
           </div>
         </div>
-        <p id="connectMessage" className="connect-message" aria-live="polite" />
+        <p id="connectMessage" className={shellClasses.connectMessage} aria-live="polite" />
       </form>
     </section>
   );
@@ -26,26 +27,26 @@ function LoginView() {
 
 function SearchControls() {
   return (
-    <section className="controls" aria-label="Search and filters">
-      <div className="search-row">
-        <div className="search-box">
+    <section className={shellClasses.controls} aria-label="Search and filters">
+      <div className={shellClasses.searchRow}>
+        <div className={shellClasses.searchBox}>
           <span data-lucide="search" />
-          <div className="search-composer">
-            <div id="tagChips" className="tag-chips" aria-label="Selected tag filters" />
+          <div className={shellClasses.searchComposer}>
+            <div id="tagChips" className={shellClasses.tagChips} aria-label="Selected tag filters" />
             <input
               id="searchInput"
-              className="unified-search-input"
+              className={shellClasses.searchInput}
               type="search"
               placeholder="Search title or tag"
               autoComplete="off"
               aria-label="Search text or tag"
             />
           </div>
-          <div id="tagSuggestions" className="tag-suggestions" role="listbox" aria-label="Tag suggestions" hidden />
+          <div id="tagSuggestions" className={shellClasses.tagSuggestions} role="listbox" aria-label="Tag suggestions" hidden />
         </div>
         <button
           id="resetFiltersButton"
-          className="icon-button filter-reset-button"
+          className={`${shellClasses.iconButton} ${shellClasses.filterResetButton}`}
           type="button"
           aria-label="Reset filters"
           title="Reset filters"
@@ -55,7 +56,7 @@ function SearchControls() {
         </button>
         <button
           id="toggleFiltersButton"
-          className="icon-button filter-toggle-button"
+          className={`${shellClasses.iconButton} ${shellClasses.filterToggleButton}`}
           type="button"
           aria-label="Show advanced search options"
           aria-expanded="false"
@@ -66,7 +67,7 @@ function SearchControls() {
         </button>
       </div>
 
-      <div id="advancedFilters" className="filter-row" hidden>
+      <div id="advancedFilters" className={shellClasses.filterRow} hidden>
         <label>
           <select id="folderSelect" aria-label="Folder">
             <option value="">All folders</option>
@@ -109,10 +110,10 @@ function SearchControls() {
 
 function ResultsStatus() {
   return (
-    <section className="status-line" aria-live="polite">
+    <section className={shellClasses.statusLine} aria-live="polite">
       <span id="resultCount">0 items</span>
-      <span className="status-actions">
-        <span className="view-toggle" aria-label="View mode">
+      <span className={shellClasses.statusActions}>
+        <span className={shellClasses.viewToggle} aria-label="View mode">
           <button id="tilesViewButton" type="button" aria-pressed="true">
             Tiles
           </button>
@@ -130,12 +131,12 @@ function ResultsStatus() {
 
 function Pager() {
   return (
-    <nav className="pager" aria-label="Pagination">
+    <nav className={shellClasses.pager} aria-label="Pagination">
       <button id="prevButton" type="button">
         <span data-lucide="chevron-left" />
         <span>Previous</span>
       </button>
-      <div id="pageButtons" className="page-buttons" aria-label="Page shortcuts" />
+      <div id="pageButtons" className={shellClasses.pageButtons} aria-label="Page shortcuts" />
       <button id="nextButton" type="button">
         <span>Next</span>
         <span data-lucide="chevron-right" />
@@ -146,9 +147,9 @@ function Pager() {
 
 function PreviewDialog() {
   return (
-    <dialog id="previewDialog">
-      <div className="dialog-header">
-        <button id="backPreview" className="text-icon-button" type="button" aria-label="Back to results">
+    <dialog id="previewDialog" className={shellClasses.dialog}>
+      <div className={shellClasses.dialogHeader}>
+        <button id="backPreview" className={shellClasses.textIconButton} type="button" aria-label="Back to results">
           <span data-lucide="chevron-left" />
           <span>Back to Results</span>
         </button>
@@ -156,30 +157,30 @@ function PreviewDialog() {
           <strong>Media Preview Server</strong>
           <span id="previewMeta" />
         </div>
-        <div className="dialog-actions">
-          <button id="toggleInfoPreview" className="icon-button" aria-label="Media information" title="Media information">
+        <div className={shellClasses.dialogActions}>
+          <button id="toggleInfoPreview" className={shellClasses.iconButton} aria-label="Media information" title="Media information">
             <span data-lucide="panel-left" />
           </button>
-          <button id="fullscreenPreview" className="icon-button" aria-label="Fullscreen" title="Fullscreen">
+          <button id="fullscreenPreview" className={shellClasses.iconButton} aria-label="Fullscreen" title="Fullscreen">
             <span data-lucide="maximize" />
           </button>
-          <button id="closePreview" className="icon-button" aria-label="Close" title="Close">
+          <button id="closePreview" className={shellClasses.iconButton} aria-label="Close" title="Close">
             <span data-lucide="x" />
           </button>
         </div>
       </div>
-      <div className="preview-layout">
-        <div id="previewBody" className="preview-body" />
-        <aside className="preview-info" aria-label="Media info">
-          <section className="preview-original-name-section">
-            <div id="previewOriginalName" className="preview-original-name-value" />
+      <div className={shellClasses.previewLayout}>
+        <div id="previewBody" className={shellClasses.previewBody} />
+        <aside className={shellClasses.previewInfo} aria-label="Media info">
+          <section className={shellClasses.previewOriginalNameSection}>
+            <div id="previewOriginalName" className={shellClasses.previewOriginalNameValue} />
           </section>
-          <section className="preview-rating-section">
-            <span className="info-label">Rating</span>
-            <div id="previewRating" className="rating-control" aria-label="Rating" />
+          <section className={shellClasses.previewRatingSection}>
+            <span className={shellClasses.infoLabel}>Rating</span>
+            <div id="previewRating" className={shellClasses.ratingControl} aria-label="Rating" />
           </section>
-          <div id="previewDetails" className="preview-details" />
-          <div id="previewActions" className="preview-info-actions" />
+          <div id="previewDetails" className={shellClasses.previewDetails} />
+          <div id="previewActions" className={shellClasses.previewInfoActions} />
         </aside>
       </div>
     </dialog>
@@ -220,11 +221,11 @@ function ViewerShell() {
         <SearchControls />
         <ResultsStatus />
         <section id="grid" className="media-grid" aria-label="Eagle assets" />
-        <div id="tilesSentinel" className="tiles-sentinel" hidden>
+        <div id="tilesSentinel" className={shellClasses.tilesSentinel} hidden>
           Loading more
         </div>
         <Pager />
-        <p id="libraryFooterName" className="library-footer-name">
+        <p id="libraryFooterName" className={shellClasses.libraryFooterName}>
           Connecting to Eagle
         </p>
       </main>
