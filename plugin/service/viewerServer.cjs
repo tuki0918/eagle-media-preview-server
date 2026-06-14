@@ -1,4 +1,4 @@
-const { createReadStream } = require("fs");
+const { createReadStream, existsSync } = require("fs");
 const { stat } = require("fs").promises;
 const { createServer } = require("http");
 const { createHash, randomUUID, timingSafeEqual } = require("crypto");
@@ -6,7 +6,13 @@ const { extname, join, normalize, resolve } = require("path");
 const { createEagleClient, pathFromFileValue, resolveLibraryItemFile } = require("./eagleClient.cjs");
 const { buildConnectionCandidates, createConnectionContext } = require("./connection.cjs");
 
-const defaultPublicDir = resolve(__dirname, "..", "..", "public");
+function resolveDefaultPublicDir(baseDir = __dirname, pathExists = existsSync) {
+  const packagedPublicDir = resolve(baseDir, "..", "..", "public");
+  const workspaceDistPublicDir = resolve(baseDir, "..", "..", "dist", "public");
+  return pathExists(workspaceDistPublicDir) ? workspaceDistPublicDir : packagedPublicDir;
+}
+
+const defaultPublicDir = resolveDefaultPublicDir();
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -662,4 +668,4 @@ async function waitForLibrarySwitch(session, expectedPath) {
   session.clearLibraryInfo?.();
   return session.libraryInfo();
 }
-module.exports = { createViewerServer, sha256 };
+module.exports = { createViewerServer, resolveDefaultPublicDir, sha256 };

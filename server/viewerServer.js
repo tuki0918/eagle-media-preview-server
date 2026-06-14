@@ -1,6 +1,6 @@
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { createViewerServer, sha256 } = require("../plugin/service/viewerServer.cjs");
+const { createViewerServer, resolveDefaultPublicDir, sha256 } = require("../plugin/service/viewerServer.cjs");
 
-export { createViewerServer, sha256 };
+export { createViewerServer, resolveDefaultPublicDir, sha256 };

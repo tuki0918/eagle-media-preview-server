@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createViewerServer, sha256 } from "./viewerServer.js";
+import { createViewerServer, resolveDefaultPublicDir, sha256 } from "./viewerServer.js";
 
 test("createViewerServer starts and stops without the CLI entrypoint", async () => {
   const viewer = createViewerServer({
@@ -30,6 +30,13 @@ test("createViewerServer starts and stops without the CLI entrypoint", async () 
 
   await viewer.stop();
   assert.equal(viewer.status().state, "stopped");
+});
+
+test("resolveDefaultPublicDir prefers Vite output when running from source", () => {
+  const existingDist = (path) => path === "/repo/dist/public";
+  assert.equal(resolveDefaultPublicDir("/repo/plugin/service", existingDist), "/repo/dist/public");
+  assert.equal(resolveDefaultPublicDir("/repo/dist/plugin/service", existingDist), "/repo/dist/public");
+  assert.equal(resolveDefaultPublicDir("/repo/plugin/service", () => false), "/repo/public");
 });
 
 test("createViewerServer reports a port conflict as an error state", async () => {

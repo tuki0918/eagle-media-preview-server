@@ -20,7 +20,9 @@ async function readViewerSources() {
     "../src/viewer/previewTransform.ts",
     "../src/viewer/rating.ts",
     "../src/viewer/state.ts",
+    "../src/viewer/tileLoading.ts",
     "../src/viewer/urlState.ts",
+    "../src/viewer/viewMode.ts",
   ];
   const sources = await Promise.all(files.map((file) => readFile(new URL(file, import.meta.url), "utf8")));
   return sources.join("\n");
@@ -235,7 +237,7 @@ test("public status line no longer renders page count UI", async () => {
 });
 
 test("public shell uses Media Preview Server branding and serves a favicon", async () => {
-  const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
+  const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
   const appComponent = await readAppSources();
   await access(new URL("./favicon.ico", import.meta.url));
 

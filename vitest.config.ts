@@ -7,7 +7,7 @@ export default defineConfig({
     include: [
       "src/**/*.test.ts",
       "src/**/*.test.tsx",
-      "public/**/*.test.js",
+      "public/**/*.test.ts",
       "plugin/**/*.test.js",
       "server/**/*.test.js",
       "plugin/**/*.test.cjs",
