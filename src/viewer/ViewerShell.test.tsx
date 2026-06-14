@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
 import {
+  AdvancedFilters,
   CardTemplate,
   ConnectButton,
   ConnectMessage,
@@ -48,6 +49,7 @@ const REQUIRED_ELEMENT_IDS = [
   "resetFiltersButton",
   "toggleFiltersButtonHost",
   "toggleFiltersButton",
+  "advancedFiltersHost",
   "advancedFilters",
   "resultsStatusHost",
   "resultGridHost",
@@ -167,6 +169,26 @@ describe("ViewerAppShell", () => {
 
     expect(html).toContain('id="libraryFooterName"');
     expect(html).toContain("My Library - Eagle 4.0");
+  });
+
+  test("renders advanced filters as a reusable component", () => {
+    const html = renderToStaticMarkup(
+      <AdvancedFilters
+        filtersOpen
+        folders={[{ id: "folder-1", name: "Folder 1", imageCount: 8, depth: 0 }]}
+        selectedExt="jpg"
+        selectedFolderId="folder-1"
+        selectedLimit={60}
+        selectedRating="3"
+      />,
+    );
+
+    expect(html).toContain('id="advancedFilters"');
+    expect(html).not.toContain("hidden");
+    expect(html).toContain('id="folderSelect"');
+    expect(html).toContain('id="pageSizeSelect"');
+    expect(html).toContain('value="folder-1"');
+    expect(html).toContain("Folder 1 (8)");
   });
 
   test("renders preview text as reusable components", () => {

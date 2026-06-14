@@ -59,7 +59,6 @@ import {
 } from "./viewer/components/PreviewBody";
 import { renderLoginConnectView } from "./viewer/components/LoginView";
 import { renderLibraryFooterView } from "./viewer/components/LibraryFooter";
-import { renderFolderOptionsView } from "./viewer/components/FolderOptions";
 import { renderResultsStatusView } from "./viewer/components/ResultsStatus";
 import { renderSearchControlButtonsView } from "./viewer/components/SearchControls";
 import { renderTagChipsView } from "./viewer/components/TagChips";
@@ -212,7 +211,7 @@ function showViewer(data: ConnectResponse) {
   els.loginView.hidden = true;
   els.viewerShell.hidden = false;
   renderLibraryFooterView(els.libraryFooterNameHost, { name: libraryLabel(data) });
-  renderFolderOptions();
+  renderSearchControlButtons();
   state.total = 0;
   state.items = [];
   applyControlsFromState();
@@ -249,18 +248,11 @@ async function loadFolders() {
   try {
     const data = await getJson<LoadFoldersResponse>("/api/folders");
     state.folders = flattenFolders(data.items);
-    renderFolderOptions();
+    renderSearchControlButtons();
   } catch {
     state.folders = [];
     // Folder loading is optional; item browsing still works without it.
   }
-}
-
-function renderFolderOptions() {
-  renderFolderOptionsView(els.folderSelect, {
-    folders: state.folders,
-    selectedValue: state.folderId,
-  });
 }
 
 async function loadItems({ append = false }: LoadItemsOptions = {}) {
@@ -484,10 +476,6 @@ function restoreUrlState() {
 function applyControlsFromState() {
   els.searchInput.value = state.query;
   renderTagChips();
-  els.folderSelect.value = state.folderId;
-  els.extSelect.value = state.ext;
-  els.ratingSelect.value = state.rating;
-  els.pageSizeSelect.value = String(state.limit);
   syncAdvancedFiltersUi();
   syncResetFiltersButton();
   updateStatus();
@@ -574,7 +562,6 @@ function hideTagSuggestions() {
 }
 
 function syncAdvancedFiltersUi() {
-  els.advancedFilters.hidden = !state.filtersOpen;
   renderSearchControlButtons();
 }
 
@@ -583,9 +570,14 @@ function syncResetFiltersButton() {
 }
 
 function renderSearchControlButtons() {
-  renderSearchControlButtonsView(els.resetFiltersButtonHost, els.toggleFiltersButtonHost, {
+  renderSearchControlButtonsView(els.resetFiltersButtonHost, els.toggleFiltersButtonHost, els.advancedFiltersHost, {
     filtersOpen: state.filtersOpen,
+    folders: state.folders,
     hasActiveFilters: hasActiveFilters(state),
+    selectedExt: state.ext,
+    selectedFolderId: state.folderId,
+    selectedLimit: state.limit,
+    selectedRating: state.rating,
   });
 }
 
@@ -807,9 +799,6 @@ function resetFilters() {
   Object.assign(state, resetFilterState());
   els.searchInput.value = "";
   renderTagChips();
-  els.folderSelect.value = "";
-  els.extSelect.value = "";
-  els.ratingSelect.value = "";
   syncResetFiltersButton();
   syncUrlState();
   loadItems();

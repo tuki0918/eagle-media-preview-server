@@ -11,18 +11,34 @@ import {
   resetFilters,
   toggleFilters,
 } from "../shellActions";
+import type { EagleFolder } from "../types";
+import { FolderOptions } from "./FolderOptions";
 import { TagSuggestions } from "./TagSuggestions";
 
-interface SearchControlButtonProps {
+interface SearchControlsProps {
   filtersOpen?: boolean;
+  folders?: readonly EagleFolder[];
   hasActiveFilters?: boolean;
+  selectedExt?: string;
+  selectedFolderId?: string;
+  selectedLimit?: number;
+  selectedRating?: string;
 }
 
 const resetButtonRoots = new WeakMap<HTMLElement, Root>();
 const toggleButtonRoots = new WeakMap<HTMLElement, Root>();
+const advancedFiltersRoots = new WeakMap<HTMLElement, Root>();
 const noopTagSelect = () => {};
 
-export function SearchControls({ filtersOpen = false, hasActiveFilters = false }: SearchControlButtonProps) {
+export function SearchControls({
+  filtersOpen = false,
+  folders = [],
+  hasActiveFilters = false,
+  selectedExt = "",
+  selectedFolderId = "",
+  selectedLimit = 30,
+  selectedRating = "",
+}: SearchControlsProps) {
   return (
     <section className="controls grid gap-4 pb-2" aria-label="Search and filters">
       <div className="search-row grid grid-cols-[minmax(0,1fr)_auto_auto] items-stretch gap-3">
@@ -54,48 +70,70 @@ export function SearchControls({ filtersOpen = false, hasActiveFilters = false }
         </div>
       </div>
 
-      <div id="advancedFilters" className="filter-row grid grid-cols-4 gap-6" hidden>
-        <label>
-          <select id="folderSelect" aria-label="Folder" onChange={changeFolder}>
-            <option value="">All folders</option>
-          </select>
-        </label>
-        <label>
-          <select id="extSelect" aria-label="Type" onChange={changeMediaType}>
-            <option value="">All types</option>
-            {MEDIA_TYPE_OPTIONS.map((type) => (
-              <option key={type} value={type}>
-                {type.toUpperCase()}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <select id="ratingSelect" aria-label="Rating" onChange={changeRating}>
-            <option value="">All ratings</option>
-            <option value="0">No rating</option>
-            {RATING_OPTIONS.map((rating) => (
-              <option key={rating} value={rating}>
-                ★ {rating}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <select id="pageSizeSelect" aria-label="Page size" defaultValue="30" onChange={changePageSize}>
-            {PAGE_SIZE_OPTIONS.map((pageSize) => (
-              <option key={pageSize} value={pageSize}>
-                {pageSize} items
-              </option>
-            ))}
-          </select>
-        </label>
+      <div id="advancedFiltersHost">
+        <AdvancedFilters
+          filtersOpen={filtersOpen}
+          folders={folders}
+          selectedExt={selectedExt}
+          selectedFolderId={selectedFolderId}
+          selectedLimit={selectedLimit}
+          selectedRating={selectedRating}
+        />
       </div>
     </section>
   );
 }
 
-function ResetFiltersButton({ hasActiveFilters = false }: Pick<SearchControlButtonProps, "hasActiveFilters">) {
+export function AdvancedFilters({
+  filtersOpen = false,
+  folders = [],
+  selectedExt = "",
+  selectedFolderId = "",
+  selectedLimit = 30,
+  selectedRating = "",
+}: Pick<SearchControlsProps, "filtersOpen" | "folders" | "selectedExt" | "selectedFolderId" | "selectedLimit" | "selectedRating">) {
+  return (
+    <div id="advancedFilters" className="filter-row grid grid-cols-4 gap-6" hidden={!filtersOpen}>
+      <label>
+        <select id="folderSelect" aria-label="Folder" value={selectedFolderId} onChange={changeFolder}>
+          <FolderOptions folders={folders} />
+        </select>
+      </label>
+      <label>
+        <select id="extSelect" aria-label="Type" value={selectedExt} onChange={changeMediaType}>
+          <option value="">All types</option>
+          {MEDIA_TYPE_OPTIONS.map((type) => (
+            <option key={type} value={type}>
+              {type.toUpperCase()}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        <select id="ratingSelect" aria-label="Rating" value={selectedRating} onChange={changeRating}>
+          <option value="">All ratings</option>
+          <option value="0">No rating</option>
+          {RATING_OPTIONS.map((rating) => (
+            <option key={rating} value={rating}>
+              ★ {rating}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        <select id="pageSizeSelect" aria-label="Page size" value={selectedLimit} onChange={changePageSize}>
+          {PAGE_SIZE_OPTIONS.map((pageSize) => (
+            <option key={pageSize} value={pageSize}>
+              {pageSize} items
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
+  );
+}
+
+function ResetFiltersButton({ hasActiveFilters = false }: Pick<SearchControlsProps, "hasActiveFilters">) {
   return (
     <button
       id="resetFiltersButton"
@@ -111,7 +149,7 @@ function ResetFiltersButton({ hasActiveFilters = false }: Pick<SearchControlButt
   );
 }
 
-function ToggleFiltersButton({ filtersOpen = false }: Pick<SearchControlButtonProps, "filtersOpen">) {
+function ToggleFiltersButton({ filtersOpen = false }: Pick<SearchControlsProps, "filtersOpen">) {
   const label = filtersOpen ? "Hide advanced search options" : "Show advanced search options";
   return (
     <button
@@ -158,7 +196,8 @@ function SlidersHorizontalIcon() {
 export function renderSearchControlButtonsView(
   resetContainer: HTMLElement,
   toggleContainer: HTMLElement,
-  props: Required<SearchControlButtonProps>,
+  advancedFiltersContainer: HTMLElement,
+  props: Required<SearchControlsProps>,
 ) {
   let resetRoot = resetButtonRoots.get(resetContainer);
   if (!resetRoot) {
@@ -175,4 +214,21 @@ export function renderSearchControlButtonsView(
     toggleButtonRoots.set(toggleContainer, toggleRoot);
   }
   toggleRoot.render(<ToggleFiltersButton filtersOpen={props.filtersOpen} />);
+
+  let advancedFiltersRoot = advancedFiltersRoots.get(advancedFiltersContainer);
+  if (!advancedFiltersRoot) {
+    advancedFiltersContainer.replaceChildren();
+    advancedFiltersRoot = createRoot(advancedFiltersContainer);
+    advancedFiltersRoots.set(advancedFiltersContainer, advancedFiltersRoot);
+  }
+  advancedFiltersRoot.render(
+    <AdvancedFilters
+      filtersOpen={props.filtersOpen}
+      folders={props.folders}
+      selectedExt={props.selectedExt}
+      selectedFolderId={props.selectedFolderId}
+      selectedLimit={props.selectedLimit}
+      selectedRating={props.selectedRating}
+    />,
+  );
 }

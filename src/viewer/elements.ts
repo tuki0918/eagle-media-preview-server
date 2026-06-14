@@ -8,11 +8,7 @@ export interface ViewerElements {
   tagSuggestionsHost: HTMLElement;
   resetFiltersButtonHost: HTMLElement;
   toggleFiltersButtonHost: HTMLElement;
-  advancedFilters: HTMLElement;
-  folderSelect: HTMLSelectElement;
-  extSelect: HTMLSelectElement;
-  ratingSelect: HTMLSelectElement;
-  pageSizeSelect: HTMLSelectElement;
+  advancedFiltersHost: HTMLElement;
   resultsStatusHost: HTMLElement;
   libraryFooterNameHost: HTMLElement;
   resultGridHost: HTMLElement;
@@ -40,11 +36,7 @@ export function getViewerElements(): ViewerElements {
     tagSuggestionsHost: document.querySelector("#tagSuggestionsHost"),
     resetFiltersButtonHost: document.querySelector("#resetFiltersButtonHost"),
     toggleFiltersButtonHost: document.querySelector("#toggleFiltersButtonHost"),
-    advancedFilters: document.querySelector("#advancedFilters"),
-    folderSelect: document.querySelector("#folderSelect"),
-    extSelect: document.querySelector("#extSelect"),
-    ratingSelect: document.querySelector("#ratingSelect"),
-    pageSizeSelect: document.querySelector("#pageSizeSelect"),
+    advancedFiltersHost: document.querySelector("#advancedFiltersHost"),
     resultsStatusHost: document.querySelector("#resultsStatusHost"),
     libraryFooterNameHost: document.querySelector("#libraryFooterNameHost"),
     resultGridHost: document.querySelector("#resultGridHost"),
