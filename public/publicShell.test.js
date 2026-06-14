@@ -2,9 +2,20 @@ import { test } from "vitest";
 import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 
+async function readViewerSources() {
+  const files = [
+    "../src/viewerApp.ts",
+    "../src/viewer/api.ts",
+    "../src/viewer/constants.ts",
+    "../src/viewer/icons.ts",
+  ];
+  const sources = await Promise.all(files.map((file) => readFile(new URL(file, import.meta.url), "utf8")));
+  return sources.join("\n");
+}
+
 test("public login no longer renders advanced Eagle connection settings", async () => {
   const html = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
-  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
+  const app = await readViewerSources();
 
   assert.match(html, /import iconOnUrl from "\.\/assets\/icon_on\.svg";/);
   assert.match(html, /className="app-logo" src=\{iconOnUrl\}/);
@@ -29,7 +40,7 @@ test("public login no longer renders advanced Eagle connection settings", async 
 
 test("public UI no longer shows connect lock icon or connection settings button", async () => {
   const html = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
-  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
+  const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.doesNotMatch(html, /id="connectButtonIcon"/);
@@ -60,7 +71,7 @@ test("public UI no longer shows connect lock icon or connection settings button"
 });
 
 test("public thumbnails lazy-load with visible loading states", async () => {
-  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
+  const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(app, /img\.loading = "lazy";/);
@@ -72,7 +83,7 @@ test("public thumbnails lazy-load with visible loading states", async () => {
 });
 
 test("public image preview fit mode scales to the viewport and refreshes on resize", async () => {
-  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
+  const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(app, /window\.addEventListener\("resize", \(\) => refreshPreviewImageLayout\(\)\);/);
@@ -109,7 +120,7 @@ test("public audio preview uses video-style dark action buttons", async () => {
 
 test("public UI exposes direct original file URLs for each media item", async () => {
   const html = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
-  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
+  const app = await readViewerSources();
   const directFileUrlSource = app.match(/function directFileUrl\(item\) \{[\s\S]*?\n\}/)?.[0] || "";
   const directFileLinkSource = app.match(/function directFileLink\(item\) \{[\s\S]*?\n\}/)?.[0] || "";
 
@@ -131,7 +142,7 @@ test("public UI exposes direct original file URLs for each media item", async ()
 });
 
 test("public image modal no longer exposes metadata editing controls", async () => {
-  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
+  const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.doesNotMatch(app, /metadata-editor/);
@@ -145,7 +156,7 @@ test("public image modal no longer exposes metadata editing controls", async () 
 });
 
 test("public preview renders text-like files and PDFs from their thumbnails", async () => {
-  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
+  const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
   const server = await readFile(new URL("../plugin/service/viewerServer.cjs", import.meta.url), "utf8");
 
@@ -178,7 +189,7 @@ test("public preview renders text-like files and PDFs from their thumbnails", as
 });
 
 test("public grid thumbnail hover icon uses play for video and audio", async () => {
-  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
+  const app = await readViewerSources();
 
   assert.match(app, /"move-diagonal":/);
   assert.match(app, /const icon = mediaType === "video" \|\| mediaType === "audio" \? "play" : "move-diagonal";/);
@@ -188,7 +199,7 @@ test("public grid thumbnail hover icon uses play for video and audio", async () 
 
 test("public status line no longer renders page count UI", async () => {
   const html = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
-  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
+  const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.doesNotMatch(html, /id="pageInfo"/);
@@ -209,14 +220,14 @@ test("public shell uses Media Preview Server branding and serves a favicon", asy
 });
 
 test("public audio preview attempts autoplay when the modal opens", async () => {
-  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
+  const app = await readViewerSources();
 
   assert.match(app, /const audio = document\.createElement\("audio"\)/);
   assert.match(app, /audio\.play\(\)\.catch\(\(\) => \{\}\)/);
 });
 
 test("public ratings are static in grid and table but editable in the preview modal", async () => {
-  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
+  const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(app, /renderRating\(rating, item, \{ interactive: false \}\);/);
@@ -230,7 +241,7 @@ test("public ratings are static in grid and table but editable in the preview mo
 
 test("public file names expose original names in truncated views and preview info", async () => {
   const html = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
-  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
+  const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(app, /function originalFileName\(item\) \{/);
@@ -248,7 +259,7 @@ test("public file names expose original names in truncated views and preview inf
 });
 
 test("public preview info uses chip lists and a full-width open file CTA", async () => {
-  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
+  const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(app, /detailsSection\.className = "preview-details-section";/);
@@ -329,7 +340,7 @@ test("public preview info uses chip lists and a full-width open file CTA", async
 });
 
 test("public preview info closes when pressing outside the side menu", async () => {
-  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
+  const app = await readViewerSources();
 
   assert.match(app, /els\.dialog\.addEventListener\("pointerdown", closePreviewInfoFromOutside\);/);
   assert.match(app, /function closePreviewInfoFromOutside\(event\) \{/);
@@ -340,7 +351,7 @@ test("public preview info closes when pressing outside the side menu", async () 
 
 test("public UI labels media extensions as type", async () => {
   const html = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
-  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
+  const app = await readViewerSources();
 
   assert.match(html, /<select id="folderSelect" aria-label="Folder">[\s\S]*?<option value="">All folders<\/option>/);
   assert.match(html, /<select id="extSelect" aria-label="Type">[\s\S]*?<option value="">All types<\/option>/);
@@ -357,7 +368,7 @@ test("public UI labels media extensions as type", async () => {
 
 test("public UI supports tag filter chips", async () => {
   const html = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
-  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
+  const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(html, /id="tagChips"/);
@@ -406,7 +417,7 @@ test("public UI supports tag filter chips", async () => {
 
 test("public UI adds a masonry tiles view with infinite loading", async () => {
   const html = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
-  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
+  const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(html, /id="tilesViewButton"/);
@@ -469,7 +480,7 @@ test("public extension pills use varied colors for common text formats", async (
 });
 
 test("public UI syncs filters, pagination, and preview state into the URL history", async () => {
-  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
+  const app = await readViewerSources();
 
   assert.match(app, /window\.addEventListener\("popstate"/);
   assert.match(app, /pushState/);
@@ -482,7 +493,7 @@ test("public UI syncs filters, pagination, and preview state into the URL histor
 });
 
 test("public results status and empty states stay concise and consistent across views", async () => {
-  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
+  const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(app, /els\.resultCount\.textContent = `\$\{state\.total\.toLocaleString\(\)\} items`;/);
@@ -497,7 +508,7 @@ test("public results status and empty states stay concise and consistent across 
 
 test("public UI exposes collapsible advanced filters without sort controls", async () => {
   const html = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
-  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
+  const app = await readViewerSources();
 
   assert.match(html, /id="toggleFiltersButton"/);
   assert.match(html, /aria-label="Show advanced search options"/);
