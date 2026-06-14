@@ -59,10 +59,18 @@ import {
 import { previewDetailRows } from "./viewer/previewDetails";
 import { renderRating } from "./viewer/rating";
 import { state } from "./viewer/state";
-import type { ViewerMode } from "./viewer/types";
+import type { EagleItem, ViewerMode } from "./viewer/types";
 import { buildViewerUrl, currentPage, parseViewerUrlState } from "./viewer/urlState";
 
 const els = getViewerElements();
+
+interface PreviewTouchSession {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  startedAt: number;
+  moved: boolean;
+}
 
 export function initViewer() {
   init();
@@ -327,13 +335,13 @@ function appendRenderedItems(items) {
   updateViewToggle();
 }
 
-function bindPreviewTrigger(element, item) {
+function bindPreviewTrigger(element: HTMLElement, item: EagleItem) {
   let lastTriggerAt = 0;
-  let touchSession: any = null;
+  let touchSession: PreviewTouchSession | null = null;
   const TAP_MOVE_THRESHOLD = 10;
   const TAP_HOLD_THRESHOLD_MS = 300;
 
-  const openFromPointer = (event) => {
+  const openFromPointer = (event?: PointerEvent | MouseEvent) => {
     if (Date.now() - lastTriggerAt < 700) return;
     if (event?.type === "touchend") {
       event.preventDefault();
