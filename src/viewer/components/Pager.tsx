@@ -1,13 +1,11 @@
-import { shellClasses } from "../shellClasses";
-
 export function Pager() {
   return (
-    <nav className={shellClasses.pager} aria-label="Pagination">
+    <nav className="pager static grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 bg-transparent pt-2.5 shadow-none backdrop-blur-none" aria-label="Pagination">
       <button id="prevButton" type="button">
         <span data-lucide="chevron-left" />
         <span>Previous</span>
       </button>
-      <div id="pageButtons" className={shellClasses.pageButtons} aria-label="Page shortcuts" />
+      <div id="pageButtons" className="page-buttons inline-flex items-center justify-center gap-2.5" aria-label="Page shortcuts" />
       <button id="nextButton" type="button">
         <span>Next</span>
         <span data-lucide="chevron-right" />
