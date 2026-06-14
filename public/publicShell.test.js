@@ -1,12 +1,13 @@
-import test from "node:test";
+import { test } from "vitest";
 import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 
 test("public login no longer renders advanced Eagle connection settings", async () => {
-  const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
-  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
+  const html = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
 
-  assert.match(html, /class="app-logo" src="\/assets\/icon_on\.svg"/);
+  assert.match(html, /import iconOnUrl from "\.\/assets\/icon_on\.svg";/);
+  assert.match(html, /class="app-logo" src="\$\{iconOnUrl\}"/);
   assert.match(html, /<h1>Media Preview Server<\/h1>/);
   assert.match(html, /A local media server for your Eagle library\./);
   assert.doesNotMatch(html, /id="viewerPasswordField"/);
@@ -27,9 +28,9 @@ test("public login no longer renders advanced Eagle connection settings", async 
 });
 
 test("public UI no longer shows connect lock icon or connection settings button", async () => {
-  const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
-  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
-  const css = await readFile(new URL("./styles.css", import.meta.url), "utf8");
+  const html = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
+  const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.doesNotMatch(html, /id="connectButtonIcon"/);
   assert.doesNotMatch(html, /aria-label="Connection settings"/);
@@ -59,8 +60,8 @@ test("public UI no longer shows connect lock icon or connection settings button"
 });
 
 test("public thumbnails lazy-load with visible loading states", async () => {
-  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
-  const css = await readFile(new URL("./styles.css", import.meta.url), "utf8");
+  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
+  const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(app, /img\.loading = "lazy";/);
   assert.match(app, /button\?\.classList\.add\("thumb-loading"\);/);
@@ -71,8 +72,8 @@ test("public thumbnails lazy-load with visible loading states", async () => {
 });
 
 test("public image preview fit mode scales to the viewport and refreshes on resize", async () => {
-  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
-  const css = await readFile(new URL("./styles.css", import.meta.url), "utf8");
+  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
+  const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(app, /window\.addEventListener\("resize", \(\) => refreshPreviewImageLayout\(\)\);/);
   assert.match(app, /const IMAGE_FIT_MARGIN = 0\.96;/);
@@ -92,7 +93,7 @@ test("public image preview fit mode scales to the viewport and refreshes on resi
 });
 
 test("public video preview reserves top space for floating action buttons", async () => {
-  const css = await readFile(new URL("./styles.css", import.meta.url), "utf8");
+  const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(css, /#previewDialog\.video-mode \.preview-layout\s*\{[^}]*padding-top:\s*calc\(60px \+ env\(safe-area-inset-top\)\);[^}]*background:\s*#05070a;/s);
   assert.match(css, /\.video-mode \.preview-body\s*\{[^}]*min-height:\s*0;[^}]*height:\s*100%;/s);
@@ -100,15 +101,15 @@ test("public video preview reserves top space for floating action buttons", asyn
 });
 
 test("public audio preview uses video-style dark action buttons", async () => {
-  const css = await readFile(new URL("./styles.css", import.meta.url), "utf8");
+  const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(css, /\.video-mode \.dialog-actions \.icon-button,\s*\.audio-mode \.dialog-actions \.icon-button\s*\{[^}]*background:\s*rgba\(15,\s*23,\s*42,\s*0\.62\);[^}]*color:\s*#fff;/s);
   assert.match(css, /\.video-mode \.dialog-actions \.icon-button:hover,\s*\.audio-mode \.dialog-actions \.icon-button:hover\s*\{[^}]*background:\s*rgba\(15,\s*23,\s*42,\s*0\.82\);[^}]*color:\s*#fff;/s);
 });
 
 test("public UI exposes direct original file URLs for each media item", async () => {
-  const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
-  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
+  const html = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
   const directFileUrlSource = app.match(/function directFileUrl\(item\) \{[\s\S]*?\n\}/)?.[0] || "";
   const directFileLinkSource = app.match(/function directFileLink\(item\) \{[\s\S]*?\n\}/)?.[0] || "";
 
@@ -130,8 +131,8 @@ test("public UI exposes direct original file URLs for each media item", async ()
 });
 
 test("public image modal no longer exposes metadata editing controls", async () => {
-  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
-  const css = await readFile(new URL("./styles.css", import.meta.url), "utf8");
+  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
+  const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.doesNotMatch(app, /metadata-editor/);
   assert.doesNotMatch(app, /Save metadata/);
@@ -144,8 +145,8 @@ test("public image modal no longer exposes metadata editing controls", async () 
 });
 
 test("public preview renders text-like files and PDFs from their thumbnails", async () => {
-  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
-  const css = await readFile(new URL("./styles.css", import.meta.url), "utf8");
+  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
+  const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
   const server = await readFile(new URL("../plugin/service/viewerServer.cjs", import.meta.url), "utf8");
 
   assert.match(app, /const textPreviewExts = new Set\(\[/);
@@ -177,7 +178,7 @@ test("public preview renders text-like files and PDFs from their thumbnails", as
 });
 
 test("public grid thumbnail hover icon uses play for video and audio", async () => {
-  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
+  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
 
   assert.match(app, /"move-diagonal":/);
   assert.match(app, /const icon = mediaType === "video" \|\| mediaType === "audio" \? "play" : "move-diagonal";/);
@@ -186,9 +187,9 @@ test("public grid thumbnail hover icon uses play for video and audio", async () 
 });
 
 test("public status line no longer renders page count UI", async () => {
-  const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
-  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
-  const css = await readFile(new URL("./styles.css", import.meta.url), "utf8");
+  const html = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
+  const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.doesNotMatch(html, /id="pageInfo"/);
   assert.doesNotMatch(app, /pageInfo:\s*document\.querySelector\("#pageInfo"\)/);
@@ -198,24 +199,25 @@ test("public status line no longer renders page count UI", async () => {
 
 test("public shell uses Media Preview Server branding and serves a favicon", async () => {
   const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
+  const appComponent = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
   await access(new URL("./favicon.ico", import.meta.url));
 
   assert.match(html, /<title>Media Preview Server - Eagle<\/title>/);
-  assert.match(html, /<strong>Media Preview Server<\/strong>/);
+  assert.match(appComponent, /<strong>Media Preview Server<\/strong>/);
   assert.match(html, /<link rel="icon" href="\/favicon\.ico"/);
   assert.doesNotMatch(html, /Eagle Web UI/);
 });
 
 test("public audio preview attempts autoplay when the modal opens", async () => {
-  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
+  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
 
   assert.match(app, /const audio = document\.createElement\("audio"\)/);
   assert.match(app, /audio\.play\(\)\.catch\(\(\) => \{\}\)/);
 });
 
 test("public ratings are static in grid and table but editable in the preview modal", async () => {
-  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
-  const css = await readFile(new URL("./styles.css", import.meta.url), "utf8");
+  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
+  const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(app, /renderRating\(rating, item, \{ interactive: false \}\);/);
   assert.match(app, /renderRating\(els\.previewRating, item, \{ interactive: true \}\);/);
@@ -227,9 +229,9 @@ test("public ratings are static in grid and table but editable in the preview mo
 });
 
 test("public file names expose original names in truncated views and preview info", async () => {
-  const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
-  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
-  const css = await readFile(new URL("./styles.css", import.meta.url), "utf8");
+  const html = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
+  const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(app, /function originalFileName\(item\) \{/);
   assert.match(app, /title\.title = originalFileName\(item\);/);
@@ -246,8 +248,8 @@ test("public file names expose original names in truncated views and preview inf
 });
 
 test("public preview info uses chip lists and a full-width open file CTA", async () => {
-  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
-  const css = await readFile(new URL("./styles.css", import.meta.url), "utf8");
+  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
+  const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(app, /detailsSection\.className = "preview-details-section";/);
   assert.match(app, /if \(chips && value\.length > 0\) \{/);
@@ -327,7 +329,7 @@ test("public preview info uses chip lists and a full-width open file CTA", async
 });
 
 test("public preview info closes when pressing outside the side menu", async () => {
-  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
+  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
 
   assert.match(app, /els\.dialog\.addEventListener\("pointerdown", closePreviewInfoFromOutside\);/);
   assert.match(app, /function closePreviewInfoFromOutside\(event\) \{/);
@@ -337,8 +339,8 @@ test("public preview info closes when pressing outside the side menu", async () 
 });
 
 test("public UI labels media extensions as type", async () => {
-  const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
-  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
+  const html = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
 
   assert.match(html, /<select id="folderSelect" aria-label="Folder">[\s\S]*?<option value="">All folders<\/option>/);
   assert.match(html, /<select id="extSelect" aria-label="Type">[\s\S]*?<option value="">All types<\/option>/);
@@ -354,9 +356,9 @@ test("public UI labels media extensions as type", async () => {
 });
 
 test("public UI supports tag filter chips", async () => {
-  const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
-  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
-  const css = await readFile(new URL("./styles.css", import.meta.url), "utf8");
+  const html = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
+  const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(html, /id="tagChips"/);
   assert.match(html, /id="tagSuggestions"/);
@@ -403,9 +405,9 @@ test("public UI supports tag filter chips", async () => {
 });
 
 test("public UI adds a masonry tiles view with infinite loading", async () => {
-  const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
-  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
-  const css = await readFile(new URL("./styles.css", import.meta.url), "utf8");
+  const html = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
+  const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(html, /id="tilesViewButton"/);
   assert.match(html, /<button id="tilesViewButton" type="button" aria-pressed="true">Tiles<\/button>[\s\S]*<button id="gridViewButton" type="button" aria-pressed="false">Grid<\/button>/);
@@ -452,7 +454,7 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
 });
 
 test("public extension pills use varied colors for common text formats", async () => {
-  const css = await readFile(new URL("./styles.css", import.meta.url), "utf8");
+  const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(css, /\.ext-pill\[data-ext="html"\]\s*\{[^}]*background:\s*#fff7ed;[^}]*color:\s*#c2410c;/s);
   assert.match(css, /\.ext-pill\[data-ext="css"\]\s*\{[^}]*background:\s*#eff6ff;[^}]*color:\s*#2563eb;/s);
@@ -467,7 +469,7 @@ test("public extension pills use varied colors for common text formats", async (
 });
 
 test("public UI syncs filters, pagination, and preview state into the URL history", async () => {
-  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
+  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
 
   assert.match(app, /window\.addEventListener\("popstate"/);
   assert.match(app, /pushState/);
@@ -480,8 +482,8 @@ test("public UI syncs filters, pagination, and preview state into the URL histor
 });
 
 test("public results status and empty states stay concise and consistent across views", async () => {
-  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
-  const css = await readFile(new URL("./styles.css", import.meta.url), "utf8");
+  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
+  const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(app, /els\.resultCount\.textContent = `\$\{state\.total\.toLocaleString\(\)\} items`;/);
   assert.doesNotMatch(app, /items · \$\{start\}-\$\{end\}/);
@@ -494,8 +496,8 @@ test("public results status and empty states stay concise and consistent across 
 });
 
 test("public UI exposes collapsible advanced filters without sort controls", async () => {
-  const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
-  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
+  const html = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const app = await readFile(new URL("../src/viewerApp.ts", import.meta.url), "utf8");
 
   assert.match(html, /id="toggleFiltersButton"/);
   assert.match(html, /aria-label="Show advanced search options"/);

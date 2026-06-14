@@ -1,4 +1,3 @@
-const test = require("node:test");
 const assert = require("node:assert/strict");
 const { mkdtemp } = require("fs").promises;
 const { join } = require("path");
