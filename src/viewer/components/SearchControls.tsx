@@ -11,6 +11,7 @@ import {
   resetFilters,
   toggleFilters,
 } from "../shellActions";
+import { TagSuggestions } from "./TagSuggestions";
 
 interface SearchControlButtonProps {
   filtersOpen?: boolean;
@@ -19,6 +20,7 @@ interface SearchControlButtonProps {
 
 const resetButtonRoots = new WeakMap<HTMLElement, Root>();
 const toggleButtonRoots = new WeakMap<HTMLElement, Root>();
+const noopTagSelect = () => {};
 
 export function SearchControls({ filtersOpen = false, hasActiveFilters = false }: SearchControlButtonProps) {
   return (
@@ -40,13 +42,9 @@ export function SearchControls({ filtersOpen = false, hasActiveFilters = false }
               onKeyDown={handleSearchKeyDown}
             />
           </div>
-          <div
-            id="tagSuggestions"
-            className="tag-suggestions absolute left-[42px] right-3 top-[calc(100%+6px)] z-20 grid max-h-[280px] overflow-auto rounded-app border border-app-border bg-app-surface p-1.5 shadow-app-soft"
-            role="listbox"
-            aria-label="Tag suggestions"
-            hidden
-          />
+          <div id="tagSuggestionsHost">
+            <TagSuggestions hidden items={[]} onSelect={noopTagSelect} />
+          </div>
         </div>
         <div id="resetFiltersButtonHost" className="contents">
           <ResetFiltersButton hasActiveFilters={hasActiveFilters} />

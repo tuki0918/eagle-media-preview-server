@@ -58,6 +58,7 @@ import {
   type PreviewBodyKind,
 } from "./viewer/components/PreviewBody";
 import { renderLoginConnectView } from "./viewer/components/LoginView";
+import { renderLibraryFooterView } from "./viewer/components/LibraryFooter";
 import { renderFolderOptionsView } from "./viewer/components/FolderOptions";
 import { renderResultsStatusView } from "./viewer/components/ResultsStatus";
 import { renderSearchControlButtonsView } from "./viewer/components/SearchControls";
@@ -210,7 +211,7 @@ function showLogin() {
 function showViewer(data: ConnectResponse) {
   els.loginView.hidden = true;
   els.viewerShell.hidden = false;
-  els.libraryFooterName.textContent = libraryLabel(data);
+  renderLibraryFooterView(els.libraryFooterNameHost, { name: libraryLabel(data) });
   renderFolderOptions();
   state.total = 0;
   state.items = [];
@@ -560,17 +561,16 @@ function renderTagSuggestions(items: readonly TagSuggestionApiItem[]) {
     return;
   }
 
-  renderTagSuggestionsView(els.tagSuggestions, {
+  renderTagSuggestionsView(els.tagSuggestionsHost, {
+    hidden: false,
     items,
     onSelect: addTagFilter,
   });
-  els.tagSuggestions.hidden = false;
 }
 
 function hideTagSuggestions() {
   state.tagSuggestionsRequestId += 1;
-  els.tagSuggestions.hidden = true;
-  clearTagSuggestionsView(els.tagSuggestions);
+  clearTagSuggestionsView(els.tagSuggestionsHost);
 }
 
 function syncAdvancedFiltersUi() {

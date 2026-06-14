@@ -1,4 +1,5 @@
 import { CardTemplate } from "./CardTemplate";
+import { LibraryFooter } from "./LibraryFooter";
 import { Pager } from "./Pager";
 import { PreviewDialog } from "./PreviewDialog";
 import { ResultsStatus } from "./ResultsStatus";
@@ -22,9 +23,9 @@ export function ViewerShellLayout() {
         <div id="pagerHost">
           <Pager />
         </div>
-        <p id="libraryFooterName" className="library-footer-name mt-2 text-center text-xs leading-[1.4] text-app-muted">
-          Connecting to Eagle
-        </p>
+        <div id="libraryFooterNameHost">
+          <LibraryFooter />
+        </div>
       </main>
       <PreviewDialog />
       <CardTemplate />

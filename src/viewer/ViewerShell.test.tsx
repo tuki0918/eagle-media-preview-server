@@ -5,6 +5,7 @@ import {
   ConnectButton,
   ConnectMessage,
   FolderOptions,
+  LibraryFooter,
   LoginView,
   PageButtons,
   Pager,
@@ -41,6 +42,7 @@ const REQUIRED_ELEMENT_IDS = [
   "pageSizeSelect",
   "searchInput",
   "tagChips",
+  "tagSuggestionsHost",
   "tagSuggestions",
   "resetFiltersButtonHost",
   "resetFiltersButton",
@@ -60,6 +62,7 @@ const REQUIRED_ELEMENT_IDS = [
   "nextButton",
   "pagerHost",
   "pageButtons",
+  "libraryFooterNameHost",
   "libraryFooterName",
   "previewDialog",
   "previewMetaHost",
@@ -157,6 +160,13 @@ describe("ViewerAppShell", () => {
     expect(html).toContain("All folders");
     expect(html).toContain("Uncategorized");
     expect(html).toContain("  Folder 1 (8)");
+  });
+
+  test("renders library footer as a reusable component", () => {
+    const html = renderToStaticMarkup(<LibraryFooter name="My Library - Eagle 4.0" />);
+
+    expect(html).toContain('id="libraryFooterName"');
+    expect(html).toContain("My Library - Eagle 4.0");
   });
 
   test("renders preview text as reusable components", () => {

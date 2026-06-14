@@ -33,6 +33,7 @@ async function readAppSources() {
     "../src/viewer/ViewerShell.tsx",
     "../src/viewer/components/CardTemplate.tsx",
     "../src/viewer/components/FolderOptions.tsx",
+    "../src/viewer/components/LibraryFooter.tsx",
     "../src/viewer/components/LoginView.tsx",
     "../src/viewer/components/Pager.tsx",
     "../src/viewer/components/PreviewBody.tsx",
@@ -96,6 +97,10 @@ test("public UI no longer shows connect lock icon or connection settings button"
   assert.match(app, /renderLoginConnectView\(els\.connectButtonHost, els\.connectMessageHost, \{/);
   assert.doesNotMatch(app, /els\.connectMessage\.textContent/);
   assert.doesNotMatch(app, /els\.connectMessage\.classList/);
+  assert.match(html, /id="libraryFooterNameHost"[\s\S]*<LibraryFooter \/>/);
+  assert.match(app, /libraryFooterNameHost: document\.querySelector\("#libraryFooterNameHost"\),/);
+  assert.doesNotMatch(app, /libraryFooterName: document\.querySelector\("#libraryFooterName"\),/);
+  assert.doesNotMatch(app, /els\.libraryFooterName\.textContent/);
   assert.doesNotMatch(app, /syncAuthUi/);
   assert.doesNotMatch(html, /id="connectionStatusDot"/);
   assert.doesNotMatch(html, /id="libraryName"/);
@@ -429,15 +434,18 @@ test("public UI supports tag filter chips", async () => {
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(html, /id="tagChips"/);
+  assert.match(html, /id="tagSuggestionsHost"/);
   assert.match(html, /id="tagSuggestions"/);
-  assert.match(html, /<div className="[^"]*\bsearch-box\b[^"]*"[\s\S]*id="tagChips"[\s\S]*id="searchInput"[\s\S]*id="tagSuggestions"[\s\S]*<\/div>[\s\S]*id="resetFiltersButtonHost"[\s\S]*id="toggleFiltersButtonHost"/);
+  assert.match(html, /<div className="[^"]*\bsearch-box\b[^"]*"[\s\S]*id="tagChips"[\s\S]*id="searchInput"[\s\S]*id="tagSuggestionsHost"[\s\S]*<\/div>[\s\S]*id="resetFiltersButtonHost"[\s\S]*id="toggleFiltersButtonHost"/);
   assert.match(html, /id="resetFiltersButton"[\s\S]*aria-label="Reset filters"[\s\S]*disabled=\{!hasActiveFilters\}/);
   assert.match(html, /id="resetFiltersButton"[\s\S]*<FunnelXIcon \/>/);
   assert.doesNotMatch(html, /id="tagInput"/);
   assert.doesNotMatch(html, /id="advancedFilters"[\s\S]*id="tagChips"/);
   assert.match(app, /tags:\s*\[\]/);
   assert.match(app, /tagChips: document\.querySelector\("#tagChips"\),/);
-  assert.match(app, /tagSuggestions: document\.querySelector\("#tagSuggestions"\),/);
+  assert.match(app, /tagSuggestionsHost: document\.querySelector\("#tagSuggestionsHost"\),/);
+  assert.doesNotMatch(app, /tagSuggestions: document\.querySelector\("#tagSuggestions"\),/);
+  assert.doesNotMatch(app, /els\.tagSuggestions\.hidden/);
   assert.match(app, /resetFiltersButtonHost: document\.querySelector\("#resetFiltersButtonHost"\),/);
   assert.doesNotMatch(app, /resetFiltersButton: document\.querySelector\("#resetFiltersButton"\),/);
   assert.match(html, /export function FolderOptions\(\{ folders \}/);

@@ -5,7 +5,7 @@ export interface ViewerElements {
   connectMessageHost: HTMLElement;
   searchInput: HTMLInputElement;
   tagChips: HTMLElement;
-  tagSuggestions: HTMLElement;
+  tagSuggestionsHost: HTMLElement;
   resetFiltersButtonHost: HTMLElement;
   toggleFiltersButtonHost: HTMLElement;
   advancedFilters: HTMLElement;
@@ -14,7 +14,7 @@ export interface ViewerElements {
   ratingSelect: HTMLSelectElement;
   pageSizeSelect: HTMLSelectElement;
   resultsStatusHost: HTMLElement;
-  libraryFooterName: HTMLElement;
+  libraryFooterNameHost: HTMLElement;
   resultGridHost: HTMLElement;
   tilesSentinelHost: HTMLElement;
   pagerHost: HTMLElement;
@@ -37,7 +37,7 @@ export function getViewerElements(): ViewerElements {
     connectMessageHost: document.querySelector("#connectMessageHost"),
     searchInput: document.querySelector("#searchInput"),
     tagChips: document.querySelector("#tagChips"),
-    tagSuggestions: document.querySelector("#tagSuggestions"),
+    tagSuggestionsHost: document.querySelector("#tagSuggestionsHost"),
     resetFiltersButtonHost: document.querySelector("#resetFiltersButtonHost"),
     toggleFiltersButtonHost: document.querySelector("#toggleFiltersButtonHost"),
     advancedFilters: document.querySelector("#advancedFilters"),
@@ -46,7 +46,7 @@ export function getViewerElements(): ViewerElements {
     ratingSelect: document.querySelector("#ratingSelect"),
     pageSizeSelect: document.querySelector("#pageSizeSelect"),
     resultsStatusHost: document.querySelector("#resultsStatusHost"),
-    libraryFooterName: document.querySelector("#libraryFooterName"),
+    libraryFooterNameHost: document.querySelector("#libraryFooterNameHost"),
     resultGridHost: document.querySelector("#resultGridHost"),
     tilesSentinelHost: document.querySelector("#tilesSentinelHost"),
     pagerHost: document.querySelector("#pagerHost"),
