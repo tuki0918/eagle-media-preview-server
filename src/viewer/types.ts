@@ -76,10 +76,6 @@ export interface OpenPreviewOptions {
   skipHistory?: boolean;
 }
 
-export interface RenderImagePreviewOptions {
-  srcKind?: string;
-}
-
 export type ItemPatch = Partial<EagleItem>;
 
 export interface ViewerState {
@@ -99,12 +95,6 @@ export interface ViewerState {
   tilesLoadingMore: boolean;
   tilesObserver: IntersectionObserver | null;
   requestId: number;
-  previewTransform: PreviewTransform;
-  previewFitScale: number;
-  previewNaturalScale: number;
-  previewDrag: PreviewDrag | null;
-  previewPointers: Map<number, PreviewPoint>;
-  previewPinch: PreviewPinch | null;
   previewItemId: string;
   previewInfoOpen: boolean;
   restoringHistory: boolean;

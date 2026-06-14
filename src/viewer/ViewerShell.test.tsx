@@ -6,6 +6,7 @@ import {
   PageButtons,
   Pager,
   PreviewActions,
+  PreviewBody,
   PreviewDialog,
   PreviewDetailsPanel,
   ResultList,
@@ -167,5 +168,16 @@ describe("ViewerAppShell", () => {
     expect(details).toContain('class="preview-details-section"');
     expect(details).toContain('class="preview-edit-form"');
     expect(actions).toContain('class="direct-file-link preview-info-cta"');
+  });
+
+  test("renders preview body media variants", () => {
+    const image = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", name: "Sample.jpg" }} kind="image" />);
+    const text = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", name: "Sample.txt" }} kind="text" />);
+    const unsupported = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", ext: "avi" }} kind="unsupported" />);
+
+    expect(image).toContain('class="image-viewport"');
+    expect(image).toContain('class="image-toolbar"');
+    expect(text).toContain('class="text-preview"');
+    expect(unsupported).toContain('class="unsupported-thumb"');
   });
 });

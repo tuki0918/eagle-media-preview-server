@@ -14,6 +14,7 @@ export { CardTemplate } from "./components/CardTemplate";
 export { LoginView } from "./components/LoginView";
 export { PageButtons } from "./components/PageButtons";
 export { Pager } from "./components/Pager";
+export { PreviewBody } from "./components/PreviewBody";
 export { PreviewDialog } from "./components/PreviewDialog";
 export { PreviewActions, PreviewDetailsPanel } from "./components/PreviewInfo";
 export { ResultList } from "./components/ResultList";

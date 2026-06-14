@@ -10,11 +10,10 @@ import {
   playableVideoExts,
   textPreviewExts,
 } from "./viewer/constants";
-import { debounce, getJson, mediaUrl, postJson } from "./viewer/api";
+import { debounce, getJson, postJson } from "./viewer/api";
 import { getViewerElements } from "./viewer/elements";
 import {
   flattenFolders,
-  formatDuration,
   isTimedMedia,
   itemMeta,
   normalizeTag,
@@ -22,7 +21,7 @@ import {
   previewFileName,
 } from "./viewer/format";
 import { hasActiveFilters, resetFilterState } from "./viewer/filters";
-import { iconNode, renderLucideIcons, type IconName } from "./viewer/icons";
+import { renderLucideIcons } from "./viewer/icons";
 import { itemQueryParams } from "./viewer/itemQuery";
 import {
   folderSuggestionItems as buildFolderSuggestionItems,
@@ -50,20 +49,16 @@ import {
   clearPreviewInfoView,
   renderPreviewInfoView,
 } from "./viewer/components/PreviewInfo";
+import {
+  clearPreviewBodyView,
+  renderPreviewBodyView,
+  type PreviewBodyKind,
+} from "./viewer/components/PreviewBody";
 import { renderTagChipsView } from "./viewer/components/TagChips";
 import {
   clearTagSuggestionsView,
   renderTagSuggestionsView,
 } from "./viewer/components/TagSuggestions";
-import {
-  dragPreviewTransform,
-  initialPreviewScales,
-  minimumPreviewScale as getMinimumPreviewScale,
-  nextPreviewScales,
-  nextZoomScale,
-  pointerDistance as getPointerDistance,
-  setPreviewZoom,
-} from "./viewer/previewTransform";
 import { previewDetailRows } from "./viewer/previewDetails";
 import { renderRating } from "./viewer/rating";
 import { setViewerShellActions } from "./viewer/shellActions";
@@ -81,8 +76,6 @@ import type {
   LoadItemsOptions,
   LoadItemsResponse,
   OpenPreviewOptions,
-  PreviewPoint,
-  RenderImagePreviewOptions,
   TagSuggestionApiItem,
 } from "./viewer/types";
 import { buildViewerUrl, currentPage, parseViewerUrlState } from "./viewer/urlState";
@@ -167,7 +160,6 @@ async function init() {
     if (els.viewerShell.hidden) return;
     loadItems();
   });
-  window.addEventListener("resize", () => refreshPreviewImageLayout());
   document.addEventListener("pointerdown", (event) => {
     if ((event.target as Element | null)?.closest(".search-box")) return;
     hideTagSuggestions();
@@ -340,7 +332,7 @@ function openPreview(item: EagleItem, { skipHistory = false }: OpenPreviewOption
   els.previewMeta.textContent = itemMeta(item);
   els.previewOriginalName.textContent = originalFileName(item);
   els.previewOriginalName.title = originalFileName(item);
-  els.previewBody.replaceChildren();
+  clearPreviewBodyView(els.previewBody);
   els.dialog.classList.remove("video-mode", "image-mode", "audio-mode", "text-mode", "unsupported-mode", "info-open");
   els.toggleInfoPreview.setAttribute("aria-expanded", state.previewInfoOpen ? "true" : "false");
   renderRating(els.previewRating, item, { interactive: true, onSelect: (star) => setItemStar(item, star) });
@@ -349,287 +341,22 @@ function openPreview(item: EagleItem, { skipHistory = false }: OpenPreviewOption
     els.dialog.classList.add("info-open");
   }
 
-  const ext = (item.ext || "").toLowerCase();
-  if (playableVideoExts.has(ext)) {
-    els.dialog.classList.add("video-mode");
-    const video = document.createElement("video");
-    video.className = "preview-video";
-    video.src = mediaUrl(String(item.id || ""), "file");
-    video.controls = true;
-    video.playsInline = true;
-    video.setAttribute("playsinline", "");
-    video.setAttribute("webkit-playsinline", "");
-    video.preload = "metadata";
-    video.addEventListener("error", () => showPreviewNotice(videoErrorMessage(video.error)));
-    els.previewBody.append(video);
-    showPreviewDialog();
-    if (!skipHistory) syncUrlState();
-    video.play().catch(() => {});
-    return;
-  } else if (playableAudioExts.has(ext)) {
-    els.dialog.classList.add("audio-mode");
-    const audio = document.createElement("audio");
-    audio.src = mediaUrl(String(item.id || ""), "file");
-    audio.controls = true;
-    audio.preload = "metadata";
-    els.previewBody.append(audio);
-    showPreviewDialog();
-    if (!skipHistory) syncUrlState();
-    audio.play().catch(() => {});
-    return;
-  } else if (textPreviewExts.has(ext)) {
-    els.dialog.classList.add("text-mode");
-    renderTextPreview(item);
-  } else if (pdfPreviewExts.has(ext)) {
-    els.dialog.classList.add("image-mode");
-    renderImagePreview(item, { srcKind: "thumb" });
-  } else if (isTimedMedia(item)) {
-    els.dialog.classList.add("unsupported-mode");
-    const image = document.createElement("img");
-    image.className = "unsupported-thumb";
-    image.src = mediaUrl(String(item.id || ""), "thumb");
-    image.alt = item.name || item.id || "";
-    const notice = document.createElement("p");
-    notice.className = "preview-notice";
-    notice.textContent = `${(item.ext || "This format").toUpperCase()} is not supported in this browser.`;
-    els.previewBody.append(image, notice);
-  } else {
-    els.dialog.classList.add("image-mode");
-    renderImagePreview(item);
-  }
+  const { kind, srcKind } = previewBodyForItem(item);
+  els.dialog.classList.add(`${kind}-mode`);
+  renderPreviewBodyView(els.previewBody, { item, kind, srcKind });
 
   showPreviewDialog();
   if (!skipHistory) syncUrlState();
 }
 
-function renderTextPreview(item: EagleItem) {
-  const preview = document.createElement("pre");
-  preview.className = "text-preview";
-  const code = document.createElement("code");
-  code.textContent = "Loading...";
-  preview.append(code);
-  els.previewBody.append(preview);
-
-  (async () => {
-    try {
-      const response = await fetch(mediaUrl(String(item.id || ""), "file"));
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const text = await response.text();
-      code.textContent = text;
-    } catch (error) {
-      code.textContent = `Unable to load preview: ${error.message}`;
-    }
-  })();
-}
-
-function renderImagePreview(item: EagleItem, { srcKind = "file" }: RenderImagePreviewOptions = {}) {
-  const viewport = document.createElement("div");
-  viewport.className = "image-viewport";
-  const status = document.createElement("div");
-  status.className = "image-status";
-  status.hidden = true;
-  const image = document.createElement("img");
-  image.className = "preview-image";
-  image.src = mediaUrl(String(item.id || ""), srcKind);
-  image.alt = item.name || item.id || "";
-  image.draggable = false;
-  viewport.append(image, status);
-  els.previewBody.append(viewport, imageToolbar());
-
-  resetPreviewTransform();
-  image.addEventListener("load", () => {
-    image.style.width = `${image.naturalWidth}px`;
-    image.style.height = `${image.naturalHeight}px`;
-    updatePreviewScales(image, viewport);
-    setImageZoom(state.previewFitScale, { x: 0, y: 0 });
-    status.hidden = false;
-    updateImageStatus();
-  });
-  image.addEventListener("error", () => {
-    status.hidden = true;
-    status.textContent = "";
-  });
-  viewport.addEventListener("pointerdown", (event) => startImageDrag(event, viewport));
-  viewport.addEventListener("pointermove", (event) => moveImageDrag(event));
-  viewport.addEventListener("pointerup", (event) => endImageDrag(event));
-  viewport.addEventListener("pointercancel", (event) => endImageDrag(event));
-  viewport.addEventListener("touchmove", (event) => {
-    if (event.touches.length > 1) {
-      event.preventDefault();
-    }
-  }, { passive: false });
-  viewport.addEventListener("wheel", (event) => {
-    event.preventDefault();
-    zoomImage(event.deltaY > 0 ? 0.9 : 1.1);
-  }, { passive: false });
-}
-
-function imageToolbar() {
-  const toolbar = document.createElement("div");
-  toolbar.className = "image-toolbar";
-  toolbar.append(
-    toolbarButton("Zoom out", "minus", () => zoomImage(0.85)),
-    toolbarButton("Fit", "maximize", () => setImageZoom(state.previewFitScale, { x: 0, y: 0 })),
-    toolbarButton("Actual size", "maximize-2", () => setImageZoom(state.previewNaturalScale, { x: 0, y: 0 })),
-    toolbarButton("Zoom in", "plus", () => zoomImage(1.18)),
-  );
-  return toolbar;
-}
-
-function toolbarButton(label: string, icon: IconName, action: () => void) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.title = label;
-  button.ariaLabel = label;
-  button.append(iconNode(icon));
-  button.addEventListener("click", action);
-  return button;
-}
-
-function resetPreviewTransform() {
-  const scales = initialPreviewScales();
-  state.previewTransform = scales.transform;
-  state.previewFitScale = scales.fitScale;
-  state.previewNaturalScale = scales.naturalScale;
-  state.previewDrag = null;
-  state.previewPointers = new Map();
-  state.previewPinch = null;
-}
-
-function updatePreviewScales(image: HTMLImageElement, viewport: HTMLElement) {
-  const scales = nextPreviewScales({
-    imageWidth: image.naturalWidth,
-    imageHeight: image.naturalHeight,
-    viewportWidth: viewport.clientWidth,
-    viewportHeight: viewport.clientHeight,
-    previousFitScale: state.previewFitScale,
-    previousTransform: state.previewTransform,
-  });
-  state.previewTransform = scales.transform;
-  state.previewFitScale = scales.fitScale;
-  state.previewNaturalScale = scales.naturalScale;
-}
-
-function zoomImage(multiplier: number) {
-  const nextScale = nextZoomScale(
-    state.previewTransform.scale,
-    multiplier,
-    state.previewFitScale,
-    state.previewNaturalScale,
-  );
-  setImageZoom(nextScale);
-}
-
-function setImageZoom(scale: number, position: PreviewPoint = state.previewTransform) {
-  state.previewTransform = setPreviewZoom(scale, position);
-  applyImageTransform();
-}
-
-function applyImageTransform() {
-  const image = els.previewBody.querySelector<HTMLElement>(".preview-image");
-  if (!image) return;
-  const { scale, x, y } = state.previewTransform;
-  image.style.transform = `translate(-50%, -50%) translate3d(${x}px, ${y}px, 0) scale(${scale})`;
-  updateImageStatus();
-}
-
-function updateImageStatus() {
-  const image = els.previewBody.querySelector<HTMLImageElement>(".preview-image");
-  const status = els.previewBody.querySelector(".image-status");
-  if (!image || !status || !image.naturalWidth || !image.naturalHeight) return;
-  const zoomPercent = Math.round((state.previewTransform.scale / state.previewNaturalScale) * 100);
-  status.textContent = `${image.naturalWidth} × ${image.naturalHeight} · ${zoomPercent}%`;
-}
-
-function startImageDrag(event: PointerEvent, viewport: HTMLElement) {
-  const image = els.previewBody.querySelector<HTMLImageElement>(".preview-image");
-  if (!image) return;
-  if (event.pointerType === "touch") {
-    state.previewPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-    if (state.previewPointers.size === 2) {
-      state.previewPinch = {
-        distance: pointerDistance(),
-        scale: state.previewTransform.scale,
-      };
-      state.previewDrag = null;
-      return;
-    }
-    if (state.previewPointers.size > 1) {
-      return;
-    }
-  }
-  viewport.setPointerCapture(event.pointerId);
-  state.previewDrag = {
-    pointerId: event.pointerId,
-    startX: event.clientX,
-    startY: event.clientY,
-    originX: state.previewTransform.x,
-    originY: state.previewTransform.y,
-  };
-}
-
-function moveImageDrag(event: PointerEvent) {
-  if (event.pointerType === "touch" && state.previewPointers.has(event.pointerId)) {
-    state.previewPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-    if (state.previewPointers.size === 2 && state.previewPinch) {
-      const distance = pointerDistance();
-      if (distance > 0 && state.previewPinch.distance > 0) {
-        const nextScale = nextZoomScale(
-          state.previewPinch.scale * (distance / state.previewPinch.distance),
-          1,
-          state.previewFitScale,
-          state.previewNaturalScale,
-        );
-        setImageZoom(nextScale);
-      }
-      return;
-    }
-  }
-  const drag = state.previewDrag;
-  if (!drag || drag.pointerId !== event.pointerId) return;
-  state.previewTransform = dragPreviewTransform(state.previewTransform, drag, {
-    x: event.clientX,
-    y: event.clientY,
-  });
-  applyImageTransform();
-}
-
-function endImageDrag(event?: PointerEvent) {
-  if (event?.pointerType === "touch") {
-    state.previewPointers.delete(event.pointerId);
-    if (state.previewPointers.size < 2) {
-      state.previewPinch = null;
-    }
-  }
-  if (!event || !state.previewDrag || state.previewDrag.pointerId === event.pointerId) {
-    state.previewDrag = null;
-  }
-}
-
-function showPreviewNotice(message: string) {
-  const notice = document.createElement("p");
-  notice.className = "preview-notice";
-  notice.textContent = message;
-  els.previewBody.append(notice);
-}
-
-function minimumPreviewScale() {
-  return getMinimumPreviewScale(state.previewFitScale, state.previewNaturalScale);
-}
-
-function refreshPreviewImageLayout() {
-  const image = els.previewBody.querySelector<HTMLImageElement>(".preview-image");
-  const viewport = els.previewBody.querySelector<HTMLElement>(".image-viewport");
-  if (!image || !viewport || !image.naturalWidth || !image.naturalHeight) return;
-  updatePreviewScales(image, viewport);
-  applyImageTransform();
-}
-
-function videoErrorMessage(error: MediaError | null) {
-  if (error?.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
-    return "This video could not be played on this device. iPhone requires Safari-compatible video such as H.264 video with AAC audio.";
-  }
-  return "This video could not be played on this device.";
+function previewBodyForItem(item: EagleItem): { kind: PreviewBodyKind; srcKind?: "file" | "thumb" } {
+  const ext = (item.ext || "").toLowerCase();
+  if (playableVideoExts.has(ext)) return { kind: "video" };
+  if (playableAudioExts.has(ext)) return { kind: "audio" };
+  if (textPreviewExts.has(ext)) return { kind: "text" };
+  if (pdfPreviewExts.has(ext)) return { kind: "image", srcKind: "thumb" };
+  if (isTimedMedia(item)) return { kind: "unsupported" };
+  return { kind: "image" };
 }
 
 function setViewMode(mode: string) {
@@ -666,7 +393,7 @@ function restoreViewMode() {
 }
 
 function closePreview({ skipHistory = false }: OpenPreviewOptions = {}) {
-  els.dialog.classList.remove("video-mode", "image-mode", "audio-mode", "unsupported-mode", "info-open");
+  els.dialog.classList.remove("video-mode", "image-mode", "audio-mode", "text-mode", "unsupported-mode", "info-open");
   els.toggleInfoPreview.setAttribute("aria-expanded", "false");
   state.previewItemId = "";
   state.previewInfoOpen = false;
@@ -877,17 +604,12 @@ function syncPreviewFromState() {
 
 function clearPreviewContents() {
   clearPreviewInfoView(els.previewDetails, els.previewActions);
-  els.previewBody.replaceChildren();
+  clearPreviewBodyView(els.previewBody);
   els.previewOriginalName.textContent = "";
   els.previewOriginalName.removeAttribute("title");
   els.previewRating.replaceChildren();
   els.previewDetails.replaceChildren();
   els.previewActions.replaceChildren();
-  resetPreviewTransform();
-}
-
-function pointerDistance() {
-  return getPointerDistance(state.previewPointers.values());
 }
 
 async function setItemStar(item: EagleItem, star: number) {

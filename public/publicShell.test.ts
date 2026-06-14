@@ -35,6 +35,7 @@ async function readAppSources() {
     "../src/viewer/components/CardTemplate.tsx",
     "../src/viewer/components/LoginView.tsx",
     "../src/viewer/components/Pager.tsx",
+    "../src/viewer/components/PreviewBody.tsx",
     "../src/viewer/components/PreviewDialog.tsx",
     "../src/viewer/components/PreviewInfo.tsx",
     "../src/viewer/components/ResultList.tsx",
@@ -121,21 +122,22 @@ test("public thumbnails lazy-load with visible loading states", async () => {
 });
 
 test("public image preview fit mode scales to the viewport and refreshes on resize", async () => {
+  const html = await readAppSources();
   const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
-  assert.match(app, /window\.addEventListener\("resize", \(\) => refreshPreviewImageLayout\(\)\);/);
+  assert.match(html, /window\.addEventListener\("resize", refreshLayout\);/);
   assert.match(app, /const IMAGE_FIT_MARGIN = 0\.96;/);
-  assert.match(app, /status\.hidden = true;/);
-  assert.match(app, /image\.style\.width = `\$\{image\.naturalWidth\}px`;/);
-  assert.match(app, /status\.hidden = false;/);
-  assert.match(app, /image\.addEventListener\("error", \(\) => \{/);
-  assert.match(app, /status\.hidden = true;/);
-  assert.match(app, /image\.style\.height = `\$\{image\.naturalHeight\}px`;/);
+  assert.match(html, /hidden=\{!imageState\.statusVisible\}/);
+  assert.match(html, /width: `\$\{imageState\.naturalSize\.width\}px`/);
+  assert.match(html, /statusVisible: true/);
+  assert.match(html, /onError=\{\(\) => \{/);
+  assert.match(html, /statusVisible: false/);
+  assert.match(html, /height: `\$\{imageState\.naturalSize\.height\}px`/);
   assert.match(app, /const fitScale = Math\.min\(widthRatio, heightRatio\) \* IMAGE_FIT_MARGIN;/);
   assert.match(app, /const naturalScale = 1;/);
   assert.match(app, /const keepFitted = Math\.abs\(previousTransform\.scale - previousFitScale\) < 0\.01;/);
-  assert.match(app, /image\.style\.transform = `translate\(-50%, -50%\) translate3d\(\$\{x\}px, \$\{y\}px, 0\) scale\(\$\{scale\}\)`;/);
+  assert.match(html, /transform: `translate\(-50%, -50%\) translate3d\(\$\{imageState\.transform\.x\}px, \$\{imageState\.transform\.y\}px, 0\) scale\(\$\{imageState\.transform\.scale\}\)`/);
   assert.match(css, /\.preview-layout\s*\{[^}]*height:\s*100%;[^}]*max-height:\s*100%;/s);
   assert.match(css, /\.preview-image\s*\{[^}]*position:\s*absolute;[^}]*left:\s*50%;[^}]*top:\s*50%;[^}]*max-width:\s*none;[^}]*max-height:\s*none;/s);
   assert.match(css, /\.preview-body img:not\(\.preview-image\),\s*\.preview-body video/);
@@ -192,6 +194,7 @@ test("public image modal no longer exposes metadata editing controls", async () 
 });
 
 test("public preview renders text-like files and PDFs from their thumbnails", async () => {
+  const html = await readAppSources();
   const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
   const server = await readFile(new URL("../plugin/service/viewerServer.cjs", import.meta.url), "utf8");
@@ -201,12 +204,12 @@ test("public preview renders text-like files and PDFs from their thumbnails", as
   assert.match(app, /const pdfPreviewExts = new Set\(\["pdf"\]\);/);
   assert.match(app, /textPreviewExts\.has\(ext\)/);
   assert.match(app, /pdfPreviewExts\.has\(ext\)/);
-  assert.match(app, /function renderTextPreview\(item[^)]*\) \{/);
-  assert.match(app, /const response = await fetch\(mediaUrl\(String\(item\.id \|\| ""\), "file"\)\);/);
-  assert.match(app, /code\.textContent = text;/);
-  assert.match(app, /renderImagePreview\(item,\s*\{\s*srcKind:\s*"thumb"\s*\}\);/);
-  assert.match(app, /function renderImagePreview\(item[^,]*,\s*\{\s*srcKind = "file"\s*\}[^)]* = \{\}\) \{/);
-  assert.match(app, /image\.src = mediaUrl\(String\(item\.id \|\| ""\), srcKind\);/);
+  assert.match(html, /function TextPreview\(\{ item \}/);
+  assert.match(html, /const response = await fetch\(mediaUrl\(String\(item\.id \|\| ""\), "file"\)\);/);
+  assert.match(html, /setText\(nextText\);/);
+  assert.match(app, /if \(pdfPreviewExts\.has\(ext\)\) return \{ kind: "image", srcKind: "thumb" \};/);
+  assert.match(html, /function ImagePreview\(\{ item, srcKind \}/);
+  assert.match(html, /src=\{mediaUrl\(String\(item\.id \|\| ""\), srcKind\)\}/);
   assert.doesNotMatch(app, /function renderPdfPreview\(item\) \{/);
   assert.doesNotMatch(app, /viewer\.src = directFileUrl\(item\);/);
   assert.match(app, /function previewFileName\(item[^)]*\) \{/);
@@ -259,10 +262,10 @@ test("public shell uses Media Preview Server branding and serves a favicon", asy
 });
 
 test("public audio preview attempts autoplay when the modal opens", async () => {
-  const app = await readViewerSources();
+  const html = await readAppSources();
 
-  assert.match(app, /const audio = document\.createElement\("audio"\)/);
-  assert.match(app, /audio\.play\(\)\.catch\(\(\) => \{\}\)/);
+  assert.match(html, /function AudioPreview\(\{ item \}/);
+  assert.match(html, /audioRef\.current\?\.play\(\)\.catch\(\(\) => \{\}\)/);
 });
 
 test("public ratings are static in grid and table but editable in the preview modal", async () => {
