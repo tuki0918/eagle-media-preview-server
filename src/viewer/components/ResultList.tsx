@@ -23,10 +23,10 @@ interface ResultListProps {
 
 interface ThumbnailButtonProps {
   children?: ReactNode;
-  className: string;
   item: EagleItem;
   onOpenPreview: (item: EagleItem) => void;
   style?: CSSProperties;
+  variant: "grid" | "row" | "tile";
   withBadges?: boolean;
   withOverlay?: boolean;
 }
@@ -64,7 +64,7 @@ function ResultItem({ item, viewMode, onOpenPreview }: { item: EagleItem; viewMo
 function GridCard({ item, onOpenPreview }: { item: EagleItem; onOpenPreview: (item: EagleItem) => void }) {
   return (
     <article className="media-card">
-      <ThumbnailButton className="thumb-button" item={item} onOpenPreview={onOpenPreview} withBadges withOverlay>
+      <ThumbnailButton variant="grid" item={item} onOpenPreview={onOpenPreview} withBadges withOverlay>
         <RatingStars item={item} className="rating-control" />
       </ThumbnailButton>
       <div className="card-meta">
@@ -80,7 +80,7 @@ function TileItem({ item, onOpenPreview }: { item: EagleItem; onOpenPreview: (it
   const height = Number(item.height);
   return (
     <ThumbnailButton
-      className="tile-item"
+      variant="tile"
       item={item}
       onOpenPreview={onOpenPreview}
       style={{ aspectRatio: width > 0 && height > 0 ? `${width} / ${height}` : "1 / 1" }}
@@ -109,7 +109,7 @@ function TableHeader() {
 function TableRow({ item, onOpenPreview }: { item: EagleItem; onOpenPreview: (item: EagleItem) => void }) {
   return (
     <article className="media-row">
-      <ThumbnailButton className="row-thumb" item={item} onOpenPreview={onOpenPreview} />
+      <ThumbnailButton variant="row" item={item} onOpenPreview={onOpenPreview} />
       <TableNameCell item={item} />
       <ExtensionPill item={item} />
       <TableCell value={formatBytes(item.size) || "-"} />
@@ -151,17 +151,16 @@ function ExtensionPill({ item }: { item: EagleItem }) {
   );
 }
 
-function ThumbnailButton({ children, className, item, onOpenPreview, style, withBadges = false, withOverlay = false }: ThumbnailButtonProps) {
+function ThumbnailButton({ children, item, onOpenPreview, style, variant, withBadges = false, withOverlay = false }: ThumbnailButtonProps) {
   const [loading, setLoading] = useState(true);
   const [missing, setMissing] = useState(false);
   const mediaType = thumbnailMediaType(item);
   const duration = isTimedMedia(item) ? formatDuration(item.duration) : "";
   const trigger = usePreviewTrigger(item, onOpenPreview);
-  const buttonClassName = [className, loading ? "thumb-loading" : "", missing ? "thumb-missing" : ""].filter(Boolean).join(" ");
 
   return (
     <button
-      className={buttonClassName}
+      className={`${variant === "tile" ? "tile-item" : variant === "row" ? "row-thumb" : "thumb-button"}${loading ? " thumb-loading" : ""}${missing ? " thumb-missing" : ""}`}
       data-media-type={mediaType}
       type="button"
       aria-label={thumbnailAriaLabel(item, mediaType)}

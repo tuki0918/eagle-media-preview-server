@@ -4,7 +4,6 @@ import {
   LIBRARY_EMPTY_LABEL,
   RECENT_FOLDERS_STORAGE_KEY,
   RECENT_TAGS_STORAGE_KEY,
-  UNCATEGORIZED_FOLDER_ID,
   pdfPreviewExts,
   playableAudioExts,
   playableVideoExts,
@@ -54,6 +53,7 @@ import {
   renderPreviewBodyView,
   type PreviewBodyKind,
 } from "./viewer/components/PreviewBody";
+import { renderFolderOptionsView } from "./viewer/components/FolderOptions";
 import { renderTagChipsView } from "./viewer/components/TagChips";
 import {
   clearTagSuggestionsView,
@@ -200,10 +200,7 @@ function showViewer(data: ConnectResponse) {
   els.loginView.hidden = true;
   els.viewerShell.hidden = false;
   els.libraryFooterName.textContent = libraryLabel(data);
-  els.folderSelect.replaceChildren(
-    optionNode("", "All folders"),
-    optionNode(UNCATEGORIZED_FOLDER_ID, "Uncategorized"),
-  );
+  renderFolderOptions();
   state.total = 0;
   state.items = [];
   applyControlsFromState();
@@ -222,30 +219,22 @@ function libraryLabel(data: ConnectResponse) {
   return `${name} - ${version}`;
 }
 
-function optionNode(value: string, text: string) {
-  const option = document.createElement("option");
-  option.value = value;
-  option.textContent = text;
-  return option;
-}
-
 async function loadFolders() {
   try {
     const data = await getJson<LoadFoldersResponse>("/api/folders");
     state.folders = flattenFolders(data.items);
-    const fragment = document.createDocumentFragment();
-    for (const folder of state.folders) {
-      fragment.append(optionNode(
-        folder.id,
-        `${folder.depth ? "  ".repeat(folder.depth) : ""}${folder.name} (${folder.imageCount ?? 0})`,
-      ));
-    }
-    els.folderSelect.append(fragment);
-    els.folderSelect.value = state.folderId;
+    renderFolderOptions();
   } catch {
     state.folders = [];
     // Folder loading is optional; item browsing still works without it.
   }
+}
+
+function renderFolderOptions() {
+  renderFolderOptionsView(els.folderSelect, {
+    folders: state.folders,
+    selectedValue: state.folderId,
+  });
 }
 
 async function loadItems({ append = false }: LoadItemsOptions = {}) {

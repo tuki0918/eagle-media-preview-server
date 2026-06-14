@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
 import {
   CardTemplate,
+  FolderOptions,
   LoginView,
   PageButtons,
   Pager,
@@ -122,6 +123,14 @@ describe("ViewerAppShell", () => {
 
     expect(html).toContain('class="tag-chip"');
     expect(html).toContain("Remove tag alpha");
+  });
+
+  test("renders folder options as a reusable component", () => {
+    const html = renderToStaticMarkup(<FolderOptions folders={[{ id: "folder-1", name: "Folder 1", imageCount: 8, depth: 1 }]} />);
+
+    expect(html).toContain("All folders");
+    expect(html).toContain("Uncategorized");
+    expect(html).toContain("  Folder 1 (8)");
   });
 
   test("renders tag suggestions as a reusable component", () => {

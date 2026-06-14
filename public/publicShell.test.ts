@@ -32,6 +32,7 @@ async function readAppSources() {
     "../src/App.tsx",
     "../src/viewer/ViewerShell.tsx",
     "../src/viewer/components/CardTemplate.tsx",
+    "../src/viewer/components/FolderOptions.tsx",
     "../src/viewer/components/LoginView.tsx",
     "../src/viewer/components/Pager.tsx",
     "../src/viewer/components/PreviewBody.tsx",
@@ -113,7 +114,8 @@ test("public thumbnails lazy-load with visible loading states", async () => {
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(html, /loading="lazy"/);
-  assert.match(html, /loading \? "thumb-loading" : ""/);
+  assert.match(html, /loading \? " thumb-loading" : ""/);
+  assert.match(html, /missing \? " thumb-missing" : ""/);
   assert.match(html, /onLoad=\{\(\) => \{\s*setLoading\(false\);\s*setMissing\(false\);\s*\}\}/);
   assert.match(html, /onError=\{\(\) => \{\s*setLoading\(false\);\s*setMissing\(true\);\s*\}\}/);
   assert.match(css, /\.thumb-button\s*\{[^}]*aspect-ratio:\s*3\s*\/\s*2;/s);
@@ -425,6 +427,11 @@ test("public UI supports tag filter chips", async () => {
   assert.match(app, /tagChips: document\.querySelector\("#tagChips"\),/);
   assert.match(app, /tagSuggestions: document\.querySelector\("#tagSuggestions"\),/);
   assert.match(app, /resetFiltersButton: document\.querySelector\("#resetFiltersButton"\),/);
+  assert.match(html, /export function FolderOptions\(\{ folders \}/);
+  assert.match(html, /<option value=\{UNCATEGORIZED_FOLDER_ID\}>Uncategorized<\/option>/);
+  assert.match(app, /renderFolderOptionsView\(els\.folderSelect, \{/);
+  assert.doesNotMatch(app, /function optionNode\(/);
+  assert.doesNotMatch(app, /document\.createElement\("option"\)/);
   assert.match(app, /"funnel-x": '<path d="M12\.531 3H3/);
   assert.match(html, /onClick=\{resetFilters\}/);
   assert.match(app, /setViewerShellActions\(\{/);
