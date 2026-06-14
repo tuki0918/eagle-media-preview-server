@@ -8,6 +8,7 @@ import {
   PreviewDialog,
   ResultsStatus,
   SearchControls,
+  TagChips,
   ViewerAppShell,
   ViewerShellLayout,
 } from "./ViewerShell";
@@ -107,5 +108,12 @@ describe("ViewerAppShell", () => {
 
     expect(html).toContain('data-active="true"');
     expect(html).toContain('class="page-ellipsis"');
+  });
+
+  test("renders tag chips as a reusable component", () => {
+    const html = renderToStaticMarkup(<TagChips tags={["alpha"]} onRemove={() => {}} />);
+
+    expect(html).toContain('class="tag-chip"');
+    expect(html).toContain("Remove tag alpha");
   });
 });

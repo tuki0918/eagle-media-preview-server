@@ -62,6 +62,7 @@ import {
   totalPages,
 } from "./viewer/pagination";
 import { renderPageButtonsView } from "./viewer/components/PageButtons";
+import { renderTagChipsView } from "./viewer/components/TagChips";
 import {
   dragPreviewTransform,
   initialPreviewScales,
@@ -1034,25 +1035,10 @@ function removeTagFilter(tag: string) {
 }
 
 function renderTagChips() {
-  const fragment = document.createDocumentFragment();
-  for (const tag of state.tags) {
-    const chip = document.createElement("span");
-    chip.className = "tag-chip";
-
-    const label = document.createElement("span");
-    label.textContent = tag;
-
-    const button = document.createElement("button");
-    button.type = "button";
-    button.setAttribute("aria-label", `Remove tag ${tag}`);
-    button.title = `Remove tag ${tag}`;
-    button.append(iconNode("x"));
-    button.addEventListener("click", () => removeTagFilter(tag));
-
-    chip.append(label, button);
-    fragment.append(chip);
-  }
-  els.tagChips.replaceChildren(fragment);
+  renderTagChipsView(els.tagChips, {
+    tags: state.tags,
+    onRemove: removeTagFilter,
+  });
   syncResetFiltersButton();
 }
 

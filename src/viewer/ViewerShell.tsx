@@ -17,4 +17,5 @@ export { Pager } from "./components/Pager";
 export { PreviewDialog } from "./components/PreviewDialog";
 export { ResultsStatus } from "./components/ResultsStatus";
 export { SearchControls } from "./components/SearchControls";
+export { TagChips } from "./components/TagChips";
 export { ViewerShellLayout } from "./components/ViewerShellLayout";
