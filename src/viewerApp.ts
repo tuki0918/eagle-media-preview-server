@@ -5,10 +5,8 @@ import {
   EAGLE_UNAVAILABLE_LABEL,
   IMAGE_FIT_MARGIN,
   LIBRARY_EMPTY_LABEL,
-  MAX_PAGE_SIZE,
   RECENT_FOLDERS_STORAGE_KEY,
   RECENT_TAGS_STORAGE_KEY,
-  TILE_PREFETCH_PAGES,
   UNCATEGORIZED_FOLDER_ID,
   pdfPreviewExts,
   playableAudioExts,
@@ -44,6 +42,11 @@ import {
   rememberRecentValues,
   tagSuggestionItems as buildTagSuggestionItems,
 } from "./viewer/metadata";
+import {
+  currentFetchLimit as getCurrentFetchLimit,
+  pageButtonList,
+  totalPages,
+} from "./viewer/pagination";
 import { state } from "./viewer/state";
 import type { ViewerMode } from "./viewer/types";
 import { buildViewerUrl, currentPage, parseViewerUrlState } from "./viewer/urlState";
@@ -1227,14 +1230,16 @@ function loadMoreTiles() {
 }
 
 function currentFetchLimit() {
-  if (state.viewMode !== "tiles" || state.tags.length) return state.limit;
-  return Math.min(state.limit * TILE_PREFETCH_PAGES, MAX_PAGE_SIZE);
+  return getCurrentFetchLimit({
+    viewMode: state.viewMode,
+    tags: state.tags,
+    limit: state.limit,
+  });
 }
 
 function renderPageButtons() {
   const current = currentPage(state);
-  const totalPages = Math.max(1, Math.ceil(state.total / state.limit));
-  const pages = pageButtonList(current, totalPages);
+  const pages = pageButtonList(current, totalPages(state.total, state.limit));
   const fragment = document.createDocumentFragment();
 
   for (const page of pages) {
@@ -1257,15 +1262,6 @@ function renderPageButtons() {
   }
 
   els.pageButtons.replaceChildren(fragment);
-}
-
-function pageButtonList(current, totalPages) {
-  if (totalPages <= 7) return Array.from({ length: totalPages }, (_, index) => index + 1);
-  if (current <= 4) return [1, 2, 3, 4, 5, "...", totalPages];
-  if (current >= totalPages - 3) {
-    return [1, "...", totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
-  }
-  return [1, "...", current - 1, current, current + 1, "...", totalPages];
 }
 
 function tableCell(value, className = "", title = "") {

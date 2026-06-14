@@ -11,6 +11,7 @@ async function readViewerSources() {
     "../src/viewer/format.ts",
     "../src/viewer/icons.ts",
     "../src/viewer/metadata.ts",
+    "../src/viewer/pagination.ts",
     "../src/viewer/state.ts",
     "../src/viewer/urlState.ts",
   ];
@@ -461,8 +462,8 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   assert.match(app, /limit: String\(currentFetchLimit\(\)\),/);
   assert.match(app, /state\.offset = state\.items\.length;/);
   assert.match(app, /function currentFetchLimit\(\) \{/);
-  assert.match(app, /if \(state\.viewMode !== "tiles" \|\| state\.tags\.length\) return state\.limit;/);
-  assert.match(app, /return Math\.min\(state\.limit \* TILE_PREFETCH_PAGES, MAX_PAGE_SIZE\);/);
+  assert.match(app, /if \(viewMode !== "tiles" \|\| tags\.length\) return limit;/);
+  assert.match(app, /return Math\.min\(limit \* TILE_PREFETCH_PAGES, MAX_PAGE_SIZE\);/);
   assert.match(app, /params\.get\("view"\) === "tiles"/);
   assert.match(css, /\.media-tiles\s*\{/);
   assert.match(css, /\.tile-item\s*\{/);
