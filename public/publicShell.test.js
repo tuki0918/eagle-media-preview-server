@@ -11,6 +11,7 @@ async function readViewerSources() {
     "../src/viewer/elements.ts",
     "../src/viewer/format.ts",
     "../src/viewer/icons.ts",
+    "../src/viewer/itemQuery.ts",
     "../src/viewer/media.ts",
     "../src/viewer/metadata.ts",
     "../src/viewer/metadataEditor.ts",
@@ -470,7 +471,7 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   assert.match(app, /new IntersectionObserver/);
   assert.match(app, /!state\.items\.length/);
   assert.match(app, /loadItems\(\{ append: true \}\)/);
-  assert.match(app, /limit: String\(currentFetchLimit\(\)\),/);
+  assert.match(app, /const params = itemQueryParams\(\{[\s\S]*\.\.\.state,[\s\S]*limit: currentFetchLimit\(\),[\s\S]*\}\);/);
   assert.match(app, /state\.offset = state\.items\.length;/);
   assert.match(app, /function currentFetchLimit\(\) \{/);
   assert.match(app, /if \(viewMode !== "tiles" \|\| tags\.length\) return limit;/);

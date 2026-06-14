@@ -37,6 +37,7 @@ import {
 } from "./viewer/format";
 import { hasActiveFilters, resetFilterState } from "./viewer/filters";
 import { iconNode, renderLucideIcons, type IconName } from "./viewer/icons";
+import { itemQueryParams } from "./viewer/itemQuery";
 import {
   thumbnailAriaLabel,
   thumbnailMediaType,
@@ -272,15 +273,10 @@ async function loadItems({ append = false }: LoadItemsOptions = {}) {
   }
   updatePager();
 
-  const params = new URLSearchParams({
-    offset: String(state.offset),
-    limit: String(currentFetchLimit()),
+  const params = itemQueryParams({
+    ...state,
+    limit: currentFetchLimit(),
   });
-  if (state.query) params.set("q", state.query);
-  for (const tag of state.tags) params.append("tags", tag);
-  if (state.folderId) params.set("folderId", state.folderId);
-  if (state.ext) params.set("ext", state.ext);
-  if (state.rating !== "") params.set("rating", state.rating);
 
   try {
     const data = await getJson<LoadItemsResponse>(`/api/items?${params.toString()}`);
