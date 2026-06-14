@@ -12,6 +12,7 @@ export function ViewerAppShell() {
 
 export { CardTemplate } from "./components/CardTemplate";
 export { LoginView } from "./components/LoginView";
+export { PageButtons } from "./components/PageButtons";
 export { Pager } from "./components/Pager";
 export { PreviewDialog } from "./components/PreviewDialog";
 export { ResultsStatus } from "./components/ResultsStatus";

@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import {
   CardTemplate,
   LoginView,
+  PageButtons,
   Pager,
   PreviewDialog,
   ResultsStatus,
@@ -99,5 +100,12 @@ describe("ViewerAppShell", () => {
     for (const { Component, expectedId } of components) {
       expect(renderToStaticMarkup(<Component />)).toContain(`id="${expectedId}"`);
     }
+  });
+
+  test("renders page buttons as a reusable component", () => {
+    const html = renderToStaticMarkup(<PageButtons current={2} pages={[1, 2, "...", 8]} onSelect={() => {}} />);
+
+    expect(html).toContain('data-active="true"');
+    expect(html).toContain('class="page-ellipsis"');
   });
 });

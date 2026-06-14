@@ -61,6 +61,7 @@ import {
   pageButtonList,
   totalPages,
 } from "./viewer/pagination";
+import { renderPageButtonsView } from "./viewer/components/PageButtons";
 import {
   dragPreviewTransform,
   initialPreviewScales,
@@ -1255,28 +1256,15 @@ function currentFetchLimit() {
 function renderPageButtons() {
   const current = currentPage(state);
   const pages = pageButtonList(current, totalPages(state.total, state.limit));
-  const fragment = document.createDocumentFragment();
 
-  for (const page of pages) {
-    if (page === "...") {
-      const spacer = document.createElement("span");
-      spacer.textContent = "...";
-      spacer.className = "page-ellipsis";
-      fragment.append(spacer);
-      continue;
-    }
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = String(page);
-    button.dataset.active = page === current ? "true" : "false";
-    button.addEventListener("click", () => {
+  renderPageButtonsView(els.pageButtons, {
+    current,
+    pages,
+    onSelect: (page) => {
       state.offset = (page - 1) * state.limit;
       loadItems();
-    });
-    fragment.append(button);
-  }
-
-  els.pageButtons.replaceChildren(fragment);
+    },
+  });
 }
 
 function renderPreviewDetails(item: EagleItem) {
