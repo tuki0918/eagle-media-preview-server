@@ -19,6 +19,7 @@ async function readViewerSources() {
     "../src/viewer/previewDetails.ts",
     "../src/viewer/previewTransform.ts",
     "../src/viewer/rating.ts",
+    "../src/viewer/shellActions.ts",
     "../src/viewer/state.ts",
     "../src/viewer/tileLoading.ts",
     "../src/viewer/urlState.ts",
@@ -95,7 +96,7 @@ test("public UI no longer shows connect lock icon or connection settings button"
   assert.match(css, /\.status-line\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) auto;/s);
   assert.match(css, /\.status-actions\s*\{[^}]*margin-left:\s*auto;[^}]*justify-self:\s*end;/s);
   assert.match(css, /@media \(max-width: 540px\)[\s\S]*\.status-line\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) auto;/s);
-  assert.match(html, /<select id="pageSizeSelect" aria-label="Page size" defaultValue="30">[\s\S]*PAGE_SIZE_OPTIONS\.map/);
+  assert.match(html, /<select id="pageSizeSelect" aria-label="Page size" defaultValue="30" onChange=\{changePageSize\}>[\s\S]*PAGE_SIZE_OPTIONS\.map/);
   assert.match(html, /export const PAGE_SIZE_OPTIONS = \[30, 60, 120, 240\] as const;/);
   assert.match(app, /limit:\s*30,/);
   assert.match(app, /if \(state\.limit !== DEFAULT_PAGE_SIZE\) params\.set\("limit", String\(state\.limit\)\);/);
@@ -388,10 +389,10 @@ test("public UI labels media extensions as type", async () => {
   const html = await readAppSources();
   const app = await readViewerSources();
 
-  assert.match(html, /<select id="folderSelect" aria-label="Folder">[\s\S]*?<option value="">All folders<\/option>/);
-  assert.match(html, /<select id="extSelect" aria-label="Type">[\s\S]*?<option value="">All types<\/option>/);
-  assert.match(html, /<select id="ratingSelect" aria-label="Rating">[\s\S]*?<option value="">All ratings<\/option>/);
-  assert.match(html, /<select id="pageSizeSelect" aria-label="Page size" defaultValue="30">[\s\S]*?PAGE_SIZE_OPTIONS\.map/);
+  assert.match(html, /<select id="folderSelect" aria-label="Folder" onChange=\{changeFolder\}>[\s\S]*?<option value="">All folders<\/option>/);
+  assert.match(html, /<select id="extSelect" aria-label="Type" onChange=\{changeMediaType\}>[\s\S]*?<option value="">All types<\/option>/);
+  assert.match(html, /<select id="ratingSelect" aria-label="Rating" onChange=\{changeRating\}>[\s\S]*?<option value="">All ratings<\/option>/);
+  assert.match(html, /<select id="pageSizeSelect" aria-label="Page size" defaultValue="30" onChange=\{changePageSize\}>[\s\S]*?PAGE_SIZE_OPTIONS\.map/);
   assert.match(html, /export const PAGE_SIZE_OPTIONS = \[30, 60, 120, 240\] as const;/);
   assert.doesNotMatch(html, /<span>Folder<\/span>/);
   assert.doesNotMatch(html, /<span>Type<\/span>\s*<select id="extSelect"/);
@@ -419,11 +420,14 @@ test("public UI supports tag filter chips", async () => {
   assert.match(app, /tagSuggestions: document\.querySelector\("#tagSuggestions"\),/);
   assert.match(app, /resetFiltersButton: document\.querySelector\("#resetFiltersButton"\),/);
   assert.match(app, /"funnel-x": '<path d="M12\.531 3H3/);
-  assert.match(app, /els\.resetFiltersButton\.addEventListener\("click", resetFilters\);/);
+  assert.match(html, /onClick=\{resetFilters\}/);
+  assert.match(app, /setViewerShellActions\(\{/);
+  assert.match(app, /resetFilters,/);
   assert.match(app, /function syncResetFiltersButton\(\) \{/);
   assert.match(app, /els\.resetFiltersButton\.disabled = !hasActiveFilters\(state\);/);
   assert.doesNotMatch(app, /tagInput:/);
-  assert.match(app, /applyFilterChange\(\{ query: els\.searchInput\.value\.trim\(\) \}\);[\s\S]*loadTagSuggestions\(\);/);
+  assert.match(html, /id="searchInput"[\s\S]*onChange=\{changeSearchQuery\}[\s\S]*onFocus=\{focusSearch\}[\s\S]*onKeyDown=\{handleSearchKeyDown\}/);
+  assert.match(app, /searchChanged:\s*debounce\(\(query: string\) => \{[\s\S]*applyFilterChange\(\{ query: query\.trim\(\) \}\);[\s\S]*loadTagSuggestions\(\);/);
   assert.match(app, /params\.getAll\("tag"\)/);
   assert.match(app, /params\.append\("tag", tag\)/);
   assert.match(app, /params\.append\("tags", tag\)/);
@@ -457,7 +461,7 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(html, /id="tilesViewButton"/);
-  assert.match(html, /<button id="tilesViewButton" type="button" aria-pressed="true">[\s\S]*Tiles[\s\S]*<\/button>[\s\S]*<button id="gridViewButton" type="button" aria-pressed="false">[\s\S]*Grid[\s\S]*<\/button>/);
+  assert.match(html, /<button id="tilesViewButton" type="button" aria-pressed="true" onClick=\{\(\) => selectViewMode\("tiles"\)\}>[\s\S]*Tiles[\s\S]*<\/button>[\s\S]*<button id="gridViewButton" type="button" aria-pressed="false" onClick=\{\(\) => selectViewMode\("grid"\)\}>[\s\S]*Grid[\s\S]*<\/button>/);
   assert.match(html, /id="tilesSentinel"/);
   assert.match(app, /const DEFAULT_VIEW_MODE = "tiles";/);
   assert.match(app, /const TILE_PREFETCH_PAGES = 3;/);

@@ -72,6 +72,7 @@ import {
 } from "./viewer/previewTransform";
 import { previewDetailRows } from "./viewer/previewDetails";
 import { renderRating } from "./viewer/rating";
+import { setViewerShellActions } from "./viewer/shellActions";
 import { state } from "./viewer/state";
 import {
   canLoadMoreTiles,
@@ -110,9 +111,54 @@ async function init() {
   renderLucideIcons();
   restoreUrlState();
   restoreViewMode();
-  els.connectForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-    connect();
+  setViewerShellActions({
+    connect,
+    searchChanged: debounce((query: string) => {
+      applyFilterChange({ query: query.trim() });
+      loadTagSuggestions();
+    }, 220),
+    searchFocused: (query: string) => {
+      if (query.trim()) loadTagSuggestions();
+    },
+    searchKeyDown: (key: string) => {
+      if (key === "Escape") {
+        hideTagSuggestions();
+      }
+    },
+    folderChanged: (folderId: string) => {
+      applyFilterChange({ folderId });
+    },
+    mediaTypeChanged: (ext: string) => {
+      applyFilterChange({ ext });
+    },
+    ratingChanged: (rating: string) => {
+      applyFilterChange({ rating });
+    },
+    pageSizeChanged: (limit: number) => {
+      applyFilterChange({ limit });
+    },
+    toggleFilters: () => {
+      state.filtersOpen = !state.filtersOpen;
+      syncAdvancedFiltersUi();
+      syncUrlState();
+    },
+    resetFilters,
+    goToPreviousPage: () => {
+      state.offset = Math.max(0, state.offset - state.limit);
+      resetPreviewState();
+      syncUrlState();
+      loadItems();
+    },
+    goToNextPage: () => {
+      state.offset += state.limit;
+      resetPreviewState();
+      syncUrlState();
+      loadItems();
+    },
+    setViewMode,
+    closePreview,
+    togglePreviewInfo,
+    toggleFullscreen,
   });
   window.addEventListener("popstate", () => {
     restoreUrlState();
@@ -121,59 +167,10 @@ async function init() {
     loadItems();
   });
   window.addEventListener("resize", () => refreshPreviewImageLayout());
-  els.toggleFiltersButton.addEventListener("click", () => {
-    state.filtersOpen = !state.filtersOpen;
-    syncAdvancedFiltersUi();
-    syncUrlState();
-  });
-  els.resetFiltersButton.addEventListener("click", resetFilters);
-  els.prevButton.addEventListener("click", () => {
-    state.offset = Math.max(0, state.offset - state.limit);
-    resetPreviewState();
-    syncUrlState();
-    loadItems();
-  });
-  els.nextButton.addEventListener("click", () => {
-    state.offset += state.limit;
-    resetPreviewState();
-    syncUrlState();
-    loadItems();
-  });
-  els.searchInput.addEventListener("input", debounce(() => {
-    applyFilterChange({ query: els.searchInput.value.trim() });
-    loadTagSuggestions();
-  }, 220));
-  els.searchInput.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      hideTagSuggestions();
-    }
-  });
-  els.searchInput.addEventListener("focus", () => {
-    if (els.searchInput.value.trim()) loadTagSuggestions();
-  });
   document.addEventListener("pointerdown", (event) => {
     if ((event.target as Element | null)?.closest(".search-box")) return;
     hideTagSuggestions();
   });
-  els.folderSelect.addEventListener("change", () => {
-    applyFilterChange({ folderId: els.folderSelect.value });
-  });
-  els.extSelect.addEventListener("change", () => {
-    applyFilterChange({ ext: els.extSelect.value });
-  });
-  els.ratingSelect.addEventListener("change", () => {
-    applyFilterChange({ rating: els.ratingSelect.value });
-  });
-  els.pageSizeSelect.addEventListener("change", () => {
-    applyFilterChange({ limit: Number(els.pageSizeSelect.value) });
-  });
-  els.gridViewButton.addEventListener("click", () => setViewMode("grid"));
-  els.tilesViewButton.addEventListener("click", () => setViewMode("tiles"));
-  els.tableViewButton.addEventListener("click", () => setViewMode("table"));
-  els.closePreview.addEventListener("click", () => closePreview());
-  els.backPreview.addEventListener("click", () => closePreview());
-  els.toggleInfoPreview.addEventListener("click", () => togglePreviewInfo());
-  els.fullscreenPreview.addEventListener("click", () => toggleFullscreen());
   els.dialog.addEventListener("pointerdown", closePreviewInfoFromOutside);
   els.dialog.addEventListener("close", () => {
     clearPreviewContents();

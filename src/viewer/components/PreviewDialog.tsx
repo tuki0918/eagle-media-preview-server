@@ -1,8 +1,10 @@
+import { closePreview, toggleFullscreen, togglePreviewInfo } from "../shellActions";
+
 export function PreviewDialog() {
   return (
     <dialog id="previewDialog" className="h-dvh max-h-dvh w-screen max-w-full rounded-none border-0 bg-app-surface p-0 text-app-text">
       <div className="dialog-header fixed right-2.5 top-[calc(10px+env(safe-area-inset-top))] z-[4] flex items-center justify-end gap-3 border-0 bg-transparent p-0">
-        <button id="backPreview" className="text-icon-button inline-flex min-h-10 items-center gap-2 border-0 bg-transparent px-2 text-sm font-[680] text-app-text" type="button" aria-label="Back to results">
+        <button id="backPreview" className="text-icon-button inline-flex min-h-10 items-center gap-2 border-0 bg-transparent px-2 text-sm font-[680] text-app-text" type="button" aria-label="Back to results" onClick={closePreview}>
           <span data-lucide="chevron-left" />
           <span>Back to Results</span>
         </button>
@@ -11,13 +13,13 @@ export function PreviewDialog() {
           <span id="previewMeta" />
         </div>
         <div className="dialog-actions flex items-center justify-end gap-2">
-          <button id="toggleInfoPreview" className="icon-button inline-grid min-h-10 w-10 flex-[0_0_40px] place-items-center rounded-app border border-app-border bg-app-surface text-app-text" aria-label="Media information" title="Media information">
+          <button id="toggleInfoPreview" className="icon-button inline-grid min-h-10 w-10 flex-[0_0_40px] place-items-center rounded-app border border-app-border bg-app-surface text-app-text" aria-label="Media information" title="Media information" onClick={togglePreviewInfo}>
             <span data-lucide="panel-left" />
           </button>
-          <button id="fullscreenPreview" className="icon-button inline-grid min-h-10 w-10 flex-[0_0_40px] place-items-center rounded-app border border-app-border bg-app-surface text-app-text" aria-label="Fullscreen" title="Fullscreen">
+          <button id="fullscreenPreview" className="icon-button inline-grid min-h-10 w-10 flex-[0_0_40px] place-items-center rounded-app border border-app-border bg-app-surface text-app-text" aria-label="Fullscreen" title="Fullscreen" onClick={toggleFullscreen}>
             <span data-lucide="maximize" />
           </button>
-          <button id="closePreview" className="icon-button inline-grid min-h-10 w-10 flex-[0_0_40px] place-items-center rounded-app border border-app-border bg-app-surface text-app-text" aria-label="Close" title="Close">
+          <button id="closePreview" className="icon-button inline-grid min-h-10 w-10 flex-[0_0_40px] place-items-center rounded-app border border-app-border bg-app-surface text-app-text" aria-label="Close" title="Close" onClick={closePreview}>
             <span data-lucide="x" />
           </button>
         </div>

@@ -1,4 +1,15 @@
 import { MEDIA_TYPE_OPTIONS, PAGE_SIZE_OPTIONS, RATING_OPTIONS } from "../shellConfig";
+import {
+  changeFolder,
+  changeMediaType,
+  changePageSize,
+  changeRating,
+  changeSearchQuery,
+  focusSearch,
+  handleSearchKeyDown,
+  resetFilters,
+  toggleFilters,
+} from "../shellActions";
 
 export function SearchControls() {
   return (
@@ -15,6 +26,9 @@ export function SearchControls() {
               placeholder="Search title or tag"
               autoComplete="off"
               aria-label="Search text or tag"
+              onChange={changeSearchQuery}
+              onFocus={focusSearch}
+              onKeyDown={handleSearchKeyDown}
             />
           </div>
           <div
@@ -32,6 +46,7 @@ export function SearchControls() {
           aria-label="Reset filters"
           title="Reset filters"
           disabled
+          onClick={resetFilters}
         >
           <span data-lucide="funnel-x" />
         </button>
@@ -43,6 +58,7 @@ export function SearchControls() {
           aria-expanded="false"
           aria-controls="advancedFilters"
           title="Show advanced search options"
+          onClick={toggleFilters}
         >
           <span data-lucide="sliders-horizontal" />
         </button>
@@ -50,12 +66,12 @@ export function SearchControls() {
 
       <div id="advancedFilters" className="filter-row grid grid-cols-4 gap-6" hidden>
         <label>
-          <select id="folderSelect" aria-label="Folder">
+          <select id="folderSelect" aria-label="Folder" onChange={changeFolder}>
             <option value="">All folders</option>
           </select>
         </label>
         <label>
-          <select id="extSelect" aria-label="Type">
+          <select id="extSelect" aria-label="Type" onChange={changeMediaType}>
             <option value="">All types</option>
             {MEDIA_TYPE_OPTIONS.map((type) => (
               <option key={type} value={type}>
@@ -65,7 +81,7 @@ export function SearchControls() {
           </select>
         </label>
         <label>
-          <select id="ratingSelect" aria-label="Rating">
+          <select id="ratingSelect" aria-label="Rating" onChange={changeRating}>
             <option value="">All ratings</option>
             <option value="0">No rating</option>
             {RATING_OPTIONS.map((rating) => (
@@ -76,7 +92,7 @@ export function SearchControls() {
           </select>
         </label>
         <label>
-          <select id="pageSizeSelect" aria-label="Page size" defaultValue="30">
+          <select id="pageSizeSelect" aria-label="Page size" defaultValue="30" onChange={changePageSize}>
             {PAGE_SIZE_OPTIONS.map((pageSize) => (
               <option key={pageSize} value={pageSize}>
                 {pageSize} items

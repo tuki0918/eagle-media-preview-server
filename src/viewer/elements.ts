@@ -1,7 +1,6 @@
 export interface ViewerElements {
   loginView: HTMLElement;
   viewerShell: HTMLElement;
-  connectForm: HTMLFormElement;
   connectButton: HTMLButtonElement;
   connectMessage: HTMLElement;
   searchInput: HTMLInputElement;
@@ -29,21 +28,17 @@ export interface ViewerElements {
   dialog: HTMLDialogElement;
   previewMeta: HTMLElement;
   previewBody: HTMLElement;
-  backPreview: HTMLButtonElement;
   previewOriginalName: HTMLElement;
   previewRating: HTMLElement;
   previewDetails: HTMLElement;
   previewActions: HTMLElement;
   toggleInfoPreview: HTMLButtonElement;
-  fullscreenPreview: HTMLButtonElement;
-  closePreview: HTMLButtonElement;
 }
 
 export function getViewerElements(): ViewerElements {
   const elements = {
     loginView: document.querySelector("#loginView"),
     viewerShell: document.querySelector("#viewerShell"),
-    connectForm: document.querySelector("#connectForm"),
     connectButton: document.querySelector("#connectButton"),
     connectMessage: document.querySelector("#connectMessage"),
     searchInput: document.querySelector("#searchInput"),
@@ -71,14 +66,11 @@ export function getViewerElements(): ViewerElements {
     dialog: document.querySelector("#previewDialog"),
     previewMeta: document.querySelector("#previewMeta"),
     previewBody: document.querySelector("#previewBody"),
-    backPreview: document.querySelector("#backPreview"),
     previewOriginalName: document.querySelector("#previewOriginalName"),
     previewRating: document.querySelector("#previewRating"),
     previewDetails: document.querySelector("#previewDetails"),
     previewActions: document.querySelector("#previewActions"),
     toggleInfoPreview: document.querySelector("#toggleInfoPreview"),
-    fullscreenPreview: document.querySelector("#fullscreenPreview"),
-    closePreview: document.querySelector("#closePreview"),
   };
   for (const [name, element] of Object.entries(elements)) {
     if (!element) throw new Error(`Missing viewer element: ${name}`);

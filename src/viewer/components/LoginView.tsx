@@ -1,4 +1,5 @@
 import iconOnUrl from "../../assets/icon_on.svg";
+import { submitConnection } from "../shellActions";
 
 export function LoginView() {
   return (
@@ -6,6 +7,7 @@ export function LoginView() {
       <form
         id="connectForm"
         className="login-panel grid w-[min(320px,100%)] gap-[18px] rounded-[14px] border border-app-border bg-[rgba(255,255,255,0.95)] px-[30px] pb-[30px] pt-[42px] shadow-app backdrop-blur-xl"
+        onSubmit={submitConnection}
       >
         <div className="login-head grid justify-items-center gap-3 text-center">
           <img
