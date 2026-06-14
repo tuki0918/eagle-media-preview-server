@@ -6,6 +6,7 @@ export default defineConfig({
     globals: true,
     include: [
       "src/**/*.test.ts",
+      "src/**/*.test.tsx",
       "public/**/*.test.js",
       "plugin/**/*.test.js",
       "server/**/*.test.js",

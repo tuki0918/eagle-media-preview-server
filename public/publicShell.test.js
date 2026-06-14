@@ -28,6 +28,7 @@ async function readAppSources() {
   const files = [
     "../src/App.tsx",
     "../src/viewer/ViewerShell.tsx",
+    "../src/viewer/shellConfig.ts",
   ];
   const sources = await Promise.all(files.map((file) => readFile(new URL(file, import.meta.url), "utf8")));
   return sources.join("\n");
@@ -83,7 +84,8 @@ test("public UI no longer shows connect lock icon or connection settings button"
   assert.match(css, /\.status-line\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) auto;/s);
   assert.match(css, /\.status-actions\s*\{[^}]*margin-left:\s*auto;[^}]*justify-self:\s*end;/s);
   assert.match(css, /@media \(max-width: 540px\)[\s\S]*\.status-line\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) auto;/s);
-  assert.match(html, /<select id="pageSizeSelect" aria-label="Page size" defaultValue="30">[\s\S]*<option value="30">30 items<\/option>/);
+  assert.match(html, /<select id="pageSizeSelect" aria-label="Page size" defaultValue="30">[\s\S]*PAGE_SIZE_OPTIONS\.map/);
+  assert.match(html, /export const PAGE_SIZE_OPTIONS = \[30, 60, 120, 240\] as const;/);
   assert.match(app, /limit:\s*30,/);
   assert.match(app, /if \(state\.limit !== DEFAULT_PAGE_SIZE\) params\.set\("limit", String\(state\.limit\)\);/);
   assert.match(app, /const parsed = Number\.parseInt\(value \|\| String\(DEFAULT_PAGE_SIZE\), 10\);/);
@@ -376,7 +378,8 @@ test("public UI labels media extensions as type", async () => {
   assert.match(html, /<select id="folderSelect" aria-label="Folder">[\s\S]*?<option value="">All folders<\/option>/);
   assert.match(html, /<select id="extSelect" aria-label="Type">[\s\S]*?<option value="">All types<\/option>/);
   assert.match(html, /<select id="ratingSelect" aria-label="Rating">[\s\S]*?<option value="">All ratings<\/option>/);
-  assert.match(html, /<select id="pageSizeSelect" aria-label="Page size" defaultValue="30">[\s\S]*?<option value="30">30 items<\/option>/);
+  assert.match(html, /<select id="pageSizeSelect" aria-label="Page size" defaultValue="30">[\s\S]*?PAGE_SIZE_OPTIONS\.map/);
+  assert.match(html, /export const PAGE_SIZE_OPTIONS = \[30, 60, 120, 240\] as const;/);
   assert.doesNotMatch(html, /<span>Folder<\/span>/);
   assert.doesNotMatch(html, /<span>Type<\/span>\s*<select id="extSelect"/);
   assert.doesNotMatch(html, /<span>Rating<\/span>/);

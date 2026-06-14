@@ -1,20 +1,5 @@
 import iconOnUrl from "../assets/icon_on.svg";
-
-const mediaTypeOptions = [
-  "jpg",
-  "png",
-  "gif",
-  "webp",
-  "svg",
-  "mp4",
-  "webm",
-  "mov",
-  "avi",
-  "mkv",
-  "mp3",
-  "wav",
-  "m4a",
-];
+import { MEDIA_TYPE_OPTIONS, PAGE_SIZE_OPTIONS, RATING_OPTIONS } from "./shellConfig";
 
 function LoginView() {
   return (
@@ -90,7 +75,7 @@ function SearchControls() {
         <label>
           <select id="extSelect" aria-label="Type">
             <option value="">All types</option>
-            {mediaTypeOptions.map((type) => (
+            {MEDIA_TYPE_OPTIONS.map((type) => (
               <option key={type} value={type}>
                 {type.toUpperCase()}
               </option>
@@ -101,7 +86,7 @@ function SearchControls() {
           <select id="ratingSelect" aria-label="Rating">
             <option value="">All ratings</option>
             <option value="0">No rating</option>
-            {[1, 2, 3, 4, 5].map((rating) => (
+            {RATING_OPTIONS.map((rating) => (
               <option key={rating} value={rating}>
                 ★ {rating}
               </option>
@@ -110,10 +95,11 @@ function SearchControls() {
         </label>
         <label>
           <select id="pageSizeSelect" aria-label="Page size" defaultValue="30">
-            <option value="30">30 items</option>
-            <option value="60">60 items</option>
-            <option value="120">120 items</option>
-            <option value="240">240 items</option>
+            {PAGE_SIZE_OPTIONS.map((pageSize) => (
+              <option key={pageSize} value={pageSize}>
+                {pageSize} items
+              </option>
+            ))}
           </select>
         </label>
       </div>
