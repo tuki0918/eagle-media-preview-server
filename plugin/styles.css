@@ -75,6 +75,31 @@ p {
   margin: 0;
 }
 
+.brand,
+.section-heading,
+.section-heading-icon,
+.status-controls,
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+}
+
+.window-close,
+.option-icon,
+.qr-code,
+#togglePasswordButton {
+  display: grid;
+  place-items: center;
+}
+
+.endpoint-input,
+.setting-control input {
+  border: 1px solid var(--line-strong);
+  background: #fff;
+  color: var(--text);
+  outline: 0;
+}
+
 .window-shell {
   width: 100%;
   min-height: 100vh;
@@ -95,8 +120,6 @@ p {
 }
 
 .brand {
-  display: inline-flex;
-  align-items: center;
   gap: 10px;
   min-width: 0;
 }
@@ -119,8 +142,6 @@ p {
   -webkit-app-region: no-drag;
   width: 26px;
   height: 26px;
-  display: grid;
-  place-items: center;
   padding: 5px;
   border: 0;
   border-radius: 6px;
@@ -166,14 +187,10 @@ p {
 }
 
 .section-heading {
-  display: inline-flex;
-  align-items: center;
   gap: 6px;
 }
 
 .section-heading-icon {
-  display: inline-flex;
-  align-items: center;
   color: #5f6670;
 }
 
@@ -183,14 +200,10 @@ p {
 }
 
 .status-controls {
-  display: inline-flex;
-  align-items: center;
   gap: 10px;
 }
 
 .status-pill {
-  display: inline-flex;
-  align-items: center;
   gap: 6px;
   min-height: 24px;
   padding: 0 9px;
@@ -317,13 +330,10 @@ p {
   min-width: 0;
   height: 32px;
   padding: 0 10px;
-  border: 1px solid var(--line-strong);
   border-radius: 8px;
   background: var(--surface-soft);
-  color: var(--text);
   cursor: pointer;
   font-size: 12px;
-  outline: 0;
 }
 
 .copy-button {
@@ -376,8 +386,6 @@ p {
 .option-icon {
   width: 24px;
   height: 24px;
-  display: grid;
-  place-items: center;
   border: 1px solid var(--line);
   border-radius: 6px;
   color: #565c66;
@@ -423,8 +431,6 @@ p {
 .qr-code {
   width: 124px;
   height: 124px;
-  display: grid;
-  place-items: center;
   align-self: center;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -490,12 +496,8 @@ p {
   width: 100%;
   height: 28px;
   padding: 0 8px;
-  border: 1px solid var(--line-strong);
   border-radius: 7px;
-  background: #fff;
-  color: var(--text);
   font-size: 11px;
-  outline: 0;
 }
 
 .setting-control input:focus {
@@ -518,8 +520,6 @@ p {
   right: 4px;
   width: 22px;
   height: 22px;
-  display: grid;
-  place-items: center;
   padding: 4px;
   border: 0;
   border-radius: 5px;
