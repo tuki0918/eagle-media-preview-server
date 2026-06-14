@@ -1501,7 +1501,7 @@ select:hover {
 
 @media (min-width: 720px) {
   main {
-    padding: 30px 20px 30px;
+    @apply px-5 py-[30px];
   }
 
   .controls {
@@ -1510,14 +1510,14 @@ select:hover {
 
   .media-grid {
     grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
-    gap: 14px;
+    @apply gap-3.5;
   }
   .preview-layout {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .preview-body {
-    min-height: 0;
+    @apply min-h-0;
   }
 
   .preview-body img:not(.preview-image),
@@ -1538,14 +1538,13 @@ select:hover {
 
 @media (min-width: 1180px) {
   main {
-    padding-left: 0;
-    padding-right: 0;
+    @apply px-0;
   }
 }
 
 @media (max-width: 540px) {
   .form-actions {
-    grid-template-columns: 1fr;
+    @apply grid-cols-1;
   }
 
   .search-row {
@@ -1556,13 +1555,13 @@ select:hover {
   .search-box {
     min-height: 44px;
     padding: 5px 10px;
-    gap: 8px;
+    @apply gap-2;
   }
 
   .search-composer {
     flex-wrap: nowrap;
     overflow: hidden;
-    gap: 6px;
+    @apply gap-1.5;
   }
 
   .tag-chips {
@@ -1580,7 +1579,7 @@ select:hover {
 
   .tag-chip {
     flex: 0 0 auto;
-    max-width: 132px;
+    @apply max-w-[132px];
   }
 
   .unified-search-input {
@@ -1597,7 +1596,7 @@ select:hover {
 
   .filter-row {
     grid-template-columns: 1fr;
-    gap: 12px;
+    @apply gap-3;
   }
 
   .media-tiles {
@@ -1607,7 +1606,7 @@ select:hover {
   }
 
   .media-tiles .tile-item {
-    margin-bottom: 3px;
+    @apply mb-[3px];
   }
 
   .status-line {
@@ -1619,10 +1618,8 @@ select:hover {
 
   .status-actions {
     display: inline-flex;
-    align-items: center;
+    @apply items-center justify-end gap-2;
     justify-self: end;
-    justify-content: flex-end;
-    gap: 8px;
     min-width: 0;
   }
 
