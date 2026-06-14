@@ -26,4 +26,5 @@ export { ResultsStatus } from "./components/ResultsStatus";
 export { SearchControls } from "./components/SearchControls";
 export { TagChips } from "./components/TagChips";
 export { TagSuggestions } from "./components/TagSuggestions";
+export { TilesSentinel } from "./components/TilesSentinel";
 export { ViewerShellLayout } from "./components/ViewerShellLayout";

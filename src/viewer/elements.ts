@@ -16,7 +16,7 @@ export interface ViewerElements {
   resultsStatusHost: HTMLElement;
   libraryFooterName: HTMLElement;
   resultGridHost: HTMLElement;
-  tilesSentinel: HTMLElement;
+  tilesSentinelHost: HTMLElement;
   pagerHost: HTMLElement;
   template: HTMLTemplateElement;
   dialog: HTMLDialogElement;
@@ -48,7 +48,7 @@ export function getViewerElements(): ViewerElements {
     resultsStatusHost: document.querySelector("#resultsStatusHost"),
     libraryFooterName: document.querySelector("#libraryFooterName"),
     resultGridHost: document.querySelector("#resultGridHost"),
-    tilesSentinel: document.querySelector("#tilesSentinel"),
+    tilesSentinelHost: document.querySelector("#tilesSentinelHost"),
     pagerHost: document.querySelector("#pagerHost"),
     template: document.querySelector("#cardTemplate"),
     dialog: document.querySelector("#previewDialog"),

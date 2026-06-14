@@ -45,6 +45,7 @@ async function readAppSources() {
     "../src/viewer/components/SearchControls.tsx",
     "../src/viewer/components/TagChips.tsx",
     "../src/viewer/components/TagSuggestions.tsx",
+    "../src/viewer/components/TilesSentinel.tsx",
     "../src/viewer/components/ViewerShellLayout.tsx",
     "../src/viewer/shellConfig.ts",
   ];
@@ -486,7 +487,8 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   assert.match(app, /const TILE_PREFETCH_PAGES = 3;/);
   assert.match(app, /resultsStatusHost: document\.querySelector\("#resultsStatusHost"\),/);
   assert.doesNotMatch(app, /tilesViewButton: document\.querySelector\("#tilesViewButton"\),/);
-  assert.match(app, /tilesSentinel: document\.querySelector\("#tilesSentinel"\),/);
+  assert.match(app, /tilesSentinelHost: document\.querySelector\("#tilesSentinelHost"\),/);
+  assert.doesNotMatch(app, /tilesSentinel: document\.querySelector\("#tilesSentinel"\),/);
   assert.match(app, /pagerHost: document\.querySelector\("#pagerHost"\),/);
   assert.doesNotMatch(app, /prevButton: document\.querySelector\("#prevButton"\),/);
   assert.doesNotMatch(app, /pageButtons: document\.querySelector\("#pageButtons"\),/);
@@ -498,6 +500,7 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   assert.match(html, /onClick=\{trigger\.onClick\}/);
   assert.match(app, /renderResultListView\(els\.resultGridHost, \{/);
   assert.match(app, /renderPagerView\(els\.pagerHost, \{/);
+  assert.match(app, /renderTilesSentinelView\(els\.tilesSentinelHost, \{/);
   assert.match(app, /function setupTileAutoLoading\(\) \{/);
   assert.match(app, /resetTileAutoLoading\(\);/);
   assert.match(app, /function resetTileAutoLoading\(\) \{/);

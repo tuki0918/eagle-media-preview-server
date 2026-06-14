@@ -19,6 +19,7 @@ import {
   SearchControls,
   TagChips,
   TagSuggestions,
+  TilesSentinel,
   ViewerAppShell,
   ViewerShellLayout,
 } from "./ViewerShell";
@@ -45,6 +46,7 @@ const REQUIRED_ELEMENT_IDS = [
   "resultsStatusHost",
   "resultGridHost",
   "grid",
+  "tilesSentinelHost",
   "tilesSentinel",
   "resultCount",
   "tilesViewButton",
@@ -150,6 +152,14 @@ describe("ViewerAppShell", () => {
     expect(meta).toContain("JPG - 120 x 80");
     expect(originalName).toContain('id="previewOriginalName"');
     expect(originalName).toContain('title="Sample.jpg"');
+  });
+
+  test("renders tiles sentinel as a reusable component", () => {
+    const html = renderToStaticMarkup(<TilesSentinel hidden={false} text="Loading more" />);
+
+    expect(html).toContain('id="tilesSentinel"');
+    expect(html).toContain("Loading more");
+    expect(html).not.toContain("hidden");
   });
 
   test("renders tag suggestions as a reusable component", () => {

@@ -61,6 +61,7 @@ import { renderFolderOptionsView } from "./viewer/components/FolderOptions";
 import { renderResultsStatusView } from "./viewer/components/ResultsStatus";
 import { renderSearchControlButtonsView } from "./viewer/components/SearchControls";
 import { renderTagChipsView } from "./viewer/components/TagChips";
+import { renderTilesSentinelView } from "./viewer/components/TilesSentinel";
 import {
   clearTagSuggestionsView,
   renderTagSuggestionsView,
@@ -247,7 +248,6 @@ async function loadItems({ append = false }: LoadItemsOptions = {}) {
   const requestId = ++state.requestId;
   if (append) {
     state.tilesLoadingMore = true;
-    els.tilesSentinel.textContent = "Loading more";
   } else {
     resetTileAutoLoading();
     state.tilesLoadingMore = false;
@@ -281,7 +281,7 @@ async function loadItems({ append = false }: LoadItemsOptions = {}) {
     if (requestId !== state.requestId) return;
     state.tilesLoadingMore = false;
     if (append) {
-      els.tilesSentinel.textContent = error.message;
+      renderTilesSentinel(error.message);
       updatePager();
       return;
     }
@@ -651,10 +651,7 @@ function updateStatus() {
 
 function updatePager() {
   const isTiles = state.viewMode === "tiles";
-  els.tilesSentinel.hidden = !shouldShowTileSentinel(tileLoadingState());
-  if (isTiles) {
-    els.tilesSentinel.textContent = tileSentinelText(tileLoadingState());
-  }
+  renderTilesSentinel(isTiles ? tileSentinelText(tileLoadingState()) : "Loading more");
   const current = currentPage(state);
   renderPagerView(els.pagerHost, {
     current,
@@ -666,6 +663,13 @@ function updatePager() {
   });
 }
 
+function renderTilesSentinel(text = "Loading more") {
+  renderTilesSentinelView(els.tilesSentinelHost, {
+    hidden: !shouldShowTileSentinel(tileLoadingState()),
+    text,
+  });
+}
+
 function setupTileAutoLoading() {
   resetTileAutoLoading();
   if (!shouldShowTileSentinel(tileLoadingState()) || typeof IntersectionObserver === "undefined") return;
@@ -673,7 +677,7 @@ function setupTileAutoLoading() {
     if (!entries.some((entry) => entry.isIntersecting)) return;
     loadMoreTiles();
   }, { rootMargin: "600px 0px" });
-  state.tilesObserver.observe(els.tilesSentinel);
+  state.tilesObserver.observe(els.tilesSentinelHost);
 }
 
 function resetTileAutoLoading() {

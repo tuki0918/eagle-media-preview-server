@@ -3,6 +3,7 @@ import { Pager } from "./Pager";
 import { PreviewDialog } from "./PreviewDialog";
 import { ResultsStatus } from "./ResultsStatus";
 import { SearchControls } from "./SearchControls";
+import { TilesSentinel } from "./TilesSentinel";
 
 export function ViewerShellLayout() {
   return (
@@ -15,8 +16,8 @@ export function ViewerShellLayout() {
         <div id="resultGridHost">
           <section id="grid" className="media-grid" aria-label="Eagle assets" />
         </div>
-        <div id="tilesSentinel" className="tiles-sentinel mt-3 grid min-h-[52px] place-items-center text-[13px] font-[680] text-app-muted" hidden>
-          Loading more
+        <div id="tilesSentinelHost">
+          <TilesSentinel />
         </div>
         <div id="pagerHost">
           <Pager />
