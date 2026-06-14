@@ -35,7 +35,7 @@ import {
   pageButtonList,
   totalPages,
 } from "./viewer/pagination";
-import { renderPageButtonsView } from "./viewer/components/PageButtons";
+import { renderPagerView } from "./viewer/components/Pager";
 import {
   clearResultStateView,
   renderResultStateView,
@@ -654,15 +654,19 @@ function updateStatus() {
 
 function updatePager() {
   const isTiles = state.viewMode === "tiles";
-  els.pager.hidden = isTiles;
   els.tilesSentinel.hidden = !shouldShowTileSentinel(tileLoadingState());
   if (isTiles) {
     els.tilesSentinel.textContent = tileSentinelText(tileLoadingState());
-    return;
   }
-  els.prevButton.disabled = state.offset <= 0;
-  els.nextButton.disabled = state.offset + state.limit >= state.total;
-  renderPageButtons();
+  const current = currentPage(state);
+  renderPagerView(els.pagerHost, {
+    current,
+    hidden: isTiles,
+    nextDisabled: state.offset + state.limit >= state.total,
+    onSelectPage: goToPage,
+    pages: pageButtonList(current, totalPages(state.total, state.limit)),
+    previousDisabled: state.offset <= 0,
+  });
 }
 
 function setupTileAutoLoading() {
@@ -706,18 +710,9 @@ function currentFetchLimit() {
   });
 }
 
-function renderPageButtons() {
-  const current = currentPage(state);
-  const pages = pageButtonList(current, totalPages(state.total, state.limit));
-
-  renderPageButtonsView(els.pageButtons, {
-    current,
-    pages,
-    onSelect: (page) => {
-      state.offset = (page - 1) * state.limit;
-      loadItems();
-    },
-  });
+function goToPage(page: number) {
+  state.offset = (page - 1) * state.limit;
+  loadItems();
 }
 
 function renderPreviewDetails(item: EagleItem) {

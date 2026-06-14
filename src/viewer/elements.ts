@@ -17,10 +17,7 @@ export interface ViewerElements {
   libraryFooterName: HTMLElement;
   grid: HTMLElement;
   tilesSentinel: HTMLElement;
-  pager: HTMLElement;
-  prevButton: HTMLButtonElement;
-  nextButton: HTMLButtonElement;
-  pageButtons: HTMLElement;
+  pagerHost: HTMLElement;
   template: HTMLTemplateElement;
   dialog: HTMLDialogElement;
   previewMeta: HTMLElement;
@@ -52,10 +49,7 @@ export function getViewerElements(): ViewerElements {
     libraryFooterName: document.querySelector("#libraryFooterName"),
     grid: document.querySelector("#grid"),
     tilesSentinel: document.querySelector("#tilesSentinel"),
-    pager: document.querySelector(".pager"),
-    prevButton: document.querySelector("#prevButton"),
-    nextButton: document.querySelector("#nextButton"),
-    pageButtons: document.querySelector("#pageButtons"),
+    pagerHost: document.querySelector("#pagerHost"),
     template: document.querySelector("#cardTemplate"),
     dialog: document.querySelector("#previewDialog"),
     previewMeta: document.querySelector("#previewMeta"),

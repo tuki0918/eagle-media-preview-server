@@ -484,6 +484,9 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   assert.match(app, /resultsStatusHost: document\.querySelector\("#resultsStatusHost"\),/);
   assert.doesNotMatch(app, /tilesViewButton: document\.querySelector\("#tilesViewButton"\),/);
   assert.match(app, /tilesSentinel: document\.querySelector\("#tilesSentinel"\),/);
+  assert.match(app, /pagerHost: document\.querySelector\("#pagerHost"\),/);
+  assert.doesNotMatch(app, /prevButton: document\.querySelector\("#prevButton"\),/);
+  assert.doesNotMatch(app, /pageButtons: document\.querySelector\("#pageButtons"\),/);
   assert.match(app, /state\.viewMode === "tiles"/);
   assert.match(html, /export function ResultList\(\{ items, viewMode, onOpenPreview \}[^)]*\) \{/);
   assert.match(html, /style=\{\{ aspectRatio: width > 0 && height > 0 \? `\$\{width\} \/ \$\{height\}` : "1 \/ 1" \}\}/);
@@ -491,6 +494,7 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   assert.match(html, /onPointerDown=\{trigger\.onPointerDown\}/);
   assert.match(html, /onClick=\{trigger\.onClick\}/);
   assert.match(app, /renderResultListView\(els\.grid, \{/);
+  assert.match(app, /renderPagerView\(els\.pagerHost, \{/);
   assert.match(app, /function setupTileAutoLoading\(\) \{/);
   assert.match(app, /resetTileAutoLoading\(\);/);
   assert.match(app, /function resetTileAutoLoading\(\) \{/);

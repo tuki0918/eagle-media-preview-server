@@ -16,7 +16,9 @@ export function ViewerShellLayout() {
         <div id="tilesSentinel" className="tiles-sentinel mt-3 grid min-h-[52px] place-items-center text-[13px] font-[680] text-app-muted" hidden>
           Loading more
         </div>
-        <Pager />
+        <div id="pagerHost">
+          <Pager />
+        </div>
         <p id="libraryFooterName" className="library-footer-name mt-2 text-center text-xs leading-[1.4] text-app-muted">
           Connecting to Eagle
         </p>
