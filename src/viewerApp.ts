@@ -64,6 +64,10 @@ import {
 import { renderPageButtonsView } from "./viewer/components/PageButtons";
 import { renderTagChipsView } from "./viewer/components/TagChips";
 import {
+  clearTagSuggestionsView,
+  renderTagSuggestionsView,
+} from "./viewer/components/TagSuggestions";
+import {
   dragPreviewTransform,
   initialPreviewScales,
   minimumPreviewScale as getMinimumPreviewScale,
@@ -1067,39 +1071,17 @@ function renderTagSuggestions(items: readonly TagSuggestionApiItem[]) {
     return;
   }
 
-  const fragment = document.createDocumentFragment();
-  for (const item of items) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "tag-suggestion";
-    button.setAttribute("role", "option");
-    button.addEventListener("pointerdown", (event) => {
-      event.preventDefault();
-      addTagFilter(item.name);
-    });
-
-    const name = document.createElement("span");
-    name.textContent = item.name || "";
-    button.append(name);
-
-    if (Number.isFinite(item.count)) {
-      const count = document.createElement("span");
-      count.className = "tag-suggestion-count";
-      count.textContent = Number(item.count).toLocaleString();
-      button.append(count);
-    }
-
-    fragment.append(button);
-  }
-
-  els.tagSuggestions.replaceChildren(fragment);
+  renderTagSuggestionsView(els.tagSuggestions, {
+    items,
+    onSelect: addTagFilter,
+  });
   els.tagSuggestions.hidden = false;
 }
 
 function hideTagSuggestions() {
   state.tagSuggestionsRequestId += 1;
   els.tagSuggestions.hidden = true;
-  els.tagSuggestions.replaceChildren();
+  clearTagSuggestionsView(els.tagSuggestions);
 }
 
 function syncAdvancedFiltersUi() {

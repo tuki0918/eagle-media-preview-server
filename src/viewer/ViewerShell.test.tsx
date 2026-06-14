@@ -9,6 +9,7 @@ import {
   ResultsStatus,
   SearchControls,
   TagChips,
+  TagSuggestions,
   ViewerAppShell,
   ViewerShellLayout,
 } from "./ViewerShell";
@@ -115,5 +116,12 @@ describe("ViewerAppShell", () => {
 
     expect(html).toContain('class="tag-chip"');
     expect(html).toContain("Remove tag alpha");
+  });
+
+  test("renders tag suggestions as a reusable component", () => {
+    const html = renderToStaticMarkup(<TagSuggestions items={[{ name: "alpha", count: 12 }]} onSelect={() => {}} />);
+
+    expect(html).toContain('class="tag-suggestion"');
+    expect(html).toContain('class="tag-suggestion-count"');
   });
 });

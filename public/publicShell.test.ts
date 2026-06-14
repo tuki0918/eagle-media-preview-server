@@ -39,6 +39,8 @@ async function readAppSources() {
     "../src/viewer/components/PreviewDialog.tsx",
     "../src/viewer/components/ResultsStatus.tsx",
     "../src/viewer/components/SearchControls.tsx",
+    "../src/viewer/components/TagChips.tsx",
+    "../src/viewer/components/TagSuggestions.tsx",
     "../src/viewer/components/ViewerShellLayout.tsx",
     "../src/viewer/shellConfig.ts",
   ];
