@@ -40,6 +40,7 @@ import {
 } from "./viewer/format";
 import { iconNode, renderLucideIcons } from "./viewer/icons";
 import { state } from "./viewer/state";
+import type { ViewerMode } from "./viewer/types";
 
 const els = getViewerElements();
 
@@ -701,7 +702,7 @@ function zoomImage(multiplier) {
   setImageZoom(nextScale);
 }
 
-function setImageZoom(scale, position = state.previewTransform) {
+function setImageZoom(scale, position: { x: number; y: number } = state.previewTransform) {
   state.previewTransform = {
     scale,
     x: position.x,
@@ -814,8 +815,8 @@ function videoErrorMessage(error) {
   return "This video could not be played on this device.";
 }
 
-function setViewMode(mode) {
-  if (!["grid", "tiles", "table"].includes(mode)) return;
+function setViewMode(mode: string) {
+  if (!isViewerMode(mode)) return;
   if (state.viewMode === mode) return;
   const previousMode = state.viewMode;
   state.viewMode = mode;
@@ -843,8 +844,12 @@ function restoreViewMode() {
     return;
   }
   const saved = localStorage.getItem("eagleViewMode");
-  state.viewMode = saved && ["grid", "tiles", "table"].includes(saved) ? saved : DEFAULT_VIEW_MODE;
+  state.viewMode = saved && isViewerMode(saved) ? saved : DEFAULT_VIEW_MODE;
   updateViewToggle();
+}
+
+function isViewerMode(value: string): value is ViewerMode {
+  return value === "grid" || value === "tiles" || value === "table";
 }
 
 function closePreview({ skipHistory = false } = {}) {
@@ -1660,7 +1665,7 @@ function folderSuggestionItems(query, selectedValues) {
     .map((folder) => ({
       value: folder.id,
       label: folderLabel(folder.id),
-      meta: Number.isFinite(folder.imageCount) ? `${folder.imageCount.toLocaleString()} items` : "",
+      meta: Number.isFinite(folder.imageCount) ? `${Number(folder.imageCount).toLocaleString()} items` : "",
     }));
   return dedupeSuggestions([...recent, ...folders]).slice(0, 20);
 }

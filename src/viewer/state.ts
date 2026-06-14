@@ -1,4 +1,6 @@
-export const state: any = {
+import type { ViewerState } from "./types";
+
+export const state: ViewerState = {
   offset: 0,
   limit: 30,
   total: 0,

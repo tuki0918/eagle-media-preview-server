@@ -18,3 +18,57 @@ export interface EagleItem {
   folders?: unknown;
   [key: string]: unknown;
 }
+
+export type ViewerMode = "grid" | "tiles" | "table";
+
+export interface PreviewTransform {
+  scale: number;
+  x: number;
+  y: number;
+}
+
+export interface PreviewPoint {
+  x: number;
+  y: number;
+}
+
+export interface PreviewDrag {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  originX: number;
+  originY: number;
+}
+
+export interface PreviewPinch {
+  distance: number;
+  scale: number;
+}
+
+export interface ViewerState {
+  offset: number;
+  limit: number;
+  total: number;
+  items: EagleItem[];
+  query: string;
+  tags: string[];
+  tagSuggestionsRequestId: number;
+  folderId: string;
+  ext: string;
+  rating: string;
+  filtersOpen: boolean;
+  folders: EagleFolder[];
+  viewMode: ViewerMode;
+  tilesLoadingMore: boolean;
+  tilesObserver: IntersectionObserver | null;
+  requestId: number;
+  previewTransform: PreviewTransform;
+  previewFitScale: number;
+  previewNaturalScale: number;
+  previewDrag: PreviewDrag | null;
+  previewPointers: Map<number, PreviewPoint>;
+  previewPinch: PreviewPinch | null;
+  previewItemId: string;
+  previewInfoOpen: boolean;
+  restoringHistory: boolean;
+}
