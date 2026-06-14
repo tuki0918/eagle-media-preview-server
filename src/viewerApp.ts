@@ -38,6 +38,11 @@ import {
 import { hasActiveFilters, resetFilterState } from "./viewer/filters";
 import { iconNode, renderLucideIcons, type IconName } from "./viewer/icons";
 import {
+  thumbnailAriaLabel,
+  thumbnailMediaType,
+  thumbnailOverlayIcon,
+} from "./viewer/media";
+import {
   folderLabel,
   folderSuggestionItems as buildFolderSuggestionItems,
   type MetadataSuggestion,
@@ -559,19 +564,11 @@ function populateThumb({ img, badge, duration, item }: PopulateThumbOptions) {
 }
 
 function decorateThumbButton(button: HTMLElement, overlayIcon: HTMLElement | null, item: EagleItem) {
-  const ext = (item.ext || "").toLowerCase();
-  const mediaType = playableVideoExts.has(ext)
-    ? "video"
-    : playableAudioExts.has(ext)
-      ? "audio"
-      : textPreviewExts.has(ext) || pdfPreviewExts.has(ext)
-        ? "document"
-        : "image";
+  const mediaType = thumbnailMediaType(item);
   button.dataset.mediaType = mediaType;
-  button.setAttribute("aria-label", mediaType === "video" || mediaType === "audio" ? `Play ${item.name || item.id}` : `Open ${item.name || item.id}`);
+  button.setAttribute("aria-label", thumbnailAriaLabel(item, mediaType));
   if (!overlayIcon) return;
-  const icon = mediaType === "video" || mediaType === "audio" ? "play" : "move-diagonal";
-  overlayIcon.replaceChildren(iconNode(icon));
+  overlayIcon.replaceChildren(iconNode(thumbnailOverlayIcon(mediaType)));
 }
 
 function openPreview(item: EagleItem, { skipHistory = false }: OpenPreviewOptions = {}) {

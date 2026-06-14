@@ -11,6 +11,7 @@ async function readViewerSources() {
     "../src/viewer/elements.ts",
     "../src/viewer/format.ts",
     "../src/viewer/icons.ts",
+    "../src/viewer/media.ts",
     "../src/viewer/metadata.ts",
     "../src/viewer/metadataEditor.ts",
     "../src/viewer/pagination.ts",
@@ -214,7 +215,9 @@ test("public grid thumbnail hover icon uses play for video and audio", async () 
   const app = await readViewerSources();
 
   assert.match(app, /"move-diagonal":/);
-  assert.match(app, /const icon = mediaType === "video" \|\| mediaType === "audio" \? "play" : "move-diagonal";/);
+  assert.match(app, /function thumbnailOverlayIcon\(mediaType[^)]*\)/);
+  assert.match(app, /return mediaType === "video" \|\| mediaType === "audio" \? "play" : "move-diagonal";/);
+  assert.match(app, /overlayIcon\.replaceChildren\(iconNode\(thumbnailOverlayIcon\(mediaType\)\)\);/);
   assert.doesNotMatch(app, /mediaType === "document" \? "file-text"/);
   assert.doesNotMatch(app, /mediaType === "image" \? "maximize-2"/);
 });
