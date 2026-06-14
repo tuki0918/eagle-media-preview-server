@@ -16,6 +16,24 @@ You can preview your media from other devices on the same network.
 ## Requirements
 
 - Eagle 4.0 Build 23 or later
+- Node.js 20 or later
+
+## Development
+
+```sh
+npm install
+npm run dev
+```
+
+## Verification
+
+```sh
+npm run typecheck
+npm run build
+npm test
+```
+
+Run `npm run verify` before committing when you need the full TypeScript, Vite build, and Vitest check in one command.
 
 ## Details
 
