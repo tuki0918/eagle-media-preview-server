@@ -20,9 +20,9 @@ export interface ViewerElements {
   pagerHost: HTMLElement;
   template: HTMLTemplateElement;
   dialog: HTMLDialogElement;
-  previewMeta: HTMLElement;
+  previewMetaHost: HTMLElement;
   previewBody: HTMLElement;
-  previewOriginalName: HTMLElement;
+  previewOriginalNameHost: HTMLElement;
   previewRating: HTMLElement;
   previewDetails: HTMLElement;
   previewActions: HTMLElement;
@@ -52,9 +52,9 @@ export function getViewerElements(): ViewerElements {
     pagerHost: document.querySelector("#pagerHost"),
     template: document.querySelector("#cardTemplate"),
     dialog: document.querySelector("#previewDialog"),
-    previewMeta: document.querySelector("#previewMeta"),
+    previewMetaHost: document.querySelector("#previewMetaHost"),
     previewBody: document.querySelector("#previewBody"),
-    previewOriginalName: document.querySelector("#previewOriginalName"),
+    previewOriginalNameHost: document.querySelector("#previewOriginalNameHost"),
     previewRating: document.querySelector("#previewRating"),
     previewDetails: document.querySelector("#previewDetails"),
     previewActions: document.querySelector("#previewActions"),

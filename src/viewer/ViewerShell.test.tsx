@@ -10,6 +10,8 @@ import {
   PreviewBody,
   PreviewDialog,
   PreviewDetailsPanel,
+  PreviewMeta,
+  PreviewOriginalName,
   RatingStars,
   ResultList,
   ResultStateView,
@@ -53,8 +55,10 @@ const REQUIRED_ELEMENT_IDS = [
   "pageButtons",
   "libraryFooterName",
   "previewDialog",
+  "previewMetaHost",
   "previewMeta",
   "previewBody",
+  "previewOriginalNameHost",
   "previewOriginalName",
   "previewRating",
   "previewDetails",
@@ -135,6 +139,16 @@ describe("ViewerAppShell", () => {
     expect(html).toContain("All folders");
     expect(html).toContain("Uncategorized");
     expect(html).toContain("  Folder 1 (8)");
+  });
+
+  test("renders preview text as reusable components", () => {
+    const meta = renderToStaticMarkup(<PreviewMeta value="JPG - 120 x 80" />);
+    const originalName = renderToStaticMarkup(<PreviewOriginalName value="Sample.jpg" />);
+
+    expect(meta).toContain('id="previewMeta"');
+    expect(meta).toContain("JPG - 120 x 80");
+    expect(originalName).toContain('id="previewOriginalName"');
+    expect(originalName).toContain('title="Sample.jpg"');
   });
 
   test("renders tag suggestions as a reusable component", () => {

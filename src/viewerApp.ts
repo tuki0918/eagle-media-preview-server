@@ -49,6 +49,10 @@ import {
   renderPreviewInfoView,
 } from "./viewer/components/PreviewInfo";
 import {
+  renderPreviewMetaView,
+  renderPreviewOriginalNameView,
+} from "./viewer/components/PreviewText";
+import {
   clearPreviewBodyView,
   renderPreviewBodyView,
   type PreviewBodyKind,
@@ -318,9 +322,8 @@ function render() {
 
 function openPreview(item: EagleItem, { skipHistory = false }: OpenPreviewOptions = {}) {
   state.previewItemId = String(item.id || "");
-  els.previewMeta.textContent = itemMeta(item);
-  els.previewOriginalName.textContent = originalFileName(item);
-  els.previewOriginalName.title = originalFileName(item);
+  renderPreviewMetaView(els.previewMetaHost, { value: itemMeta(item) });
+  renderPreviewOriginalNameView(els.previewOriginalNameHost, { value: originalFileName(item) });
   clearPreviewBodyView(els.previewBody);
   els.dialog.classList.remove("video-mode", "image-mode", "audio-mode", "text-mode", "unsupported-mode", "info-open");
   els.toggleInfoPreview.setAttribute("aria-expanded", state.previewInfoOpen ? "true" : "false");
@@ -598,10 +601,8 @@ function clearPreviewContents() {
   clearPreviewInfoView(els.previewDetails, els.previewActions);
   clearPreviewBodyView(els.previewBody);
   clearRatingView(els.previewRating);
-  els.previewOriginalName.textContent = "";
-  els.previewOriginalName.removeAttribute("title");
-  els.previewDetails.replaceChildren();
-  els.previewActions.replaceChildren();
+  renderPreviewMetaView(els.previewMetaHost, { value: "" });
+  renderPreviewOriginalNameView(els.previewOriginalNameHost, { value: "" });
 }
 
 async function setItemStar(item: EagleItem, star: number) {

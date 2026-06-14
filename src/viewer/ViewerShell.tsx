@@ -18,6 +18,7 @@ export { Pager } from "./components/Pager";
 export { PreviewBody } from "./components/PreviewBody";
 export { PreviewDialog } from "./components/PreviewDialog";
 export { PreviewActions, PreviewDetailsPanel } from "./components/PreviewInfo";
+export { PreviewMeta, PreviewOriginalName } from "./components/PreviewText";
 export { RatingStars } from "./components/RatingStars";
 export { ResultList } from "./components/ResultList";
 export { ResultStateView } from "./components/ResultState";
