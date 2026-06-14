@@ -1,5 +1,46 @@
-export function getViewerElements(): Record<string, any> {
-  return {
+export interface ViewerElements {
+  loginView: HTMLElement;
+  viewerShell: HTMLElement;
+  connectForm: HTMLFormElement;
+  connectButton: HTMLButtonElement;
+  connectMessage: HTMLElement;
+  searchInput: HTMLInputElement;
+  tagChips: HTMLElement;
+  tagSuggestions: HTMLElement;
+  resetFiltersButton: HTMLButtonElement;
+  toggleFiltersButton: HTMLButtonElement;
+  advancedFilters: HTMLElement;
+  folderSelect: HTMLSelectElement;
+  extSelect: HTMLSelectElement;
+  ratingSelect: HTMLSelectElement;
+  pageSizeSelect: HTMLSelectElement;
+  gridViewButton: HTMLButtonElement;
+  tilesViewButton: HTMLButtonElement;
+  tableViewButton: HTMLButtonElement;
+  resultCount: HTMLElement;
+  libraryFooterName: HTMLElement;
+  grid: HTMLElement;
+  tilesSentinel: HTMLElement;
+  pager: HTMLElement;
+  prevButton: HTMLButtonElement;
+  nextButton: HTMLButtonElement;
+  pageButtons: HTMLElement;
+  template: HTMLTemplateElement;
+  dialog: HTMLDialogElement;
+  previewMeta: HTMLElement;
+  previewBody: HTMLElement;
+  backPreview: HTMLButtonElement;
+  previewOriginalName: HTMLElement;
+  previewRating: HTMLElement;
+  previewDetails: HTMLElement;
+  previewActions: HTMLElement;
+  toggleInfoPreview: HTMLButtonElement;
+  fullscreenPreview: HTMLButtonElement;
+  closePreview: HTMLButtonElement;
+}
+
+export function getViewerElements(): ViewerElements {
+  const elements = {
     loginView: document.querySelector("#loginView"),
     viewerShell: document.querySelector("#viewerShell"),
     connectForm: document.querySelector("#connectForm"),
@@ -39,4 +80,8 @@ export function getViewerElements(): Record<string, any> {
     fullscreenPreview: document.querySelector("#fullscreenPreview"),
     closePreview: document.querySelector("#closePreview"),
   };
+  for (const [name, element] of Object.entries(elements)) {
+    if (!element) throw new Error(`Missing viewer element: ${name}`);
+  }
+  return elements as ViewerElements;
 }

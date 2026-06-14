@@ -122,7 +122,7 @@ async function init() {
     document.body.classList.remove("modal-open");
   });
   els.dialog.addEventListener("dblclick", (event) => {
-    if (event.target.closest("button")) {
+    if ((event.target as Element | null)?.closest("button")) {
       event.preventDefault();
     }
   });
@@ -367,15 +367,17 @@ function bindPreviewTrigger(element, item) {
 }
 
 function gridCard(item) {
-  const node = els.template.content.firstElementChild.cloneNode(true);
-  const img = node.querySelector("img");
-  const button = node.querySelector("button");
-  const badge = node.querySelector(".file-badge");
-  const duration = node.querySelector(".duration-badge");
-  const overlayIcon = node.querySelector(".thumb-overlay-icon");
-  const title = node.querySelector("strong");
-  const metaLine = node.querySelector(".card-meta span");
-  const rating = node.querySelector(".rating-control");
+  const templateNode = els.template.content.firstElementChild;
+  if (!templateNode) throw new Error("Missing media card template content");
+  const node = templateNode.cloneNode(true) as HTMLElement;
+  const img = requiredChild<HTMLImageElement>(node, "img");
+  const button = requiredChild<HTMLButtonElement>(node, "button");
+  const badge = requiredChild<HTMLElement>(node, ".file-badge");
+  const duration = requiredChild<HTMLElement>(node, ".duration-badge");
+  const overlayIcon = requiredChild<HTMLElement>(node, ".thumb-overlay-icon");
+  const title = requiredChild<HTMLElement>(node, "strong");
+  const metaLine = requiredChild<HTMLElement>(node, ".card-meta span");
+  const rating = requiredChild<HTMLElement>(node, ".rating-control");
 
   populateThumb({ img, badge, duration, item });
   decorateThumbButton(button, overlayIcon, item);
@@ -386,6 +388,12 @@ function gridCard(item) {
   button.append(rating);
   bindPreviewTrigger(button, item);
   return node;
+}
+
+function requiredChild<T extends Element>(parent: ParentNode, selector: string): T {
+  const element = parent.querySelector<T>(selector);
+  if (!element) throw new Error(`Missing template element: ${selector}`);
+  return element;
 }
 
 function tileItem(item) {
@@ -712,7 +720,7 @@ function setImageZoom(scale, position: { x: number; y: number } = state.previewT
 }
 
 function applyImageTransform() {
-  const image = els.previewBody.querySelector(".preview-image");
+  const image = els.previewBody.querySelector<HTMLElement>(".preview-image");
   if (!image) return;
   const { scale, x, y } = state.previewTransform;
   image.style.transform = `translate(-50%, -50%) translate3d(${x}px, ${y}px, 0) scale(${scale})`;
@@ -720,7 +728,7 @@ function applyImageTransform() {
 }
 
 function updateImageStatus() {
-  const image = els.previewBody.querySelector(".preview-image");
+  const image = els.previewBody.querySelector<HTMLImageElement>(".preview-image");
   const status = els.previewBody.querySelector(".image-status");
   if (!image || !status || !image.naturalWidth || !image.naturalHeight) return;
   const zoomPercent = Math.round((state.previewTransform.scale / state.previewNaturalScale) * 100);
@@ -728,7 +736,7 @@ function updateImageStatus() {
 }
 
 function startImageDrag(event, viewport) {
-  const image = els.previewBody.querySelector(".preview-image");
+  const image = els.previewBody.querySelector<HTMLImageElement>(".preview-image");
   if (!image) return;
   if (event.pointerType === "touch") {
     state.previewPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
@@ -801,8 +809,8 @@ function minimumPreviewScale() {
 }
 
 function refreshPreviewImageLayout() {
-  const image = els.previewBody.querySelector(".preview-image");
-  const viewport = els.previewBody.querySelector(".image-viewport");
+  const image = els.previewBody.querySelector<HTMLImageElement>(".preview-image");
+  const viewport = els.previewBody.querySelector<HTMLElement>(".image-viewport");
   if (!image || !viewport || !image.naturalWidth || !image.naturalHeight) return;
   updatePreviewScales(image, viewport);
   applyImageTransform();
@@ -887,9 +895,12 @@ function setPreviewInfoOpen(isOpen) {
 
 async function toggleFullscreen() {
   const target = els.previewBody.firstElementChild || els.previewBody;
+  const videoTarget = target instanceof HTMLVideoElement
+    ? target as HTMLVideoElement & { webkitEnterFullscreen?: () => void }
+    : null;
   try {
-    if (target.tagName === "VIDEO" && target.webkitEnterFullscreen && !document.fullscreenEnabled) {
-      target.webkitEnterFullscreen();
+    if (videoTarget?.webkitEnterFullscreen && !document.fullscreenEnabled) {
+      videoTarget.webkitEnterFullscreen();
       return;
     }
     if (document.fullscreenElement) {
@@ -900,8 +911,8 @@ async function toggleFullscreen() {
       await target.requestFullscreen();
       return;
     }
-    if (target.tagName === "VIDEO" && target.webkitEnterFullscreen) {
-      target.webkitEnterFullscreen();
+    if (videoTarget?.webkitEnterFullscreen) {
+      videoTarget.webkitEnterFullscreen();
     }
   } catch (error) {
     console.warn("Fullscreen is unavailable in this browser.", error);
