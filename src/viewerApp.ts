@@ -62,6 +62,10 @@ import {
   totalPages,
 } from "./viewer/pagination";
 import { renderPageButtonsView } from "./viewer/components/PageButtons";
+import {
+  clearResultStateView,
+  renderResultStateView,
+} from "./viewer/components/ResultState";
 import { renderTagChipsView } from "./viewer/components/TagChips";
 import {
   clearTagSuggestionsView,
@@ -280,7 +284,7 @@ async function loadItems({ append = false }: LoadItemsOptions = {}) {
     resetTileAutoLoading();
     state.tilesLoadingMore = false;
     state.items = [];
-    els.grid.replaceChildren(messageNode("Loading"));
+    renderMessage("Loading");
   }
   updatePager();
 
@@ -315,7 +319,7 @@ async function loadItems({ append = false }: LoadItemsOptions = {}) {
     }
     state.items = [];
     state.total = 0;
-    els.grid.replaceChildren(messageNode(error.message, "error"));
+    renderMessage(error.message, "error");
     updateStatus();
     updatePager();
     setupTileAutoLoading();
@@ -323,6 +327,7 @@ async function loadItems({ append = false }: LoadItemsOptions = {}) {
 }
 
 function render() {
+  clearResultStateView(els.grid);
   const fragment = document.createDocumentFragment();
   els.grid.classList.toggle("media-table", state.viewMode === "table");
   els.grid.classList.toggle("media-grid", state.viewMode === "grid");
@@ -337,7 +342,12 @@ function render() {
   }
 
   if (!state.items.length) {
-    fragment.append(emptyStateNode());
+    renderEmptyState();
+    updateStatus();
+    updatePager();
+    setupTileAutoLoading();
+    updateViewToggle();
+    return;
   }
 
   els.grid.replaceChildren(fragment);
@@ -1369,37 +1379,16 @@ function folderSuggestionItems(query: string, selectedValues: string[]) {
   });
 }
 
-function messageNode(text: string, className = "empty") {
-  const node = document.createElement("div");
-  node.className = className;
-  node.textContent = text;
-  return node;
+function renderMessage(text: string, className = "empty") {
+  renderResultStateView(els.grid, { kind: "message", text, className });
 }
 
-function emptyStateNode() {
-  const node = document.createElement("section");
-  node.className = "empty-state";
-
-  const title = document.createElement("strong");
-  title.textContent = hasActiveFilters(state) ? "No items matched these filters" : "No items found";
-
-  const description = document.createElement("p");
-  description.textContent = hasActiveFilters(state)
-    ? "Try changing the search text, folder, extension, or rating to widen the results."
-    : "This page has no items yet. Refresh or change the current view to load another range.";
-
-  node.append(title, description);
-
-  if (hasActiveFilters(state)) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "text-button empty-state-button";
-    button.textContent = "Clear filters";
-    button.addEventListener("click", resetFilters);
-    node.append(button);
-  }
-
-  return node;
+function renderEmptyState() {
+  renderResultStateView(els.grid, {
+    kind: "empty",
+    hasActiveFilters: hasActiveFilters(state),
+    onClearFilters: resetFilters,
+  });
 }
 
 function resetFilters() {

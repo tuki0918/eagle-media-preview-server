@@ -6,6 +6,7 @@ import {
   PageButtons,
   Pager,
   PreviewDialog,
+  ResultStateView,
   ResultsStatus,
   SearchControls,
   TagChips,
@@ -123,5 +124,13 @@ describe("ViewerAppShell", () => {
 
     expect(html).toContain('class="tag-suggestion"');
     expect(html).toContain('class="tag-suggestion-count"');
+  });
+
+  test("renders result state as a reusable component", () => {
+    const message = renderToStaticMarkup(<ResultStateView kind="message" text="Loading" />);
+    const empty = renderToStaticMarkup(<ResultStateView kind="empty" hasActiveFilters={true} onClearFilters={() => {}} />);
+
+    expect(message).toContain("Loading");
+    expect(empty).toContain("Clear filters");
   });
 });
