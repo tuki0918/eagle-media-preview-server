@@ -54,6 +54,7 @@ import {
   type PreviewBodyKind,
 } from "./viewer/components/PreviewBody";
 import { renderFolderOptionsView } from "./viewer/components/FolderOptions";
+import { renderResultsStatusView } from "./viewer/components/ResultsStatus";
 import { renderTagChipsView } from "./viewer/components/TagChips";
 import {
   clearTagSuggestionsView,
@@ -301,7 +302,6 @@ function render() {
     updateStatus();
     updatePager();
     setupTileAutoLoading();
-    updateViewToggle();
     return;
   }
 
@@ -313,7 +313,6 @@ function render() {
   updateStatus();
   updatePager();
   setupTileAutoLoading();
-  updateViewToggle();
 }
 
 function openPreview(item: EagleItem, { skipHistory = false }: OpenPreviewOptions = {}) {
@@ -370,20 +369,14 @@ function setViewMode(mode: string) {
   render();
 }
 
-function updateViewToggle() {
-  els.gridViewButton.setAttribute("aria-pressed", state.viewMode === "grid" ? "true" : "false");
-  els.tilesViewButton.setAttribute("aria-pressed", state.viewMode === "tiles" ? "true" : "false");
-  els.tableViewButton.setAttribute("aria-pressed", state.viewMode === "table" ? "true" : "false");
-}
-
 function restoreViewMode() {
   if (new URLSearchParams(window.location.search).has("view")) {
-    updateViewToggle();
+    updateStatus();
     return;
   }
   const saved = localStorage.getItem("eagleViewMode");
   state.viewMode = savedViewerMode(saved);
-  updateViewToggle();
+  updateStatus();
 }
 
 function closePreview({ skipHistory = false }: OpenPreviewOptions = {}) {
@@ -478,7 +471,7 @@ function applyControlsFromState() {
   els.pageSizeSelect.value = String(state.limit);
   syncAdvancedFiltersUi();
   syncResetFiltersButton();
-  updateViewToggle();
+  updateStatus();
 }
 
 function applyFilterChange(patch: Partial<Pick<typeof state, "query" | "tags" | "folderId" | "ext" | "rating" | "limit">>) {
@@ -648,7 +641,10 @@ function updateItemInState(id: string, patch: ItemPatch) {
 }
 
 function updateStatus() {
-  els.resultCount.textContent = `${state.total.toLocaleString()} items`;
+  renderResultsStatusView(els.resultsStatusHost, {
+    total: state.total,
+    viewMode: state.viewMode,
+  });
 }
 
 function updatePager() {

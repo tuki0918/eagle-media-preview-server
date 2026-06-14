@@ -13,10 +13,7 @@ export interface ViewerElements {
   extSelect: HTMLSelectElement;
   ratingSelect: HTMLSelectElement;
   pageSizeSelect: HTMLSelectElement;
-  gridViewButton: HTMLButtonElement;
-  tilesViewButton: HTMLButtonElement;
-  tableViewButton: HTMLButtonElement;
-  resultCount: HTMLElement;
+  resultsStatusHost: HTMLElement;
   libraryFooterName: HTMLElement;
   grid: HTMLElement;
   tilesSentinel: HTMLElement;
@@ -51,10 +48,7 @@ export function getViewerElements(): ViewerElements {
     extSelect: document.querySelector("#extSelect"),
     ratingSelect: document.querySelector("#ratingSelect"),
     pageSizeSelect: document.querySelector("#pageSizeSelect"),
-    gridViewButton: document.querySelector("#gridViewButton"),
-    tilesViewButton: document.querySelector("#tilesViewButton"),
-    tableViewButton: document.querySelector("#tableViewButton"),
-    resultCount: document.querySelector("#resultCount"),
+    resultsStatusHost: document.querySelector("#resultsStatusHost"),
     libraryFooterName: document.querySelector("#libraryFooterName"),
     grid: document.querySelector("#grid"),
     tilesSentinel: document.querySelector("#tilesSentinel"),

@@ -9,7 +9,9 @@ export function ViewerShellLayout() {
     <div id="viewerShell" hidden>
       <main>
         <SearchControls />
-        <ResultsStatus />
+        <div id="resultsStatusHost">
+          <ResultsStatus />
+        </div>
         <section id="grid" className="media-grid" aria-label="Eagle assets" />
         <div id="tilesSentinel" className="tiles-sentinel mt-3 grid min-h-[52px] place-items-center text-[13px] font-[680] text-app-muted" hidden>
           Loading more

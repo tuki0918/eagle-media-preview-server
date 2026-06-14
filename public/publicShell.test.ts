@@ -474,11 +474,13 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(html, /id="tilesViewButton"/);
-  assert.match(html, /<button id="tilesViewButton" type="button" aria-pressed="true" onClick=\{\(\) => selectViewMode\("tiles"\)\}>[\s\S]*Tiles[\s\S]*<\/button>[\s\S]*<button id="gridViewButton" type="button" aria-pressed="false" onClick=\{\(\) => selectViewMode\("grid"\)\}>[\s\S]*Grid[\s\S]*<\/button>/);
+  assert.match(html, /aria-pressed=\{viewMode === "tiles"\} onClick=\{\(\) => selectViewMode\("tiles"\)\}/);
+  assert.match(html, /aria-pressed=\{viewMode === "grid"\} onClick=\{\(\) => selectViewMode\("grid"\)\}/);
   assert.match(html, /id="tilesSentinel"/);
   assert.match(app, /const DEFAULT_VIEW_MODE = "tiles";/);
   assert.match(app, /const TILE_PREFETCH_PAGES = 3;/);
-  assert.match(app, /tilesViewButton: document\.querySelector\("#tilesViewButton"\),/);
+  assert.match(app, /resultsStatusHost: document\.querySelector\("#resultsStatusHost"\),/);
+  assert.doesNotMatch(app, /tilesViewButton: document\.querySelector\("#tilesViewButton"\),/);
   assert.match(app, /tilesSentinel: document\.querySelector\("#tilesSentinel"\),/);
   assert.match(app, /state\.viewMode === "tiles"/);
   assert.match(html, /export function ResultList\(\{ items, viewMode, onOpenPreview \}[^)]*\) \{/);
@@ -543,10 +545,13 @@ test("public UI syncs filters, pagination, and preview state into the URL histor
 });
 
 test("public results status and empty states stay concise and consistent across views", async () => {
+  const html = await readAppSources();
   const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
-  assert.match(app, /els\.resultCount\.textContent = `\$\{state\.total\.toLocaleString\(\)\} items`;/);
+  assert.match(html, /<span id="resultCount">\{total\.toLocaleString\(\)\} items<\/span>/);
+  assert.match(app, /renderResultsStatusView\(els\.resultsStatusHost, \{/);
+  assert.doesNotMatch(app, /els\.resultCount\.textContent/);
   assert.doesNotMatch(app, /items · \$\{start\}-\$\{end\}/);
   assert.match(app, /els\.grid\.classList\.toggle\("is-empty", !state\.items\.length\);/);
   assert.match(css, /\.media-grid,\s*\.media-table\s*\{[\s\S]*align-content:\s*start;/);
