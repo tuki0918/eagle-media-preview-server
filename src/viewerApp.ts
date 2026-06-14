@@ -1,7 +1,6 @@
 import {
   DATE_KEYS_MODIFIED,
   DEFAULT_EAGLE_CONNECTION,
-  DEFAULT_PAGE_SIZE,
   DEFAULT_VIEW_MODE,
   EAGLE_UNAVAILABLE_LABEL,
   IMAGE_FIT_MARGIN,
@@ -41,6 +40,7 @@ import {
 import { iconNode, renderLucideIcons } from "./viewer/icons";
 import { state } from "./viewer/state";
 import type { ViewerMode } from "./viewer/types";
+import { buildViewerUrl, currentPage, parseViewerUrlState } from "./viewer/urlState";
 
 const els = getViewerElements();
 
@@ -926,18 +926,7 @@ function showPreviewDialog() {
 function restoreUrlState() {
   state.restoringHistory = true;
   try {
-    const params = new URLSearchParams(window.location.search);
-    state.query = params.get("q") || "";
-    state.tags = uniqueTags(params.getAll("tag"));
-    state.folderId = params.get("folder") || "";
-    state.ext = params.get("ext") || "";
-    state.rating = params.get("rating") || "";
-    state.filtersOpen = params.get("filters") === "1";
-    state.limit = clampPageSize(params.get("limit"));
-    state.viewMode = params.get("view") === "tiles" ? "tiles" : params.get("view") === "table" ? "table" : DEFAULT_VIEW_MODE;
-    state.offset = state.viewMode === "tiles" ? 0 : (Math.max(1, Number.parseInt(params.get("page") || "1", 10)) - 1) * state.limit;
-    state.previewItemId = params.get("item") || "";
-    state.previewInfoOpen = params.get("info") === "1";
+    Object.assign(state, parseViewerUrlState(window.location.search));
   } finally {
     state.restoringHistory = false;
   }
@@ -965,19 +954,7 @@ function applyFilterChange(patch) {
 
 function syncUrlState({ replace = false } = {}) {
   if (state.restoringHistory) return;
-  const params = new URLSearchParams();
-  if (state.query) params.set("q", state.query);
-  for (const tag of state.tags) params.append("tag", tag);
-  if (state.folderId) params.set("folder", state.folderId);
-  if (state.ext) params.set("ext", state.ext);
-  if (state.rating !== "") params.set("rating", state.rating);
-  if (state.filtersOpen) params.set("filters", "1");
-  if (state.limit !== DEFAULT_PAGE_SIZE) params.set("limit", String(state.limit));
-  if (state.viewMode !== DEFAULT_VIEW_MODE) params.set("view", state.viewMode);
-  if (state.viewMode !== "tiles") params.set("page", String(currentPage()));
-  if (state.previewItemId) params.set("item", state.previewItemId);
-  if (state.previewInfoOpen) params.set("info", "1");
-  const nextUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ""}`;
+  const nextUrl = buildViewerUrl(window.location.pathname, state);
   const currentUrl = `${window.location.pathname}${window.location.search}`;
   if (nextUrl === currentUrl) return;
   const method = replace ? "replaceState" : "pushState";
@@ -1085,14 +1062,6 @@ function hideTagSuggestions() {
   els.tagSuggestions.replaceChildren();
 }
 
-function uniqueTags(tags) {
-  const unique: string[] = [];
-  for (const tag of tags.map(normalizeTag).filter(Boolean)) {
-    if (!unique.includes(tag)) unique.push(tag);
-  }
-  return unique;
-}
-
 function syncAdvancedFiltersUi() {
   const label = state.filtersOpen ? "Hide advanced search options" : "Show advanced search options";
   els.advancedFilters.hidden = !state.filtersOpen;
@@ -1103,16 +1072,6 @@ function syncAdvancedFiltersUi() {
 
 function syncResetFiltersButton() {
   els.resetFiltersButton.disabled = !hasActiveFilters();
-}
-
-function currentPage() {
-  return Math.floor(state.offset / state.limit) + 1;
-}
-
-function clampPageSize(value) {
-  const parsed = Number.parseInt(value || "30", 10);
-  if (!Number.isFinite(parsed)) return DEFAULT_PAGE_SIZE;
-  return clamp(parsed, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
 }
 
 function resetPreviewState() {
@@ -1256,7 +1215,7 @@ function currentFetchLimit() {
 }
 
 function renderPageButtons() {
-  const current = currentPage();
+  const current = currentPage(state);
   const totalPages = Math.max(1, Math.ceil(state.total / state.limit));
   const pages = pageButtonList(current, totalPages);
   const fragment = document.createDocumentFragment();

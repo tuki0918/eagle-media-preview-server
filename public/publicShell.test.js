@@ -11,6 +11,7 @@ async function readViewerSources() {
     "../src/viewer/format.ts",
     "../src/viewer/icons.ts",
     "../src/viewer/state.ts",
+    "../src/viewer/urlState.ts",
   ];
   const sources = await Promise.all(files.map((file) => readFile(new URL(file, import.meta.url), "utf8")));
   return sources.join("\n");
@@ -78,7 +79,7 @@ test("public UI no longer shows connect lock icon or connection settings button"
   assert.match(html, /<select id="pageSizeSelect" aria-label="Page size" defaultValue="30">[\s\S]*<option value="30">30 items<\/option>/);
   assert.match(app, /limit:\s*30,/);
   assert.match(app, /if \(state\.limit !== DEFAULT_PAGE_SIZE\) params\.set\("limit", String\(state\.limit\)\);/);
-  assert.match(app, /const parsed = Number\.parseInt\(value \|\| "30", 10\);/);
+  assert.match(app, /const parsed = Number\.parseInt\(value \|\| String\(DEFAULT_PAGE_SIZE\), 10\);/);
   assert.match(app, /if \(!Number\.isFinite\(parsed\)\) return DEFAULT_PAGE_SIZE;/);
 });
 
@@ -496,8 +497,8 @@ test("public UI syncs filters, pagination, and preview state into the URL histor
 
   assert.match(app, /window\.addEventListener\("popstate"/);
   assert.match(app, /pushState/);
-  assert.match(app, /if \(state\.viewMode !== "tiles"\) params\.set\("page", String\(currentPage\(\)\)\);/);
-  assert.match(app, /state\.offset = state\.viewMode === "tiles" \? 0 : \(Math\.max\(1, Number\.parseInt\(params\.get\("page"\) \|\| "1", 10\)\) - 1\) \* state\.limit;/);
+  assert.match(app, /if \(state\.viewMode !== "tiles"\) params\.set\("page", String\(currentPage\(state\)\)\);/);
+  assert.match(app, /offset: viewMode === "tiles" \? 0 : \(Math\.max\(1, Number\.parseInt\(params\.get\("page"\) \|\| "1", 10\)\) - 1\) \* limit,/);
   assert.match(app, /state\.viewMode === "tiles" && new URLSearchParams\(window\.location\.search\)\.has\("page"\)/);
   assert.match(app, /syncUrlState\(\{ replace: true \}\);/);
   assert.match(app, /params\.set\("item"/);
