@@ -3,7 +3,7 @@ export interface ViewerElements {
   viewerShell: HTMLElement;
   connectButtonHost: HTMLElement;
   connectMessageHost: HTMLElement;
-  searchInput: HTMLInputElement;
+  searchInputHost: HTMLElement;
   tagChips: HTMLElement;
   tagSuggestionsHost: HTMLElement;
   resetFiltersButtonHost: HTMLElement;
@@ -31,7 +31,7 @@ export function getViewerElements(): ViewerElements {
     viewerShell: document.querySelector("#viewerShell"),
     connectButtonHost: document.querySelector("#connectButtonHost"),
     connectMessageHost: document.querySelector("#connectMessageHost"),
-    searchInput: document.querySelector("#searchInput"),
+    searchInputHost: document.querySelector("#searchInputHost"),
     tagChips: document.querySelector("#tagChips"),
     tagSuggestionsHost: document.querySelector("#tagSuggestionsHost"),
     resetFiltersButtonHost: document.querySelector("#resetFiltersButtonHost"),

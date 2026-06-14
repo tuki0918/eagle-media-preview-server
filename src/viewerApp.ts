@@ -474,7 +474,6 @@ function restoreUrlState() {
 }
 
 function applyControlsFromState() {
-  els.searchInput.value = state.query;
   renderTagChips();
   syncAdvancedFiltersUi();
   syncResetFiltersButton();
@@ -501,12 +500,11 @@ function syncUrlState({ replace = false }: { replace?: boolean } = {}) {
 function addTagFilter(value: unknown) {
   const tag = normalizeTag(value);
   if (!tag || state.tags.includes(tag)) {
-    els.searchInput.value = "";
+    renderSearchControlButtons();
     hideTagSuggestions();
     return;
   }
   applyFilterChange({ query: "", tags: [...state.tags, tag] });
-  els.searchInput.value = "";
   renderTagChips();
   hideTagSuggestions();
 }
@@ -525,7 +523,7 @@ function renderTagChips() {
 }
 
 async function loadTagSuggestions() {
-  const query = els.searchInput.value.trim();
+  const query = state.query.trim();
   const requestId = ++state.tagSuggestionsRequestId;
   if (!query) {
     hideTagSuggestions();
@@ -570,10 +568,11 @@ function syncResetFiltersButton() {
 }
 
 function renderSearchControlButtons() {
-  renderSearchControlButtonsView(els.resetFiltersButtonHost, els.toggleFiltersButtonHost, els.advancedFiltersHost, {
+  renderSearchControlButtonsView(els.searchInputHost, els.resetFiltersButtonHost, els.toggleFiltersButtonHost, els.advancedFiltersHost, {
     filtersOpen: state.filtersOpen,
     folders: state.folders,
     hasActiveFilters: hasActiveFilters(state),
+    searchQuery: state.query,
     selectedExt: state.ext,
     selectedFolderId: state.folderId,
     selectedLimit: state.limit,
@@ -797,7 +796,6 @@ function renderEmptyState() {
 function resetFilters() {
   if (!hasActiveFilters(state)) return;
   Object.assign(state, resetFilterState());
-  els.searchInput.value = "";
   renderTagChips();
   syncResetFiltersButton();
   syncUrlState();

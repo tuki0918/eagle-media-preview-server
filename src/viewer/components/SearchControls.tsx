@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { MEDIA_TYPE_OPTIONS, PAGE_SIZE_OPTIONS, RATING_OPTIONS } from "../shellConfig";
 import {
@@ -19,6 +20,7 @@ interface SearchControlsProps {
   filtersOpen?: boolean;
   folders?: readonly EagleFolder[];
   hasActiveFilters?: boolean;
+  searchQuery?: string;
   selectedExt?: string;
   selectedFolderId?: string;
   selectedLimit?: number;
@@ -28,12 +30,14 @@ interface SearchControlsProps {
 const resetButtonRoots = new WeakMap<HTMLElement, Root>();
 const toggleButtonRoots = new WeakMap<HTMLElement, Root>();
 const advancedFiltersRoots = new WeakMap<HTMLElement, Root>();
+const searchInputRoots = new WeakMap<HTMLElement, Root>();
 const noopTagSelect = () => {};
 
 export function SearchControls({
   filtersOpen = false,
   folders = [],
   hasActiveFilters = false,
+  searchQuery = "",
   selectedExt = "",
   selectedFolderId = "",
   selectedLimit = 30,
@@ -46,17 +50,9 @@ export function SearchControls({
           <span data-lucide="search" />
           <div className="search-composer flex min-w-0 flex-auto flex-wrap items-center gap-x-2 gap-y-1.5">
             <div id="tagChips" className="tag-chips flex min-h-6 flex-wrap gap-1.5" aria-label="Selected tag filters" />
-            <input
-              id="searchInput"
-              className="unified-search-input min-h-[34px] min-w-[180px] flex-[1_1_220px] border-0 bg-transparent text-[15px] text-app-text outline-0"
-              type="search"
-              placeholder="Search title or tag"
-              autoComplete="off"
-              aria-label="Search text or tag"
-              onChange={changeSearchQuery}
-              onFocus={focusSearch}
-              onKeyDown={handleSearchKeyDown}
-            />
+            <div id="searchInputHost" className="contents">
+              <SearchInput value={searchQuery} />
+            </div>
           </div>
           <div id="tagSuggestionsHost">
             <TagSuggestions hidden items={[]} onSelect={noopTagSelect} />
@@ -81,6 +77,32 @@ export function SearchControls({
         />
       </div>
     </section>
+  );
+}
+
+export function SearchInput({ value = "" }: { value?: string }) {
+  const [inputValue, setInputValue] = useState(value);
+
+  useEffect(() => {
+    setInputValue(value);
+  }, [value]);
+
+  return (
+    <input
+      id="searchInput"
+      className="unified-search-input min-h-[34px] min-w-[180px] flex-[1_1_220px] border-0 bg-transparent text-[15px] text-app-text outline-0"
+      type="search"
+      placeholder="Search title or tag"
+      autoComplete="off"
+      aria-label="Search text or tag"
+      value={inputValue}
+      onChange={(event) => {
+        setInputValue(event.currentTarget.value);
+        changeSearchQuery(event);
+      }}
+      onFocus={focusSearch}
+      onKeyDown={handleSearchKeyDown}
+    />
   );
 }
 
@@ -194,11 +216,20 @@ function SlidersHorizontalIcon() {
 }
 
 export function renderSearchControlButtonsView(
+  searchInputContainer: HTMLElement,
   resetContainer: HTMLElement,
   toggleContainer: HTMLElement,
   advancedFiltersContainer: HTMLElement,
   props: Required<SearchControlsProps>,
 ) {
+  let searchInputRoot = searchInputRoots.get(searchInputContainer);
+  if (!searchInputRoot) {
+    searchInputContainer.replaceChildren();
+    searchInputRoot = createRoot(searchInputContainer);
+    searchInputRoots.set(searchInputContainer, searchInputRoot);
+  }
+  searchInputRoot.render(<SearchInput value={props.searchQuery} />);
+
   let resetRoot = resetButtonRoots.get(resetContainer);
   if (!resetRoot) {
     resetContainer.replaceChildren();

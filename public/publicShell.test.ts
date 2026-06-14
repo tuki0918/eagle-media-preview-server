@@ -436,7 +436,7 @@ test("public UI supports tag filter chips", async () => {
   assert.match(html, /id="tagChips"/);
   assert.match(html, /id="tagSuggestionsHost"/);
   assert.match(html, /id="tagSuggestions"/);
-  assert.match(html, /<div className="[^"]*\bsearch-box\b[^"]*"[\s\S]*id="tagChips"[\s\S]*id="searchInput"[\s\S]*id="tagSuggestionsHost"[\s\S]*<\/div>[\s\S]*id="resetFiltersButtonHost"[\s\S]*id="toggleFiltersButtonHost"/);
+  assert.match(html, /<div className="[^"]*\bsearch-box\b[^"]*"[\s\S]*id="tagChips"[\s\S]*id="searchInputHost"[\s\S]*id="tagSuggestionsHost"[\s\S]*<\/div>[\s\S]*id="resetFiltersButtonHost"[\s\S]*id="toggleFiltersButtonHost"/);
   assert.match(html, /id="resetFiltersButton"[\s\S]*aria-label="Reset filters"[\s\S]*disabled=\{!hasActiveFilters\}/);
   assert.match(html, /id="resetFiltersButton"[\s\S]*<FunnelXIcon \/>/);
   assert.doesNotMatch(html, /id="tagInput"/);
@@ -444,6 +444,8 @@ test("public UI supports tag filter chips", async () => {
   assert.match(html, /id="advancedFiltersHost"[\s\S]*<AdvancedFilters[\s\S]*filtersOpen=\{filtersOpen\}/);
   assert.match(app, /tags:\s*\[\]/);
   assert.match(app, /tagChips: document\.querySelector\("#tagChips"\),/);
+  assert.match(app, /searchInputHost: document\.querySelector\("#searchInputHost"\),/);
+  assert.doesNotMatch(app, /searchInput: document\.querySelector\("#searchInput"\),/);
   assert.match(app, /tagSuggestionsHost: document\.querySelector\("#tagSuggestionsHost"\),/);
   assert.doesNotMatch(app, /tagSuggestions: document\.querySelector\("#tagSuggestions"\),/);
   assert.doesNotMatch(app, /els\.tagSuggestions\.hidden/);
@@ -470,12 +472,15 @@ test("public UI supports tag filter chips", async () => {
   assert.match(app, /setViewerShellActions\(\{/);
   assert.match(app, /resetFilters,/);
   assert.match(app, /function syncResetFiltersButton\(\) \{/);
-  assert.match(app, /renderSearchControlButtonsView\(els\.resetFiltersButtonHost, els\.toggleFiltersButtonHost, els\.advancedFiltersHost, \{/);
+  assert.match(app, /renderSearchControlButtonsView\(els\.searchInputHost, els\.resetFiltersButtonHost, els\.toggleFiltersButtonHost, els\.advancedFiltersHost, \{/);
+  assert.match(app, /searchQuery:\s*state\.query,/);
   assert.match(app, /selectedFolderId:\s*state\.folderId,/);
   assert.match(app, /selectedLimit:\s*state\.limit,/);
   assert.doesNotMatch(app, /els\.resetFiltersButton\.disabled/);
   assert.doesNotMatch(app, /tagInput:/);
-  assert.match(html, /id="searchInput"[\s\S]*onChange=\{changeSearchQuery\}[\s\S]*onFocus=\{focusSearch\}[\s\S]*onKeyDown=\{handleSearchKeyDown\}/);
+  assert.match(html, /export function SearchInput\(\{ value = "" \}/);
+  assert.match(html, /id="searchInput"[\s\S]*value=\{inputValue\}[\s\S]*changeSearchQuery\(event\)[\s\S]*onFocus=\{focusSearch\}[\s\S]*onKeyDown=\{handleSearchKeyDown\}/);
+  assert.doesNotMatch(app, /els\.searchInput\.value/);
   assert.match(app, /searchChanged:\s*debounce\(\(query: string\) => \{[\s\S]*applyFilterChange\(\{ query: query\.trim\(\) \}\);[\s\S]*loadTagSuggestions\(\);/);
   assert.match(app, /params\.getAll\("tag"\)/);
   assert.match(app, /params\.append\("tag", tag\)/);

@@ -21,6 +21,7 @@ import {
   ResultStateView,
   ResultsStatus,
   SearchControls,
+  SearchInput,
   TagChips,
   TagSuggestions,
   TilesSentinel,
@@ -42,6 +43,7 @@ const REQUIRED_ELEMENT_IDS = [
   "ratingSelect",
   "pageSizeSelect",
   "searchInput",
+  "searchInputHost",
   "tagChips",
   "tagSuggestionsHost",
   "tagSuggestions",
@@ -189,6 +191,13 @@ describe("ViewerAppShell", () => {
     expect(html).toContain('id="pageSizeSelect"');
     expect(html).toContain('value="folder-1"');
     expect(html).toContain("Folder 1 (8)");
+  });
+
+  test("renders search input as a reusable component", () => {
+    const html = renderToStaticMarkup(<SearchInput value="alpha" />);
+
+    expect(html).toContain('id="searchInput"');
+    expect(html).toContain('value="alpha"');
   });
 
   test("renders preview text as reusable components", () => {
