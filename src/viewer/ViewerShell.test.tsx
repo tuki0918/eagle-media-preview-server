@@ -1,6 +1,15 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
-import { ViewerAppShell } from "./ViewerShell";
+import {
+  CardTemplate,
+  LoginView,
+  Pager,
+  PreviewDialog,
+  ResultsStatus,
+  SearchControls,
+  ViewerAppShell,
+  ViewerShellLayout,
+} from "./ViewerShell";
 import { MEDIA_TYPE_OPTIONS, PAGE_SIZE_OPTIONS, RATING_OPTIONS } from "./shellConfig";
 
 const REQUIRED_ELEMENT_IDS = [
@@ -73,6 +82,22 @@ describe("ViewerAppShell", () => {
     for (const pageSize of PAGE_SIZE_OPTIONS) {
       expect(html).toContain(`value="${pageSize}"`);
       expect(html).toContain(`${pageSize} items`);
+    }
+  });
+
+  test("exports independently renderable shell components", () => {
+    const components = [
+      { Component: LoginView, expectedId: "loginView" },
+      { Component: SearchControls, expectedId: "advancedFilters" },
+      { Component: ResultsStatus, expectedId: "resultCount" },
+      { Component: Pager, expectedId: "pageButtons" },
+      { Component: PreviewDialog, expectedId: "previewDialog" },
+      { Component: CardTemplate, expectedId: "cardTemplate" },
+      { Component: ViewerShellLayout, expectedId: "viewerShell" },
+    ] as const;
+
+    for (const { Component, expectedId } of components) {
+      expect(renderToStaticMarkup(<Component />)).toContain(`id="${expectedId}"`);
     }
   });
 });

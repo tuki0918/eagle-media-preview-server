@@ -32,6 +32,13 @@ async function readAppSources() {
   const files = [
     "../src/App.tsx",
     "../src/viewer/ViewerShell.tsx",
+    "../src/viewer/components/CardTemplate.tsx",
+    "../src/viewer/components/LoginView.tsx",
+    "../src/viewer/components/Pager.tsx",
+    "../src/viewer/components/PreviewDialog.tsx",
+    "../src/viewer/components/ResultsStatus.tsx",
+    "../src/viewer/components/SearchControls.tsx",
+    "../src/viewer/components/ViewerShellLayout.tsx",
     "../src/viewer/shellClasses.ts",
     "../src/viewer/shellConfig.ts",
   ];
@@ -43,7 +50,7 @@ test("public login no longer renders advanced Eagle connection settings", async 
   const html = await readAppSources();
   const app = await readViewerSources();
 
-  assert.match(html, /import iconOnUrl from "\.\.\/assets\/icon_on\.svg";/);
+  assert.match(html, /import iconOnUrl from "\.\.\/\.\.\/assets\/icon_on\.svg";/);
   assert.match(html, /appLogo:\s*"[^"]*\bapp-logo\b/);
   assert.match(html, /className=\{shellClasses\.appLogo\} src=\{iconOnUrl\}/);
   assert.match(html, /<h1>Media Preview Server<\/h1>/);
