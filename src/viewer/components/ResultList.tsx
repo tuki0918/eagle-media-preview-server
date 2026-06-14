@@ -55,6 +55,11 @@ export function ResultList({ items, viewMode, onOpenPreview }: ResultListProps) 
   );
 }
 
+function resultSurfaceClassName(viewMode: ViewerMode, isEmpty: boolean) {
+  const modeClassName = viewMode === "table" ? "media-table" : viewMode === "tiles" ? "media-tiles" : "media-grid";
+  return `${modeClassName}${isEmpty ? " is-empty" : ""}`;
+}
+
 function ResultItem({ item, viewMode, onOpenPreview }: { item: EagleItem; viewMode: ViewerMode; onOpenPreview: (item: EagleItem) => void }) {
   if (viewMode === "table") return <TableRow item={item} onOpenPreview={onOpenPreview} />;
   if (viewMode === "tiles") return <TileItem item={item} onOpenPreview={onOpenPreview} />;
@@ -272,7 +277,11 @@ export function renderResultListView(container: HTMLElement, props: ResultListPr
     root = createRoot(container);
     roots.set(container, root);
   }
-  root.render(<ResultList {...props} />);
+  root.render(
+    <section id="grid" className={resultSurfaceClassName(props.viewMode, !props.items.length)} aria-label="Eagle assets">
+      <ResultList {...props} />
+    </section>,
+  );
 }
 
 export function clearResultListView(container: HTMLElement) {

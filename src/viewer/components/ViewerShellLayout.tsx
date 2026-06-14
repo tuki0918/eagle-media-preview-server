@@ -12,7 +12,9 @@ export function ViewerShellLayout() {
         <div id="resultsStatusHost">
           <ResultsStatus />
         </div>
-        <section id="grid" className="media-grid" aria-label="Eagle assets" />
+        <div id="resultGridHost">
+          <section id="grid" className="media-grid" aria-label="Eagle assets" />
+        </div>
         <div id="tilesSentinel" className="tiles-sentinel mt-3 grid min-h-[52px] place-items-center text-[13px] font-[680] text-app-muted" hidden>
           Loading more
         </div>

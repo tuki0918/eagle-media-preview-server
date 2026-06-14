@@ -43,6 +43,7 @@ const REQUIRED_ELEMENT_IDS = [
   "toggleFiltersButton",
   "advancedFilters",
   "resultsStatusHost",
+  "resultGridHost",
   "grid",
   "tilesSentinel",
   "resultCount",

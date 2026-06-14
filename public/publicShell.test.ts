@@ -496,7 +496,7 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   assert.match(html, /<RatingStars item=\{item\} className="rating-control tile-rating" \/>/);
   assert.match(html, /onPointerDown=\{trigger\.onPointerDown\}/);
   assert.match(html, /onClick=\{trigger\.onClick\}/);
-  assert.match(app, /renderResultListView\(els\.grid, \{/);
+  assert.match(app, /renderResultListView\(els\.resultGridHost, \{/);
   assert.match(app, /renderPagerView\(els\.pagerHost, \{/);
   assert.match(app, /function setupTileAutoLoading\(\) \{/);
   assert.match(app, /resetTileAutoLoading\(\);/);
@@ -562,7 +562,9 @@ test("public results status and empty states stay concise and consistent across 
   assert.match(app, /renderResultsStatusView\(els\.resultsStatusHost, \{/);
   assert.doesNotMatch(app, /els\.resultCount\.textContent/);
   assert.doesNotMatch(app, /items · \$\{start\}-\$\{end\}/);
-  assert.match(app, /els\.grid\.classList\.toggle\("is-empty", !state\.items\.length\);/);
+  assert.match(app, /resultGridHost: document\.querySelector\("#resultGridHost"\),/);
+  assert.doesNotMatch(app, /els\.grid\.classList\.toggle/);
+  assert.match(html, /function resultSurfaceClassName\(viewMode:[\s\S]*isEmpty/);
   assert.match(css, /\.media-grid,\s*\.media-table\s*\{[\s\S]*align-content:\s*start;/);
   assert.doesNotMatch(css, /\.media-grid\s*\{[^}]*min-height:\s*320px;/s);
   assert.doesNotMatch(css, /\.media-table\s*\{[^}]*min-height:\s*320px;/s);

@@ -295,14 +295,10 @@ async function loadItems({ append = false }: LoadItemsOptions = {}) {
 }
 
 function render() {
-  clearResultStateView(els.grid);
-  els.grid.classList.toggle("media-table", state.viewMode === "table");
-  els.grid.classList.toggle("media-grid", state.viewMode === "grid");
-  els.grid.classList.toggle("media-tiles", state.viewMode === "tiles");
-  els.grid.classList.toggle("is-empty", !state.items.length);
+  clearResultStateView(els.resultGridHost);
 
   if (!state.items.length) {
-    clearResultListView(els.grid);
+    clearResultListView(els.resultGridHost);
     renderEmptyState();
     updateStatus();
     updatePager();
@@ -310,7 +306,7 @@ function render() {
     return;
   }
 
-  renderResultListView(els.grid, {
+  renderResultListView(els.resultGridHost, {
     items: state.items,
     viewMode: state.viewMode,
     onOpenPreview: openPreview,
@@ -771,15 +767,16 @@ function folderSuggestionItems(query: string, selectedValues: string[]) {
 }
 
 function renderMessage(text: string, className = "empty") {
-  clearResultListView(els.grid);
-  renderResultStateView(els.grid, { kind: "message", text, className });
+  clearResultListView(els.resultGridHost);
+  renderResultStateView(els.resultGridHost, { kind: "message", text, className, viewMode: state.viewMode });
 }
 
 function renderEmptyState() {
-  renderResultStateView(els.grid, {
+  renderResultStateView(els.resultGridHost, {
     kind: "empty",
     hasActiveFilters: hasActiveFilters(state),
     onClearFilters: resetFilters,
+    viewMode: state.viewMode,
   });
 }
 

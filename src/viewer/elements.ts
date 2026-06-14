@@ -15,7 +15,7 @@ export interface ViewerElements {
   pageSizeSelect: HTMLSelectElement;
   resultsStatusHost: HTMLElement;
   libraryFooterName: HTMLElement;
-  grid: HTMLElement;
+  resultGridHost: HTMLElement;
   tilesSentinel: HTMLElement;
   pagerHost: HTMLElement;
   template: HTMLTemplateElement;
@@ -47,7 +47,7 @@ export function getViewerElements(): ViewerElements {
     pageSizeSelect: document.querySelector("#pageSizeSelect"),
     resultsStatusHost: document.querySelector("#resultsStatusHost"),
     libraryFooterName: document.querySelector("#libraryFooterName"),
-    grid: document.querySelector("#grid"),
+    resultGridHost: document.querySelector("#resultGridHost"),
     tilesSentinel: document.querySelector("#tilesSentinel"),
     pagerHost: document.querySelector("#pagerHost"),
     template: document.querySelector("#cardTemplate"),
