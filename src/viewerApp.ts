@@ -229,7 +229,7 @@ async function connect() {
 
   try {
     const connection = { ...DEFAULT_EAGLE_CONNECTION };
-    const data = await postJson("/api/connect", connection);
+    const data = await postJson<ConnectResponse>("/api/connect", connection);
     showViewer(data);
     await Promise.all([loadFolders(), loadItems()]);
   } catch (error) {
@@ -280,7 +280,7 @@ function optionNode(value: string, text: string) {
 
 async function loadFolders() {
   try {
-    const data = await getJson("/api/folders") as LoadFoldersResponse;
+    const data = await getJson<LoadFoldersResponse>("/api/folders");
     state.folders = flattenFolders(data.items);
     const fragment = document.createDocumentFragment();
     for (const folder of state.folders) {
@@ -321,7 +321,7 @@ async function loadItems({ append = false }: LoadItemsOptions = {}) {
   if (state.rating !== "") params.set("rating", state.rating);
 
   try {
-    const data = await getJson(`/api/items?${params.toString()}`) as LoadItemsResponse;
+    const data = await getJson<LoadItemsResponse>(`/api/items?${params.toString()}`);
     if (requestId !== state.requestId) return;
     const items = data.items || [];
     state.total = Number(data.total || 0);
@@ -1114,7 +1114,7 @@ async function loadTagSuggestions() {
 
   const params = new URLSearchParams({ q: query, limit: "20" });
   try {
-    const data = await getJson(`/api/tags?${params.toString()}`) as { items?: TagSuggestionApiItem[] };
+    const data = await getJson<{ items?: TagSuggestionApiItem[] }>(`/api/tags?${params.toString()}`);
     if (requestId !== state.tagSuggestionsRequestId) return;
     const items = Array.isArray(data.items) ? data.items : [];
     renderTagSuggestions(items.filter((item) => item?.name && !state.tags.includes(item.name)));
@@ -1222,7 +1222,7 @@ async function setItemStar(item: EagleItem, star: number) {
   }
 
   try {
-    const data = await postJson(`/api/items/${encodeURIComponent(String(item.id || ""))}/star`, { star }) as { star?: unknown };
+    const data = await postJson<{ star?: unknown }>(`/api/items/${encodeURIComponent(String(item.id || ""))}/star`, { star });
     const savedStar = Number(data.star ?? star);
     item.star = savedStar;
     updateItemInState(String(item.id || ""), { star: savedStar });
@@ -1409,10 +1409,10 @@ async function savePreviewMetadata(item: EagleItem, { tags, folders, saveButton,
   saveButton.disabled = true;
   status.textContent = "Saving";
   try {
-    const data = await postJson(`/api/items/${encodeURIComponent(String(item.id || ""))}/metadata`, { tags, folders }) as {
+    const data = await postJson<{
       tags?: unknown;
       folders?: unknown;
-    };
+    }>(`/api/items/${encodeURIComponent(String(item.id || ""))}/metadata`, { tags, folders });
     const patch = {
       tags: Array.isArray(data.tags) ? data.tags : tags,
       folders: Array.isArray(data.folders) ? data.folders : folders,
@@ -1436,7 +1436,7 @@ function tagSuggestionItems(query: string, selectedValues: string[]): Promise<Me
     return buildTagSuggestionItems({ query, selectedValues, recentTags });
   }
   const params = new URLSearchParams({ q: query, limit: "20" });
-  return getJson(`/api/tags?${params.toString()}`)
+  return getJson<{ items?: RemoteTag[] }>(`/api/tags?${params.toString()}`)
     .then((data: { items?: RemoteTag[] }) => {
       const remote = Array.isArray(data.items) ? data.items : [];
       return buildTagSuggestionItems({ query, selectedValues, recentTags, remoteTags: remote });

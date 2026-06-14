@@ -303,7 +303,7 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(app, /tags: tagPicker\.values\(\),/);
   assert.match(app, /folders: categoryPicker\.values\(\),/);
   assert.match(app, /saveButton\.addEventListener\("click", submitMetadata\);/);
-  assert.match(app, /postJson\(`\/api\/items\/\$\{encodeURIComponent\(String\(item\.id \|\| ""\)\)\}\/metadata`, \{ tags, folders \}\)/);
+  assert.match(app, /postJson<\{[\s\S]*folders\?: unknown;[\s\S]*\}>\(`\/api\/items\/\$\{encodeURIComponent\(String\(item\.id \|\| ""\)\)\}\/metadata`, \{ tags, folders \}\)/);
   assert.match(app, /rememberRecentValues\(RECENT_TAGS_STORAGE_KEY, patch\.tags\);/);
   assert.match(app, /rememberRecentValues\(RECENT_FOLDERS_STORAGE_KEY, patch\.folders\);/);
   assert.match(app, /if \(status\.isConnected\) status\.textContent = "Saved";/);
@@ -414,7 +414,7 @@ test("public UI supports tag filter chips", async () => {
   assert.match(app, /params\.getAll\("tag"\)/);
   assert.match(app, /params\.append\("tag", tag\)/);
   assert.match(app, /params\.append\("tags", tag\)/);
-  assert.match(app, /getJson\(`\/api\/tags\?\$\{params\.toString\(\)\}`\)/);
+  assert.match(app, /getJson<\{ items\?: TagSuggestionApiItem\[\] \}>\(`\/api\/tags\?\$\{params\.toString\(\)\}`\)/);
   assert.match(app, /function loadTagSuggestions\(\) \{/);
   assert.match(app, /function renderTagSuggestions\(items[^)]*\) \{/);
   assert.match(app, /function addTagFilter\(value[^)]*\) \{/);
