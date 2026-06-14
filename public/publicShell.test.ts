@@ -418,26 +418,28 @@ test("public UI supports tag filter chips", async () => {
 
   assert.match(html, /id="tagChips"/);
   assert.match(html, /id="tagSuggestions"/);
-  assert.match(html, /<div className="[^"]*\bsearch-box\b[^"]*"[\s\S]*id="tagChips"[\s\S]*id="searchInput"[\s\S]*id="tagSuggestions"[\s\S]*<\/div>[\s\S]*id="resetFiltersButton"[\s\S]*id="toggleFiltersButton"/);
-  assert.match(html, /id="resetFiltersButton"[\s\S]*aria-label="Reset filters"[\s\S]*disabled/);
-  assert.match(html, /id="resetFiltersButton"[\s\S]*data-lucide="funnel-x"/);
+  assert.match(html, /<div className="[^"]*\bsearch-box\b[^"]*"[\s\S]*id="tagChips"[\s\S]*id="searchInput"[\s\S]*id="tagSuggestions"[\s\S]*<\/div>[\s\S]*id="resetFiltersButtonHost"[\s\S]*id="toggleFiltersButtonHost"/);
+  assert.match(html, /id="resetFiltersButton"[\s\S]*aria-label="Reset filters"[\s\S]*disabled=\{!hasActiveFilters\}/);
+  assert.match(html, /id="resetFiltersButton"[\s\S]*<FunnelXIcon \/>/);
   assert.doesNotMatch(html, /id="tagInput"/);
   assert.doesNotMatch(html, /id="advancedFilters"[\s\S]*id="tagChips"/);
   assert.match(app, /tags:\s*\[\]/);
   assert.match(app, /tagChips: document\.querySelector\("#tagChips"\),/);
   assert.match(app, /tagSuggestions: document\.querySelector\("#tagSuggestions"\),/);
-  assert.match(app, /resetFiltersButton: document\.querySelector\("#resetFiltersButton"\),/);
+  assert.match(app, /resetFiltersButtonHost: document\.querySelector\("#resetFiltersButtonHost"\),/);
+  assert.doesNotMatch(app, /resetFiltersButton: document\.querySelector\("#resetFiltersButton"\),/);
   assert.match(html, /export function FolderOptions\(\{ folders \}/);
   assert.match(html, /<option value=\{UNCATEGORIZED_FOLDER_ID\}>Uncategorized<\/option>/);
   assert.match(app, /renderFolderOptionsView\(els\.folderSelect, \{/);
   assert.doesNotMatch(app, /function optionNode\(/);
   assert.doesNotMatch(app, /document\.createElement\("option"\)/);
-  assert.match(app, /"funnel-x": '<path d="M12\.531 3H3/);
+  assert.match(html, /function FunnelXIcon\(\) \{[\s\S]*<path d="M12\.531 3H3/);
   assert.match(html, /onClick=\{resetFilters\}/);
   assert.match(app, /setViewerShellActions\(\{/);
   assert.match(app, /resetFilters,/);
   assert.match(app, /function syncResetFiltersButton\(\) \{/);
-  assert.match(app, /els\.resetFiltersButton\.disabled = !hasActiveFilters\(state\);/);
+  assert.match(app, /renderSearchControlButtonsView\(els\.resetFiltersButtonHost, els\.toggleFiltersButtonHost, \{/);
+  assert.doesNotMatch(app, /els\.resetFiltersButton\.disabled/);
   assert.doesNotMatch(app, /tagInput:/);
   assert.match(html, /id="searchInput"[\s\S]*onChange=\{changeSearchQuery\}[\s\S]*onFocus=\{focusSearch\}[\s\S]*onKeyDown=\{handleSearchKeyDown\}/);
   assert.match(app, /searchChanged:\s*debounce\(\(query: string\) => \{[\s\S]*applyFilterChange\(\{ query: query\.trim\(\) \}\);[\s\S]*loadTagSuggestions\(\);/);
@@ -566,7 +568,8 @@ test("public UI exposes collapsible advanced filters without sort controls", asy
   const app = await readViewerSources();
 
   assert.match(html, /id="toggleFiltersButton"/);
-  assert.match(html, /aria-label="Show advanced search options"/);
+  assert.match(html, /aria-label=\{label\}/);
+  assert.match(html, /aria-expanded=\{filtersOpen\}/);
   assert.match(html, /id="advancedFilters"/);
   assert.doesNotMatch(html, /id="sortSelect"/);
   assert.doesNotMatch(html, /id="randomizeCheckbox"/);

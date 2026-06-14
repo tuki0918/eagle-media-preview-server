@@ -1,3 +1,4 @@
+import { createRoot, type Root } from "react-dom/client";
 import { MEDIA_TYPE_OPTIONS, PAGE_SIZE_OPTIONS, RATING_OPTIONS } from "../shellConfig";
 import {
   changeFolder,
@@ -11,7 +12,15 @@ import {
   toggleFilters,
 } from "../shellActions";
 
-export function SearchControls() {
+interface SearchControlButtonProps {
+  filtersOpen?: boolean;
+  hasActiveFilters?: boolean;
+}
+
+const resetButtonRoots = new WeakMap<HTMLElement, Root>();
+const toggleButtonRoots = new WeakMap<HTMLElement, Root>();
+
+export function SearchControls({ filtersOpen = false, hasActiveFilters = false }: SearchControlButtonProps) {
   return (
     <section className="controls grid gap-4 pb-2" aria-label="Search and filters">
       <div className="search-row grid grid-cols-[minmax(0,1fr)_auto_auto] items-stretch gap-3">
@@ -39,29 +48,12 @@ export function SearchControls() {
             hidden
           />
         </div>
-        <button
-          id="resetFiltersButton"
-          className="icon-button filter-reset-button inline-grid min-h-[50px] w-[50px] min-w-[50px] flex-[0_0_40px] place-items-center self-stretch rounded-app border border-app-border bg-app-surface text-app-text disabled:cursor-default disabled:opacity-[0.42]"
-          type="button"
-          aria-label="Reset filters"
-          title="Reset filters"
-          disabled
-          onClick={resetFilters}
-        >
-          <span data-lucide="funnel-x" />
-        </button>
-        <button
-          id="toggleFiltersButton"
-          className="icon-button filter-toggle-button inline-grid min-h-[50px] w-[50px] min-w-[50px] flex-[0_0_40px] place-items-center self-stretch rounded-app border border-app-border bg-app-surface text-app-text"
-          type="button"
-          aria-label="Show advanced search options"
-          aria-expanded="false"
-          aria-controls="advancedFilters"
-          title="Show advanced search options"
-          onClick={toggleFilters}
-        >
-          <span data-lucide="sliders-horizontal" />
-        </button>
+        <div id="resetFiltersButtonHost" className="contents">
+          <ResetFiltersButton hasActiveFilters={hasActiveFilters} />
+        </div>
+        <div id="toggleFiltersButtonHost" className="contents">
+          <ToggleFiltersButton filtersOpen={filtersOpen} />
+        </div>
       </div>
 
       <div id="advancedFilters" className="filter-row grid grid-cols-4 gap-6" hidden>
@@ -103,4 +95,86 @@ export function SearchControls() {
       </div>
     </section>
   );
+}
+
+function ResetFiltersButton({ hasActiveFilters = false }: Pick<SearchControlButtonProps, "hasActiveFilters">) {
+  return (
+    <button
+      id="resetFiltersButton"
+      className="icon-button filter-reset-button inline-grid min-h-[50px] w-[50px] min-w-[50px] flex-[0_0_40px] place-items-center self-stretch rounded-app border border-app-border bg-app-surface text-app-text disabled:cursor-default disabled:opacity-[0.42]"
+      type="button"
+      aria-label="Reset filters"
+      title="Reset filters"
+      disabled={!hasActiveFilters}
+      onClick={resetFilters}
+    >
+      <FunnelXIcon />
+    </button>
+  );
+}
+
+function ToggleFiltersButton({ filtersOpen = false }: Pick<SearchControlButtonProps, "filtersOpen">) {
+  const label = filtersOpen ? "Hide advanced search options" : "Show advanced search options";
+  return (
+    <button
+      id="toggleFiltersButton"
+      className="icon-button filter-toggle-button inline-grid min-h-[50px] w-[50px] min-w-[50px] flex-[0_0_40px] place-items-center self-stretch rounded-app border border-app-border bg-app-surface text-app-text"
+      type="button"
+      aria-label={label}
+      aria-expanded={filtersOpen}
+      aria-controls="advancedFilters"
+      title={label}
+      onClick={toggleFilters}
+    >
+      <SlidersHorizontalIcon />
+    </button>
+  );
+}
+
+function FunnelXIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12.531 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14v6a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341l.427-.473" />
+      <path d="m16.5 3.5 5 5" />
+      <path d="m21.5 3.5-5 5" />
+    </svg>
+  );
+}
+
+function SlidersHorizontalIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <line x1="21" x2="14" y1="4" y2="4" />
+      <line x1="10" x2="3" y1="4" y2="4" />
+      <line x1="21" x2="12" y1="12" y2="12" />
+      <line x1="8" x2="3" y1="12" y2="12" />
+      <line x1="21" x2="16" y1="20" y2="20" />
+      <line x1="12" x2="3" y1="20" y2="20" />
+      <line x1="14" x2="14" y1="2" y2="6" />
+      <line x1="8" x2="8" y1="10" y2="14" />
+      <line x1="16" x2="16" y1="18" y2="22" />
+    </svg>
+  );
+}
+
+export function renderSearchControlButtonsView(
+  resetContainer: HTMLElement,
+  toggleContainer: HTMLElement,
+  props: Required<SearchControlButtonProps>,
+) {
+  let resetRoot = resetButtonRoots.get(resetContainer);
+  if (!resetRoot) {
+    resetContainer.replaceChildren();
+    resetRoot = createRoot(resetContainer);
+    resetButtonRoots.set(resetContainer, resetRoot);
+  }
+  resetRoot.render(<ResetFiltersButton hasActiveFilters={props.hasActiveFilters} />);
+
+  let toggleRoot = toggleButtonRoots.get(toggleContainer);
+  if (!toggleRoot) {
+    toggleContainer.replaceChildren();
+    toggleRoot = createRoot(toggleContainer);
+    toggleButtonRoots.set(toggleContainer, toggleRoot);
+  }
+  toggleRoot.render(<ToggleFiltersButton filtersOpen={props.filtersOpen} />);
 }

@@ -6,8 +6,8 @@ export interface ViewerElements {
   searchInput: HTMLInputElement;
   tagChips: HTMLElement;
   tagSuggestions: HTMLElement;
-  resetFiltersButton: HTMLButtonElement;
-  toggleFiltersButton: HTMLButtonElement;
+  resetFiltersButtonHost: HTMLElement;
+  toggleFiltersButtonHost: HTMLElement;
   advancedFilters: HTMLElement;
   folderSelect: HTMLSelectElement;
   extSelect: HTMLSelectElement;
@@ -41,8 +41,8 @@ export function getViewerElements(): ViewerElements {
     searchInput: document.querySelector("#searchInput"),
     tagChips: document.querySelector("#tagChips"),
     tagSuggestions: document.querySelector("#tagSuggestions"),
-    resetFiltersButton: document.querySelector("#resetFiltersButton"),
-    toggleFiltersButton: document.querySelector("#toggleFiltersButton"),
+    resetFiltersButtonHost: document.querySelector("#resetFiltersButtonHost"),
+    toggleFiltersButtonHost: document.querySelector("#toggleFiltersButtonHost"),
     advancedFilters: document.querySelector("#advancedFilters"),
     folderSelect: document.querySelector("#folderSelect"),
     extSelect: document.querySelector("#extSelect"),

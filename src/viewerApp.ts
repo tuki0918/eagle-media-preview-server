@@ -55,6 +55,7 @@ import {
 } from "./viewer/components/PreviewBody";
 import { renderFolderOptionsView } from "./viewer/components/FolderOptions";
 import { renderResultsStatusView } from "./viewer/components/ResultsStatus";
+import { renderSearchControlButtonsView } from "./viewer/components/SearchControls";
 import { renderTagChipsView } from "./viewer/components/TagChips";
 import {
   clearTagSuggestionsView,
@@ -556,15 +557,19 @@ function hideTagSuggestions() {
 }
 
 function syncAdvancedFiltersUi() {
-  const label = state.filtersOpen ? "Hide advanced search options" : "Show advanced search options";
   els.advancedFilters.hidden = !state.filtersOpen;
-  els.toggleFiltersButton.setAttribute("aria-expanded", String(state.filtersOpen));
-  els.toggleFiltersButton.setAttribute("aria-label", label);
-  els.toggleFiltersButton.title = label;
+  renderSearchControlButtons();
 }
 
 function syncResetFiltersButton() {
-  els.resetFiltersButton.disabled = !hasActiveFilters(state);
+  renderSearchControlButtons();
+}
+
+function renderSearchControlButtons() {
+  renderSearchControlButtonsView(els.resetFiltersButtonHost, els.toggleFiltersButtonHost, {
+    filtersOpen: state.filtersOpen,
+    hasActiveFilters: hasActiveFilters(state),
+  });
 }
 
 function resetPreviewState() {
