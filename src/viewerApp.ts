@@ -39,6 +39,7 @@ import {
   readRecentList,
   rememberRecentValues,
   tagSuggestionItems as buildTagSuggestionItems,
+  uniqueValues,
 } from "./viewer/metadata";
 import {
   currentFetchLimit as getCurrentFetchLimit,
@@ -1408,7 +1409,7 @@ function metadataChipPicker({
   getSuggestions,
   normalizeValue,
 }) {
-  let selected: any[] = uniqueValues((initialValues || []).map(normalizeValue).filter(Boolean));
+  let selected = uniqueValues((initialValues || []).map(normalizeValue).filter(Boolean));
   let currentSuggestions: any[] = [];
   let requestId = 0;
 
@@ -1631,14 +1632,6 @@ function folderSuggestionItems(query, selectedValues) {
     recentFolderIds: readRecentList(RECENT_FOLDERS_STORAGE_KEY),
     folders: state.folders,
   });
-}
-
-function uniqueValues(values) {
-  const unique: any[] = [];
-  for (const value of values) {
-    if (value && !unique.includes(value)) unique.push(value);
-  }
-  return unique;
 }
 
 function messageNode(text, className = "empty") {
