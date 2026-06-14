@@ -17,6 +17,9 @@ export interface ViewerShellActions {
   closePreview: () => void;
   togglePreviewInfo: () => void;
   toggleFullscreen: () => void;
+  previewPointerDown: (target: EventTarget | null) => void;
+  previewClosed: () => void;
+  previewDoubleClicked: (target: EventTarget | null, preventDefault: () => void) => void;
 }
 
 const noop = () => {};
@@ -38,6 +41,9 @@ let actions: ViewerShellActions = {
   closePreview: noop,
   togglePreviewInfo: noop,
   toggleFullscreen: noop,
+  previewPointerDown: noop,
+  previewClosed: noop,
+  previewDoubleClicked: noop,
 };
 
 export function setViewerShellActions(nextActions: ViewerShellActions) {
@@ -107,4 +113,16 @@ export function togglePreviewInfo() {
 
 export function toggleFullscreen() {
   actions.toggleFullscreen();
+}
+
+export function handlePreviewPointerDown(event: { target: EventTarget | null }) {
+  actions.previewPointerDown(event.target);
+}
+
+export function handlePreviewClose() {
+  actions.previewClosed();
+}
+
+export function handlePreviewDoubleClick(event: { target: EventTarget | null; preventDefault: () => void }) {
+  actions.previewDoubleClicked(event.target, () => event.preventDefault());
 }

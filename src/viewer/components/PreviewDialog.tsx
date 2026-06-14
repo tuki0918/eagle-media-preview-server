@@ -1,8 +1,21 @@
-import { closePreview, toggleFullscreen, togglePreviewInfo } from "../shellActions";
+import {
+  closePreview,
+  handlePreviewClose,
+  handlePreviewDoubleClick,
+  handlePreviewPointerDown,
+  toggleFullscreen,
+  togglePreviewInfo,
+} from "../shellActions";
 
 export function PreviewDialog() {
   return (
-    <dialog id="previewDialog" className="h-dvh max-h-dvh w-screen max-w-full rounded-none border-0 bg-app-surface p-0 text-app-text">
+    <dialog
+      id="previewDialog"
+      className="h-dvh max-h-dvh w-screen max-w-full rounded-none border-0 bg-app-surface p-0 text-app-text"
+      onClose={handlePreviewClose}
+      onDoubleClick={handlePreviewDoubleClick}
+      onPointerDown={handlePreviewPointerDown}
+    >
       <div className="dialog-header fixed right-2.5 top-[calc(10px+env(safe-area-inset-top))] z-[4] flex items-center justify-end gap-3 border-0 bg-transparent p-0">
         <button id="backPreview" className="text-icon-button inline-flex min-h-10 items-center gap-2 border-0 bg-transparent px-2 text-sm font-[680] text-app-text" type="button" aria-label="Back to results" onClick={closePreview}>
           <span data-lucide="chevron-left" />

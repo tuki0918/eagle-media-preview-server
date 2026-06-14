@@ -376,12 +376,14 @@ test("public preview info uses chip lists and a full-width open file CTA", async
 });
 
 test("public preview info closes when pressing outside the side menu", async () => {
+  const html = await readAppSources();
   const app = await readViewerSources();
 
-  assert.match(app, /els\.dialog\.addEventListener\("pointerdown", closePreviewInfoFromOutside\);/);
-  assert.match(app, /function closePreviewInfoFromOutside\(event[^)]*\) \{/);
+  assert.match(html, /onPointerDown=\{handlePreviewPointerDown\}/);
+  assert.match(app, /previewPointerDown:\s*closePreviewInfoFromOutside,/);
+  assert.match(app, /function closePreviewInfoFromOutside\(target: EventTarget \| null\) \{/);
   assert.match(app, /if \(!state\.previewInfoOpen\) return;/);
-  assert.match(app, /if \(\(event\.target as Element \| null\)\?\.closest\("\.preview-info, #toggleInfoPreview"\)\) return;/);
+  assert.match(app, /if \(\(target as Element \| null\)\?\.closest\("\.preview-info, #toggleInfoPreview"\)\) return;/);
   assert.match(app, /setPreviewInfoOpen\(false\);/);
 });
 

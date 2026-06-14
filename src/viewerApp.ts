@@ -159,6 +159,16 @@ async function init() {
     closePreview,
     togglePreviewInfo,
     toggleFullscreen,
+    previewPointerDown: closePreviewInfoFromOutside,
+    previewClosed: () => {
+      clearPreviewContents();
+      document.body.classList.remove("modal-open");
+    },
+    previewDoubleClicked: (target, preventDefault) => {
+      if ((target as Element | null)?.closest("button")) {
+        preventDefault();
+      }
+    },
   });
   window.addEventListener("popstate", () => {
     restoreUrlState();
@@ -170,16 +180,6 @@ async function init() {
   document.addEventListener("pointerdown", (event) => {
     if ((event.target as Element | null)?.closest(".search-box")) return;
     hideTagSuggestions();
-  });
-  els.dialog.addEventListener("pointerdown", closePreviewInfoFromOutside);
-  els.dialog.addEventListener("close", () => {
-    clearPreviewContents();
-    document.body.classList.remove("modal-open");
-  });
-  els.dialog.addEventListener("dblclick", (event) => {
-    if ((event.target as Element | null)?.closest("button")) {
-      event.preventDefault();
-    }
   });
   for (const eventName of ["gesturestart", "gesturechange", "gestureend"]) {
     els.dialog.addEventListener(eventName, (event) => {
@@ -922,9 +922,9 @@ function togglePreviewInfo() {
   setPreviewInfoOpen(!state.previewInfoOpen);
 }
 
-function closePreviewInfoFromOutside(event: PointerEvent) {
+function closePreviewInfoFromOutside(target: EventTarget | null) {
   if (!state.previewInfoOpen) return;
-  if ((event.target as Element | null)?.closest(".preview-info, #toggleInfoPreview")) return;
+  if ((target as Element | null)?.closest(".preview-info, #toggleInfoPreview")) return;
   setPreviewInfoOpen(false);
 }
 
