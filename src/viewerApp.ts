@@ -73,6 +73,11 @@ import {
 import { previewDetailRows } from "./viewer/previewDetails";
 import { renderRating } from "./viewer/rating";
 import { state } from "./viewer/state";
+import {
+  canLoadMoreTiles,
+  shouldShowTileSentinel,
+  tileSentinelText,
+} from "./viewer/tileLoading";
 import type {
   ConnectResponse,
   EagleItem,
@@ -1199,9 +1204,9 @@ function updateStatus() {
 function updatePager() {
   const isTiles = state.viewMode === "tiles";
   els.pager.hidden = isTiles;
-  els.tilesSentinel.hidden = !isTiles || !state.items.length || state.items.length >= state.total;
+  els.tilesSentinel.hidden = !shouldShowTileSentinel(tileLoadingState());
   if (isTiles) {
-    els.tilesSentinel.textContent = state.tilesLoadingMore ? "Loading more" : "Scroll to load more";
+    els.tilesSentinel.textContent = tileSentinelText(tileLoadingState());
     return;
   }
   els.prevButton.disabled = state.offset <= 0;
@@ -1211,7 +1216,7 @@ function updatePager() {
 
 function setupTileAutoLoading() {
   resetTileAutoLoading();
-  if (state.viewMode !== "tiles" || !state.items.length || state.items.length >= state.total || typeof IntersectionObserver === "undefined") return;
+  if (!shouldShowTileSentinel(tileLoadingState()) || typeof IntersectionObserver === "undefined") return;
   state.tilesObserver = new IntersectionObserver((entries) => {
     if (!entries.some((entry) => entry.isIntersecting)) return;
     loadMoreTiles();
@@ -1227,10 +1232,19 @@ function resetTileAutoLoading() {
 }
 
 function loadMoreTiles() {
-  if (state.viewMode !== "tiles" || state.tilesLoadingMore || !state.items.length || state.items.length >= state.total) return;
+  if (!canLoadMoreTiles(tileLoadingState())) return;
   state.offset = state.items.length;
   syncUrlState({ replace: true });
   loadItems({ append: true });
+}
+
+function tileLoadingState() {
+  return {
+    viewMode: state.viewMode,
+    itemCount: state.items.length,
+    total: state.total,
+    tilesLoadingMore: state.tilesLoadingMore,
+  };
 }
 
 function currentFetchLimit() {
