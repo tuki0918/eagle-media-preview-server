@@ -1,5 +1,4 @@
 import {
-  DATE_KEYS_MODIFIED,
   DEFAULT_EAGLE_CONNECTION,
   DEFAULT_VIEW_MODE,
   EAGLE_UNAVAILABLE_LABEL,
@@ -23,10 +22,8 @@ import {
   formatDimensions,
   formatDuration,
   formatDurationCell,
-  formatItemDate,
   itemMeta,
   itemTags,
-  mediaTypeLabel,
   normalizeTag,
   originalFileName,
   previewFileName,
@@ -55,6 +52,7 @@ import {
   pointerDistance as getPointerDistance,
   setPreviewZoom,
 } from "./viewer/previewTransform";
+import { previewDetailRows } from "./viewer/previewDetails";
 import { renderRating } from "./viewer/rating";
 import { state } from "./viewer/state";
 import type { ViewerMode } from "./viewer/types";
@@ -1285,17 +1283,7 @@ function renderPreviewDetails(item) {
   const detailsSection = document.createElement("section");
   detailsSection.className = "preview-details-section";
 
-  const detailRows: Array<{ label: string; value: any; chips?: boolean; always?: boolean }> = [
-    { label: "Type", value: mediaTypeLabel(item) },
-    { label: "Size", value: formatBytes(item.size) },
-    { label: "Dimensions", value: item.width && item.height ? `${item.width} x ${item.height}` : "" },
-    { label: "Duration", value: isTimedMedia(item) ? formatDuration(item.duration) : "" },
-    { label: "ID", value: item.id },
-    { label: "Date Modified", value: formatItemDate(item, DATE_KEYS_MODIFIED) || "-" },
-  ];
-  const rows = detailRows.filter(({ value, chips, always }) => always || (chips ? value.length > 0 : Boolean(value)));
-
-  for (const { label, value, chips = false } of rows) {
+  for (const { label, value, chips = false } of previewDetailRows(item)) {
     const row = document.createElement("div");
     row.className = "preview-detail-row";
 

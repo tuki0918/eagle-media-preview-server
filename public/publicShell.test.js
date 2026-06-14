@@ -12,6 +12,7 @@ async function readViewerSources() {
     "../src/viewer/icons.ts",
     "../src/viewer/metadata.ts",
     "../src/viewer/pagination.ts",
+    "../src/viewer/previewDetails.ts",
     "../src/viewer/previewTransform.ts",
     "../src/viewer/rating.ts",
     "../src/viewer/state.ts",
