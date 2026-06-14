@@ -7,7 +7,6 @@ import {
   LIBRARY_EMPTY_LABEL,
   MAX_PAGE_SIZE,
   RECENT_FOLDERS_STORAGE_KEY,
-  RECENT_METADATA_LIMIT,
   RECENT_TAGS_STORAGE_KEY,
   TILE_PREFETCH_PAGES,
   UNCATEGORIZED_FOLDER_ID,
@@ -38,6 +37,13 @@ import {
   isTimedMedia,
 } from "./viewer/format";
 import { iconNode, renderLucideIcons } from "./viewer/icons";
+import {
+  folderLabel,
+  folderSuggestionItems as buildFolderSuggestionItems,
+  readRecentList,
+  rememberRecentValues,
+  tagSuggestionItems as buildTagSuggestionItems,
+} from "./viewer/metadata";
 import { state } from "./viewer/state";
 import type { ViewerMode } from "./viewer/types";
 import { buildViewerUrl, currentPage, parseViewerUrlState } from "./viewer/urlState";
@@ -1356,7 +1362,7 @@ function previewMetadataEditor(item) {
     initialValues: folderIds(item.folders),
     placeholder: "Add category",
     inputLabel: "Add category",
-    labelForValue: folderLabel,
+    labelForValue: (value) => folderLabel(value, state.folders),
     getSuggestions: folderSuggestionItems,
     normalizeValue: (value) => String(value || "").trim(),
   });
@@ -1601,91 +1607,26 @@ function previewChipList(values) {
 }
 
 function tagSuggestionItems(query, selectedValues) {
-  const selected = new Set(selectedValues);
-  const recent = readRecentList(RECENT_TAGS_STORAGE_KEY)
-    .filter((tag) => !selected.has(tag) && matchesQuery(tag, query))
-    .map((tag) => ({ value: tag, label: tag, meta: "Recent" }));
-  if (!query) return recent;
-
+  const recentTags = readRecentList(RECENT_TAGS_STORAGE_KEY);
+  if (!query) {
+    return buildTagSuggestionItems({ query, selectedValues, recentTags });
+  }
   const params = new URLSearchParams({ q: query, limit: "20" });
   return getJson(`/api/tags?${params.toString()}`)
     .then((data) => {
       const remote = Array.isArray(data.items) ? data.items : [];
-      return dedupeSuggestions([
-        ...recent,
-        ...remote
-          .map((item) => ({
-            value: normalizeTag(item?.name),
-            label: normalizeTag(item?.name),
-            meta: Number.isFinite(item?.count) ? item.count.toLocaleString() : "",
-          }))
-          .filter((item) => item.value && !selected.has(item.value)),
-      ]);
+      return buildTagSuggestionItems({ query, selectedValues, recentTags, remoteTags: remote });
     })
-    .catch(() => recent);
+    .catch(() => buildTagSuggestionItems({ query, selectedValues, recentTags }));
 }
 
 function folderSuggestionItems(query, selectedValues) {
-  const selected = new Set(selectedValues);
-  const recent = readRecentList(RECENT_FOLDERS_STORAGE_KEY)
-    .filter((id) => !selected.has(id) && matchesQuery(folderLabel(id), query))
-    .map((id) => ({ value: id, label: folderLabel(id), meta: "Recent" }));
-  const folders = state.folders
-    .filter((folder) => !selected.has(folder.id) && matchesQuery(folder.name, query))
-    .map((folder) => ({
-      value: folder.id,
-      label: folderLabel(folder.id),
-      meta: Number.isFinite(folder.imageCount) ? `${Number(folder.imageCount).toLocaleString()} items` : "",
-    }));
-  return dedupeSuggestions([...recent, ...folders]).slice(0, 20);
-}
-
-function dedupeSuggestions(items) {
-  const seen = new Set();
-  const output: any[] = [];
-  for (const item of items) {
-    if (!item.value || seen.has(item.value)) continue;
-    seen.add(item.value);
-    output.push(item);
-  }
-  return output;
-}
-
-function matchesQuery(value, query) {
-  const needle = query.trim().toLowerCase();
-  if (!needle) return true;
-  return String(value || "").toLowerCase().includes(needle);
-}
-
-function folderLabel(id) {
-  const folder = state.folders.find((entry) => entry.id === id);
-  if (!folder) return id;
-  return `${folder.depth ? "  ".repeat(folder.depth) : ""}${folder.name}`;
-}
-
-function readRecentList(key) {
-  try {
-    const values = JSON.parse(localStorage.getItem(key) || "[]");
-    return Array.isArray(values) ? uniqueValues(values.map((value) => String(value || "").trim()).filter(Boolean)) : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeRecentList(key, values) {
-  try {
-    localStorage.setItem(key, JSON.stringify(uniqueValues(values).slice(0, RECENT_METADATA_LIMIT)));
-  } catch {
-    // Recent metadata is a convenience cache; saving metadata itself should not fail because of storage limits.
-  }
-}
-
-function rememberRecentValues(key, values) {
-  const next = uniqueValues([
-    ...(values || []).map((value) => String(value || "").trim()).filter(Boolean),
-    ...readRecentList(key),
-  ]);
-  writeRecentList(key, next);
+  return buildFolderSuggestionItems({
+    query,
+    selectedValues,
+    recentFolderIds: readRecentList(RECENT_FOLDERS_STORAGE_KEY),
+    folders: state.folders,
+  });
 }
 
 function uniqueValues(values) {

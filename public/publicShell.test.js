@@ -10,6 +10,7 @@ async function readViewerSources() {
     "../src/viewer/elements.ts",
     "../src/viewer/format.ts",
     "../src/viewer/icons.ts",
+    "../src/viewer/metadata.ts",
     "../src/viewer/state.ts",
     "../src/viewer/urlState.ts",
   ];
@@ -304,10 +305,10 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(app, /input\.addEventListener\("pointerdown", updateSuggestions\);/);
   assert.match(app, /wrapper\.addEventListener\("pointerdown", \(event\) => event\.stopPropagation\(\)\);/);
   assert.match(app, /input\.value = "";\s*renderSelected\(\);\s*hideSuggestions\(\);/);
-  assert.match(app, /function readRecentList\(key\) \{/);
-  assert.match(app, /function writeRecentList\(key, values\) \{/);
-  assert.match(app, /function tagSuggestionItems\(query, selectedValues\) \{/);
-  assert.match(app, /function folderSuggestionItems\(query, selectedValues\) \{/);
+  assert.match(app, /function readRecentList\(key[^)]*\) \{/);
+  assert.match(app, /function writeRecentList\(key[^,]*,\s*values[^)]*\) \{/);
+  assert.match(app, /function tagSuggestionItems\(\{/);
+  assert.match(app, /function folderSuggestionItems\(\{/);
   assert.match(app, /row\.className = "preview-edit-row";\s*const labelNode = document\.createElement\("span"\);/);
   assert.doesNotMatch(app, /const row = document\.createElement\("label"\);/);
   assert.doesNotMatch(app, /render\(\);\s*if \(els\.dialog\.open && state\.previewItemId === item\.id\) \{\s*renderPreviewDetails\(item\);/s);
