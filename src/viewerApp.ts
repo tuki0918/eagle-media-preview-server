@@ -1,6 +1,5 @@
 import {
   DEFAULT_EAGLE_CONNECTION,
-  DEFAULT_VIEW_MODE,
   EAGLE_UNAVAILABLE_LABEL,
   LIBRARY_EMPTY_LABEL,
   RECENT_FOLDERS_STORAGE_KEY,
@@ -88,9 +87,13 @@ import type {
   RenderImagePreviewOptions,
   SavePreviewMetadataOptions,
   TagSuggestionApiItem,
-  ViewerMode,
 } from "./viewer/types";
 import { buildViewerUrl, currentPage, parseViewerUrlState } from "./viewer/urlState";
+import {
+  isViewerMode,
+  needsViewModeReload,
+  savedViewerMode,
+} from "./viewer/viewMode";
 
 const els = getViewerElements();
 
@@ -870,7 +873,7 @@ function setViewMode(mode: string) {
   const previousMode = state.viewMode;
   state.viewMode = mode;
   localStorage.setItem("eagleViewMode", mode);
-  if (mode === "tiles" || previousMode === "tiles") {
+  if (needsViewModeReload(previousMode, mode)) {
     state.offset = 0;
     resetPreviewState();
     syncUrlState();
@@ -893,12 +896,8 @@ function restoreViewMode() {
     return;
   }
   const saved = localStorage.getItem("eagleViewMode");
-  state.viewMode = saved && isViewerMode(saved) ? saved : DEFAULT_VIEW_MODE;
+  state.viewMode = savedViewerMode(saved);
   updateViewToggle();
-}
-
-function isViewerMode(value: string): value is ViewerMode {
-  return value === "grid" || value === "tiles" || value === "table";
 }
 
 function closePreview({ skipHistory = false }: OpenPreviewOptions = {}) {
