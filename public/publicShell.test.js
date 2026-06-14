@@ -12,6 +12,7 @@ async function readViewerSources() {
     "../src/viewer/icons.ts",
     "../src/viewer/metadata.ts",
     "../src/viewer/pagination.ts",
+    "../src/viewer/previewTransform.ts",
     "../src/viewer/state.ts",
     "../src/viewer/urlState.ts",
   ];
@@ -109,9 +110,9 @@ test("public image preview fit mode scales to the viewport and refreshes on resi
   assert.match(app, /image\.addEventListener\("error", \(\) => \{/);
   assert.match(app, /status\.hidden = true;/);
   assert.match(app, /image\.style\.height = `\$\{image\.naturalHeight\}px`;/);
-  assert.match(app, /state\.previewFitScale = Math\.min\(widthRatio, heightRatio\) \* IMAGE_FIT_MARGIN;/);
-  assert.match(app, /state\.previewNaturalScale = 1;/);
-  assert.match(app, /const keepFitted = Math\.abs\(state\.previewTransform\.scale - previousFitScale\) < 0\.01;/);
+  assert.match(app, /const fitScale = Math\.min\(widthRatio, heightRatio\) \* IMAGE_FIT_MARGIN;/);
+  assert.match(app, /const naturalScale = 1;/);
+  assert.match(app, /const keepFitted = Math\.abs\(previousTransform\.scale - previousFitScale\) < 0\.01;/);
   assert.match(app, /image\.style\.transform = `translate\(-50%, -50%\) translate3d\(\$\{x\}px, \$\{y\}px, 0\) scale\(\$\{scale\}\)`;/);
   assert.match(css, /\.preview-layout\s*\{[^}]*height:\s*100%;[^}]*max-height:\s*100%;/s);
   assert.match(css, /\.preview-image\s*\{[^}]*position:\s*absolute;[^}]*left:\s*50%;[^}]*top:\s*50%;[^}]*max-width:\s*none;[^}]*max-height:\s*none;/s);

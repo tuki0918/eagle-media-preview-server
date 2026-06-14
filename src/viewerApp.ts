@@ -3,7 +3,6 @@ import {
   DEFAULT_EAGLE_CONNECTION,
   DEFAULT_VIEW_MODE,
   EAGLE_UNAVAILABLE_LABEL,
-  IMAGE_FIT_MARGIN,
   LIBRARY_EMPTY_LABEL,
   RECENT_FOLDERS_STORAGE_KEY,
   RECENT_TAGS_STORAGE_KEY,
@@ -16,7 +15,6 @@ import {
 import { debounce, getJson, mediaUrl, postJson } from "./viewer/api";
 import { getViewerElements } from "./viewer/elements";
 import {
-  clamp,
   flattenFolders,
   folderIds,
   formatBytes,
@@ -47,6 +45,15 @@ import {
   pageButtonList,
   totalPages,
 } from "./viewer/pagination";
+import {
+  dragPreviewTransform,
+  initialPreviewScales,
+  minimumPreviewScale as getMinimumPreviewScale,
+  nextPreviewScales,
+  nextZoomScale,
+  pointerDistance as getPointerDistance,
+  setPreviewZoom,
+} from "./viewer/previewTransform";
 import { state } from "./viewer/state";
 import type { ViewerMode } from "./viewer/types";
 import { buildViewerUrl, currentPage, parseViewerUrlState } from "./viewer/urlState";
@@ -691,40 +698,41 @@ function toolbarButton(label, icon, action) {
 }
 
 function resetPreviewTransform() {
-  state.previewTransform = { scale: 1, x: 0, y: 0 };
-  state.previewFitScale = 1;
-  state.previewNaturalScale = 1;
+  const scales = initialPreviewScales();
+  state.previewTransform = scales.transform;
+  state.previewFitScale = scales.fitScale;
+  state.previewNaturalScale = scales.naturalScale;
   state.previewDrag = null;
   state.previewPointers = new Map();
   state.previewPinch = null;
 }
 
 function updatePreviewScales(image, viewport) {
-  const previousFitScale = state.previewFitScale;
-  const previousScale = state.previewTransform.scale;
-  const widthRatio = viewport.clientWidth / image.naturalWidth;
-  const heightRatio = viewport.clientHeight / image.naturalHeight;
-  state.previewFitScale = Math.min(widthRatio, heightRatio) * IMAGE_FIT_MARGIN;
-  state.previewNaturalScale = 1;
-  const keepFitted = Math.abs(state.previewTransform.scale - previousFitScale) < 0.01;
-  if (keepFitted || previousScale === 1) {
-    state.previewTransform.scale = state.previewFitScale;
-    state.previewTransform.x = 0;
-    state.previewTransform.y = 0;
-  }
+  const scales = nextPreviewScales({
+    imageWidth: image.naturalWidth,
+    imageHeight: image.naturalHeight,
+    viewportWidth: viewport.clientWidth,
+    viewportHeight: viewport.clientHeight,
+    previousFitScale: state.previewFitScale,
+    previousTransform: state.previewTransform,
+  });
+  state.previewTransform = scales.transform;
+  state.previewFitScale = scales.fitScale;
+  state.previewNaturalScale = scales.naturalScale;
 }
 
 function zoomImage(multiplier) {
-  const nextScale = clamp(state.previewTransform.scale * multiplier, minimumPreviewScale(), 8);
+  const nextScale = nextZoomScale(
+    state.previewTransform.scale,
+    multiplier,
+    state.previewFitScale,
+    state.previewNaturalScale,
+  );
   setImageZoom(nextScale);
 }
 
 function setImageZoom(scale, position: { x: number; y: number } = state.previewTransform) {
-  state.previewTransform = {
-    scale,
-    x: position.x,
-    y: position.y,
-  };
+  state.previewTransform = setPreviewZoom(scale, position);
   applyImageTransform();
 }
 
@@ -777,10 +785,11 @@ function moveImageDrag(event) {
     if (state.previewPointers.size === 2 && state.previewPinch) {
       const distance = pointerDistance();
       if (distance > 0 && state.previewPinch.distance > 0) {
-        const nextScale = clamp(
+        const nextScale = nextZoomScale(
           state.previewPinch.scale * (distance / state.previewPinch.distance),
-          minimumPreviewScale(),
-          8,
+          1,
+          state.previewFitScale,
+          state.previewNaturalScale,
         );
         setImageZoom(nextScale);
       }
@@ -789,8 +798,10 @@ function moveImageDrag(event) {
   }
   const drag = state.previewDrag;
   if (!drag || drag.pointerId !== event.pointerId) return;
-  state.previewTransform.x = drag.originX + event.clientX - drag.startX;
-  state.previewTransform.y = drag.originY + event.clientY - drag.startY;
+  state.previewTransform = dragPreviewTransform(state.previewTransform, drag, {
+    x: event.clientX,
+    y: event.clientY,
+  });
   applyImageTransform();
 }
 
@@ -814,7 +825,7 @@ function showPreviewNotice(message) {
 }
 
 function minimumPreviewScale() {
-  return Math.max(0.05, Math.min(state.previewFitScale, state.previewNaturalScale) * 0.5);
+  return getMinimumPreviewScale(state.previewFitScale, state.previewNaturalScale);
 }
 
 function refreshPreviewImageLayout() {
@@ -1127,10 +1138,7 @@ function clearPreviewContents() {
 }
 
 function pointerDistance() {
-  const points = [...state.previewPointers.values()];
-  if (points.length < 2) return 0;
-  const [first, second] = points;
-  return Math.hypot(second.x - first.x, second.y - first.y);
+  return getPointerDistance(state.previewPointers.values());
 }
 
 function renderRating(container, item, { interactive = false } = {}) {
