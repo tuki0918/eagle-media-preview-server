@@ -45,14 +45,6 @@ export interface PreviewPinch {
   scale: number;
 }
 
-export interface PreviewTouchSession {
-  pointerId: number;
-  startX: number;
-  startY: number;
-  startedAt: number;
-  moved: boolean;
-}
-
 export interface ConnectResponse {
   library?: {
     name?: string;
@@ -86,20 +78,6 @@ export interface OpenPreviewOptions {
 
 export interface RenderImagePreviewOptions {
   srcKind?: string;
-}
-
-export interface PopulateThumbOptions {
-  img: HTMLImageElement;
-  badge: HTMLElement | null;
-  duration: HTMLElement | null;
-  item: EagleItem;
-}
-
-export interface SavePreviewMetadataOptions {
-  tags: string[];
-  folders: string[];
-  saveButton: HTMLButtonElement;
-  status: HTMLElement;
 }
 
 export type ItemPatch = Partial<EagleItem>;

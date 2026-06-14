@@ -7,14 +7,13 @@ async function readViewerSources() {
     "../src/viewerApp.ts",
     "../src/viewer/api.ts",
     "../src/viewer/constants.ts",
-    "../src/viewer/dom.ts",
     "../src/viewer/elements.ts",
+    "../src/viewer/fileLinks.ts",
     "../src/viewer/format.ts",
     "../src/viewer/icons.ts",
     "../src/viewer/itemQuery.ts",
     "../src/viewer/media.ts",
     "../src/viewer/metadata.ts",
-    "../src/viewer/metadataEditor.ts",
     "../src/viewer/pagination.ts",
     "../src/viewer/previewDetails.ts",
     "../src/viewer/previewTransform.ts",
@@ -37,6 +36,7 @@ async function readAppSources() {
     "../src/viewer/components/LoginView.tsx",
     "../src/viewer/components/Pager.tsx",
     "../src/viewer/components/PreviewDialog.tsx",
+    "../src/viewer/components/PreviewInfo.tsx",
     "../src/viewer/components/ResultList.tsx",
     "../src/viewer/components/ResultsStatus.tsx",
     "../src/viewer/components/SearchControls.tsx",
@@ -160,15 +160,13 @@ test("public UI exposes direct original file URLs for each media item", async ()
   const html = await readAppSources();
   const app = await readViewerSources();
   const directFileUrlSource = app.match(/function directFileUrl\(item[^)]*\) \{[\s\S]*?\n\}/)?.[0] || "";
-  const directFileLinkSource = app.match(/function directFileLink\(item[^)]*\) \{[\s\S]*?\n\}/)?.[0] || "";
 
   assert.doesNotMatch(html, /class="direct-file-link"/);
   assert.match(app, /function directFileUrl\(item[^)]*\)/);
   assert.match(app, /function previewFileName\(item[^)]*\)/);
-  assert.match(app, /function directFileLink\(item[^)]*\)/);
   assert.match(directFileUrlSource, /return new URL\(`\/file\/\$\{encodeURIComponent\(String\(item\.id \|\| ""\)\)\}`,\s*baseUrl\)\.href;/);
-  assert.match(directFileLinkSource, /link\.className = "direct-file-link"/);
-  assert.match(directFileLinkSource, /link\.textContent = "Open file"/);
+  assert.match(html, /className="direct-file-link preview-info-cta"/);
+  assert.match(html, /Open file/);
   assert.doesNotMatch(directFileUrlSource, /connectionId/);
   assert.doesNotMatch(app, /state\.connectionId/);
   assert.doesNotMatch(app, /function withConnection\(/);
@@ -303,43 +301,39 @@ test("public file names expose original names in truncated views and preview inf
 });
 
 test("public preview info uses chip lists and a full-width open file CTA", async () => {
+  const html = await readAppSources();
   const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
-  assert.match(app, /detailsSection\.className = "preview-details-section";/);
-  assert.match(app, /if \(chips && value\.length > 0\) \{/);
-  assert.match(app, /function previewChipList\(values[^)]*\) \{/);
-  assert.match(app, /chip\.className = "preview-chip";/);
+  assert.match(html, /<section className="preview-details-section">/);
+  assert.match(html, /function PreviewChipList\(\{ values \}/);
+  assert.match(html, /className="preview-chip"/);
   assert.doesNotMatch(app, /preview-chip-empty/);
   assert.match(app, /previewActions: document\.querySelector\("#previewActions"\),/);
-  assert.match(app, /link\.classList\.add\("preview-info-cta"\);/);
-  assert.match(app, /link\.prepend\(iconNode\("external-link"\)\);/);
+  assert.match(html, /className="direct-file-link preview-info-cta"/);
+  assert.match(html, /function ExternalLinkIcon\(\)/);
   assert.match(app, /{ label: "Type", value: mediaTypeLabel\(item\) }/);
-  assert.match(app, /detailsSection\.append\(previewMetadataEditor\(item\)\);/);
-  assert.match(app, /function previewMetadataEditor\(item[^)]*\) \{/);
-  assert.match(app, /const tagPicker = metadataChipPicker\(\{/);
-  assert.match(app, /const categoryPicker = metadataChipPicker\(\{/);
-  assert.match(app, /previewEditField\("Tags", tagPicker\.element\)/);
-  assert.match(app, /previewEditField\("Categories", categoryPicker\.element\)/);
-  assert.match(app, /savePreviewMetadata\(item, \{/);
-  assert.match(app, /tags: tagPicker\.values\(\),/);
-  assert.match(app, /folders: categoryPicker\.values\(\),/);
-  assert.match(app, /saveButton\.addEventListener\("click", submitMetadata\);/);
+  assert.match(app, /renderPreviewInfoView\(els\.previewDetails, els\.previewActions, \{/);
+  assert.match(html, /function PreviewMetadataEditor\(\{/);
+  assert.match(html, /<PreviewEditField label="Tags">/);
+  assert.match(html, /<PreviewEditField label="Categories">/);
+  assert.match(html, /await onSaveMetadata\(item, \{ tags, folders: categories \}\);/);
+  assert.match(html, /onSubmit=\{submitMetadata\}/);
   assert.match(app, /postJson<\{[\s\S]*folders\?: unknown;[\s\S]*\}>\(`\/api\/items\/\$\{encodeURIComponent\(String\(item\.id \|\| ""\)\)\}\/metadata`, \{ tags, folders \}\)/);
   assert.match(app, /rememberRecentValues\(RECENT_TAGS_STORAGE_KEY, patch\.tags\);/);
   assert.match(app, /rememberRecentValues\(RECENT_FOLDERS_STORAGE_KEY, patch\.folders\);/);
-  assert.match(app, /if \(status\.isConnected\) status\.textContent = "Saved";/);
+  assert.match(html, /setStatus\("Saved"\);/);
   assert.match(app, /const RECENT_TAGS_STORAGE_KEY = "eagleRecentTags";/);
   assert.match(app, /const RECENT_FOLDERS_STORAGE_KEY = "eagleRecentFolders";/);
-  assert.match(app, /function metadataChipPicker\(\{/);
-  assert.match(app, /input\.addEventListener\("pointerdown", updateSuggestions\);/);
-  assert.match(app, /wrapper\.addEventListener\("pointerdown", \(event\) => event\.stopPropagation\(\)\);/);
-  assert.match(app, /input\.value = "";\s*renderSelected\(\);\s*hideSuggestions\(\);/);
+  assert.match(html, /function MetadataChipEditor\(\{/);
+  assert.match(html, /onPointerDown=\{\(\) => updateSuggestions\(\)\}/);
+  assert.match(html, /onPointerDown=\{\(event\) => event\.stopPropagation\(\)\}/);
+  assert.match(html, /setQuery\(""\);\s*hideSuggestions\(\);/);
   assert.match(app, /function readRecentList\(key[^)]*\) \{/);
   assert.match(app, /function writeRecentList\(key[^,]*,\s*values[^)]*\) \{/);
   assert.match(app, /function tagSuggestionItems\(\{/);
   assert.match(app, /function folderSuggestionItems\(\{/);
-  assert.match(app, /row\.className = "preview-edit-row";\s*const labelNode = document\.createElement\("span"\);/);
+  assert.match(html, /className="preview-edit-row"/);
   assert.doesNotMatch(app, /const row = document\.createElement\("label"\);/);
   assert.doesNotMatch(app, /render\(\);\s*if \(els\.dialog\.open && state\.previewItemId === item\.id\) \{\s*renderPreviewDetails\(item\);/s);
   assert.match(app, /{ label: "Date Modified", value: formatItemDate\(item, DATE_KEYS_MODIFIED\) \|\| "-" }/);
@@ -347,8 +341,8 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.doesNotMatch(app, /Date Created/);
   assert.doesNotMatch(app, /preview-date-section/);
   assert.match(app, /function formatItemDate\(item[^,]*,\s*keys[^)]*\) \{/);
-  assert.match(app, /els\.previewDetails\.replaceChildren\(detailsSection\);/);
-  assert.match(app, /els\.previewActions\.replaceChildren\(link\);/);
+  assert.match(html, /detailsRoot\.render\(<PreviewDetailsPanel \{\.\.\.props\} \/>/);
+  assert.match(html, /actionsRoot\.render\(<PreviewActions item=\{props\.item\} \/>/);
   assert.match(css, /\.preview-details-section\s*\{/);
   assert.doesNotMatch(css, /\.preview-detail-row-divider\s*\{/);
   assert.match(css, /\.preview-rating-section\s*\{[^}]*min-height:\s*32px;/s);

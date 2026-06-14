@@ -5,7 +5,9 @@ import {
   LoginView,
   PageButtons,
   Pager,
+  PreviewActions,
   PreviewDialog,
+  PreviewDetailsPanel,
   ResultList,
   ResultStateView,
   ResultsStatus,
@@ -147,5 +149,23 @@ describe("ViewerAppShell", () => {
     expect(html).toContain('class="tile-item thumb-loading"');
     expect(html).toContain('data-ext="jpg"');
     expect(html).toContain('data-active="true"');
+  });
+
+  test("renders preview info as reusable detail and action components", () => {
+    const details = renderToStaticMarkup(
+      <PreviewDetailsPanel
+        item={{ id: "item-1", tags: ["alpha"], folders: ["folder-1"] }}
+        folders={[{ id: "folder-1", name: "Folder 1" }]}
+        detailRows={[{ label: "Type", value: "Image" }]}
+        onTagSuggestions={() => []}
+        onFolderSuggestions={() => []}
+        onSaveMetadata={async () => {}}
+      />,
+    );
+    const actions = renderToStaticMarkup(<PreviewActions item={{ id: "item-1" }} />);
+
+    expect(details).toContain('class="preview-details-section"');
+    expect(details).toContain('class="preview-edit-form"');
+    expect(actions).toContain('class="direct-file-link preview-info-cta"');
   });
 });

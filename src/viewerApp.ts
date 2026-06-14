@@ -11,18 +11,12 @@ import {
   textPreviewExts,
 } from "./viewer/constants";
 import { debounce, getJson, mediaUrl, postJson } from "./viewer/api";
-import {
-  directFileLink,
-  previewChipList,
-} from "./viewer/dom";
 import { getViewerElements } from "./viewer/elements";
 import {
   flattenFolders,
-  folderIds,
   formatDuration,
   isTimedMedia,
   itemMeta,
-  itemTags,
   normalizeTag,
   originalFileName,
   previewFileName,
@@ -31,7 +25,6 @@ import { hasActiveFilters, resetFilterState } from "./viewer/filters";
 import { iconNode, renderLucideIcons, type IconName } from "./viewer/icons";
 import { itemQueryParams } from "./viewer/itemQuery";
 import {
-  folderLabel,
   folderSuggestionItems as buildFolderSuggestionItems,
   type MetadataSuggestion,
   type RemoteTag,
@@ -39,11 +32,6 @@ import {
   rememberRecentValues,
   tagSuggestionItems as buildTagSuggestionItems,
 } from "./viewer/metadata";
-import {
-  metadataChipPicker,
-  previewEditActions,
-  previewEditField,
-} from "./viewer/metadataEditor";
 import {
   currentFetchLimit as getCurrentFetchLimit,
   pageButtonList,
@@ -58,6 +46,10 @@ import {
   clearResultListView,
   renderResultListView,
 } from "./viewer/components/ResultList";
+import {
+  clearPreviewInfoView,
+  renderPreviewInfoView,
+} from "./viewer/components/PreviewInfo";
 import { renderTagChipsView } from "./viewer/components/TagChips";
 import {
   clearTagSuggestionsView,
@@ -91,7 +83,6 @@ import type {
   OpenPreviewOptions,
   PreviewPoint,
   RenderImagePreviewOptions,
-  SavePreviewMetadataOptions,
   TagSuggestionApiItem,
 } from "./viewer/types";
 import { buildViewerUrl, currentPage, parseViewerUrlState } from "./viewer/urlState";
@@ -885,6 +876,7 @@ function syncPreviewFromState() {
 }
 
 function clearPreviewContents() {
+  clearPreviewInfoView(els.previewDetails, els.previewActions);
   els.previewBody.replaceChildren();
   els.previewOriginalName.textContent = "";
   els.previewOriginalName.removeAttribute("title");
@@ -1002,94 +994,17 @@ function renderPageButtons() {
 }
 
 function renderPreviewDetails(item: EagleItem) {
-  const detailsSection = document.createElement("section");
-  detailsSection.className = "preview-details-section";
-
-  for (const { label, value, chips = false } of previewDetailRows(item)) {
-    const row = document.createElement("div");
-    row.className = "preview-detail-row";
-
-    const labelNode = document.createElement("span");
-    labelNode.className = "preview-detail-label";
-    labelNode.textContent = label;
-
-    const valueNode = document.createElement("div");
-    valueNode.className = "preview-detail-value";
-    if (chips && value.length > 0) {
-      const chipList = previewChipList(value);
-      valueNode.append(chipList);
-    } else {
-      valueNode.textContent = chips ? "-" : value;
-    }
-
-    row.append(labelNode, valueNode);
-    detailsSection.append(row);
-  }
-
-  detailsSection.append(previewMetadataEditor(item));
-
-  const link = directFileLink(item);
-  link.classList.add("preview-info-cta");
-  link.prepend(iconNode("external-link"));
-
-  els.previewDetails.replaceChildren(detailsSection);
-  els.previewActions.replaceChildren(link);
+  renderPreviewInfoView(els.previewDetails, els.previewActions, {
+    item,
+    detailRows: previewDetailRows(item),
+    folders: state.folders,
+    onTagSuggestions: tagSuggestionItems,
+    onFolderSuggestions: folderSuggestionItems,
+    onSaveMetadata: savePreviewMetadata,
+  });
 }
 
-function previewMetadataEditor(item: EagleItem) {
-  const form = document.createElement("form");
-  form.className = "preview-edit-form";
-
-  const tagPicker = metadataChipPicker({
-    kind: "tag",
-    initialValues: itemTags(item),
-    placeholder: "Add tag",
-    inputLabel: "Add tag",
-    labelForValue: (value) => value,
-    getSuggestions: tagSuggestionItems,
-    normalizeValue: normalizeTag,
-  });
-  const categoryPicker = metadataChipPicker({
-    kind: "category",
-    initialValues: folderIds(item.folders),
-    placeholder: "Add category",
-    inputLabel: "Add category",
-    labelForValue: (value) => folderLabel(value, state.folders),
-    getSuggestions: folderSuggestionItems,
-    normalizeValue: (value) => String(value || "").trim(),
-  });
-
-  const saveButton = document.createElement("button");
-  saveButton.type = "submit";
-  saveButton.className = "text-button preview-edit-save";
-  saveButton.textContent = "Save";
-
-  const status = document.createElement("span");
-  status.className = "preview-edit-status";
-  status.setAttribute("role", "status");
-
-  form.append(
-    previewEditField("Tags", tagPicker.element),
-    previewEditField("Categories", categoryPicker.element),
-    previewEditActions(saveButton, status),
-  );
-  const submitMetadata = (event: Event) => {
-    event.preventDefault();
-    savePreviewMetadata(item, {
-      tags: tagPicker.values(),
-      folders: categoryPicker.values(),
-      saveButton,
-      status,
-    });
-  };
-  form.addEventListener("submit", submitMetadata);
-  saveButton.addEventListener("click", submitMetadata);
-  return form;
-}
-
-async function savePreviewMetadata(item: EagleItem, { tags, folders, saveButton, status }: SavePreviewMetadataOptions) {
-  saveButton.disabled = true;
-  status.textContent = "Saving";
+async function savePreviewMetadata(item: EagleItem, { tags, folders }: { tags: string[]; folders: string[] }) {
   try {
     const data = await postJson<{
       tags?: unknown;
@@ -1104,11 +1019,8 @@ async function savePreviewMetadata(item: EagleItem, { tags, folders, saveButton,
     Object.assign(item, patch);
     updateItemInState(String(item.id || ""), patch);
     render();
-    if (status.isConnected) status.textContent = "Saved";
   } catch (error) {
-    status.textContent = error.message;
-  } finally {
-    saveButton.disabled = false;
+    throw error instanceof Error ? error : new Error(String(error));
   }
 }
 
