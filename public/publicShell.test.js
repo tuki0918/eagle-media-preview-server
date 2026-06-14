@@ -13,6 +13,7 @@ async function readViewerSources() {
     "../src/viewer/metadata.ts",
     "../src/viewer/pagination.ts",
     "../src/viewer/previewTransform.ts",
+    "../src/viewer/rating.ts",
     "../src/viewer/state.ts",
     "../src/viewer/urlState.ts",
   ];
@@ -247,8 +248,8 @@ test("public ratings are static in grid and table but editable in the preview mo
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(app, /renderRating\(rating, item, \{ interactive: false \}\);/);
-  assert.match(app, /renderRating\(els\.previewRating, item, \{ interactive: true \}\);/);
-  assert.match(app, /function renderRating\(container, item, \{ interactive = false \} = \{\}\)/);
+  assert.match(app, /renderRating\(els\.previewRating, item, \{ interactive: true, onSelect:/);
+  assert.match(app, /function renderRating\(container[^,]*,\s*item[^,]*,\s*\{ interactive = false, onSelect \}[^)]*\)/);
   assert.match(app, /const star = document\.createElement\(interactive \? "button" : "span"\);/);
   assert.match(app, /star\.className = interactive \? "rating-star" : "rating-star rating-star-static";/);
   assert.match(css, /\.rating-star-static\s*\{/);

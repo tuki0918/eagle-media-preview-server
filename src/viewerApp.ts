@@ -55,6 +55,7 @@ import {
   pointerDistance as getPointerDistance,
   setPreviewZoom,
 } from "./viewer/previewTransform";
+import { renderRating } from "./viewer/rating";
 import { state } from "./viewer/state";
 import type { ViewerMode } from "./viewer/types";
 import { buildViewerUrl, currentPage, parseViewerUrlState } from "./viewer/urlState";
@@ -555,7 +556,7 @@ function openPreview(item, { skipHistory = false } = {}) {
   els.previewBody.replaceChildren();
   els.dialog.classList.remove("video-mode", "image-mode", "audio-mode", "text-mode", "unsupported-mode", "info-open");
   els.toggleInfoPreview.setAttribute("aria-expanded", state.previewInfoOpen ? "true" : "false");
-  renderRating(els.previewRating, item, { interactive: true });
+  renderRating(els.previewRating, item, { interactive: true, onSelect: (star) => setItemStar(item, star) });
   renderPreviewDetails(item);
   if (state.previewInfoOpen) {
     els.dialog.classList.add("info-open");
@@ -1142,37 +1143,13 @@ function pointerDistance() {
   return getPointerDistance(state.previewPointers.values());
 }
 
-function renderRating(container, item, { interactive = false } = {}) {
-  container.replaceChildren();
-  const current = Number(item.star || 0);
-  for (let value = 1; value <= 5; value += 1) {
-    const star = document.createElement(interactive ? "button" : "span");
-    if (interactive) (star as HTMLButtonElement).type = "button";
-    star.className = interactive ? "rating-star" : "rating-star rating-star-static";
-    star.textContent = "★";
-    star.title = `${value}`;
-    star.dataset.active = value <= current ? "true" : "false";
-    if (interactive) {
-      star.ariaLabel = `Rating ${value}`;
-      star.setAttribute("aria-pressed", value <= current ? "true" : "false");
-      star.addEventListener("click", (event) => {
-        event.stopPropagation();
-        setItemStar(item, value === Number(item.star || 0) ? 0 : value);
-      });
-    } else {
-      star.setAttribute("aria-hidden", "true");
-    }
-    container.append(star);
-  }
-}
-
 async function setItemStar(item, star) {
   const previous = Number(item.star || 0);
   item.star = star;
   updateItemInState(item.id, { star });
   render();
   if (els.dialog.open) {
-    renderRating(els.previewRating, item, { interactive: true });
+    renderRating(els.previewRating, item, { interactive: true, onSelect: (nextStar) => setItemStar(item, nextStar) });
   }
 
   try {
@@ -1187,7 +1164,7 @@ async function setItemStar(item, star) {
   } finally {
     render();
     if (els.dialog.open) {
-      renderRating(els.previewRating, item, { interactive: true });
+      renderRating(els.previewRating, item, { interactive: true, onSelect: (nextStar) => setItemStar(item, nextStar) });
     }
   }
 }
