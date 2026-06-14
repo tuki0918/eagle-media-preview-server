@@ -1,5 +1,3 @@
-// @ts-nocheck
-
 import {
   DATE_KEYS_MODIFIED,
   DEFAULT_EAGLE_CONNECTION,
@@ -80,7 +78,7 @@ async function init() {
     if (els.searchInput.value.trim()) loadTagSuggestions();
   });
   document.addEventListener("pointerdown", (event) => {
-    if (event.target.closest(".search-box")) return;
+    if ((event.target as Element | null)?.closest(".search-box")) return;
     hideTagSuggestions();
   });
   els.folderSelect.addEventListener("change", () => {
@@ -295,7 +293,7 @@ function appendRenderedItems(items) {
 
 function bindPreviewTrigger(element, item) {
   let lastTriggerAt = 0;
-  let touchSession = null;
+  let touchSession: any = null;
   const TAP_MOVE_THRESHOLD = 10;
   const TAP_HOLD_THRESHOLD_MS = 300;
 
@@ -429,7 +427,7 @@ function tableRow(item) {
   img.decoding = "async";
   thumb.append(img);
 
-  populateThumb({ img, item });
+  populateThumb({ img, badge: null, duration: null, item });
   decorateThumbButton(thumb, null, item);
   bindPreviewTrigger(thumb, item);
   row.append(
@@ -830,7 +828,7 @@ function restoreViewMode() {
     return;
   }
   const saved = localStorage.getItem("eagleViewMode");
-  state.viewMode = ["grid", "tiles", "table"].includes(saved) ? saved : DEFAULT_VIEW_MODE;
+  state.viewMode = saved && ["grid", "tiles", "table"].includes(saved) ? saved : DEFAULT_VIEW_MODE;
   updateViewToggle();
 }
 
@@ -1072,7 +1070,7 @@ function normalizeTag(value) {
 }
 
 function uniqueTags(tags) {
-  const unique = [];
+  const unique: string[] = [];
   for (const tag of tags.map(normalizeTag).filter(Boolean)) {
     if (!unique.includes(tag)) unique.push(tag);
   }
@@ -1145,7 +1143,7 @@ function renderRating(container, item, { interactive = false } = {}) {
   const current = Number(item.star || 0);
   for (let value = 1; value <= 5; value += 1) {
     const star = document.createElement(interactive ? "button" : "span");
-    if (interactive) star.type = "button";
+    if (interactive) (star as HTMLButtonElement).type = "button";
     star.className = interactive ? "rating-star" : "rating-star rating-star-static";
     star.textContent = "★";
     star.title = `${value}`;
@@ -1344,14 +1342,15 @@ function renderPreviewDetails(item) {
   const detailsSection = document.createElement("section");
   detailsSection.className = "preview-details-section";
 
-  const rows = [
+  const detailRows: Array<{ label: string; value: any; chips?: boolean; always?: boolean }> = [
     { label: "Type", value: mediaTypeLabel(item) },
     { label: "Size", value: formatBytes(item.size) },
     { label: "Dimensions", value: item.width && item.height ? `${item.width} x ${item.height}` : "" },
     { label: "Duration", value: isTimedMedia(item) ? formatDuration(item.duration) : "" },
     { label: "ID", value: item.id },
     { label: "Date Modified", value: formatItemDate(item, DATE_KEYS_MODIFIED) || "-" },
-  ].filter(({ value, chips, always }) => always || (chips ? value.length > 0 : Boolean(value)));
+  ];
+  const rows = detailRows.filter(({ value, chips, always }) => always || (chips ? value.length > 0 : Boolean(value)));
 
   for (const { label, value, chips = false } of rows) {
     const row = document.createElement("div");
@@ -1444,8 +1443,8 @@ function metadataChipPicker({
   getSuggestions,
   normalizeValue,
 }) {
-  let selected = uniqueValues((initialValues || []).map(normalizeValue).filter(Boolean));
-  let currentSuggestions = [];
+  let selected: any[] = uniqueValues((initialValues || []).map(normalizeValue).filter(Boolean));
+  let currentSuggestions: any[] = [];
   let requestId = 0;
 
   const wrapper = document.createElement("div");
@@ -1582,7 +1581,7 @@ function metadataChipPicker({
     if (currentSuggestions[0]) addValue(currentSuggestions[0].value);
   });
   wrapper.addEventListener("focusout", (event) => {
-    if (wrapper.contains(event.relatedTarget)) return;
+    if (wrapper.contains(event.relatedTarget as Node | null)) return;
     window.setTimeout(hideSuggestions, 120);
   });
   wrapper.addEventListener("pointerdown", (event) => event.stopPropagation());
@@ -1692,7 +1691,7 @@ function folderSuggestionItems(query, selectedValues) {
 
 function dedupeSuggestions(items) {
   const seen = new Set();
-  const output = [];
+  const output: any[] = [];
   for (const item of items) {
     if (!item.value || seen.has(item.value)) continue;
     seen.add(item.value);
@@ -1739,7 +1738,7 @@ function rememberRecentValues(key, values) {
 }
 
 function uniqueValues(values) {
-  const unique = [];
+  const unique: any[] = [];
   for (const value of values) {
     if (value && !unique.includes(value)) unique.push(value);
   }
@@ -1815,7 +1814,7 @@ function isTimedMedia(item) {
 }
 
 function flattenFolders(folders, depth = 0) {
-  const output = [];
+  const output: any[] = [];
   for (const folder of folders || []) {
     output.push({ ...folder, depth });
     output.push(...flattenFolders(folder.children, depth + 1));

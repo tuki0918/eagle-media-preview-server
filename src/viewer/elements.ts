@@ -1,4 +1,4 @@
-export function getViewerElements() {
+export function getViewerElements(): Record<string, any> {
   return {
     loginView: document.querySelector("#loginView"),
     viewerShell: document.querySelector("#viewerShell"),

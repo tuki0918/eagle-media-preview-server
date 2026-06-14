@@ -1,4 +1,4 @@
-export const state = {
+export const state: any = {
   offset: 0,
   limit: 30,
   total: 0,

@@ -17,7 +17,7 @@ async function requestJson(url: string, options?: RequestInit) {
   return data;
 }
 
-export function mediaUrl(id: string, kind: "file" | "thumb") {
+export function mediaUrl(id: string, kind: string) {
   if (kind === "file") {
     return `/file/${encodeURIComponent(id)}`;
   }
