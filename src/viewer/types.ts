@@ -45,6 +45,65 @@ export interface PreviewPinch {
   scale: number;
 }
 
+export interface PreviewTouchSession {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  startedAt: number;
+  moved: boolean;
+}
+
+export interface ConnectResponse {
+  library?: {
+    name?: string;
+  };
+  app?: {
+    version?: string;
+  };
+}
+
+export interface LoadFoldersResponse {
+  items?: EagleFolder[];
+}
+
+export interface LoadItemsResponse {
+  items?: EagleItem[];
+  total?: number;
+}
+
+export interface TagSuggestionApiItem {
+  name?: string;
+  count?: number;
+}
+
+export interface LoadItemsOptions {
+  append?: boolean;
+}
+
+export interface OpenPreviewOptions {
+  skipHistory?: boolean;
+}
+
+export interface RenderImagePreviewOptions {
+  srcKind?: string;
+}
+
+export interface PopulateThumbOptions {
+  img: HTMLImageElement;
+  badge: HTMLElement | null;
+  duration: HTMLElement | null;
+  item: EagleItem;
+}
+
+export interface SavePreviewMetadataOptions {
+  tags: string[];
+  folders: string[];
+  saveButton: HTMLButtonElement;
+  status: HTMLElement;
+}
+
+export type ItemPatch = Partial<EagleItem>;
+
 export interface ViewerState {
   offset: number;
   limit: number;

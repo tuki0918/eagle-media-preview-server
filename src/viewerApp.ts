@@ -67,69 +67,25 @@ import {
 import { previewDetailRows } from "./viewer/previewDetails";
 import { renderRating } from "./viewer/rating";
 import { state } from "./viewer/state";
-import type { EagleFolder, EagleItem, PreviewPoint, ViewerMode } from "./viewer/types";
+import type {
+  ConnectResponse,
+  EagleItem,
+  ItemPatch,
+  LoadFoldersResponse,
+  LoadItemsOptions,
+  LoadItemsResponse,
+  OpenPreviewOptions,
+  PopulateThumbOptions,
+  PreviewPoint,
+  PreviewTouchSession,
+  RenderImagePreviewOptions,
+  SavePreviewMetadataOptions,
+  TagSuggestionApiItem,
+  ViewerMode,
+} from "./viewer/types";
 import { buildViewerUrl, currentPage, parseViewerUrlState } from "./viewer/urlState";
 
 const els = getViewerElements();
-
-interface PreviewTouchSession {
-  pointerId: number;
-  startX: number;
-  startY: number;
-  startedAt: number;
-  moved: boolean;
-}
-
-interface ConnectResponse {
-  library?: {
-    name?: string;
-  };
-  app?: {
-    version?: string;
-  };
-}
-
-interface LoadFoldersResponse {
-  items?: EagleFolder[];
-}
-
-interface LoadItemsResponse {
-  items?: EagleItem[];
-  total?: number;
-}
-
-interface TagSuggestionApiItem {
-  name?: string;
-  count?: number;
-}
-
-interface LoadItemsOptions {
-  append?: boolean;
-}
-
-interface OpenPreviewOptions {
-  skipHistory?: boolean;
-}
-
-interface RenderImagePreviewOptions {
-  srcKind?: string;
-}
-
-interface PopulateThumbOptions {
-  img: HTMLImageElement;
-  badge: HTMLElement | null;
-  duration: HTMLElement | null;
-  item: EagleItem;
-}
-
-interface SavePreviewMetadataOptions {
-  tags: string[];
-  folders: string[];
-  saveButton: HTMLButtonElement;
-  status: HTMLElement;
-}
-
-type ItemPatch = Partial<EagleItem>;
 
 export function initViewer() {
   init();
