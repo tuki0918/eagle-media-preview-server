@@ -12,7 +12,7 @@ export function ViewerAppShell() {
 
 export { CardTemplate } from "./components/CardTemplate";
 export { FolderOptions } from "./components/FolderOptions";
-export { LoginView } from "./components/LoginView";
+export { ConnectButton, ConnectMessage, LoginView } from "./components/LoginView";
 export { PageButtons } from "./components/PageButtons";
 export { Pager } from "./components/Pager";
 export { PreviewBody } from "./components/PreviewBody";

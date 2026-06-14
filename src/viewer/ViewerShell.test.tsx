@@ -2,6 +2,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
 import {
   CardTemplate,
+  ConnectButton,
+  ConnectMessage,
   FolderOptions,
   LoginView,
   PageButtons,
@@ -28,7 +30,9 @@ import { MEDIA_TYPE_OPTIONS, PAGE_SIZE_OPTIONS, RATING_OPTIONS } from "./shellCo
 const REQUIRED_ELEMENT_IDS = [
   "loginView",
   "connectForm",
+  "connectButtonHost",
   "connectButton",
+  "connectMessageHost",
   "connectMessage",
   "viewerShell",
   "folderSelect",
@@ -104,6 +108,17 @@ describe("ViewerAppShell", () => {
       expect(html).toContain(`value="${pageSize}"`);
       expect(html).toContain(`${pageSize} items`);
     }
+  });
+
+  test("renders login connection controls as reusable components", () => {
+    const button = renderToStaticMarkup(<ConnectButton disabled />);
+    const message = renderToStaticMarkup(<ConnectMessage isError message="No Eagle" />);
+
+    expect(button).toContain('id="connectButton"');
+    expect(button).toContain("disabled");
+    expect(message).toContain('id="connectMessage"');
+    expect(message).toContain("No Eagle");
+    expect(message).toContain("error-text");
   });
 
   test("exports independently renderable shell components", () => {

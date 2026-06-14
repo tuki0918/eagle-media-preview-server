@@ -84,10 +84,18 @@ test("public UI no longer shows connect lock icon or connection settings button"
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.doesNotMatch(html, /id="connectButtonIcon"/);
+  assert.match(html, /id="connectButtonHost"[\s\S]*<ConnectButton \/>/);
+  assert.match(html, /id="connectMessageHost"[\s\S]*<ConnectMessage \/>/);
   assert.doesNotMatch(html, /aria-label="Connection settings"/);
   assert.doesNotMatch(html, /id="changeConnectionButton"/);
   assert.doesNotMatch(app, /changeConnectionButton/);
   assert.doesNotMatch(app, /connectButtonIcon/);
+  assert.match(app, /connectButtonHost: document\.querySelector\("#connectButtonHost"\),/);
+  assert.match(app, /connectMessageHost: document\.querySelector\("#connectMessageHost"\),/);
+  assert.doesNotMatch(app, /connectButton: document\.querySelector\("#connectButton"\),/);
+  assert.match(app, /renderLoginConnectView\(els\.connectButtonHost, els\.connectMessageHost, \{/);
+  assert.doesNotMatch(app, /els\.connectMessage\.textContent/);
+  assert.doesNotMatch(app, /els\.connectMessage\.classList/);
   assert.doesNotMatch(app, /syncAuthUi/);
   assert.doesNotMatch(html, /id="connectionStatusDot"/);
   assert.doesNotMatch(html, /id="libraryName"/);

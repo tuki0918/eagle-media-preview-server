@@ -1,8 +1,8 @@
 export interface ViewerElements {
   loginView: HTMLElement;
   viewerShell: HTMLElement;
-  connectButton: HTMLButtonElement;
-  connectMessage: HTMLElement;
+  connectButtonHost: HTMLElement;
+  connectMessageHost: HTMLElement;
   searchInput: HTMLInputElement;
   tagChips: HTMLElement;
   tagSuggestions: HTMLElement;
@@ -33,8 +33,8 @@ export function getViewerElements(): ViewerElements {
   const elements = {
     loginView: document.querySelector("#loginView"),
     viewerShell: document.querySelector("#viewerShell"),
-    connectButton: document.querySelector("#connectButton"),
-    connectMessage: document.querySelector("#connectMessage"),
+    connectButtonHost: document.querySelector("#connectButtonHost"),
+    connectMessageHost: document.querySelector("#connectMessageHost"),
     searchInput: document.querySelector("#searchInput"),
     tagChips: document.querySelector("#tagChips"),
     tagSuggestions: document.querySelector("#tagSuggestions"),

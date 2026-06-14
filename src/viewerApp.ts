@@ -57,6 +57,7 @@ import {
   renderPreviewBodyView,
   type PreviewBodyKind,
 } from "./viewer/components/PreviewBody";
+import { renderLoginConnectView } from "./viewer/components/LoginView";
 import { renderFolderOptionsView } from "./viewer/components/FolderOptions";
 import { renderResultsStatusView } from "./viewer/components/ResultsStatus";
 import { renderSearchControlButtonsView } from "./viewer/components/SearchControls";
@@ -93,6 +94,9 @@ import {
 } from "./viewer/viewMode";
 
 const els = getViewerElements();
+let connectMessageText = "";
+let connectMessageIsError = false;
+let connectBusy = false;
 
 export function initViewer() {
   init();
@@ -183,7 +187,7 @@ async function init() {
 
 async function connect() {
   setConnectMessage("Connecting", false);
-  els.connectButton.disabled = true;
+  setConnectBusy(true);
 
   try {
     const connection = { ...DEFAULT_EAGLE_CONNECTION };
@@ -194,7 +198,7 @@ async function connect() {
     showLogin();
     setConnectMessage(error.message, true);
   } finally {
-    els.connectButton.disabled = false;
+    setConnectBusy(false);
   }
 }
 
@@ -216,8 +220,22 @@ function showViewer(data: ConnectResponse) {
 }
 
 function setConnectMessage(message: string, isError: boolean) {
-  els.connectMessage.textContent = message;
-  els.connectMessage.classList.toggle("error-text", isError);
+  connectMessageText = message;
+  connectMessageIsError = isError;
+  renderLoginConnect();
+}
+
+function setConnectBusy(isBusy: boolean) {
+  connectBusy = isBusy;
+  renderLoginConnect();
+}
+
+function renderLoginConnect() {
+  renderLoginConnectView(els.connectButtonHost, els.connectMessageHost, {
+    disabled: connectBusy,
+    isError: connectMessageIsError,
+    message: connectMessageText,
+  });
 }
 
 function libraryLabel(data: ConnectResponse) {
