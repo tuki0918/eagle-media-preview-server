@@ -1,28 +1,32 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { createServerManager } from "./serverManager.js";
+import { createServerManager, type ManagedViewerServer } from "./serverManager.js";
+import { DEFAULT_SETTINGS, normalizeSettings, type PluginSettings, type SettingsInput } from "./settingsStore.js";
+
+const testSettings = (overrides: SettingsInput = {}): PluginSettings => normalizeSettings({
+  ...DEFAULT_SETTINGS,
+  ...overrides,
+});
 
 test("server manager starts, stops, and reports access URL", async () => {
-  const calls = [];
+  const calls: unknown[][] = [];
   const manager = createServerManager({
     settingsStore: {
       async load() {
-        return {
-          autoStart: false,
+        return testSettings({
           host: "0.0.0.0",
           port: 41532,
-          authEnabled: false,
           passwordHash: "",
           preferredLanAddress: "192.168.1.50",
           lastServerStatus: "stopped",
-        };
+        });
       },
-      async save(value) {
+      async save(value: SettingsInput = {}) {
         calls.push(["save", value]);
-        return value;
+        return testSettings(value);
       },
     },
-    createViewerServer() {
+    createViewerServer(): ManagedViewerServer {
       calls.push(["create"]);
       return {
         async start() {
@@ -55,19 +59,16 @@ test("server manager reports localhost URL when public network is disabled", asy
   const manager = createServerManager({
     settingsStore: {
       async load() {
-        return {
-          autoStart: false,
+        return testSettings({
           host: "127.0.0.1",
           port: 41532,
-          authEnabled: false,
-          basicAuthUser: "eagle",
           passwordHash: "",
           preferredLanAddress: "",
           lastServerStatus: "stopped",
-        };
+        });
       },
-      async save(value) {
-        return value;
+      async save(value: SettingsInput = {}) {
+        return testSettings(value);
       },
     },
     createViewerServer() {
@@ -93,8 +94,8 @@ test("server manager reports localhost URL when public network is disabled", asy
 });
 
 test("server manager restarts after saving binding settings while running", async () => {
-  const calls = [];
-  let settings = {
+  const calls: unknown[][] = [];
+  let settings = testSettings({
     autoStart: false,
     host: "0.0.0.0",
     port: 41532,
@@ -102,15 +103,15 @@ test("server manager restarts after saving binding settings while running", asyn
     passwordHash: "",
     preferredLanAddress: "192.168.1.50",
     lastServerStatus: "stopped",
-  };
+  });
 
   const manager = createServerManager({
     settingsStore: {
       async load() {
         return settings;
       },
-      async save(next) {
-        settings = { ...settings, ...next };
+      async save(next: SettingsInput = {}) {
+        settings = testSettings({ ...settings, ...next });
         calls.push(["save", settings.port]);
         return settings;
       },
@@ -150,8 +151,8 @@ test("server manager restarts after saving binding settings while running", asyn
 });
 
 test("server manager does not restart when only auto start changes while running", async () => {
-  const calls = [];
-  let settings = {
+  const calls: unknown[][] = [];
+  let settings = testSettings({
     autoStart: false,
     host: "0.0.0.0",
     port: 41532,
@@ -160,15 +161,15 @@ test("server manager does not restart when only auto start changes while running
     passwordHash: "",
     preferredLanAddress: "",
     lastServerStatus: "stopped",
-  };
+  });
 
   const manager = createServerManager({
     settingsStore: {
       async load() {
         return settings;
       },
-      async save(next) {
-        settings = { ...settings, ...next };
+      async save(next: SettingsInput = {}) {
+        settings = testSettings({ ...settings, ...next });
         calls.push(["save", settings.autoStart]);
         return settings;
       },

@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
+type PluginRequirePath = (relativePath: string) => string;
+
 test("manifest declares an Eagle background service management window", async () => {
   const manifest = JSON.parse(await readFile(new URL("../manifest.json", import.meta.url), "utf8"));
 
@@ -72,7 +74,7 @@ test("plugin window does not expose an unused shared URL expiration setting", as
   const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
   const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
   const runtime = await readFile(new URL("./service/runtime.cjs", import.meta.url), "utf8");
-  const settingsStore = await readFile(new URL("./service/settingsStore.js", import.meta.url), "utf8");
+  const settingsStore = await readFile(new URL("./service/settingsStore.ts", import.meta.url), "utf8");
 
   assert.doesNotMatch(html, /共有URL/);
   assert.doesNotMatch(html, /有効期限/);
@@ -145,7 +147,7 @@ test("plugin app resolves Windows drive paths without a leading slash", async ()
   assert.ok(functionSource);
 
   const pluginRequirePath = Function("require", "document", "location", `${functionSource}; return pluginRequirePath;`)(
-    (name) => {
+    (name: string) => {
       if (name === "path") return path.win32;
       throw new Error(`Unexpected require: ${name}`);
     },
@@ -165,7 +167,7 @@ test("plugin app resolves Windows drive paths when Eagle exposes backslashes", a
   assert.ok(functionSource);
 
   const pluginRequirePath = Function("require", "document", "location", `${functionSource}; return pluginRequirePath;`)(
-    (name) => {
+    (name: string) => {
       if (name === "path") return path.win32;
       throw new Error(`Unexpected require: ${name}`);
     },
@@ -188,8 +190,8 @@ test("plugin app resolves Windows drive paths with repeated leading separators",
     "//E:/github.com/xxx/eagle-media-preview-server/plugin/index.html",
     "\\\\E:\\github.com\\xxx\\eagle-media-preview-server\\plugin\\index.html",
   ]) {
-    const pluginRequirePath = Function("require", "document", "location", `${functionSource}; return pluginRequirePath;`)(
-      (name) => {
+    const pluginRequirePath: PluginRequirePath = Function("require", "document", "location", `${functionSource}; return pluginRequirePath;`)(
+      (name: string) => {
         if (name === "path") return path.win32;
         throw new Error(`Unexpected require: ${name}`);
       },

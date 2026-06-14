@@ -10,6 +10,8 @@ const {
   normalizeConnectionInput,
 } = require("../plugin/service/connection.cjs");
 
+type ConnectionCandidate = { baseUrl: string };
+
 test("normalizeConnectionInput builds Eagle base URL from host and port", () => {
   assert.deepEqual(
     normalizeConnectionInput({ host: " 192.168.1.20 ", port: "41595", token: " secret " }),
@@ -52,7 +54,7 @@ test("buildConnectionCandidates tries localhost first when user enters the viewe
     buildConnectionCandidates({
       input: { host: "192.168.1.20", port: "41595", token: "abc" },
       requestHost: "192.168.1.20:41532",
-    }).map((candidate) => candidate.baseUrl),
+    }).map((candidate: ConnectionCandidate) => candidate.baseUrl),
     ["http://127.0.0.1:41595", "http://192.168.1.20:41595"],
   );
 });
@@ -62,7 +64,7 @@ test("buildConnectionCandidates does not add localhost for a different remote ho
     buildConnectionCandidates({
       input: { host: "192.168.1.30", port: "41595", token: "abc" },
       requestHost: "192.168.1.20:41532",
-    }).map((candidate) => candidate.baseUrl),
+    }).map((candidate: ConnectionCandidate) => candidate.baseUrl),
     ["http://192.168.1.30:41595"],
   );
 });

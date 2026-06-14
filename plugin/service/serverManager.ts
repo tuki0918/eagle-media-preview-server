@@ -1,14 +1,40 @@
 import { createViewerServer as defaultCreateViewerServer } from "../../server/viewerServer.js";
-import { createSettingsStore } from "./settingsStore.js";
+import { createSettingsStore, type PluginSettings, type SettingsInput, type SettingsStore } from "./settingsStore.js";
 import { buildAccessUrl } from "./qrUrlBuilder.js";
 import { getLanAddresses as defaultGetLanAddresses } from "./networkInfo.js";
+import type { LanAddress } from "./qrUrlBuilder.js";
+
+export interface ViewerServerStatus {
+  state: string;
+  host: string;
+  port: number;
+  requestCount?: number;
+  lastError?: string;
+}
+
+export interface ManagedViewerServer {
+  start(): Promise<ViewerServerStatus>;
+  stop(): Promise<ViewerServerStatus>;
+  status(): ViewerServerStatus;
+}
+
+export interface ServerManagerOptions {
+  settingsStore?: SettingsStore;
+  createViewerServer?: (options: {
+    host: string;
+    port: number;
+    basicAuthUsername: string;
+    passwordHash: string;
+  }) => ManagedViewerServer;
+  getLanAddresses?: () => LanAddress[];
+}
 
 export function createServerManager({
   settingsStore = createSettingsStore(),
   createViewerServer = defaultCreateViewerServer,
   getLanAddresses = defaultGetLanAddresses,
-} = {}) {
-  let viewer = null;
+}: ServerManagerOptions = {}) {
+  let viewer: ManagedViewerServer | null = null;
   let stateOverride = "stopped";
   let lastError = "";
 
@@ -16,7 +42,7 @@ export function createServerManager({
     return settingsStore.load();
   }
 
-  async function createViewer(settings) {
+  async function createViewer(settings: PluginSettings) {
     return createViewerServer({
       host: settings.host,
       port: settings.port,
@@ -25,7 +51,7 @@ export function createServerManager({
     });
   }
 
-  function needsServerRestart(prev, next) {
+  function needsServerRestart(prev: PluginSettings, next: PluginSettings) {
     return prev.host !== next.host
       || prev.port !== next.port
       || prev.authEnabled !== next.authEnabled
@@ -33,7 +59,7 @@ export function createServerManager({
       || prev.passwordHash !== next.passwordHash;
   }
 
-  async function snapshot(settings = null) {
+  async function snapshot(settings: PluginSettings | null = null) {
     const loadedSettings = settings || await currentSettings();
     const lanAddresses = getLanAddresses();
     const status = viewer ? viewer.status() : { state: stateOverride, host: loadedSettings.host, port: loadedSettings.port, lastError };
@@ -89,7 +115,7 @@ export function createServerManager({
       return this.start();
     },
 
-    async saveSettings(input) {
+    async saveSettings(input: SettingsInput) {
       const wasRunning = viewer?.status().state === "running";
       const current = await currentSettings();
       const settings = await settingsStore.save(input);

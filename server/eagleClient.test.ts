@@ -5,6 +5,8 @@ import { createRequire } from "node:module";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
+type RequestCall = { url: string; init: { method?: string; body: string } };
+
 const require = createRequire(import.meta.url);
 const {
   clampLimit,
@@ -23,11 +25,11 @@ test("clampLimit keeps page sizes bounded for large libraries", () => {
 });
 
 test("listItems uses V2 item/get with limited fields and offset", async () => {
-  const calls = [];
+  const calls: RequestCall[] = [];
   const client = createEagleClient({
     baseUrl: "http://eagle.local:41595",
     token: "secret-token",
-    fetchImpl: async (url, init) => {
+    fetchImpl: async (url: string, init: { method?: string; body: string }) => {
       calls.push({ url, init });
       return jsonResponse({
         status: "success",
@@ -83,10 +85,10 @@ test("listItems uses V2 item/get with limited fields and offset", async () => {
 });
 
 test("listItems omits rating when the filter is not specified", async () => {
-  const calls = [];
+  const calls: RequestCall[] = [];
   const client = createEagleClient({
     baseUrl: "http://eagle.local:41595",
-    fetchImpl: async (url, init) => {
+    fetchImpl: async (url: string, init: { method?: string; body: string }) => {
       calls.push({ url, init });
       return jsonResponse({
         status: "success",
@@ -101,10 +103,10 @@ test("listItems omits rating when the filter is not specified", async () => {
 });
 
 test("listItems sends multiple tag filters with keywords", async () => {
-  const calls = [];
+  const calls: RequestCall[] = [];
   const client = createEagleClient({
     baseUrl: "http://eagle.local:41595",
-    fetchImpl: async (url, init) => {
+    fetchImpl: async (url: string, init: { method?: string; body: string }) => {
       calls.push({ url, init });
       return jsonResponse({
         status: "success",
@@ -121,10 +123,10 @@ test("listItems sends multiple tag filters with keywords", async () => {
 });
 
 test("listItems supports uncategorized filtering without folder ids", async () => {
-  const calls = [];
+  const calls: RequestCall[] = [];
   const client = createEagleClient({
     baseUrl: "http://eagle.local:41595",
-    fetchImpl: async (url, init) => {
+    fetchImpl: async (url: string, init: { method?: string; body: string }) => {
       calls.push({ url, init });
       return jsonResponse({
         status: "success",
@@ -174,10 +176,10 @@ test("listItems supports uncategorized filtering without folder ids", async () =
 });
 
 test("searchItems uses V2 item/query", async () => {
-  const calls = [];
+  const calls: RequestCall[] = [];
   const client = createEagleClient({
     baseUrl: "http://localhost:41595",
-    fetchImpl: async (url, init) => {
+    fetchImpl: async (url: string, init: { method?: string; body: string }) => {
       calls.push({ url, init });
       return jsonResponse({
         status: "success",
@@ -197,10 +199,10 @@ test("searchItems uses V2 item/query", async () => {
 });
 
 test("listTags uses V2 tag/get with a bounded name query", async () => {
-  const calls = [];
+  const calls: RequestCall[] = [];
   const client = createEagleClient({
     baseUrl: "http://localhost:41595",
-    fetchImpl: async (url, init) => {
+    fetchImpl: async (url: string, init: { method?: string; body: string }) => {
       calls.push({ url, init });
       return jsonResponse({
         status: "success",
@@ -218,10 +220,10 @@ test("listTags uses V2 tag/get with a bounded name query", async () => {
 });
 
 test("libraryHistory uses the legacy library history endpoint", async () => {
-  const calls = [];
+  const calls: RequestCall[] = [];
   const client = createEagleClient({
     baseUrl: "http://localhost:41595",
-    fetchImpl: async (url, init) => {
+    fetchImpl: async (url: string, init: { method?: string; body: string }) => {
       calls.push({ url, init });
       return jsonResponse({ status: "success", data: ["/Users/me/A.library"] });
     },
@@ -234,10 +236,10 @@ test("libraryHistory uses the legacy library history endpoint", async () => {
 });
 
 test("switchLibrary uses the legacy library switch endpoint", async () => {
-  const calls = [];
+  const calls: RequestCall[] = [];
   const client = createEagleClient({
     baseUrl: "http://localhost:41595",
-    fetchImpl: async (url, init) => {
+    fetchImpl: async (url: string, init: { method?: string; body: string }) => {
       calls.push({ url, init });
       return jsonResponse({ status: "success", data: {} });
     },
@@ -251,10 +253,10 @@ test("switchLibrary uses the legacy library switch endpoint", async () => {
 });
 
 test("updateItemStar uses V2 item/update with a 0-5 star value", async () => {
-  const calls = [];
+  const calls: RequestCall[] = [];
   const client = createEagleClient({
     baseUrl: "http://localhost:41595",
-    fetchImpl: async (url, init) => {
+    fetchImpl: async (url: string, init: { method?: string; body: string }) => {
       calls.push({ url, init });
       return jsonResponse({
         status: "success",
@@ -277,10 +279,10 @@ test("updateItemStar rejects values outside 0-5", async () => {
 });
 
 test("updateItemMetadata uses V2 item/update with tags and folders", async () => {
-  const calls = [];
+  const calls: RequestCall[] = [];
   const client = createEagleClient({
     baseUrl: "http://localhost:41595",
-    fetchImpl: async (url, init) => {
+    fetchImpl: async (url: string, init: { method?: string; body: string }) => {
       calls.push({ url, init });
       return jsonResponse({
         status: "success",
@@ -366,7 +368,7 @@ test("resolveLibraryItemFile finds the original file inside an Eagle item folder
   );
 });
 
-function jsonResponse(body) {
+function jsonResponse(body: unknown) {
   return {
     ok: true,
     status: 200,

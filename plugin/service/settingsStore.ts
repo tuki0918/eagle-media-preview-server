@@ -3,7 +3,33 @@ import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 
-export const DEFAULT_SETTINGS = {
+export type ServerStatus = "running" | "stopped" | "error";
+
+export interface PluginSettings {
+  autoStart: boolean;
+  host: string;
+  port: number;
+  authEnabled: boolean;
+  basicAuthUser: string;
+  passwordHash: string;
+  preferredLanAddress: string;
+  lastServerStatus: ServerStatus;
+}
+
+export type SettingsInput = Partial<Omit<PluginSettings, "port">> & {
+  port?: number | string;
+  password?: string;
+  confirmPassword?: string;
+  [key: string]: unknown;
+};
+
+export interface SettingsStore {
+  filePath?: string;
+  load(): Promise<PluginSettings>;
+  save(input?: SettingsInput): Promise<PluginSettings>;
+}
+
+export const DEFAULT_SETTINGS: PluginSettings = {
   autoStart: false,
   host: "0.0.0.0",
   port: 41532,
@@ -18,7 +44,7 @@ export function defaultSettingsPath() {
   return join(homedir(), ".eagle-media-preview-server", "settings.json");
 }
 
-export function createSettingsStore({ filePath = defaultSettingsPath() } = {}) {
+export function createSettingsStore({ filePath = defaultSettingsPath() }: { filePath?: string } = {}): SettingsStore {
   return {
     filePath,
 
@@ -32,7 +58,7 @@ export function createSettingsStore({ filePath = defaultSettingsPath() } = {}) {
       }
     },
 
-    async save(input = {}) {
+    async save(input: SettingsInput = {}) {
       const current = await this.load();
       const next = normalizeSettings({
         ...current,
@@ -46,7 +72,7 @@ export function createSettingsStore({ filePath = defaultSettingsPath() } = {}) {
         if (!String(input.password || "").trim()) {
           throw new Error("Password is required");
         }
-        next.passwordHash = hashPassword(input.password);
+        next.passwordHash = hashPassword(String(input.password || ""));
       }
 
       if (next.authEnabled && !next.passwordHash) {
@@ -63,13 +89,13 @@ export function createSettingsStore({ filePath = defaultSettingsPath() } = {}) {
   };
 }
 
-export function normalizeSettings(input = {}) {
-  const port = Number.parseInt(input.port ?? DEFAULT_SETTINGS.port, 10);
+export function normalizeSettings(input: SettingsInput = {}): PluginSettings {
+  const port = Number.parseInt(String(input.port ?? DEFAULT_SETTINGS.port), 10);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error("port must be an integer from 1-65535");
   }
 
-  const lastServerStatus = ["running", "stopped", "error"].includes(input.lastServerStatus)
+  const lastServerStatus = input.lastServerStatus && ["running", "stopped", "error"].includes(input.lastServerStatus)
     ? input.lastServerStatus
     : DEFAULT_SETTINGS.lastServerStatus;
 
@@ -85,6 +111,6 @@ export function normalizeSettings(input = {}) {
   };
 }
 
-export function hashPassword(value) {
+export function hashPassword(value: string | number) {
   return createHash("sha256").update(String(value)).digest("hex");
 }

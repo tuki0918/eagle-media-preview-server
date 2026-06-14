@@ -6,7 +6,8 @@ import { resolve } from "node:path";
 const distDir = resolve("dist");
 
 function copyPluginPackageAssets() {
-  const excludeTests = (sourcePath: string) => !/\.test\.(?:cjs|js|ts|tsx)$/.test(sourcePath);
+  const includeRuntimeAsset = (sourcePath: string) => !/\.test\.(?:cjs|js|ts|tsx)$/.test(sourcePath)
+    && !/\.(?:ts|tsx)$/.test(sourcePath);
 
   return {
     name: "copy-plugin-package-assets",
@@ -17,7 +18,7 @@ function copyPluginPackageAssets() {
       await mkdir(distDir, { recursive: true });
       await Promise.all([
         cp("manifest.json", resolve(distDir, "manifest.json")),
-        cp("plugin", resolve(distDir, "plugin"), { recursive: true, filter: excludeTests }),
+        cp("plugin", resolve(distDir, "plugin"), { recursive: true, filter: includeRuntimeAsset }),
         cp("public/favicon.ico", resolve(distDir, "public/favicon.ico")),
         cp("public/assets", resolve(distDir, "public/assets"), { recursive: true }),
       ]);

@@ -1,7 +1,8 @@
 import { networkInterfaces } from "node:os";
+import type { LanAddress } from "./qrUrlBuilder.js";
 
-export function getLanAddresses() {
-  const output = [];
+export function getLanAddresses(): LanAddress[] {
+  const output: LanAddress[] = [];
   const interfaces = networkInterfaces();
 
   for (const [label, entries] of Object.entries(interfaces)) {

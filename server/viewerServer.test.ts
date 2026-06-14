@@ -5,6 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createViewerServer, resolveDefaultPublicDir, sha256 } from "./viewerServer.js";
 
+type ItemListOptions = { keywords?: string; tags?: string[] };
+type TagListOptions = { query?: string; limit?: string };
+
 test("createViewerServer starts and stops without the CLI entrypoint", async () => {
   const viewer = createViewerServer({
     host: "127.0.0.1",
@@ -33,7 +36,7 @@ test("createViewerServer starts and stops without the CLI entrypoint", async () 
 });
 
 test("resolveDefaultPublicDir prefers Vite output when running from source", () => {
-  const existingDist = (path) => path === "/repo/dist/public";
+  const existingDist = (path: string) => path === "/repo/dist/public";
   assert.equal(resolveDefaultPublicDir("/repo/plugin/service", existingDist), "/repo/dist/public");
   assert.equal(resolveDefaultPublicDir("/repo/dist/plugin/service", existingDist), "/repo/dist/public");
   assert.equal(resolveDefaultPublicDir("/repo/plugin/service", () => false), "/repo/public");
@@ -73,7 +76,7 @@ test("createViewerServer protects static viewer with BasicAuth when password has
 
   const denied = await fetch(rootUrl);
   assert.equal(denied.status, 401);
-  assert.match(denied.headers.get("www-authenticate"), /Basic/);
+  assert.match(denied.headers.get("www-authenticate") || "", /Basic/);
 
   const allowed = await fetch(rootUrl, {
     headers: {
@@ -101,7 +104,7 @@ test("createViewerServer serves direct file routes from /file/:id", async () => 
       async libraryInfo() {
         return { path: root, name: "Test Library" };
       },
-      async itemById(id) {
+      async itemById(id: string) {
         return {
           data: [{ id, filePath }],
         };
@@ -135,7 +138,7 @@ test("createViewerServer serves text and markdown direct file routes inline as r
       async libraryInfo() {
         return { path: root, name: "Test Library" };
       },
-      async itemById(id) {
+      async itemById(id: string) {
         return {
           data: [{ id, filePath }],
         };
@@ -171,7 +174,7 @@ test("createViewerServer uses Eagle item extension as a PDF MIME fallback", asyn
       async libraryInfo() {
         return { path: root, name: "Test Library" };
       },
-      async itemById(id) {
+      async itemById(id: string) {
         return {
           data: [{ id, filePath, name: "sample", ext: "pdf" }],
         };
@@ -195,7 +198,7 @@ test("createViewerServer uses Eagle item extension as a PDF MIME fallback", asyn
 });
 
 test("createViewerServer forwards repeated tag filters to item listing", async () => {
-  const calls = [];
+  const calls: ItemListOptions[] = [];
   const viewer = createViewerServer({
     host: "127.0.0.1",
     port: 0,
@@ -207,7 +210,7 @@ test("createViewerServer forwards repeated tag filters to item listing", async (
       async libraryInfo() {
         return { path: "/tmp/Test.library", name: "Test Library" };
       },
-      async listItems(options) {
+      async listItems(options: ItemListOptions) {
         calls.push(options);
         return { items: [], total: 0, offset: 0, limit: 30 };
       },
@@ -232,7 +235,7 @@ test("createViewerServer forwards repeated tag filters to item listing", async (
 });
 
 test("createViewerServer serves tag autocomplete suggestions", async () => {
-  const calls = [];
+  const calls: TagListOptions[] = [];
   const viewer = createViewerServer({
     host: "127.0.0.1",
     port: 0,
@@ -244,7 +247,7 @@ test("createViewerServer serves tag autocomplete suggestions", async () => {
       async libraryInfo() {
         return { path: "/tmp/Test.library", name: "Test Library" };
       },
-      async listTags(options) {
+      async listTags(options: TagListOptions) {
         calls.push(options);
         return { items: [{ name: "photo", count: 12 }], total: 1, offset: 0, limit: 20 };
       },
