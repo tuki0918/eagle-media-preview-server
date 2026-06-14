@@ -7,6 +7,7 @@ async function readViewerSources() {
     "../src/viewerApp.ts",
     "../src/viewer/api.ts",
     "../src/viewer/constants.ts",
+    "../src/viewer/dom.ts",
     "../src/viewer/elements.ts",
     "../src/viewer/format.ts",
     "../src/viewer/icons.ts",
@@ -140,14 +141,14 @@ test("public audio preview uses video-style dark action buttons", async () => {
 test("public UI exposes direct original file URLs for each media item", async () => {
   const html = await readAppSources();
   const app = await readViewerSources();
-  const directFileUrlSource = app.match(/function directFileUrl\(item\) \{[\s\S]*?\n\}/)?.[0] || "";
-  const directFileLinkSource = app.match(/function directFileLink\(item\) \{[\s\S]*?\n\}/)?.[0] || "";
+  const directFileUrlSource = app.match(/function directFileUrl\(item[^)]*\) \{[\s\S]*?\n\}/)?.[0] || "";
+  const directFileLinkSource = app.match(/function directFileLink\(item[^)]*\) \{[\s\S]*?\n\}/)?.[0] || "";
 
   assert.doesNotMatch(html, /class="direct-file-link"/);
-  assert.match(app, /function directFileUrl\(item\)/);
+  assert.match(app, /function directFileUrl\(item[^)]*\)/);
   assert.match(app, /function previewFileName\(item[^)]*\)/);
-  assert.match(app, /function directFileLink\(item\)/);
-  assert.match(directFileUrlSource, /return new URL\(`\/file\/\$\{encodeURIComponent\(item\.id\)\}`,\s*window\.location\.href\)\.href;/);
+  assert.match(app, /function directFileLink\(item[^)]*\)/);
+  assert.match(directFileUrlSource, /return new URL\(`\/file\/\$\{encodeURIComponent\(String\(item\.id \|\| ""\)\)\}`,\s*baseUrl\)\.href;/);
   assert.match(directFileLinkSource, /link\.className = "direct-file-link"/);
   assert.match(directFileLinkSource, /link\.textContent = "Open file"/);
   assert.doesNotMatch(directFileUrlSource, /connectionId/);
@@ -283,7 +284,7 @@ test("public preview info uses chip lists and a full-width open file CTA", async
 
   assert.match(app, /detailsSection\.className = "preview-details-section";/);
   assert.match(app, /if \(chips && value\.length > 0\) \{/);
-  assert.match(app, /function previewChipList\(values\) \{/);
+  assert.match(app, /function previewChipList\(values[^)]*\) \{/);
   assert.match(app, /chip\.className = "preview-chip";/);
   assert.doesNotMatch(app, /preview-chip-empty/);
   assert.match(app, /previewActions: document\.querySelector\("#previewActions"\),/);

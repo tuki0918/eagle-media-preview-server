@@ -12,6 +12,12 @@ import {
   textPreviewExts,
 } from "./viewer/constants";
 import { debounce, getJson, mediaUrl, postJson } from "./viewer/api";
+import {
+  directFileLink,
+  extensionPill,
+  previewChipList,
+  tableCell,
+} from "./viewer/dom";
 import { getViewerElements } from "./viewer/elements";
 import {
   flattenFolders,
@@ -1260,37 +1266,6 @@ function renderPageButtons() {
   els.pageButtons.replaceChildren(fragment);
 }
 
-function tableCell(value, className = "", title = "") {
-  const cell = document.createElement("span");
-  cell.className = className;
-  cell.textContent = value;
-  if (title) cell.title = title;
-  return cell;
-}
-
-function extensionPill(item) {
-  const ext = document.createElement("span");
-  ext.className = "ext-pill";
-  ext.textContent = (item.ext || "file").toUpperCase();
-  ext.dataset.ext = (item.ext || "file").toLowerCase();
-  return ext;
-}
-
-function directFileUrl(item) {
-  return new URL(`/file/${encodeURIComponent(item.id)}`, window.location.href).href;
-}
-
-function directFileLink(item) {
-  const link = document.createElement("a");
-  link.className = "direct-file-link";
-  link.target = "_blank";
-  link.rel = "noopener";
-  link.textContent = "Open file";
-  link.href = directFileUrl(item);
-  link.addEventListener("click", (event) => event.stopPropagation());
-  return link;
-}
-
 function renderPreviewDetails(item) {
   const detailsSection = document.createElement("section");
   detailsSection.className = "preview-details-section";
@@ -1397,18 +1372,6 @@ async function savePreviewMetadata(item, { tags, folders, saveButton, status }) 
   } finally {
     saveButton.disabled = false;
   }
-}
-
-function previewChipList(values) {
-  const list = document.createElement("div");
-  list.className = "preview-chip-list";
-  for (const value of values) {
-    const chip = document.createElement("span");
-    chip.className = "preview-chip";
-    chip.textContent = value;
-    list.append(chip);
-  }
-  return list;
 }
 
 function tagSuggestionItems(query, selectedValues) {
