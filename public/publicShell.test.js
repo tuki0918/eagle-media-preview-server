@@ -408,7 +408,7 @@ test("public UI supports tag filter chips", async () => {
   assert.match(app, /"funnel-x": '<path d="M12\.531 3H3/);
   assert.match(app, /els\.resetFiltersButton\.addEventListener\("click", resetFilters\);/);
   assert.match(app, /function syncResetFiltersButton\(\) \{/);
-  assert.match(app, /els\.resetFiltersButton\.disabled = !hasActiveFilters\(\);/);
+  assert.match(app, /els\.resetFiltersButton\.disabled = !hasActiveFilters\(state\);/);
   assert.doesNotMatch(app, /tagInput:/);
   assert.match(app, /applyFilterChange\(\{ query: els\.searchInput\.value\.trim\(\) \}\);[\s\S]*loadTagSuggestions\(\);/);
   assert.match(app, /params\.getAll\("tag"\)/);
@@ -421,7 +421,7 @@ test("public UI supports tag filter chips", async () => {
   assert.match(app, /applyFilterChange\(\{ query: "", tags: \[\.\.\.state\.tags, tag\] \}\);/);
   assert.match(app, /function removeTagFilter\(tag[^)]*\) \{/);
   assert.match(app, /function renderTagChips\(\) \{/);
-  assert.match(app, /state\.tags = \[\];/);
+  assert.match(app, /Object\.assign\(state, resetFilterState\(\)\);/);
   assert.match(css, /\.search-composer\s*\{/);
   assert.match(css, /\.search-row\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) auto auto;/s);
   assert.match(css, /\.filter-reset-button,\s*\.filter-toggle-button\s*\{/);

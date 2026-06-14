@@ -35,6 +35,7 @@ import {
   previewFileName,
   isTimedMedia,
 } from "./viewer/format";
+import { hasActiveFilters, resetFilterState } from "./viewer/filters";
 import { iconNode, renderLucideIcons, type IconName } from "./viewer/icons";
 import {
   folderLabel,
@@ -1129,7 +1130,7 @@ function syncAdvancedFiltersUi() {
 }
 
 function syncResetFiltersButton() {
-  els.resetFiltersButton.disabled = !hasActiveFilters();
+  els.resetFiltersButton.disabled = !hasActiveFilters(state);
 }
 
 function resetPreviewState() {
@@ -1421,16 +1422,16 @@ function emptyStateNode() {
   node.className = "empty-state";
 
   const title = document.createElement("strong");
-  title.textContent = hasActiveFilters() ? "No items matched these filters" : "No items found";
+  title.textContent = hasActiveFilters(state) ? "No items matched these filters" : "No items found";
 
   const description = document.createElement("p");
-  description.textContent = hasActiveFilters()
+  description.textContent = hasActiveFilters(state)
     ? "Try changing the search text, folder, extension, or rating to widen the results."
     : "This page has no items yet. Refresh or change the current view to load another range.";
 
   node.append(title, description);
 
-  if (hasActiveFilters()) {
+  if (hasActiveFilters(state)) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "text-button empty-state-button";
@@ -1442,18 +1443,9 @@ function emptyStateNode() {
   return node;
 }
 
-function hasActiveFilters() {
-  return Boolean(state.query || state.tags.length || state.folderId || state.ext || state.rating !== "");
-}
-
 function resetFilters() {
-  if (!hasActiveFilters()) return;
-  state.query = "";
-  state.tags = [];
-  state.folderId = "";
-  state.ext = "";
-  state.rating = "";
-  state.offset = 0;
+  if (!hasActiveFilters(state)) return;
+  Object.assign(state, resetFilterState());
   els.searchInput.value = "";
   renderTagChips();
   els.folderSelect.value = "";
