@@ -9,6 +9,7 @@ import {
   PreviewBody,
   PreviewDialog,
   PreviewDetailsPanel,
+  RatingStars,
   ResultList,
   ResultStateView,
   ResultsStatus,
@@ -179,5 +180,15 @@ describe("ViewerAppShell", () => {
     expect(image).toContain('class="image-toolbar"');
     expect(text).toContain('class="text-preview"');
     expect(unsupported).toContain('class="unsupported-thumb"');
+  });
+
+  test("renders rating stars as reusable static and interactive controls", () => {
+    const statik = renderToStaticMarkup(<RatingStars className="rating-control" item={{ star: 3 }} />);
+    const interactive = renderToStaticMarkup(<RatingStars className="rating-control" item={{ star: 2 }} interactive onSelect={() => {}} />);
+
+    expect(statik).toContain('class="rating-star rating-star-static"');
+    expect(statik).toContain('data-active="true"');
+    expect(interactive).toContain('aria-pressed="true"');
+    expect(interactive).toContain("Rating 2");
   });
 });

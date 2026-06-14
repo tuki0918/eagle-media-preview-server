@@ -17,7 +17,6 @@ async function readViewerSources() {
     "../src/viewer/pagination.ts",
     "../src/viewer/previewDetails.ts",
     "../src/viewer/previewTransform.ts",
-    "../src/viewer/rating.ts",
     "../src/viewer/shellActions.ts",
     "../src/viewer/state.ts",
     "../src/viewer/tileLoading.ts",
@@ -38,6 +37,7 @@ async function readAppSources() {
     "../src/viewer/components/PreviewBody.tsx",
     "../src/viewer/components/PreviewDialog.tsx",
     "../src/viewer/components/PreviewInfo.tsx",
+    "../src/viewer/components/RatingStars.tsx",
     "../src/viewer/components/ResultList.tsx",
     "../src/viewer/components/ResultsStatus.tsx",
     "../src/viewer/components/SearchControls.tsx",
@@ -273,13 +273,12 @@ test("public ratings are static in grid and table but editable in the preview mo
   const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
-  assert.match(html, /function RatingStars\(\{ className, item \}/);
-  assert.match(html, /className="rating-star rating-star-static"/);
+  assert.match(html, /function RatingStars\(\{ className, interactive = false, item, onSelect \}/);
+  assert.match(html, /className=\{interactive \? "rating-star" : "rating-star rating-star-static"\}/);
   assert.match(html, /data-active=\{value <= current \? "true" : "false"\}/);
-  assert.match(app, /renderRating\(els\.previewRating, item, \{ interactive: true, onSelect:/);
-  assert.match(app, /function renderRating\(container[^,]*,\s*item[^,]*,\s*\{ interactive = false, onSelect \}[^)]*\)/);
-  assert.match(app, /const star = document\.createElement\(interactive \? "button" : "span"\);/);
-  assert.match(app, /star\.className = interactive \? "rating-star" : "rating-star rating-star-static";/);
+  assert.match(app, /renderRatingView\(els\.previewRating, \{/);
+  assert.match(html, /function renderRatingView\(container[^,]*,\s*props: RatingStarsProps\)/);
+  assert.match(html, /const Tag = interactive \? "button" : "span";/);
   assert.match(css, /\.rating-star-static\s*\{/);
   assert.match(css, /cursor:\s*default;/);
 });

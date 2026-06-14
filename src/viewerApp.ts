@@ -60,7 +60,7 @@ import {
   renderTagSuggestionsView,
 } from "./viewer/components/TagSuggestions";
 import { previewDetailRows } from "./viewer/previewDetails";
-import { renderRating } from "./viewer/rating";
+import { clearRatingView, renderRatingView } from "./viewer/components/RatingStars";
 import { setViewerShellActions } from "./viewer/shellActions";
 import { state } from "./viewer/state";
 import {
@@ -335,7 +335,12 @@ function openPreview(item: EagleItem, { skipHistory = false }: OpenPreviewOption
   clearPreviewBodyView(els.previewBody);
   els.dialog.classList.remove("video-mode", "image-mode", "audio-mode", "text-mode", "unsupported-mode", "info-open");
   els.toggleInfoPreview.setAttribute("aria-expanded", state.previewInfoOpen ? "true" : "false");
-  renderRating(els.previewRating, item, { interactive: true, onSelect: (star) => setItemStar(item, star) });
+  renderRatingView(els.previewRating, {
+    className: "rating-control inline-flex items-center gap-px",
+    interactive: true,
+    item,
+    onSelect: (star) => setItemStar(item, star),
+  });
   renderPreviewDetails(item);
   if (state.previewInfoOpen) {
     els.dialog.classList.add("info-open");
@@ -605,9 +610,9 @@ function syncPreviewFromState() {
 function clearPreviewContents() {
   clearPreviewInfoView(els.previewDetails, els.previewActions);
   clearPreviewBodyView(els.previewBody);
+  clearRatingView(els.previewRating);
   els.previewOriginalName.textContent = "";
   els.previewOriginalName.removeAttribute("title");
-  els.previewRating.replaceChildren();
   els.previewDetails.replaceChildren();
   els.previewActions.replaceChildren();
 }
@@ -618,7 +623,12 @@ async function setItemStar(item: EagleItem, star: number) {
   updateItemInState(String(item.id || ""), { star });
   render();
   if (els.dialog.open) {
-    renderRating(els.previewRating, item, { interactive: true, onSelect: (nextStar) => setItemStar(item, nextStar) });
+    renderRatingView(els.previewRating, {
+      className: "rating-control inline-flex items-center gap-px",
+      interactive: true,
+      item,
+      onSelect: (nextStar) => setItemStar(item, nextStar),
+    });
   }
 
   try {
@@ -633,7 +643,12 @@ async function setItemStar(item: EagleItem, star: number) {
   } finally {
     render();
     if (els.dialog.open) {
-      renderRating(els.previewRating, item, { interactive: true, onSelect: (nextStar) => setItemStar(item, nextStar) });
+      renderRatingView(els.previewRating, {
+        className: "rating-control inline-flex items-center gap-px",
+        interactive: true,
+        item,
+        onSelect: (nextStar) => setItemStar(item, nextStar),
+      });
     }
   }
 }

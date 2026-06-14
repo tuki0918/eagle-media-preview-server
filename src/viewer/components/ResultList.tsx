@@ -13,6 +13,7 @@ import {
 } from "../format";
 import { thumbnailAriaLabel, thumbnailMediaType, thumbnailOverlayIcon } from "../media";
 import type { EagleItem, ViewerMode } from "../types";
+import { RatingStars } from "./RatingStars";
 
 interface ResultListProps {
   items: readonly EagleItem[];
@@ -207,19 +208,6 @@ function ThumbnailButton({ children, className, item, onOpenPreview, style, with
       ) : null}
       {children}
     </button>
-  );
-}
-
-function RatingStars({ className, item }: { className: string; item: EagleItem }) {
-  const current = Number(item.star || 0);
-  return (
-    <div className={className} aria-label="Rating">
-      {[1, 2, 3, 4, 5].map((value) => (
-        <span key={value} className="rating-star rating-star-static" title={`${value}`} data-active={value <= current ? "true" : "false"} aria-hidden="true">
-          ★
-        </span>
-      ))}
-    </div>
   );
 }
 
