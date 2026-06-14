@@ -12,17 +12,32 @@ import {
   RECENT_TAGS_STORAGE_KEY,
   TILE_PREFETCH_PAGES,
   UNCATEGORIZED_FOLDER_ID,
-  audioExts,
-  dateFormatter,
-  dateTimeFormatter,
   pdfPreviewExts,
   playableAudioExts,
   playableVideoExts,
   textPreviewExts,
-  videoExts,
 } from "./viewer/constants";
 import { debounce, getJson, mediaUrl, postJson } from "./viewer/api";
 import { getViewerElements } from "./viewer/elements";
+import {
+  clamp,
+  flattenFolders,
+  folderIds,
+  formatBytes,
+  formatDate,
+  formatDateShort,
+  formatDimensions,
+  formatDuration,
+  formatDurationCell,
+  formatItemDate,
+  itemMeta,
+  itemTags,
+  mediaTypeLabel,
+  normalizeTag,
+  originalFileName,
+  previewFileName,
+  isTimedMedia,
+} from "./viewer/format";
 import { iconNode, renderLucideIcons } from "./viewer/icons";
 import { state } from "./viewer/state";
 
@@ -1065,10 +1080,6 @@ function hideTagSuggestions() {
   els.tagSuggestions.replaceChildren();
 }
 
-function normalizeTag(value) {
-  return String(value || "").trim();
-}
-
 function uniqueTags(tags) {
   const unique: string[] = [];
   for (const tag of tags.map(normalizeTag).filter(Boolean)) {
@@ -1276,32 +1287,12 @@ function pageButtonList(current, totalPages) {
   return [1, "...", current - 1, current, current + 1, "...", totalPages];
 }
 
-function itemMeta(item) {
-  const ext = (item.ext || "").toUpperCase() || "FILE";
-  const dimensions = item.width && item.height ? `${item.width}x${item.height}` : "";
-  const duration = isTimedMedia(item) ? formatDuration(item.duration) : "";
-  const size = formatBytes(item.size);
-  return [ext, dimensions, duration, size].filter(Boolean).join(" · ");
-}
-
-function formatDimensions(item) {
-  return item.width && item.height ? `${item.width} x ${item.height}` : "";
-}
-
-function formatDurationCell(item) {
-  return isTimedMedia(item) ? formatDuration(item.duration) : "";
-}
-
 function tableCell(value, className = "", title = "") {
   const cell = document.createElement("span");
   cell.className = className;
   cell.textContent = value;
   if (title) cell.title = title;
   return cell;
-}
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
 }
 
 function extensionPill(item) {
@@ -1314,17 +1305,6 @@ function extensionPill(item) {
 
 function directFileUrl(item) {
   return new URL(`/file/${encodeURIComponent(item.id)}`, window.location.href).href;
-}
-
-function previewFileName(item) {
-  return originalFileName(item);
-}
-
-function originalFileName(item) {
-  const name = String(item.name || item.id || "file").trim() || "file";
-  const ext = String(item.ext || "").trim().replace(/^\./, "");
-  if (!ext || name.toLowerCase().endsWith(`.${ext.toLowerCase()}`)) return name;
-  return `${name}.${ext}`;
 }
 
 function directFileLink(item) {
@@ -1645,10 +1625,6 @@ function previewChipList(values) {
   return list;
 }
 
-function itemTags(item) {
-  return Array.isArray(item.tags) ? item.tags.map(normalizeTag).filter(Boolean) : [];
-}
-
 function tagSuggestionItems(query, selectedValues) {
   const selected = new Set(selectedValues);
   const recent = readRecentList(RECENT_TAGS_STORAGE_KEY)
@@ -1743,83 +1719,6 @@ function uniqueValues(values) {
     if (value && !unique.includes(value)) unique.push(value);
   }
   return unique;
-}
-
-function mediaTypeLabel(item) {
-  return (item.ext || "").toUpperCase() || "FILE";
-}
-
-function formatItemDate(item, keys) {
-  for (const key of keys) {
-    const value = item[key];
-    const formatted = formatDate(value);
-    if (formatted) return formatted;
-  }
-  return "";
-}
-
-function folderIds(value) {
-  if (!Array.isArray(value)) return [];
-  return value.map((item) => {
-    if (typeof item === "string") return item;
-    return item?.id || "";
-  }).filter(Boolean);
-}
-
-function folderDisplayNames(value) {
-  const byId = new Map(state.folders.map((folder) => [folder.id, folder.name]));
-  return folderIds(value).map((id) => byId.get(id) || id);
-}
-
-function formatBytes(value) {
-  if (!Number.isFinite(value) || value <= 0) return "";
-  const units = ["B", "KB", "MB", "GB"];
-  let size = value;
-  let unit = 0;
-  while (size >= 1024 && unit < units.length - 1) {
-    size /= 1024;
-    unit += 1;
-  }
-  return `${size.toFixed(size >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
-}
-
-function formatDuration(value) {
-  const seconds = Number(value);
-  if (!Number.isFinite(seconds) || seconds <= 0) return "";
-  const rounded = Math.round(seconds);
-  const hours = Math.floor(rounded / 3600);
-  const minutes = Math.floor((rounded % 3600) / 60);
-  const rest = rounded % 60;
-  if (hours > 0) return `${hours}:${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
-  return `${minutes}:${String(rest).padStart(2, "0")}`;
-}
-
-function formatDate(value) {
-  const timestamp = typeof value === "string" && value.trim() && !Number.isFinite(Number(value))
-    ? Date.parse(value)
-    : Number(value);
-  if (!Number.isFinite(timestamp) || timestamp <= 0) return "";
-  return dateTimeFormatter.format(new Date(timestamp));
-}
-
-function formatDateShort(value) {
-  const timestamp = Number(value);
-  if (!Number.isFinite(timestamp) || timestamp <= 0) return "";
-  return dateFormatter.format(new Date(timestamp));
-}
-
-function isTimedMedia(item) {
-  const ext = (item.ext || "").toLowerCase();
-  return videoExts.has(ext) || audioExts.has(ext);
-}
-
-function flattenFolders(folders, depth = 0) {
-  const output: any[] = [];
-  for (const folder of folders || []) {
-    output.push({ ...folder, depth });
-    output.push(...flattenFolders(folder.children, depth + 1));
-  }
-  return output;
 }
 
 function messageNode(text, className = "empty") {

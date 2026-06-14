@@ -8,6 +8,7 @@ async function readViewerSources() {
     "../src/viewer/api.ts",
     "../src/viewer/constants.ts",
     "../src/viewer/elements.ts",
+    "../src/viewer/format.ts",
     "../src/viewer/icons.ts",
     "../src/viewer/state.ts",
   ];
@@ -137,7 +138,7 @@ test("public UI exposes direct original file URLs for each media item", async ()
 
   assert.doesNotMatch(html, /class="direct-file-link"/);
   assert.match(app, /function directFileUrl\(item\)/);
-  assert.match(app, /function previewFileName\(item\)/);
+  assert.match(app, /function previewFileName\(item[^)]*\)/);
   assert.match(app, /function directFileLink\(item\)/);
   assert.match(directFileUrlSource, /return new URL\(`\/file\/\$\{encodeURIComponent\(item\.id\)\}`,\s*window\.location\.href\)\.href;/);
   assert.match(directFileLinkSource, /link\.className = "direct-file-link"/);
@@ -184,7 +185,7 @@ test("public preview renders text-like files and PDFs from their thumbnails", as
   assert.match(app, /image\.src = mediaUrl\(item\.id, srcKind\);/);
   assert.doesNotMatch(app, /function renderPdfPreview\(item\) \{/);
   assert.doesNotMatch(app, /viewer\.src = directFileUrl\(item\);/);
-  assert.match(app, /function previewFileName\(item\) \{/);
+  assert.match(app, /function previewFileName\(item[^)]*\) \{/);
   assert.match(app, /text-mode/);
   assert.doesNotMatch(app, /pdf-mode/);
   assert.match(css, /\.text-mode \.preview-body/);
@@ -255,7 +256,7 @@ test("public file names expose original names in truncated views and preview inf
   const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
-  assert.match(app, /function originalFileName\(item\) \{/);
+  assert.match(app, /function originalFileName\(item[^)]*\) \{/);
   assert.match(app, /title\.title = originalFileName\(item\);/);
   assert.match(app, /name\.title = originalFileName\(item\);/);
   assert.match(html, /<section className="preview-original-name-section">[\s\S]*<div id="previewOriginalName" className="preview-original-name-value" \/>[\s\S]*<\/section>[\s\S]*<section className="preview-rating-section">/);
@@ -313,7 +314,7 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.doesNotMatch(app, /Date Imported/);
   assert.doesNotMatch(app, /Date Created/);
   assert.doesNotMatch(app, /preview-date-section/);
-  assert.match(app, /function formatItemDate\(item, keys\) \{/);
+  assert.match(app, /function formatItemDate\(item[^,]*,\s*keys[^)]*\) \{/);
   assert.match(app, /els\.previewDetails\.replaceChildren\(detailsSection\);/);
   assert.match(app, /els\.previewActions\.replaceChildren\(link\);/);
   assert.match(css, /\.preview-details-section\s*\{/);
