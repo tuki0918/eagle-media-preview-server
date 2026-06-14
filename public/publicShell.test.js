@@ -7,7 +7,9 @@ async function readViewerSources() {
     "../src/viewerApp.ts",
     "../src/viewer/api.ts",
     "../src/viewer/constants.ts",
+    "../src/viewer/elements.ts",
     "../src/viewer/icons.ts",
+    "../src/viewer/state.ts",
   ];
   const sources = await Promise.all(files.map((file) => readFile(new URL(file, import.meta.url), "utf8")));
   return sources.join("\n");

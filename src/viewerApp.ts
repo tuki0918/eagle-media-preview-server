@@ -24,80 +24,11 @@ import {
   videoExts,
 } from "./viewer/constants";
 import { debounce, getJson, mediaUrl, postJson } from "./viewer/api";
+import { getViewerElements } from "./viewer/elements";
 import { iconNode, renderLucideIcons } from "./viewer/icons";
+import { state } from "./viewer/state";
 
-const state = {
-  offset: 0,
-  limit: 30,
-  total: 0,
-  items: [],
-  query: "",
-  tags: [],
-  tagSuggestionsRequestId: 0,
-  folderId: "",
-  ext: "",
-  rating: "",
-  filtersOpen: false,
-  folders: [],
-  viewMode: "grid",
-  tilesLoadingMore: false,
-  tilesObserver: null,
-  requestId: 0,
-  previewTransform: {
-    scale: 1,
-    x: 0,
-    y: 0,
-  },
-  previewFitScale: 1,
-  previewNaturalScale: 1,
-  previewDrag: null,
-  previewPointers: new Map(),
-  previewPinch: null,
-  previewItemId: "",
-  previewInfoOpen: false,
-  restoringHistory: false,
-};
-
-const els = {
-  loginView: document.querySelector("#loginView"),
-  viewerShell: document.querySelector("#viewerShell"),
-  connectForm: document.querySelector("#connectForm"),
-  connectButton: document.querySelector("#connectButton"),
-  connectMessage: document.querySelector("#connectMessage"),
-  searchInput: document.querySelector("#searchInput"),
-  tagChips: document.querySelector("#tagChips"),
-  tagSuggestions: document.querySelector("#tagSuggestions"),
-  resetFiltersButton: document.querySelector("#resetFiltersButton"),
-  toggleFiltersButton: document.querySelector("#toggleFiltersButton"),
-  advancedFilters: document.querySelector("#advancedFilters"),
-  folderSelect: document.querySelector("#folderSelect"),
-  extSelect: document.querySelector("#extSelect"),
-  ratingSelect: document.querySelector("#ratingSelect"),
-  pageSizeSelect: document.querySelector("#pageSizeSelect"),
-  gridViewButton: document.querySelector("#gridViewButton"),
-  tilesViewButton: document.querySelector("#tilesViewButton"),
-  tableViewButton: document.querySelector("#tableViewButton"),
-  resultCount: document.querySelector("#resultCount"),
-  libraryFooterName: document.querySelector("#libraryFooterName"),
-  grid: document.querySelector("#grid"),
-  tilesSentinel: document.querySelector("#tilesSentinel"),
-  pager: document.querySelector(".pager"),
-  prevButton: document.querySelector("#prevButton"),
-  nextButton: document.querySelector("#nextButton"),
-  pageButtons: document.querySelector("#pageButtons"),
-  template: document.querySelector("#cardTemplate"),
-  dialog: document.querySelector("#previewDialog"),
-  previewMeta: document.querySelector("#previewMeta"),
-  previewBody: document.querySelector("#previewBody"),
-  backPreview: document.querySelector("#backPreview"),
-  previewOriginalName: document.querySelector("#previewOriginalName"),
-  previewRating: document.querySelector("#previewRating"),
-  previewDetails: document.querySelector("#previewDetails"),
-  previewActions: document.querySelector("#previewActions"),
-  toggleInfoPreview: document.querySelector("#toggleInfoPreview"),
-  fullscreenPreview: document.querySelector("#fullscreenPreview"),
-  closePreview: document.querySelector("#closePreview"),
-};
+const els = getViewerElements();
 
 export function initViewer() {
   init();
