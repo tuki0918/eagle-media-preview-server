@@ -185,12 +185,12 @@ test("public preview renders text-like files and PDFs from their thumbnails", as
   assert.match(app, /const pdfPreviewExts = new Set\(\["pdf"\]\);/);
   assert.match(app, /textPreviewExts\.has\(ext\)/);
   assert.match(app, /pdfPreviewExts\.has\(ext\)/);
-  assert.match(app, /function renderTextPreview\(item\) \{/);
-  assert.match(app, /const response = await fetch\(mediaUrl\(item\.id, "file"\)\);/);
+  assert.match(app, /function renderTextPreview\(item[^)]*\) \{/);
+  assert.match(app, /const response = await fetch\(mediaUrl\(String\(item\.id \|\| ""\), "file"\)\);/);
   assert.match(app, /code\.textContent = text;/);
   assert.match(app, /renderImagePreview\(item,\s*\{\s*srcKind:\s*"thumb"\s*\}\);/);
-  assert.match(app, /function renderImagePreview\(item,\s*\{\s*srcKind = "file"\s*\} = \{\}\) \{/);
-  assert.match(app, /image\.src = mediaUrl\(item\.id, srcKind\);/);
+  assert.match(app, /function renderImagePreview\(item[^,]*,\s*\{\s*srcKind = "file"\s*\}[^)]* = \{\}\) \{/);
+  assert.match(app, /image\.src = mediaUrl\(String\(item\.id \|\| ""\), srcKind\);/);
   assert.doesNotMatch(app, /function renderPdfPreview\(item\) \{/);
   assert.doesNotMatch(app, /viewer\.src = directFileUrl\(item\);/);
   assert.match(app, /function previewFileName\(item[^)]*\) \{/);
@@ -292,7 +292,7 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(app, /link\.prepend\(iconNode\("external-link"\)\);/);
   assert.match(app, /{ label: "Type", value: mediaTypeLabel\(item\) }/);
   assert.match(app, /detailsSection\.append\(previewMetadataEditor\(item\)\);/);
-  assert.match(app, /function previewMetadataEditor\(item\) \{/);
+  assert.match(app, /function previewMetadataEditor\(item[^)]*\) \{/);
   assert.match(app, /const tagPicker = metadataChipPicker\(\{/);
   assert.match(app, /const categoryPicker = metadataChipPicker\(\{/);
   assert.match(app, /previewEditField\("Tags", tagPicker\.element\)/);
@@ -301,7 +301,7 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(app, /tags: tagPicker\.values\(\),/);
   assert.match(app, /folders: categoryPicker\.values\(\),/);
   assert.match(app, /saveButton\.addEventListener\("click", submitMetadata\);/);
-  assert.match(app, /postJson\(`\/api\/items\/\$\{encodeURIComponent\(item\.id\)\}\/metadata`, \{ tags, folders \}\)/);
+  assert.match(app, /postJson\(`\/api\/items\/\$\{encodeURIComponent\(String\(item\.id \|\| ""\)\)\}\/metadata`, \{ tags, folders \}\)/);
   assert.match(app, /rememberRecentValues\(RECENT_TAGS_STORAGE_KEY, patch\.tags\);/);
   assert.match(app, /rememberRecentValues\(RECENT_FOLDERS_STORAGE_KEY, patch\.folders\);/);
   assert.match(app, /if \(status\.isConnected\) status\.textContent = "Saved";/);
@@ -363,9 +363,9 @@ test("public preview info closes when pressing outside the side menu", async () 
   const app = await readViewerSources();
 
   assert.match(app, /els\.dialog\.addEventListener\("pointerdown", closePreviewInfoFromOutside\);/);
-  assert.match(app, /function closePreviewInfoFromOutside\(event\) \{/);
+  assert.match(app, /function closePreviewInfoFromOutside\(event[^)]*\) \{/);
   assert.match(app, /if \(!state\.previewInfoOpen\) return;/);
-  assert.match(app, /if \(event\.target\.closest\("\.preview-info, #toggleInfoPreview"\)\) return;/);
+  assert.match(app, /if \(\(event\.target as Element \| null\)\?\.closest\("\.preview-info, #toggleInfoPreview"\)\) return;/);
   assert.match(app, /setPreviewInfoOpen\(false\);/);
 });
 
@@ -413,10 +413,10 @@ test("public UI supports tag filter chips", async () => {
   assert.match(app, /params\.append\("tags", tag\)/);
   assert.match(app, /getJson\(`\/api\/tags\?\$\{params\.toString\(\)\}`\)/);
   assert.match(app, /function loadTagSuggestions\(\) \{/);
-  assert.match(app, /function renderTagSuggestions\(items\) \{/);
-  assert.match(app, /function addTagFilter\(value\) \{/);
+  assert.match(app, /function renderTagSuggestions\(items[^)]*\) \{/);
+  assert.match(app, /function addTagFilter\(value[^)]*\) \{/);
   assert.match(app, /applyFilterChange\(\{ query: "", tags: \[\.\.\.state\.tags, tag\] \}\);/);
-  assert.match(app, /function removeTagFilter\(tag\) \{/);
+  assert.match(app, /function removeTagFilter\(tag[^)]*\) \{/);
   assert.match(app, /function renderTagChips\(\) \{/);
   assert.match(app, /state\.tags = \[\];/);
   assert.match(css, /\.search-composer\s*\{/);
@@ -448,14 +448,14 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   assert.match(app, /tilesViewButton: document\.querySelector\("#tilesViewButton"\),/);
   assert.match(app, /tilesSentinel: document\.querySelector\("#tilesSentinel"\),/);
   assert.match(app, /state\.viewMode === "tiles"/);
-  assert.match(app, /function tileItem\(item\) \{/);
+  assert.match(app, /function tileItem\(item[^)]*\) \{/);
   assert.match(app, /button\.style\.aspectRatio = width > 0 && height > 0 \? `\$\{width\} \/ \$\{height\}` : "1 \/ 1";/);
   assert.match(app, /rating\.className = "rating-control tile-rating";/);
   assert.match(app, /renderRating\(rating, item, \{ interactive: false \}\);/);
   assert.match(app, /button\.append\(img, overlay, badge, duration, rating\);/);
   assert.match(app, /populateThumb\(\{ img, badge, duration, item \}\);/);
   assert.match(app, /decorateThumbButton\(button, overlayIcon, item\);/);
-  assert.match(app, /function appendRenderedItems\(items\) \{/);
+  assert.match(app, /function appendRenderedItems\(items[^)]*\) \{/);
   assert.match(app, /els\.grid\.append\(fragment\);/);
   assert.match(app, /function setupTileAutoLoading\(\) \{/);
   assert.match(app, /resetTileAutoLoading\(\);/);

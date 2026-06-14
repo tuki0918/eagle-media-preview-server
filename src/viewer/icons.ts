@@ -23,7 +23,7 @@ const lucideIcons = {
   x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
 };
 
-type IconName = keyof typeof lucideIcons;
+export type IconName = keyof typeof lucideIcons;
 
 export function renderLucideIcons(root: ParentNode = document) {
   for (const placeholder of root.querySelectorAll<HTMLElement>("[data-lucide]")) {

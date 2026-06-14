@@ -35,10 +35,12 @@ import {
   previewFileName,
   isTimedMedia,
 } from "./viewer/format";
-import { iconNode, renderLucideIcons } from "./viewer/icons";
+import { iconNode, renderLucideIcons, type IconName } from "./viewer/icons";
 import {
   folderLabel,
   folderSuggestionItems as buildFolderSuggestionItems,
+  type MetadataSuggestion,
+  type RemoteTag,
   readRecentList,
   rememberRecentValues,
   tagSuggestionItems as buildTagSuggestionItems,
@@ -65,7 +67,7 @@ import {
 import { previewDetailRows } from "./viewer/previewDetails";
 import { renderRating } from "./viewer/rating";
 import { state } from "./viewer/state";
-import type { EagleItem, ViewerMode } from "./viewer/types";
+import type { EagleFolder, EagleItem, PreviewPoint, ViewerMode } from "./viewer/types";
 import { buildViewerUrl, currentPage, parseViewerUrlState } from "./viewer/urlState";
 
 const els = getViewerElements();
@@ -77,6 +79,57 @@ interface PreviewTouchSession {
   startedAt: number;
   moved: boolean;
 }
+
+interface ConnectResponse {
+  library?: {
+    name?: string;
+  };
+  app?: {
+    version?: string;
+  };
+}
+
+interface LoadFoldersResponse {
+  items?: EagleFolder[];
+}
+
+interface LoadItemsResponse {
+  items?: EagleItem[];
+  total?: number;
+}
+
+interface TagSuggestionApiItem {
+  name?: string;
+  count?: number;
+}
+
+interface LoadItemsOptions {
+  append?: boolean;
+}
+
+interface OpenPreviewOptions {
+  skipHistory?: boolean;
+}
+
+interface RenderImagePreviewOptions {
+  srcKind?: string;
+}
+
+interface PopulateThumbOptions {
+  img: HTMLImageElement;
+  badge: HTMLElement | null;
+  duration: HTMLElement | null;
+  item: EagleItem;
+}
+
+interface SavePreviewMetadataOptions {
+  tags: string[];
+  folders: string[];
+  saveButton: HTMLButtonElement;
+  status: HTMLElement;
+}
+
+type ItemPatch = Partial<EagleItem>;
 
 export function initViewer() {
   init();
@@ -192,7 +245,7 @@ function showLogin() {
   els.viewerShell.hidden = true;
 }
 
-function showViewer(data) {
+function showViewer(data: ConnectResponse) {
   els.loginView.hidden = true;
   els.viewerShell.hidden = false;
   els.libraryFooterName.textContent = libraryLabel(data);
@@ -207,18 +260,18 @@ function showViewer(data) {
   updatePager();
 }
 
-function setConnectMessage(message, isError) {
+function setConnectMessage(message: string, isError: boolean) {
   els.connectMessage.textContent = message;
   els.connectMessage.classList.toggle("error-text", isError);
 }
 
-function libraryLabel(data) {
+function libraryLabel(data: ConnectResponse) {
   const name = data.library?.name || LIBRARY_EMPTY_LABEL;
   const version = data.app?.version ? `Eagle ${data.app.version}` : EAGLE_UNAVAILABLE_LABEL;
   return `${name} - ${version}`;
 }
 
-function optionNode(value, text) {
+function optionNode(value: string, text: string) {
   const option = document.createElement("option");
   option.value = value;
   option.textContent = text;
@@ -227,7 +280,7 @@ function optionNode(value, text) {
 
 async function loadFolders() {
   try {
-    const data = await getJson("/api/folders");
+    const data = await getJson("/api/folders") as LoadFoldersResponse;
     state.folders = flattenFolders(data.items);
     const fragment = document.createDocumentFragment();
     for (const folder of state.folders) {
@@ -244,7 +297,7 @@ async function loadFolders() {
   }
 }
 
-async function loadItems({ append = false } = {}) {
+async function loadItems({ append = false }: LoadItemsOptions = {}) {
   const requestId = ++state.requestId;
   if (append) {
     state.tilesLoadingMore = true;
@@ -268,10 +321,10 @@ async function loadItems({ append = false } = {}) {
   if (state.rating !== "") params.set("rating", state.rating);
 
   try {
-    const data = await getJson(`/api/items?${params.toString()}`);
+    const data = await getJson(`/api/items?${params.toString()}`) as LoadItemsResponse;
     if (requestId !== state.requestId) return;
     const items = data.items || [];
-    state.total = data.total;
+    state.total = Number(data.total || 0);
     state.items = append ? [...state.items, ...items] : items;
     state.tilesLoadingMore = false;
     if (append) {
@@ -325,11 +378,11 @@ function render() {
   updateViewToggle();
 }
 
-function resultItemNode(item) {
+function resultItemNode(item: EagleItem) {
   return state.viewMode === "table" ? tableRow(item) : state.viewMode === "tiles" ? tileItem(item) : gridCard(item);
 }
 
-function appendRenderedItems(items) {
+function appendRenderedItems(items: readonly EagleItem[]) {
   const fragment = document.createDocumentFragment();
   for (const item of items) {
     fragment.append(resultItemNode(item));
@@ -400,7 +453,7 @@ function bindPreviewTrigger(element: HTMLElement, item: EagleItem) {
   });
 }
 
-function gridCard(item) {
+function gridCard(item: EagleItem) {
   const templateNode = els.template.content.firstElementChild;
   if (!templateNode) throw new Error("Missing media card template content");
   const node = templateNode.cloneNode(true) as HTMLElement;
@@ -415,7 +468,7 @@ function gridCard(item) {
 
   populateThumb({ img, badge, duration, item });
   decorateThumbButton(button, overlayIcon, item);
-  title.textContent = item.name || item.id;
+  title.textContent = item.name || item.id || "";
   title.title = originalFileName(item);
   metaLine.hidden = true;
   renderRating(rating, item, { interactive: false });
@@ -430,7 +483,7 @@ function requiredChild<T extends Element>(parent: ParentNode, selector: string):
   return element;
 }
 
-function tileItem(item) {
+function tileItem(item: EagleItem) {
   const button = document.createElement("button");
   button.className = "tile-item";
   button.type = "button";
@@ -474,7 +527,7 @@ function tableHeader() {
   return header;
 }
 
-function tableRow(item) {
+function tableRow(item: EagleItem) {
   const row = document.createElement("article");
   row.className = "media-row";
   const thumb = document.createElement("button");
@@ -500,12 +553,12 @@ function tableRow(item) {
   return row;
 }
 
-function tableNameCell(item) {
+function tableNameCell(item: EagleItem) {
   const cell = document.createElement("span");
   cell.className = "row-name-cell";
   const name = document.createElement("span");
   name.className = "row-file-name";
-  name.textContent = item.name || item.id;
+  name.textContent = item.name || item.id || "";
   name.title = originalFileName(item);
   const meta = document.createElement("span");
   meta.className = "table-mobile-meta";
@@ -521,13 +574,13 @@ function tableNameCell(item) {
   return cell;
 }
 
-function populateThumb({ img, badge, duration, item }) {
+function populateThumb({ img, badge, duration, item }: PopulateThumbOptions) {
   const button = img.closest("button");
   button?.classList.add("thumb-loading");
   img.loading = "lazy";
   img.decoding = "async";
-  img.src = mediaUrl(item.id, "thumb");
-  img.alt = item.name || item.id;
+  img.src = mediaUrl(String(item.id || ""), "thumb");
+  img.alt = item.name || item.id || "";
   img.onload = () => {
     button?.classList.remove("thumb-loading");
     img.hidden = false;
@@ -548,7 +601,7 @@ function populateThumb({ img, badge, duration, item }) {
   }
 }
 
-function decorateThumbButton(button, overlayIcon, item) {
+function decorateThumbButton(button: HTMLElement, overlayIcon: HTMLElement | null, item: EagleItem) {
   const ext = (item.ext || "").toLowerCase();
   const mediaType = playableVideoExts.has(ext)
     ? "video"
@@ -564,8 +617,8 @@ function decorateThumbButton(button, overlayIcon, item) {
   overlayIcon.replaceChildren(iconNode(icon));
 }
 
-function openPreview(item, { skipHistory = false } = {}) {
-  state.previewItemId = item.id;
+function openPreview(item: EagleItem, { skipHistory = false }: OpenPreviewOptions = {}) {
+  state.previewItemId = String(item.id || "");
   els.previewMeta.textContent = itemMeta(item);
   els.previewOriginalName.textContent = originalFileName(item);
   els.previewOriginalName.title = originalFileName(item);
@@ -583,7 +636,7 @@ function openPreview(item, { skipHistory = false } = {}) {
     els.dialog.classList.add("video-mode");
     const video = document.createElement("video");
     video.className = "preview-video";
-    video.src = mediaUrl(item.id, "file");
+    video.src = mediaUrl(String(item.id || ""), "file");
     video.controls = true;
     video.playsInline = true;
     video.setAttribute("playsinline", "");
@@ -598,7 +651,7 @@ function openPreview(item, { skipHistory = false } = {}) {
   } else if (playableAudioExts.has(ext)) {
     els.dialog.classList.add("audio-mode");
     const audio = document.createElement("audio");
-    audio.src = mediaUrl(item.id, "file");
+    audio.src = mediaUrl(String(item.id || ""), "file");
     audio.controls = true;
     audio.preload = "metadata";
     els.previewBody.append(audio);
@@ -616,8 +669,8 @@ function openPreview(item, { skipHistory = false } = {}) {
     els.dialog.classList.add("unsupported-mode");
     const image = document.createElement("img");
     image.className = "unsupported-thumb";
-    image.src = mediaUrl(item.id, "thumb");
-    image.alt = item.name || item.id;
+    image.src = mediaUrl(String(item.id || ""), "thumb");
+    image.alt = item.name || item.id || "";
     const notice = document.createElement("p");
     notice.className = "preview-notice";
     notice.textContent = `${(item.ext || "This format").toUpperCase()} is not supported in this browser.`;
@@ -631,7 +684,7 @@ function openPreview(item, { skipHistory = false } = {}) {
   if (!skipHistory) syncUrlState();
 }
 
-function renderTextPreview(item) {
+function renderTextPreview(item: EagleItem) {
   const preview = document.createElement("pre");
   preview.className = "text-preview";
   const code = document.createElement("code");
@@ -641,7 +694,7 @@ function renderTextPreview(item) {
 
   (async () => {
     try {
-      const response = await fetch(mediaUrl(item.id, "file"));
+      const response = await fetch(mediaUrl(String(item.id || ""), "file"));
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const text = await response.text();
       code.textContent = text;
@@ -651,7 +704,7 @@ function renderTextPreview(item) {
   })();
 }
 
-function renderImagePreview(item, { srcKind = "file" } = {}) {
+function renderImagePreview(item: EagleItem, { srcKind = "file" }: RenderImagePreviewOptions = {}) {
   const viewport = document.createElement("div");
   viewport.className = "image-viewport";
   const status = document.createElement("div");
@@ -659,8 +712,8 @@ function renderImagePreview(item, { srcKind = "file" } = {}) {
   status.hidden = true;
   const image = document.createElement("img");
   image.className = "preview-image";
-  image.src = mediaUrl(item.id, srcKind);
-  image.alt = item.name || item.id;
+  image.src = mediaUrl(String(item.id || ""), srcKind);
+  image.alt = item.name || item.id || "";
   image.draggable = false;
   viewport.append(image, status);
   els.previewBody.append(viewport, imageToolbar());
@@ -705,7 +758,7 @@ function imageToolbar() {
   return toolbar;
 }
 
-function toolbarButton(label, icon, action) {
+function toolbarButton(label: string, icon: IconName, action: () => void) {
   const button = document.createElement("button");
   button.type = "button";
   button.title = label;
@@ -725,7 +778,7 @@ function resetPreviewTransform() {
   state.previewPinch = null;
 }
 
-function updatePreviewScales(image, viewport) {
+function updatePreviewScales(image: HTMLImageElement, viewport: HTMLElement) {
   const scales = nextPreviewScales({
     imageWidth: image.naturalWidth,
     imageHeight: image.naturalHeight,
@@ -739,7 +792,7 @@ function updatePreviewScales(image, viewport) {
   state.previewNaturalScale = scales.naturalScale;
 }
 
-function zoomImage(multiplier) {
+function zoomImage(multiplier: number) {
   const nextScale = nextZoomScale(
     state.previewTransform.scale,
     multiplier,
@@ -749,7 +802,7 @@ function zoomImage(multiplier) {
   setImageZoom(nextScale);
 }
 
-function setImageZoom(scale, position: { x: number; y: number } = state.previewTransform) {
+function setImageZoom(scale: number, position: PreviewPoint = state.previewTransform) {
   state.previewTransform = setPreviewZoom(scale, position);
   applyImageTransform();
 }
@@ -770,7 +823,7 @@ function updateImageStatus() {
   status.textContent = `${image.naturalWidth} × ${image.naturalHeight} · ${zoomPercent}%`;
 }
 
-function startImageDrag(event, viewport) {
+function startImageDrag(event: PointerEvent, viewport: HTMLElement) {
   const image = els.previewBody.querySelector<HTMLImageElement>(".preview-image");
   if (!image) return;
   if (event.pointerType === "touch") {
@@ -797,7 +850,7 @@ function startImageDrag(event, viewport) {
   };
 }
 
-function moveImageDrag(event) {
+function moveImageDrag(event: PointerEvent) {
   if (event.pointerType === "touch" && state.previewPointers.has(event.pointerId)) {
     state.previewPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (state.previewPointers.size === 2 && state.previewPinch) {
@@ -823,7 +876,7 @@ function moveImageDrag(event) {
   applyImageTransform();
 }
 
-function endImageDrag(event) {
+function endImageDrag(event?: PointerEvent) {
   if (event?.pointerType === "touch") {
     state.previewPointers.delete(event.pointerId);
     if (state.previewPointers.size < 2) {
@@ -835,7 +888,7 @@ function endImageDrag(event) {
   }
 }
 
-function showPreviewNotice(message) {
+function showPreviewNotice(message: string) {
   const notice = document.createElement("p");
   notice.className = "preview-notice";
   notice.textContent = message;
@@ -854,7 +907,7 @@ function refreshPreviewImageLayout() {
   applyImageTransform();
 }
 
-function videoErrorMessage(error) {
+function videoErrorMessage(error: MediaError | null) {
   if (error?.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
     return "This video could not be played on this device. iPhone requires Safari-compatible video such as H.264 video with AAC audio.";
   }
@@ -898,7 +951,7 @@ function isViewerMode(value: string): value is ViewerMode {
   return value === "grid" || value === "tiles" || value === "table";
 }
 
-function closePreview({ skipHistory = false } = {}) {
+function closePreview({ skipHistory = false }: OpenPreviewOptions = {}) {
   els.dialog.classList.remove("video-mode", "image-mode", "audio-mode", "unsupported-mode", "info-open");
   els.toggleInfoPreview.setAttribute("aria-expanded", "false");
   state.previewItemId = "";
@@ -918,13 +971,13 @@ function togglePreviewInfo() {
   setPreviewInfoOpen(!state.previewInfoOpen);
 }
 
-function closePreviewInfoFromOutside(event) {
+function closePreviewInfoFromOutside(event: PointerEvent) {
   if (!state.previewInfoOpen) return;
-  if (event.target.closest(".preview-info, #toggleInfoPreview")) return;
+  if ((event.target as Element | null)?.closest(".preview-info, #toggleInfoPreview")) return;
   setPreviewInfoOpen(false);
 }
 
-function setPreviewInfoOpen(isOpen) {
+function setPreviewInfoOpen(isOpen: boolean) {
   els.dialog.classList.toggle("info-open", isOpen);
   els.toggleInfoPreview.setAttribute("aria-expanded", isOpen ? "true" : "false");
   state.previewInfoOpen = isOpen;
@@ -993,7 +1046,7 @@ function applyControlsFromState() {
   updateViewToggle();
 }
 
-function applyFilterChange(patch) {
+function applyFilterChange(patch: Partial<Pick<typeof state, "query" | "tags" | "folderId" | "ext" | "rating" | "limit">>) {
   Object.assign(state, patch, { offset: 0 });
   resetPreviewState();
   syncResetFiltersButton();
@@ -1001,7 +1054,7 @@ function applyFilterChange(patch) {
   loadItems();
 }
 
-function syncUrlState({ replace = false } = {}) {
+function syncUrlState({ replace = false }: { replace?: boolean } = {}) {
   if (state.restoringHistory) return;
   const nextUrl = buildViewerUrl(window.location.pathname, state);
   const currentUrl = `${window.location.pathname}${window.location.search}`;
@@ -1010,7 +1063,7 @@ function syncUrlState({ replace = false } = {}) {
   history[method](null, "", nextUrl);
 }
 
-function addTagFilter(value) {
+function addTagFilter(value: unknown) {
   const tag = normalizeTag(value);
   if (!tag || state.tags.includes(tag)) {
     els.searchInput.value = "";
@@ -1023,7 +1076,7 @@ function addTagFilter(value) {
   hideTagSuggestions();
 }
 
-function removeTagFilter(tag) {
+function removeTagFilter(tag: string) {
   applyFilterChange({ tags: state.tags.filter((entry) => entry !== tag) });
   renderTagChips();
 }
@@ -1061,7 +1114,7 @@ async function loadTagSuggestions() {
 
   const params = new URLSearchParams({ q: query, limit: "20" });
   try {
-    const data = await getJson(`/api/tags?${params.toString()}`);
+    const data = await getJson(`/api/tags?${params.toString()}`) as { items?: TagSuggestionApiItem[] };
     if (requestId !== state.tagSuggestionsRequestId) return;
     const items = Array.isArray(data.items) ? data.items : [];
     renderTagSuggestions(items.filter((item) => item?.name && !state.tags.includes(item.name)));
@@ -1070,7 +1123,7 @@ async function loadTagSuggestions() {
   }
 }
 
-function renderTagSuggestions(items) {
+function renderTagSuggestions(items: readonly TagSuggestionApiItem[]) {
   if (!items.length) {
     hideTagSuggestions();
     return;
@@ -1088,13 +1141,13 @@ function renderTagSuggestions(items) {
     });
 
     const name = document.createElement("span");
-    name.textContent = item.name;
+    name.textContent = item.name || "";
     button.append(name);
 
     if (Number.isFinite(item.count)) {
       const count = document.createElement("span");
       count.className = "tag-suggestion-count";
-      count.textContent = item.count.toLocaleString();
+      count.textContent = Number(item.count).toLocaleString();
       button.append(count);
     }
 
@@ -1159,23 +1212,23 @@ function pointerDistance() {
   return getPointerDistance(state.previewPointers.values());
 }
 
-async function setItemStar(item, star) {
+async function setItemStar(item: EagleItem, star: number) {
   const previous = Number(item.star || 0);
   item.star = star;
-  updateItemInState(item.id, { star });
+  updateItemInState(String(item.id || ""), { star });
   render();
   if (els.dialog.open) {
     renderRating(els.previewRating, item, { interactive: true, onSelect: (nextStar) => setItemStar(item, nextStar) });
   }
 
   try {
-    const data = await postJson(`/api/items/${encodeURIComponent(item.id)}/star`, { star });
+    const data = await postJson(`/api/items/${encodeURIComponent(String(item.id || ""))}/star`, { star }) as { star?: unknown };
     const savedStar = Number(data.star ?? star);
     item.star = savedStar;
-    updateItemInState(item.id, { star: savedStar });
+    updateItemInState(String(item.id || ""), { star: savedStar });
   } catch (error) {
     item.star = previous;
-    updateItemInState(item.id, { star: previous });
+    updateItemInState(String(item.id || ""), { star: previous });
     alert(error.message);
   } finally {
     render();
@@ -1185,7 +1238,7 @@ async function setItemStar(item, star) {
   }
 }
 
-function updateItemInState(id, patch) {
+function updateItemInState(id: string, patch: ItemPatch) {
   const target = state.items.find((item) => item.id === id);
   if (target) Object.assign(target, patch);
 }
@@ -1266,7 +1319,7 @@ function renderPageButtons() {
   els.pageButtons.replaceChildren(fragment);
 }
 
-function renderPreviewDetails(item) {
+function renderPreviewDetails(item: EagleItem) {
   const detailsSection = document.createElement("section");
   detailsSection.className = "preview-details-section";
 
@@ -1301,7 +1354,7 @@ function renderPreviewDetails(item) {
   els.previewActions.replaceChildren(link);
 }
 
-function previewMetadataEditor(item) {
+function previewMetadataEditor(item: EagleItem) {
   const form = document.createElement("form");
   form.className = "preview-edit-form";
 
@@ -1338,7 +1391,7 @@ function previewMetadataEditor(item) {
     previewEditField("Categories", categoryPicker.element),
     previewEditActions(saveButton, status),
   );
-  const submitMetadata = (event) => {
+  const submitMetadata = (event: Event) => {
     event.preventDefault();
     savePreviewMetadata(item, {
       tags: tagPicker.values(),
@@ -1352,11 +1405,14 @@ function previewMetadataEditor(item) {
   return form;
 }
 
-async function savePreviewMetadata(item, { tags, folders, saveButton, status }) {
+async function savePreviewMetadata(item: EagleItem, { tags, folders, saveButton, status }: SavePreviewMetadataOptions) {
   saveButton.disabled = true;
   status.textContent = "Saving";
   try {
-    const data = await postJson(`/api/items/${encodeURIComponent(item.id)}/metadata`, { tags, folders });
+    const data = await postJson(`/api/items/${encodeURIComponent(String(item.id || ""))}/metadata`, { tags, folders }) as {
+      tags?: unknown;
+      folders?: unknown;
+    };
     const patch = {
       tags: Array.isArray(data.tags) ? data.tags : tags,
       folders: Array.isArray(data.folders) ? data.folders : folders,
@@ -1364,7 +1420,7 @@ async function savePreviewMetadata(item, { tags, folders, saveButton, status }) 
     rememberRecentValues(RECENT_TAGS_STORAGE_KEY, patch.tags);
     rememberRecentValues(RECENT_FOLDERS_STORAGE_KEY, patch.folders);
     Object.assign(item, patch);
-    updateItemInState(item.id, patch);
+    updateItemInState(String(item.id || ""), patch);
     render();
     if (status.isConnected) status.textContent = "Saved";
   } catch (error) {
@@ -1374,21 +1430,21 @@ async function savePreviewMetadata(item, { tags, folders, saveButton, status }) 
   }
 }
 
-function tagSuggestionItems(query, selectedValues) {
+function tagSuggestionItems(query: string, selectedValues: string[]): Promise<MetadataSuggestion[]> | MetadataSuggestion[] {
   const recentTags = readRecentList(RECENT_TAGS_STORAGE_KEY);
   if (!query) {
     return buildTagSuggestionItems({ query, selectedValues, recentTags });
   }
   const params = new URLSearchParams({ q: query, limit: "20" });
   return getJson(`/api/tags?${params.toString()}`)
-    .then((data) => {
+    .then((data: { items?: RemoteTag[] }) => {
       const remote = Array.isArray(data.items) ? data.items : [];
       return buildTagSuggestionItems({ query, selectedValues, recentTags, remoteTags: remote });
     })
     .catch(() => buildTagSuggestionItems({ query, selectedValues, recentTags }));
 }
 
-function folderSuggestionItems(query, selectedValues) {
+function folderSuggestionItems(query: string, selectedValues: string[]) {
   return buildFolderSuggestionItems({
     query,
     selectedValues,
@@ -1397,7 +1453,7 @@ function folderSuggestionItems(query, selectedValues) {
   });
 }
 
-function messageNode(text, className = "empty") {
+function messageNode(text: string, className = "empty") {
   const node = document.createElement("div");
   node.className = className;
   node.textContent = text;
