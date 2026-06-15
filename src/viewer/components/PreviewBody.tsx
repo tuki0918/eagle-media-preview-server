@@ -38,7 +38,7 @@ const videoPlayerClassName =
 const audioPlayerShellClassName =
   "audio-player-shell grid w-[min(560px,calc(100%_-_28px))] content-center gap-5 rounded-[18px] border border-[rgba(255,255,255,0.12)] bg-[linear-gradient(145deg,rgba(30,41,59,0.92),rgba(2,6,23,0.94))] p-5 text-white shadow-[0_24px_80px_rgba(0,0,0,0.36)] max-[540px]:w-[calc(100%_-_24px)] max-[540px]:gap-4 max-[540px]:rounded-[16px] max-[540px]:p-4";
 const audioArtworkClassName =
-  "audio-artwork relative mx-auto aspect-square w-[min(260px,72vw)] overflow-hidden rounded-[16px] border border-[rgba(255,255,255,0.12)] bg-[linear-gradient(135deg,rgba(37,99,235,0.34),rgba(14,165,233,0.16)),rgba(15,23,42,0.82)] shadow-[0_18px_48px_rgba(0,0,0,0.34)] max-[540px]:w-[min(220px,68vw)] [&>img]:h-full [&>img]:w-full [&>img]:object-cover";
+  "audio-artwork relative mx-auto my-3 aspect-square w-[min(260px,72vw)] overflow-hidden rounded-[16px] border border-[rgba(255,255,255,0.12)] bg-[linear-gradient(135deg,rgba(37,99,235,0.34),rgba(14,165,233,0.16)),rgba(15,23,42,0.82)] shadow-[0_18px_48px_rgba(0,0,0,0.34)] max-[540px]:my-2.5 max-[540px]:w-[min(220px,68vw)] [&>img]:h-full [&>img]:w-full [&>img]:object-cover";
 const audioArtworkFallbackClassName =
   "grid h-full w-full place-items-center text-[rgba(255,255,255,0.72)] [&_svg]:h-14 [&_svg]:w-14 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-linecap:round] [&_svg]:[stroke-linejoin:round] [&_svg]:[stroke-width:1.8]";
 const mediaTitleClassName =
