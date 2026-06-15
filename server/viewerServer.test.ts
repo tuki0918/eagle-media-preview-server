@@ -176,6 +176,49 @@ test("createViewerServer allows metadata writes when editing is enabled for an a
   }
 });
 
+test("createViewerServer rejects invalid star values before reaching Eagle", async () => {
+  const calls: unknown[] = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    allowMetadataEditing: true,
+    passwordHash: sha256("secret"),
+    basicAuthUsername: "eagle",
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/tmp/Test.library", name: "Test Library" };
+      },
+      async updateItemStar(id: string, star: unknown) {
+        calls.push({ id, star });
+        return { id, star };
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const response = await fetch(`http://127.0.0.1:${status.port}/api/items/ITEM123/star`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${Buffer.from("eagle:secret").toString("base64")}`,
+        "Content-Type": "application/json",
+        Origin: `http://127.0.0.1:${status.port}`,
+      },
+      body: JSON.stringify({ star: 6 }),
+    });
+
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), { error: "star must be an integer from 0-5" });
+    assert.deepEqual(calls, []);
+  } finally {
+    await viewer.stop();
+  }
+});
+
 test("createViewerServer authorizes metadata writes by user role", async () => {
   const calls: unknown[] = [];
   const viewer = createViewerServer({

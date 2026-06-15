@@ -413,8 +413,9 @@ async function handleApi(req, url, res, { auth, getSession, setSession }: ApiCon
     }
     const itemId = decodeURIComponent(starMatch[1]);
     const body = await readJson(req);
-    const item = await session.client.updateItemStar(itemId, body.star);
-    sendJson(res, 200, { id: item.id || itemId, star: item.star ?? Number(body.star) });
+    const star = normalizeStar(body.star);
+    const item = await session.client.updateItemStar(itemId, star);
+    sendJson(res, 200, { id: item.id || itemId, star: item.star ?? star });
     return;
   }
 
@@ -734,6 +735,14 @@ function normalizeMetadataPatch(body) {
     tags: body.tags === undefined ? undefined : normalizeStringArray(body.tags, "tags"),
     folders: body.folders === undefined ? undefined : normalizeStringArray(body.folders, "folders"),
   };
+}
+
+function normalizeStar(value: unknown) {
+  const star = Number(value);
+  if (!Number.isInteger(star) || star < 0 || star > 5) {
+    throw new HttpError(400, "star must be an integer from 0-5");
+  }
+  return star;
 }
 
 function authRequired({ users = [], viewerPassword, passwordHash }: { passwordHash?: string; users?: AuthUser[]; viewerPassword?: string }) {
