@@ -62,6 +62,8 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(app, /aria-label=\{`Username for user \$\{index \+ 1\}`\}/);
   assert.match(app, /aria-label=\{`Role for \$\{user\.username \|\| `user \$\{index \+ 1\}`\}`\}/);
   assert.match(app, /aria-label=\{`Password for \$\{user\.username \|\| `user \$\{index \+ 1\}`\}`\}/);
+  assert.match(app, /<PlusIcon className="h-\[12px\] w-\[12px\]" \/>/);
+  assert.match(app, /<span>Add user<\/span>/);
   assert.match(app, /function SettingRow\(\{ children, help, label \}/);
   assert.doesNotMatch(app, /<label className="grid grid-cols-\[72px_minmax\(0,1fr\)\]/);
   assert.doesNotMatch(app, /Admin is reserved for full management permissions/);

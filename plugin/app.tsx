@@ -466,7 +466,10 @@ function App() {
                 </div>
               ))}
               <div className="flex items-center justify-between gap-2">
-                <button className="h-7 rounded-md border border-[#d7d9de] bg-white px-2 text-[11px] font-medium text-[#111] hover:bg-[#f8f9fb]" type="button" disabled={formDisabled} onClick={addAuthUser}>Add user</button>
+                <button className="inline-flex h-7 items-center gap-1.5 rounded-md border border-[#d7d9de] bg-white px-2 text-[11px] font-medium text-[#111] hover:bg-[#f8f9fb]" type="button" disabled={formDisabled} onClick={addAuthUser}>
+                  <PlusIcon className="h-[12px] w-[12px]" />
+                  <span>Add user</span>
+                </button>
                 <button className="grid h-7 w-7 place-items-center rounded-md border border-[#d7d9de] bg-white p-1 text-[#555c66] hover:bg-[#f4f5f7]" type="button" aria-label={passwordVisible ? "Hide passwords" : "Show passwords"} title={passwordVisible ? "Hide passwords" : "Show passwords"} disabled={formDisabled} onClick={() => setPasswordVisible((current) => !current)}>
                   {passwordVisible ? <EyeIcon className="h-[13px] w-[13px]" /> : <EyeOffIcon className="h-[13px] w-[13px]" />}
                 </button>
@@ -739,6 +742,10 @@ function GlobeIcon() {
 
 function PowerIcon() {
   return <Svg><path d="M12 2v10" /><path d="M18.4 6.6a9 9 0 1 1-12.8 0" /></Svg>;
+}
+
+function PlusIcon({ className }: { className?: string }) {
+  return <Svg className={className}><path d="M12 5v14M5 12h14" /></Svg>;
 }
 
 function ServerIcon() {
