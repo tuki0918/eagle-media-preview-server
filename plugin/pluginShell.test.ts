@@ -57,6 +57,8 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(app, /Active editors/);
   assert.match(app, /Active viewers/);
   assert.match(app, /Saved users apply when BasicAuth protection is enabled\./);
+  assert.match(app, /Admin can also switch libraries\./);
+  assert.doesNotMatch(app, /Admin is reserved for full management permissions/);
   assert.doesNotMatch(app, /title="Editor roles"/);
   assert.doesNotMatch(app, /function EditIcon\(/);
   assert.doesNotMatch(app, /const \[password, setPassword\]/);

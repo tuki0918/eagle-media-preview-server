@@ -421,7 +421,7 @@ function App() {
               onBlur={(event) => saveSettings({ patch: { port: event.currentTarget.value } })}
             />
           </SettingRow>
-          <SettingRow label="Users" help={authEnabled ? "Viewer can browse. Editor can edit metadata. Admin is reserved for full management permissions." : "Saved users apply when BasicAuth protection is enabled."}>
+          <SettingRow label="Users" help={authEnabled ? "Viewer can browse. Editor can edit metadata. Admin can also switch libraries." : "Saved users apply when BasicAuth protection is enabled."}>
             <div className="grid gap-2">
               <div className="flex justify-end">
                 <span id="authUsersStatus" className={`inline-flex min-h-5 items-center rounded-md border px-2 text-[10px] font-medium ${authUsersStatusClassName}`}>
