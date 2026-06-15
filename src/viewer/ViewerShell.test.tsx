@@ -485,7 +485,6 @@ describe("ViewerAppShell", () => {
       await act(async () => {
         const valueSetter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")?.set;
         valueSetter?.call(tagInput, "beta");
-        tagInput.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
         tagInput.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
       });
 
@@ -567,7 +566,6 @@ describe("ViewerAppShell", () => {
       await act(async () => {
         const valueSetter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")?.set;
         valueSetter?.call(tagInput, "beta");
-        tagInput.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
         tagInput.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
       });
 

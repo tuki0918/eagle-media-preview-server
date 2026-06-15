@@ -1,4 +1,7 @@
 import { useSyncExternalStore } from "react";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import iconOnUrl from "../../assets/icon_on.svg";
 import { getLoginConnectState, subscribeLoginConnectState } from "../loginConnectState";
 import { submitConnection } from "../shellActions";
@@ -22,9 +25,12 @@ export function LoginView({ hidden = false }: LoginViewProps) {
 
   return (
     <section id="loginView" className="login-view grid min-h-dvh place-items-center px-4 py-9" hidden={hidden}>
+      <Card
+        className="login-panel w-[min(320px,100%)] rounded-[14px] border-app-border bg-[rgba(255,255,255,0.95)] px-[30px] pb-[30px] pt-[42px] shadow-app backdrop-blur-xl"
+      >
       <form
         id="connectForm"
-        className="login-panel grid w-[min(320px,100%)] gap-[18px] rounded-[14px] border border-app-border bg-[rgba(255,255,255,0.95)] px-[30px] pb-[30px] pt-[42px] shadow-app backdrop-blur-xl"
+        className="grid gap-[18px]"
         onSubmit={submitConnection}
       >
         <div className="login-head grid justify-items-center gap-3 text-center">
@@ -46,6 +52,7 @@ export function LoginView({ hidden = false }: LoginViewProps) {
         </div>
         <ConnectMessage />
       </form>
+      </Card>
     </section>
   );
 }
@@ -53,10 +60,10 @@ export function LoginView({ hidden = false }: LoginViewProps) {
 function LoginCredentials({ disabled }: { disabled: boolean }) {
   return (
     <div className="grid gap-2">
-      <input
+      <Input
         id="authUsernameInput"
         name="username"
-        className="min-h-[42px] rounded-app border border-app-border bg-white px-3 text-sm text-app-text outline-none focus:border-app-accent focus:shadow-[0_0_0_3px_rgba(37,99,235,0.12)]"
+        className="min-h-[42px] rounded-lg bg-white px-3 text-sm text-app-text"
         aria-label="Username"
         autoComplete="username"
         disabled={disabled}
@@ -64,10 +71,10 @@ function LoginCredentials({ disabled }: { disabled: boolean }) {
         required
         type="text"
       />
-      <input
+      <Input
         id="authPasswordInput"
         name="password"
-        className="min-h-[42px] rounded-app border border-app-border bg-white px-3 text-sm text-app-text outline-none focus:border-app-accent focus:shadow-[0_0_0_3px_rgba(37,99,235,0.12)]"
+        className="min-h-[42px] rounded-lg bg-white px-3 text-sm text-app-text"
         aria-label="Password"
         autoComplete="current-password"
         disabled={disabled}
@@ -83,14 +90,14 @@ export function ConnectButton({ disabled }: ConnectButtonProps) {
   const state = useSyncExternalStore(subscribeLoginConnectState, getLoginConnectState, getLoginConnectState);
 
   return (
-    <button
+    <Button
       id="connectButton"
-      className="inline-flex min-h-[46px] items-center justify-center gap-[9px] rounded-app border border-app-accent bg-app-accent text-sm font-[720] text-white shadow-[0_10px_22px_rgba(37,99,235,0.18)] hover:border-app-accent-strong hover:bg-app-accent-strong disabled:border-app-border disabled:bg-app-surface-strong disabled:text-app-muted"
+      className="min-h-[46px] rounded-lg text-sm font-[720] shadow-[0_10px_22px_rgba(37,99,235,0.18)]"
       type="submit"
       disabled={disabled ?? state.disabled}
     >
       <span>{state.authRequired && !state.authenticated ? "Sign in" : "Connect"}</span>
-    </button>
+    </Button>
   );
 }
 

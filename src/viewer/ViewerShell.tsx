@@ -1,4 +1,5 @@
 import { useEffect, useSyncExternalStore } from "react";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { LoginView } from "./components/LoginView";
 import { ViewerShellLayout } from "./components/ViewerShellLayout";
 import { handleUrlPop } from "./shellActions";
@@ -13,10 +14,10 @@ export function ViewerAppShell() {
   }, []);
 
   return (
-    <>
+    <TooltipProvider>
       <LoginView hidden={shellView !== "login"} />
       <ViewerShellLayout hidden={shellView !== "viewer"} />
-    </>
+    </TooltipProvider>
   );
 }
 

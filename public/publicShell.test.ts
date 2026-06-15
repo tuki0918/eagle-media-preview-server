@@ -615,9 +615,9 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.doesNotMatch(html, /initialValues/);
   assert.match(html, /const clearDebounceTimer = \(\) => \{/);
   assert.match(html, /return \(\) => \{\s*requestId\.current \+= 1;\s*clearDebounceTimer\(\);\s*\};/);
-  assert.match(html, /onPointerDown=\{\(\) => updateSuggestions\(\)\}/);
+  assert.match(html, /input\.addEventListener\("pointerdown", handlePointerDown\)/);
   assert.match(html, /onPointerDown=\{\(event\) => event\.stopPropagation\(\)\}/);
-  assert.match(html, /setQuery\(""\);\s*hideSuggestions\(\);/);
+  assert.match(html, /setQuery\(""\);[\s\S]*inputRef\.current\.value = "";[\s\S]*hideSuggestions\(\);/);
   assert.match(app, /function readRecentList\(key[^)]*\) \{/);
   assert.match(app, /function writeRecentList\(key[^,]*,\s*values[^)]*\) \{/);
   assert.match(app, /function tagSuggestionItems\(\{/);

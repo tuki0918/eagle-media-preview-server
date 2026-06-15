@@ -1,4 +1,7 @@
 import { useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { mediaUrl } from "../api";
 import {
   formatBytes,
@@ -42,7 +45,7 @@ const overlayIconPaths = {
   ),
 };
 
-const mediaCardClassName = "media-card min-w-0 overflow-hidden rounded-app border border-app-border bg-app-surface p-0 shadow-app-soft";
+const mediaCardClassName = "media-card min-w-0 overflow-hidden rounded-lg border border-border bg-card p-0 py-0 shadow-sm transition-shadow hover:shadow-md";
 const cardMetaClassName = "card-meta px-2 pb-2 pt-[9px] [&>span]:mt-0.5 [&>span]:block [&>span]:min-w-0 [&>span]:overflow-hidden [&>span]:text-ellipsis [&>span]:whitespace-nowrap [&>span]:text-xs [&>span]:text-app-muted [&>strong]:block [&>strong]:min-w-0 [&>strong]:overflow-hidden [&>strong]:text-ellipsis [&>strong]:whitespace-nowrap [&>strong]:text-[13px] [&>strong]:font-[420] [&>strong]:leading-[1.3]";
 const tileButtonClassName =
   "tile-item relative block h-full w-full cursor-zoom-in overflow-hidden border-0 bg-app-surface-strong p-0 shadow-none [border-radius:0] [contain:layout_paint] [&>img]:block [&>img]:h-full [&>img]:w-full [&>img]:object-contain";
@@ -167,7 +170,7 @@ function ResultItem({ item, viewMode, onOpenPreview }: { item: EagleItem; viewMo
 
 function GridCard({ item, onOpenPreview }: { item: EagleItem; onOpenPreview: (item: EagleItem) => void }) {
   return (
-    <article className={mediaCardClassName}>
+    <Card className={mediaCardClassName}>
       <ThumbnailButton variant="grid" item={item} onOpenPreview={onOpenPreview} withBadges withOverlay>
         <RatingStars item={item} className={cardRatingClassName} />
       </ThumbnailButton>
@@ -175,7 +178,7 @@ function GridCard({ item, onOpenPreview }: { item: EagleItem; onOpenPreview: (it
         <strong title={originalFileName(item)}>{item.name || item.id || ""}</strong>
         <span hidden />
       </div>
-    </article>
+    </Card>
   );
 }
 
@@ -258,9 +261,9 @@ function TableCell({ className = "", title = "", value }: { className?: string; 
 function ExtensionPill({ item }: { item: EagleItem }) {
   const ext = normalizeExt(item.ext || "file");
   return (
-    <span className={`ext-pill inline-flex w-fit min-w-11 justify-center rounded-md border px-[7px] py-[3px] text-[11px] font-[760] max-[540px]:hidden ${extensionColorClassNames[ext] || "border-[#bfdbfe] bg-[#eff6ff] text-[#1d4ed8]"}`} data-ext={ext}>
+    <Badge variant="outline" className={`ext-pill inline-flex h-auto w-fit min-w-11 justify-center rounded-md px-[7px] py-[3px] text-[11px] font-[760] max-[540px]:hidden ${extensionColorClassNames[ext] || "border-[#bfdbfe] bg-[#eff6ff] text-[#1d4ed8]"}`} data-ext={ext}>
       {String(ext).toUpperCase()}
-    </span>
+    </Badge>
   );
 }
 
@@ -316,9 +319,9 @@ function ThumbnailButton({ children, item, onOpenPreview, style, variant, withBa
       {withBadges ? (
         <>
           {withFileBadge ? (
-            <span className={`file-badge absolute left-1.5 top-1.5 max-w-[calc(100%_-_12px)] overflow-hidden text-ellipsis whitespace-nowrap rounded-md px-1.5 py-[3px] text-[10px] font-[720] leading-[1.2] ${fileBadgeColorClassName(item.ext)}`} data-ext={normalizeExt(item.ext || "file")}>
+            <Badge className={`file-badge absolute left-1.5 top-1.5 h-auto max-w-[calc(100%_-_12px)] overflow-hidden text-ellipsis whitespace-nowrap rounded-md border-0 px-1.5 py-[3px] text-[10px] font-[720] leading-[1.2] ${fileBadgeColorClassName(item.ext)}`} data-ext={normalizeExt(item.ext || "file")}>
               {(item.ext || "").toUpperCase()}
-            </span>
+            </Badge>
           ) : null}
           <span className={durationBadgeClassName} hidden={!duration}>
             {duration}
@@ -339,15 +342,15 @@ function thumbnailButtonBaseClassName(variant: ThumbnailButtonProps["variant"]) 
 function LoadingIndicator({ variant }: { variant: ThumbnailButtonProps["variant"] }) {
   if (variant === "tile") {
     return (
-      <span
-        className="pointer-events-none absolute inset-0 z-[4] animate-pulse bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.36),transparent),linear-gradient(135deg,rgba(226,232,240,0.92),rgba(203,213,225,0.72))] [background-size:180%_100%,100%_100%]"
+      <Skeleton
+        className="pointer-events-none absolute inset-0 z-[4] animate-pulse bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.36),transparent),linear-gradient(135deg,rgba(226,232,240,0.92),rgba(203,213,225,0.72))] rounded-none"
         aria-hidden="true"
       />
     );
   }
   return (
-    <span
-      className="pointer-events-none absolute left-1/2 top-1/2 z-[2] h-[22px] w-[22px] -translate-x-1/2 -translate-y-1/2 animate-spin rounded-full border-2 border-[rgba(148,163,184,0.35)] border-t-[rgba(20,99,243,0.9)]"
+    <Skeleton
+      className="pointer-events-none absolute left-1/2 top-1/2 z-[2] size-[22px] -translate-x-1/2 -translate-y-1/2 animate-spin rounded-full border-2 border-[rgba(148,163,184,0.35)] border-t-[rgba(20,99,243,0.9)]"
       aria-hidden="true"
     />
   );

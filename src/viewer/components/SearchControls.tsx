@@ -1,4 +1,7 @@
 import { useEffect, useState, useSyncExternalStore, type CSSProperties } from "react";
+import { FunnelXIcon, SlidersHorizontalIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { MEDIA_TYPE_OPTIONS, PAGE_SIZE_OPTIONS, RATING_OPTIONS } from "../shellConfig";
 import {
   getSearchControlsState,
@@ -34,7 +37,7 @@ interface SearchControlsProps {
 }
 
 const selectClassName =
-  "min-h-[50px] w-full appearance-none rounded-app border border-app-border bg-app-surface py-0 pl-4 pr-[46px] text-base text-app-text hover:border-app-border-strong hover:bg-[#fcfdff] min-[720px]:text-[15px]";
+  "h-12 w-full appearance-none rounded-lg border border-input bg-card py-0 pl-3 pr-10 text-base text-foreground shadow-sm hover:bg-muted/30 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 min-[720px]:text-sm";
 
 const selectArrowStyle: CSSProperties = {
   backgroundImage:
@@ -74,7 +77,7 @@ export function SearchControls({
   return (
     <section className="controls grid gap-4 pb-2" aria-label="Search and filters">
       <div className="search-row grid grid-cols-[minmax(0,1fr)_auto_auto] items-stretch gap-3 max-[540px]:gap-2">
-        <div className="search-box relative flex min-h-[50px] items-center gap-2.5 rounded-app border border-app-border bg-app-surface px-4 py-[7px] shadow-app-soft hover:border-app-border-strong max-[540px]:min-h-11 max-[540px]:gap-2 max-[540px]:px-2.5 max-[540px]:py-[5px]">
+        <div className="search-box relative flex min-h-[50px] items-center gap-2.5 rounded-lg border border-input bg-card px-3 py-1.5 shadow-sm transition-colors hover:bg-muted/20 max-[540px]:min-h-11 max-[540px]:gap-2 max-[540px]:px-2.5 max-[540px]:py-[5px]">
           <SearchIcon />
           <div className="search-composer flex min-w-0 flex-auto flex-wrap items-center gap-x-2 gap-y-1.5 max-[540px]:flex-nowrap max-[540px]:overflow-hidden max-[540px]:gap-1.5">
             <TagChips />
@@ -108,7 +111,7 @@ export function SearchInput({ value = "" }: { value?: string }) {
   return (
     <input
       id="searchInput"
-      className="unified-search-input min-h-[34px] min-w-[180px] flex-[1_1_220px] border-0 bg-transparent text-base text-app-text outline-0 min-[720px]:text-[15px] max-[540px]:min-w-0 max-[540px]:basis-[72px]"
+      className="unified-search-input h-9 min-w-[180px] flex-[1_1_220px] border-0 bg-transparent px-0 text-base text-foreground shadow-none focus-visible:border-transparent focus-visible:ring-0 min-[720px]:text-sm max-[540px]:min-w-0 max-[540px]:basis-[72px]"
       type="search"
       placeholder="Search title or tag"
       autoComplete="off"
@@ -175,26 +178,33 @@ export function AdvancedFilters({
 
 function ResetFiltersButton({ hasActiveFilters = false }: Pick<SearchControlsProps, "hasActiveFilters">) {
   return (
-    <button
+    <Button
       id="resetFiltersButton"
-      className="icon-button filter-reset-button inline-grid min-h-[50px] w-[50px] min-w-[50px] flex-[0_0_40px] place-items-center self-stretch rounded-app border border-app-border bg-app-surface text-app-text disabled:cursor-default disabled:opacity-[0.42] max-[540px]:min-h-11 max-[540px]:w-11 max-[540px]:min-w-11"
+      className="icon-button filter-reset-button size-[50px] min-w-[50px] flex-[0_0_40px] self-stretch rounded-lg disabled:opacity-[0.42] max-[540px]:size-11 max-[540px]:w-11 max-[540px]:min-w-11"
+      variant="outline"
+      size="icon-lg"
       type="button"
       aria-label="Reset filters"
       title="Reset filters"
       disabled={!hasActiveFilters}
       onClick={resetFilters}
     >
-      <FunnelXIcon />
-    </button>
+      <FunnelXIcon data-icon="inline-start" />
+    </Button>
   );
 }
 
 function ToggleFiltersButton({ filtersOpen = false }: Pick<SearchControlsProps, "filtersOpen">) {
   const label = filtersOpen ? "Hide advanced search options" : "Show advanced search options";
   return (
-    <button
+    <Button
       id="toggleFiltersButton"
-      className="icon-button filter-toggle-button inline-grid min-h-[50px] w-[50px] min-w-[50px] flex-[0_0_40px] place-items-center self-stretch rounded-app border border-app-border bg-app-surface text-app-text max-[540px]:min-h-11 max-[540px]:w-11 max-[540px]:min-w-11"
+      className={cn(
+        "icon-button filter-toggle-button size-[50px] min-w-[50px] flex-[0_0_40px] self-stretch rounded-lg max-[540px]:size-11 max-[540px]:min-w-11",
+        filtersOpen && "bg-muted text-foreground",
+      )}
+      variant="outline"
+      size="icon-lg"
       type="button"
       aria-label={label}
       aria-expanded={filtersOpen}
@@ -202,33 +212,7 @@ function ToggleFiltersButton({ filtersOpen = false }: Pick<SearchControlsProps, 
       title={label}
       onClick={toggleFilters}
     >
-      <SlidersHorizontalIcon />
-    </button>
-  );
-}
-
-function FunnelXIcon() {
-  return (
-    <svg className="h-5 w-5 fill-none stroke-current [stroke-linecap:round] [stroke-linejoin:round] [stroke-width:2]" viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M12.531 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14v6a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341l.427-.473" />
-      <path d="m16.5 3.5 5 5" />
-      <path d="m21.5 3.5-5 5" />
-    </svg>
-  );
-}
-
-function SlidersHorizontalIcon() {
-  return (
-    <svg className="h-5 w-5 fill-none stroke-current [stroke-linecap:round] [stroke-linejoin:round] [stroke-width:2]" viewBox="0 0 24 24" aria-hidden="true">
-      <line x1="21" x2="14" y1="4" y2="4" />
-      <line x1="10" x2="3" y1="4" y2="4" />
-      <line x1="21" x2="12" y1="12" y2="12" />
-      <line x1="8" x2="3" y1="12" y2="12" />
-      <line x1="21" x2="16" y1="20" y2="20" />
-      <line x1="12" x2="3" y1="20" y2="20" />
-      <line x1="14" x2="14" y1="2" y2="6" />
-      <line x1="8" x2="8" y1="10" y2="14" />
-      <line x1="16" x2="16" y1="18" y2="22" />
-    </svg>
+      <SlidersHorizontalIcon data-icon="inline-start" />
+    </Button>
   );
 }

@@ -1,4 +1,7 @@
 import { useState, useSyncExternalStore } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import iconOnUrl from "../../assets/icon_on.svg";
 import { getLibraryFooterName, subscribeLibraryFooterName } from "../libraryFooterState";
 import { getLoginConnectState, subscribeLoginConnectState } from "../loginConnectState";
@@ -20,9 +23,11 @@ export function AccountSideMenu() {
 
   return (
     <>
-      <button
+      <Button
         id="accountMenuButton"
-        className="fixed left-3 top-[calc(12px+env(safe-area-inset-top))] z-30 grid h-10 w-10 place-items-center rounded-full border border-app-border bg-white text-app-text shadow-app-soft min-[720px]:hidden"
+        className="fixed left-3 top-[calc(12px+env(safe-area-inset-top))] z-30 size-10 rounded-full bg-white text-app-text shadow-app-soft min-[720px]:hidden"
+        variant="outline"
+        size="icon-lg"
         type="button"
         aria-controls="accountSideMenu"
         aria-expanded={mobileOpen}
@@ -30,7 +35,7 @@ export function AccountSideMenu() {
         onClick={() => setMobileOpen((current) => !current)}
       >
         {mobileOpen ? <XIcon /> : <PanelLeftIcon />}
-      </button>
+      </Button>
       <button
         className={`fixed inset-0 z-20 bg-[rgba(2,6,23,0.24)] backdrop-blur-[2px] transition-opacity min-[720px]:hidden ${mobileOpen ? "opacity-100" : "pointer-events-none opacity-0"}`}
         type="button"
@@ -52,9 +57,9 @@ export function AccountSideMenu() {
         </div>
 
         <div className="mt-5 grid gap-2">
-          <div
+          <Card
             id="authAccountLabel"
-            className="grid gap-2 rounded-app border border-app-border bg-app-surface-strong p-2 min-[720px]:place-items-center min-[720px]:border-transparent min-[720px]:bg-transparent min-[1180px]:place-items-stretch min-[1180px]:border-app-border min-[1180px]:bg-app-surface-strong"
+            className="grid gap-2 rounded-lg border-app-border bg-app-surface-strong p-2 py-2 shadow-none min-[720px]:place-items-center min-[720px]:border-transparent min-[720px]:bg-transparent min-[1180px]:place-items-stretch min-[1180px]:border-app-border min-[1180px]:bg-app-surface-strong"
             aria-label={accountStatusLabel || accountLabel}
             title={roleDescription || undefined}
           >
@@ -63,12 +68,13 @@ export function AccountSideMenu() {
             </span>
             <span className="min-w-0 min-[720px]:hidden min-[1180px]:block">
               {username ? <span id="authUserLabel" className="block truncate text-sm font-[650] text-app-text">{username}</span> : null}
-              {roleLabel ? <span id="authRoleLabel" className="mt-1 inline-flex rounded-full border border-app-border bg-white px-2 py-0.5 text-[11px] font-medium text-app-text-soft">{roleLabel}</span> : null}
+              {roleLabel ? <Badge id="authRoleLabel" variant="outline" className="mt-1 rounded-full bg-white text-[11px] font-medium text-app-text-soft">{roleLabel}</Badge> : null}
             </span>
-          </div>
-          <button
+          </Card>
+          <Button
             id="logoutButton"
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-app border border-app-border bg-white px-3 text-sm font-[650] text-app-text hover:border-app-accent hover:text-app-accent disabled:text-app-muted min-[720px]:px-0 min-[1180px]:justify-start min-[1180px]:px-3"
+            className="h-10 rounded-lg px-3 text-sm font-[650] min-[720px]:px-0 min-[1180px]:justify-start min-[1180px]:px-3"
+            variant="outline"
             type="button"
             disabled={loginState.disabled}
             title="Sign out"
@@ -76,7 +82,7 @@ export function AccountSideMenu() {
           >
             <SignOutIcon />
             <span className="min-[720px]:hidden min-[1180px]:inline">Sign out</span>
-          </button>
+          </Button>
           {authError ? (
             <p id="authFooterMessage" className="m-0 rounded-app border border-red-200 bg-red-50 px-2.5 py-2 text-xs leading-[1.35] text-app-danger min-[720px]:hidden min-[1180px]:block" role="alert">
               {authError}
