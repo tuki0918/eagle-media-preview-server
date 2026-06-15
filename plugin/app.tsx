@@ -100,7 +100,6 @@ function App() {
     ? "border-[#b5ebc1] bg-[#e7f8eb] text-[#178c35]"
     : "border-[#d5d9df] bg-[#f3f4f6] text-[#626975]";
   const publicNetwork = (settings.host || "0.0.0.0") === "0.0.0.0";
-  const selectedLanAddress = settings.preferredLanAddress || "";
   const qrSrc = useMemo(() => {
     if (!status.url || serverState !== "running") return "";
     return createQrDataUrl(status.url);
@@ -167,7 +166,7 @@ function App() {
       allowMetadataEditing: authEnabled && effectiveAuthUsers.some((user) => canRoleEditMetadata(user.role)),
       authUsers: effectiveAuthUsers,
       basicAuthUser: settings.basicAuthUser || "eagle",
-      preferredLanAddress: selectedLanAddress,
+      preferredLanAddress: "",
       ...patch,
     };
     const cleanUserPasswords = Object.fromEntries(effectiveAuthUsers
