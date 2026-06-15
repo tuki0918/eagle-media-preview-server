@@ -247,9 +247,13 @@ test("plugin server caches authenticated users per request", async () => {
   assert.match(source, /function authSessionCookie\(token, maxAge = AUTH_SESSION_MAX_AGE_SECONDS\)/);
   assert.match(source, /"Set-Cookie": authSessionCookie\(token\)/);
   assert.match(source, /"Set-Cookie": authSessionCookie\("", 0\)/);
-  assert.match(source, /required: false,[\s\S]*authenticated: true,[\s\S]*permissions: permissionsForUser\(null, \{ authenticated: true \}\)/);
-  assert.match(source, /required: true,[\s\S]*authenticated: true,[\s\S]*permissions: permissionsForUser\(user\)/);
-  assert.match(source, /permissions: permissionsForUser\(null, \{ authenticated: false \}\)/);
+  assert.match(source, /function authStatusResponse\(auth, user, \{ authenticated = Boolean\(user\) \} = \{\}\)/);
+  assert.match(source, /required: authRequired\(auth\)/);
+  assert.match(source, /user: user \? \{ role: user\.role, username: user\.username \} : null/);
+  assert.match(source, /permissions: permissionsForUser\(user, \{ authenticated \}\)/);
+  assert.match(source, /authStatusResponse\(auth, null, \{ authenticated: true \}\)/);
+  assert.match(source, /authStatusResponse\(auth, user, \{ authenticated: true \}\)/);
+  assert.match(source, /authStatusResponse\(auth, null, \{ authenticated: false \}\)/);
   assert.match(source, /const auth = \{ authSessions, users: resolvedAuthUsers \};/);
   assert.match(source, /function authRequired\(\{ users = \[\] \}/);
   assert.doesNotMatch(source, /username === auth\.basicAuthUsername/);
@@ -265,7 +269,6 @@ test("plugin server caches authenticated users per request", async () => {
   assert.match(source, /const metadataPatch = normalizeMetadataPatch\(body\);/);
   assert.match(source, /normalizeStringArray\(body\.tags, "tags"\)/);
   assert.doesNotMatch(source, /function normalizeMetadataValues/);
-  assert.match(source, /permissions: permissionsForUser\(null, \{ authenticated: true \}\)/);
   assert.doesNotMatch(source, /const writeMetadata = Boolean\(user && canRoleEditMetadata\(user\.role\)\)/);
   assert.doesNotMatch(source, /const manageLibrary = user\?\.role === "admin"/);
 });

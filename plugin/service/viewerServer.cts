@@ -464,12 +464,7 @@ async function handleAuthRoutes(req, url, res, auth: AuthContext) {
     pruneAuthSessions(auth.authSessions);
     const user = authenticatedUser(req, auth);
     const authenticated = !authRequired(auth) || Boolean(user);
-    sendJson(res, 200, {
-      required: authRequired(auth),
-      authenticated,
-      user: user ? { role: user.role, username: user.username } : null,
-      permissions: permissionsForUser(user, { authenticated }),
-    });
+    sendJson(res, 200, authStatusResponse(auth, user, { authenticated }));
     return true;
   }
 
@@ -479,12 +474,7 @@ async function handleAuthRoutes(req, url, res, auth: AuthContext) {
       return true;
     }
     if (!authRequired(auth)) {
-      sendJson(res, 200, {
-        required: false,
-        authenticated: true,
-        permissions: permissionsForUser(null, { authenticated: true }),
-        user: null,
-      });
+      sendJson(res, 200, authStatusResponse(auth, null, { authenticated: true }));
       return true;
     }
     const body = await readJson(req);
@@ -504,12 +494,7 @@ async function handleAuthRoutes(req, url, res, auth: AuthContext) {
       "Content-Type": "application/json; charset=utf-8",
       "Set-Cookie": authSessionCookie(token),
     });
-    res.end(JSON.stringify({
-      required: true,
-      authenticated: true,
-      user: { role: user.role, username: user.username },
-      permissions: permissionsForUser(user),
-    }));
+    res.end(JSON.stringify(authStatusResponse(auth, user, { authenticated: true })));
     return true;
   }
 
@@ -524,12 +509,7 @@ async function handleAuthRoutes(req, url, res, auth: AuthContext) {
       "Content-Type": "application/json; charset=utf-8",
       "Set-Cookie": authSessionCookie("", 0),
     });
-    res.end(JSON.stringify({
-      required: authRequired(auth),
-      authenticated: false,
-      user: null,
-      permissions: permissionsForUser(null, { authenticated: false }),
-    }));
+    res.end(JSON.stringify(authStatusResponse(auth, null, { authenticated: false })));
     return true;
   }
 
@@ -846,6 +826,15 @@ function findPasswordUser(username, password, auth: AuthContext): AuthUser | nul
   const user = auth.users.find((entry) => entry.username === username);
   if (user?.passwordHash && passwordMatches(password, user.passwordHash)) return user;
   return null;
+}
+
+function authStatusResponse(auth: AuthContext, user: AuthSession | AuthUser | null, { authenticated = Boolean(user) } = {}) {
+  return {
+    required: authRequired(auth),
+    authenticated,
+    user: user ? { role: user.role, username: user.username } : null,
+    permissions: permissionsForUser(user, { authenticated }),
+  };
 }
 
 function permissionsForUser(user: AuthSession | AuthUser | null, { authenticated = Boolean(user) } = {}) {
