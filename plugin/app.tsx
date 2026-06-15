@@ -433,6 +433,7 @@ function App() {
                   <input
                     className="h-7 min-w-0 rounded-md border border-[#d7d9de] bg-white px-2 text-[11px] text-[#111] outline-0 focus:border-[rgba(31,116,255,0.58)] focus:shadow-[0_0_0_3px_rgba(31,116,255,0.12)]"
                     type="text"
+                    aria-label={`Username for user ${index + 1}`}
                     autoComplete="username"
                     disabled={formDisabled}
                     value={user.username}
@@ -441,6 +442,7 @@ function App() {
                   />
                   <select
                     className="h-7 rounded-md border border-[#d7d9de] bg-white px-1.5 text-[11px] text-[#111] outline-0"
+                    aria-label={`Role for ${user.username || `user ${index + 1}`}`}
                     disabled={formDisabled}
                     value={user.role}
                     onChange={(event) => {
@@ -454,6 +456,7 @@ function App() {
                   <input
                     className="h-7 min-w-0 rounded-md border border-[#d7d9de] bg-white px-2 text-[11px] text-[#111] outline-0 focus:border-[rgba(31,116,255,0.58)] focus:shadow-[0_0_0_3px_rgba(31,116,255,0.12)]"
                     type={passwordVisible ? "text" : "password"}
+                    aria-label={`Password for ${user.username || `user ${index + 1}`}`}
                     autoComplete="new-password"
                     disabled={formDisabled}
                     placeholder={user.passwordHash ? "••••••••" : "Password"}
