@@ -468,6 +468,7 @@ async function handleAuthRoutes(req, url, res, auth: AuthContext) {
       sendJson(res, 401, { error: "Invalid password" });
       return true;
     }
+    pruneAuthSessions(auth.authSessions);
     const token = randomUUID();
     auth.authSessions.set(token, {
       expiresAt: Date.now() + AUTH_SESSION_MAX_AGE_SECONDS * 1000,

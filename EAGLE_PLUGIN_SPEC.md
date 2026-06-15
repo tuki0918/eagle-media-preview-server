@@ -220,7 +220,7 @@ Settings path:
 - `GET /api/auth/status`
   - Returns whether authentication is required, whether the current request is authenticated, the current user, and viewer permissions
 - `POST /api/auth/login`
-  - Issues a BasicAuth session cookie
+  - Issues a `viewer_session` cookie
 - `POST /api/auth/logout`
   - Clears the `viewer_session` cookie and removes the server-side session token
 - `POST /api/connect`
@@ -265,7 +265,7 @@ When BasicAuth protection is enabled, static viewer routes, API routes, and medi
 Supported authentication paths:
 
 - BasicAuth header
-- `viewer_session` cookie issued by the login API
+- `viewer_session` cookie issued by the login API; cookie and server-side session tokens expire after 30 days
 
 Roles:
 

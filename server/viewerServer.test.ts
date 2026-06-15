@@ -420,6 +420,18 @@ test("createViewerServer expires cookie sessions server side", async () => {
       },
     });
     assert.equal(viewer.status().activeSessions, 0);
+
+    Date.now = originalNow;
+    const nextLogin = await fetch(`${origin}/api/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: origin,
+      },
+      body: JSON.stringify({ username: "eagle", password: "secret" }),
+    });
+    assert.equal(nextLogin.status, 200);
+    assert.equal(viewer.status().activeSessions, 1);
   } finally {
     Date.now = originalNow;
     await viewer.stop();
