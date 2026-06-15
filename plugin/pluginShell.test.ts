@@ -214,6 +214,7 @@ test("plugin server caches authenticated users per request", async () => {
   assert.match(source, /"Set-Cookie": authSessionCookie\("", 0\)/);
   assert.match(source, /function safeDecodeCookieValue\(value\)/);
   assert.match(source, /return decodeURIComponent\(value\);/);
+  assert.match(source, /permissions: permissionsForUser\(null, \{ authenticated: true \}\)/);
   assert.doesNotMatch(source, /const writeMetadata = Boolean\(user && canRoleEditMetadata\(user\.role\)\)/);
   assert.doesNotMatch(source, /const manageLibrary = user\?\.role === "admin"/);
 });

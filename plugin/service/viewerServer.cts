@@ -460,7 +460,11 @@ async function handleAuthRoutes(req, url, res, auth: AuthContext) {
       return true;
     }
     if (!authRequired(auth)) {
-      sendJson(res, 200, { authenticated: true });
+      sendJson(res, 200, {
+        authenticated: true,
+        permissions: permissionsForUser(null, { authenticated: true }),
+        user: null,
+      });
       return true;
     }
     const body = await readJson(req);

@@ -38,6 +38,21 @@ test("createViewerServer starts and stops without the CLI entrypoint", async () 
     },
   });
 
+  const login = await fetch(`http://127.0.0.1:${status.port}/api/auth/login`, {
+    method: "POST",
+  });
+  assert.equal(login.status, 200);
+  assert.deepEqual(await login.json(), {
+    authenticated: true,
+    user: null,
+    permissions: {
+      manageLibrary: false,
+      read: true,
+      writeMetadata: false,
+      writeRating: false,
+    },
+  });
+
   await viewer.stop();
   assert.equal(viewer.status().state, "stopped");
 });
