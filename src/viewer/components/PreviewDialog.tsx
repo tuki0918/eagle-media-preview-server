@@ -89,7 +89,7 @@ export function PreviewDialog() {
   const toggleFullscreen = async () => {
     const previewBody = previewBodyRef.current;
     if (!previewBody) return;
-    const target = previewBody.firstElementChild || previewBody;
+    const target = previewBody.querySelector("video") || previewBody.firstElementChild || previewBody;
     const videoTarget = target instanceof HTMLVideoElement
       ? target as HTMLVideoElement & { webkitEnterFullscreen?: () => void }
       : null;
@@ -136,7 +136,7 @@ export function PreviewDialog() {
           <button id="toggleInfoPreview" className={previewActionButtonClassName} aria-label="Media information" aria-expanded={previewDialogState.infoOpen} title="Media information" onClick={togglePreviewInfo}>
             <PanelLeftIcon />
           </button>
-          <button id="fullscreenPreview" className={`${previewActionButtonClassName} hidden`} aria-label="Fullscreen" title="Fullscreen" onClick={toggleFullscreen}>
+          <button id="fullscreenPreview" className={`${previewActionButtonClassName} ${previewDialogState.mode === "video" ? "" : "hidden"}`} aria-label="Fullscreen" title="Fullscreen" onClick={toggleFullscreen}>
             <MaximizeIcon />
           </button>
           <button id="closePreview" className={previewActionButtonClassName} aria-label="Close" title="Close" onClick={closePreview}>

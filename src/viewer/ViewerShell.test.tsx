@@ -273,10 +273,17 @@ describe("ViewerAppShell", () => {
   });
 
   test("renders preview body media variants", () => {
+    const video = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", name: "Sample.mp4", ext: "mp4" }} kind="video" />);
+    const audio = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", name: "Sample.mp3", ext: "mp3" }} kind="audio" />);
     const image = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", name: "Sample.jpg" }} kind="image" />);
     const text = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", name: "Sample.txt" }} kind="text" />);
     const unsupported = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", ext: "avi" }} kind="unsupported" />);
 
+    expect(video).toContain("video-player");
+    expect(video).toContain("Playback position");
+    expect(audio).toContain("audio-player-shell");
+    expect(audio).toContain("audio-artwork");
+    expect(audio).toContain("Playback speed");
     expect(image).toContain("image-viewport");
     expect(image).toContain("image-toolbar");
     expect(text).toContain("text-preview");

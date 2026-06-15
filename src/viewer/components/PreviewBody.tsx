@@ -31,7 +31,27 @@ const checkerboardClassName =
   "bg-[#f8fafc] bg-[linear-gradient(45deg,rgba(148,163,184,0.24)_25%,transparent_25%),linear-gradient(-45deg,rgba(148,163,184,0.24)_25%,transparent_25%),linear-gradient(45deg,transparent_75%,rgba(148,163,184,0.24)_75%),linear-gradient(-45deg,transparent_75%,rgba(148,163,184,0.24)_75%)] [background-position:0_0,0_12px,12px_-12px,-12px_0] [background-size:24px_24px]";
 const previewVideoClassName =
   "preview-video h-full w-full max-h-full bg-[#05070a] object-contain [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:max-h-none [&:fullscreen]:max-w-none [&:fullscreen]:bg-[#05070a] [&:fullscreen]:object-contain";
-const audioClassName = "w-[min(540px,calc(100%_-_32px))]";
+const mediaPlayerClassName =
+  "media-player pointer-events-auto grid w-full gap-3 rounded-none border-0 bg-transparent text-white max-[540px]:gap-2.5";
+const videoPlayerClassName =
+  "video-player absolute inset-x-0 bottom-0 z-[2] px-3 pb-[calc(12px+env(safe-area-inset-bottom))] pt-10 [background:linear-gradient(180deg,transparent,rgba(5,7,10,0.78))] max-[540px]:px-2.5 max-[540px]:pb-[calc(10px+env(safe-area-inset-bottom))]";
+const audioPlayerShellClassName =
+  "audio-player-shell grid w-[min(560px,calc(100%_-_28px))] content-center gap-5 rounded-[18px] border border-[rgba(255,255,255,0.12)] bg-[linear-gradient(145deg,rgba(30,41,59,0.92),rgba(2,6,23,0.94))] p-5 text-white shadow-[0_24px_80px_rgba(0,0,0,0.36)] max-[540px]:w-[calc(100%_-_24px)] max-[540px]:gap-4 max-[540px]:rounded-[16px] max-[540px]:p-4";
+const audioArtworkClassName =
+  "audio-artwork relative mx-auto aspect-square w-[min(260px,72vw)] overflow-hidden rounded-[16px] border border-[rgba(255,255,255,0.12)] bg-[linear-gradient(135deg,rgba(37,99,235,0.34),rgba(14,165,233,0.16)),rgba(15,23,42,0.82)] shadow-[0_18px_48px_rgba(0,0,0,0.34)] max-[540px]:w-[min(220px,68vw)] [&>img]:h-full [&>img]:w-full [&>img]:object-cover";
+const audioArtworkFallbackClassName =
+  "grid h-full w-full place-items-center text-[rgba(255,255,255,0.72)] [&_svg]:h-14 [&_svg]:w-14 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-linecap:round] [&_svg]:[stroke-linejoin:round] [&_svg]:[stroke-width:1.8]";
+const mediaTitleClassName =
+  "min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-sm font-[720] leading-tight text-white max-[540px]:text-[13px]";
+const mediaSubtleTextClassName = "text-xs font-[620] tabular-nums text-[rgba(255,255,255,0.72)]";
+const mediaControlsClassName = "flex min-w-0 items-center gap-2 max-[540px]:gap-1.5";
+const mediaButtonClassName =
+  "inline-grid h-11 w-11 touch-manipulation select-none place-items-center rounded-full border border-[rgba(255,255,255,0.16)] bg-[rgba(255,255,255,0.12)] text-white backdrop-blur-[12px] hover:bg-[rgba(255,255,255,0.2)] disabled:cursor-default disabled:opacity-40 [&_svg]:h-5 [&_svg]:w-5 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-linecap:round] [&_svg]:[stroke-linejoin:round] [&_svg]:[stroke-width:2]";
+const playButtonClassName = `${mediaButtonClassName} h-12 w-12 border-[#60a5fa] bg-[#2563eb] text-white shadow-[0_10px_26px_rgba(37,99,235,0.42)] hover:border-[#93c5fd] hover:bg-[#1d4ed8]`;
+const mediaRangeClassName =
+  "h-10 w-full min-w-0 touch-manipulation appearance-none bg-transparent accent-white [&::-webkit-slider-runnable-track]:h-1.5 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-[rgba(255,255,255,0.28)] [&::-webkit-slider-thumb]:mt-[-7px] [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-[0_4px_12px_rgba(0,0,0,0.32)]";
+const mediaSpeedButtonClassName =
+  "inline-flex h-9 min-w-14 touch-manipulation select-none items-center justify-center rounded-full border border-[rgba(255,255,255,0.16)] bg-[rgba(255,255,255,0.1)] px-3 text-xs font-[760] text-white hover:bg-[rgba(255,255,255,0.18)]";
 const textPreviewClassName =
   "text-preview m-0 min-w-0 overflow-auto rounded-app border border-app-border bg-white p-[18px] font-mono text-[13px] leading-[1.55] text-app-text shadow-app-soft [overflow-wrap:anywhere] [white-space:pre-wrap]";
 const unsupportedThumbClassName = "unsupported-thumb max-h-[min(62dvh,640px)] w-[min(640px,calc(100vw_-_48px))] max-w-full object-contain";
@@ -81,11 +101,11 @@ function VideoPreview({ item }: { item: EagleItem }) {
         ref={videoRef}
         className={previewVideoClassName}
         src={mediaUrl(String(item.id || ""), "file")}
-        controls
         playsInline
         preload="metadata"
         onError={(event) => setNotice(videoErrorMessage(event.currentTarget.error))}
       />
+      <MediaControls mediaRef={videoRef} item={item} variant="video" />
       {notice ? <PreviewNotice message={notice} /> : null}
     </>
   );
@@ -93,12 +113,150 @@ function VideoPreview({ item }: { item: EagleItem }) {
 
 function AudioPreview({ item }: { item: EagleItem }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [artworkMissing, setArtworkMissing] = useState(false);
 
   useEffect(() => {
+    setArtworkMissing(false);
     audioRef.current?.play().catch(() => {});
   }, [item.id]);
 
-  return <audio ref={audioRef} className={audioClassName} src={mediaUrl(String(item.id || ""), "file")} controls preload="metadata" />;
+  return (
+    <section className={audioPlayerShellClassName} aria-label="Audio player">
+      <div className={audioArtworkClassName} aria-label="Audio thumbnail">
+        {artworkMissing ? (
+          <span className={audioArtworkFallbackClassName}>
+            <MusicIcon />
+          </span>
+        ) : (
+          <img
+            src={mediaUrl(String(item.id || ""), "thumb")}
+            alt=""
+            decoding="async"
+            onError={() => setArtworkMissing(true)}
+          />
+        )}
+      </div>
+      <div className="grid min-w-0 gap-1">
+        <strong className={mediaTitleClassName}>{item.name || item.id || "Audio preview"}</strong>
+        <span className="text-xs font-[620] text-[rgba(255,255,255,0.62)]">{(item.ext || "audio").toUpperCase()}</span>
+      </div>
+      <audio ref={audioRef} src={mediaUrl(String(item.id || ""), "file")} preload="metadata" />
+      <MediaControls mediaRef={audioRef} item={item} variant="audio" />
+    </section>
+  );
+}
+
+function MediaControls({
+  item,
+  mediaRef,
+  variant,
+}: {
+  item: EagleItem;
+  mediaRef: { current: HTMLMediaElement | null };
+  variant: "audio" | "video";
+}) {
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [paused, setPaused] = useState(true);
+  const [muted, setMuted] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState(1);
+
+  useEffect(() => {
+    const media = mediaRef.current;
+    if (!media) return;
+    const sync = () => {
+      setDuration(Number.isFinite(media.duration) ? media.duration : 0);
+      setCurrentTime(Number.isFinite(media.currentTime) ? media.currentTime : 0);
+      setPaused(media.paused);
+      setMuted(media.muted);
+      setPlaybackRate(media.playbackRate || 1);
+    };
+    sync();
+    for (const eventName of ["durationchange", "loadedmetadata", "timeupdate", "play", "pause", "volumechange", "ratechange", "ended"]) {
+      media.addEventListener(eventName, sync);
+    }
+    return () => {
+      for (const eventName of ["durationchange", "loadedmetadata", "timeupdate", "play", "pause", "volumechange", "ratechange", "ended"]) {
+        media.removeEventListener(eventName, sync);
+      }
+    };
+  }, [item.id, mediaRef]);
+
+  const togglePlay = () => {
+    const media = mediaRef.current;
+    if (!media) return;
+    if (media.paused) {
+      media.play().catch(() => {});
+    } else {
+      media.pause();
+    }
+  };
+  const seekBy = (seconds: number) => {
+    const media = mediaRef.current;
+    if (!media || !Number.isFinite(media.duration)) return;
+    media.currentTime = Math.min(media.duration, Math.max(0, media.currentTime + seconds));
+  };
+  const seekTo = (value: string) => {
+    const media = mediaRef.current;
+    if (!media) return;
+    media.currentTime = Number(value);
+  };
+  const cycleSpeed = () => {
+    const media = mediaRef.current;
+    if (!media) return;
+    const speeds = [1, 1.25, 1.5, 2];
+    const currentIndex = speeds.findIndex((speed) => speed === media.playbackRate);
+    media.playbackRate = speeds[(currentIndex + 1) % speeds.length];
+  };
+  const toggleMuted = () => {
+    const media = mediaRef.current;
+    if (!media) return;
+    media.muted = !media.muted;
+  };
+
+  const timeLabel = `${formatMediaTime(currentTime)} / ${formatMediaTime(duration)}`;
+  const title = item.name || item.id || (variant === "video" ? "Video preview" : "Audio preview");
+
+  return (
+    <div className={`${mediaPlayerClassName} ${variant === "video" ? videoPlayerClassName : ""}`} aria-label={`${variant === "video" ? "Video" : "Audio"} controls`}>
+      {variant === "video" ? <strong className={mediaTitleClassName}>{title}</strong> : null}
+      <div className="grid gap-1.5">
+        <input
+          className={mediaRangeClassName}
+          type="range"
+          min="0"
+          max={duration || 0}
+          step="0.1"
+          value={Math.min(currentTime, duration || currentTime)}
+          aria-label="Playback position"
+          onChange={(event) => seekTo(event.currentTarget.value)}
+        />
+        <div className="flex items-center justify-between gap-3">
+          <span className={mediaSubtleTextClassName}>{timeLabel}</span>
+          <span className={mediaSubtleTextClassName}>{paused ? "Paused" : "Playing"}</span>
+        </div>
+      </div>
+      <div className={mediaControlsClassName}>
+        <button type="button" className={mediaButtonClassName} aria-label="Back 10 seconds" title="Back 10 seconds" disabled={!duration} onClick={() => seekBy(-10)}>
+          <SkipBackIcon />
+        </button>
+        <button type="button" className={playButtonClassName} aria-label={paused ? "Play" : "Pause"} title={paused ? "Play" : "Pause"} onClick={togglePlay}>
+          {paused ? <PlayIcon /> : <PauseIcon />}
+        </button>
+        <button type="button" className={mediaButtonClassName} aria-label="Forward 10 seconds" title="Forward 10 seconds" disabled={!duration} onClick={() => seekBy(10)}>
+          <SkipForwardIcon />
+        </button>
+        <div className="ml-auto flex min-w-0 items-center justify-end gap-2 max-[540px]:gap-1.5">
+          <button type="button" className={mediaButtonClassName} aria-label={muted ? "Unmute" : "Mute"} title={muted ? "Unmute" : "Mute"} onClick={toggleMuted}>
+            {muted ? <VolumeXIcon /> : <Volume2Icon />}
+          </button>
+          <button type="button" className={mediaSpeedButtonClassName} aria-label="Playback speed" title="Playback speed" onClick={cycleSpeed}>
+            {playbackRate}x
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function TextPreview({ item }: { item: EagleItem }) {
@@ -383,6 +541,81 @@ function videoErrorMessage(error: MediaError | null) {
     return "This video could not be played on this device. iPhone requires Safari-compatible video such as H.264 video with AAC audio.";
   }
   return "This video could not be played on this device.";
+}
+
+function formatMediaTime(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return "0:00";
+  const rounded = Math.floor(value);
+  const hours = Math.floor(rounded / 3600);
+  const minutes = Math.floor((rounded % 3600) / 60);
+  const seconds = rounded % 60;
+  if (hours > 0) return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function PlayIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M8 5v14l11-7z" />
+    </svg>
+  );
+}
+
+function PauseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M10 5v14" />
+      <path d="M14 5v14" />
+    </svg>
+  );
+}
+
+function SkipBackIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="m11 17-5-5 5-5" />
+      <path d="M18 18V6" />
+    </svg>
+  );
+}
+
+function SkipForwardIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="m13 7 5 5-5 5" />
+      <path d="M6 6v12" />
+    </svg>
+  );
+}
+
+function Volume2Icon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M11 5 6 9H3v6h3l5 4z" />
+      <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+      <path d="M19 5a10 10 0 0 1 0 14" />
+    </svg>
+  );
+}
+
+function VolumeXIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M11 5 6 9H3v6h3l5 4z" />
+      <path d="m22 9-6 6" />
+      <path d="m16 9 6 6" />
+    </svg>
+  );
+}
+
+function MusicIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M9 18V5l12-2v13" />
+      <circle cx="6" cy="18" r="3" />
+      <circle cx="18" cy="16" r="3" />
+    </svg>
+  );
 }
 
 function MinusIcon() {
