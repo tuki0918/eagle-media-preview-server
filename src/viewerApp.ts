@@ -214,6 +214,7 @@ async function logout() {
     authAuthenticated = false;
     authUser = null;
     state.permissions = defaultPermissions(!authRequired);
+    clearViewerSessionState();
     renderLoginConnect();
     showLogin();
   } catch (error) {
@@ -267,6 +268,24 @@ function showViewer(data: ConnectResponse) {
   state.total = 0;
   state.items = [];
   applyControlsFromState();
+  updateStatus();
+  updatePager();
+}
+
+function clearViewerSessionState() {
+  state.requestId += 1;
+  state.tilesLoadingMore = false;
+  state.items = [];
+  state.folders = [];
+  state.total = 0;
+  state.offset = 0;
+  Object.assign(state, resetFilterState());
+  hideTagSuggestions();
+  resetTileAutoLoading();
+  closePreview({ skipHistory: true });
+  setLibraryFooterName("");
+  renderTagChips();
+  renderSearchControlButtons();
   updateStatus();
   updatePager();
 }
