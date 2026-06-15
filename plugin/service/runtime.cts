@@ -127,7 +127,7 @@ function createSettingsStore({ filePath = defaultSettingsPath() }: { filePath?: 
         }];
       }
 
-      if (next.authEnabled && (!next.authUsers.length || next.authUsers.some((user) => !user.passwordHash))) {
+      if (next.authEnabled && authUsersMissingPassword(next.authUsers)) {
         throw new Error("Password is required for every enabled user");
       }
       if (!next.authEnabled) {
@@ -140,7 +140,7 @@ function createSettingsStore({ filePath = defaultSettingsPath() }: { filePath?: 
       if (next.authUsers.length) {
         next.basicAuthUser = next.authUsers[0].username;
         next.passwordHash = next.authEnabled ? next.authUsers[0].passwordHash : "";
-        next.allowMetadataEditing = next.authEnabled && next.authUsers.some((user) => canRoleEditMetadata(user.role));
+        next.allowMetadataEditing = next.authEnabled && authUsersCanEditMetadata(next.authUsers);
       }
 
       await mkdir(dirname(filePath), { recursive: true });
@@ -257,6 +257,14 @@ function normalizeUserPasswords(value: unknown) {
 
 function canRoleEditMetadata(role: UserRole) {
   return role === "admin" || role === "editor";
+}
+
+function authUsersCanEditMetadata(users: AuthUser[]) {
+  return users.some((user) => canRoleEditMetadata(user.role));
+}
+
+function authUsersMissingPassword(users: AuthUser[]) {
+  return !users.length || users.some((user) => !user.passwordHash);
 }
 
 function getLanAddresses() {
