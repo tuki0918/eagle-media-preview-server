@@ -167,6 +167,10 @@ test("createViewerServer authorizes metadata writes by user role", async () => {
         calls.push({ id, star });
         return { id, star };
       },
+      async updateItemMetadata(id: string, input: unknown) {
+        calls.push({ id, input });
+        return { id, ...(input as object) };
+      },
     },
   });
 
@@ -203,7 +207,18 @@ test("createViewerServer authorizes metadata writes by user role", async () => {
     });
     assert.equal(denied.status, 403);
 
-    const allowed = await fetch(`${origin}/api/items/ITEM123/star`, {
+    const deniedMetadata = await fetch(`${origin}/api/items/ITEM123/metadata`, {
+      method: "POST",
+      headers: {
+        Authorization: reader,
+        "Content-Type": "application/json",
+        Origin: origin,
+      },
+      body: JSON.stringify({ tags: ["cat"], folders: ["folder-1"] }),
+    });
+    assert.equal(deniedMetadata.status, 403);
+
+    const allowedStar = await fetch(`${origin}/api/items/ITEM123/star`, {
       method: "POST",
       headers: {
         Authorization: editor,
@@ -212,8 +227,22 @@ test("createViewerServer authorizes metadata writes by user role", async () => {
       },
       body: JSON.stringify({ star: 4 }),
     });
-    assert.equal(allowed.status, 200);
-    assert.deepEqual(calls, [{ id: "ITEM123", star: 4 }]);
+    assert.equal(allowedStar.status, 200);
+
+    const allowedMetadata = await fetch(`${origin}/api/items/ITEM123/metadata`, {
+      method: "POST",
+      headers: {
+        Authorization: editor,
+        "Content-Type": "application/json",
+        Origin: origin,
+      },
+      body: JSON.stringify({ tags: ["cat"], folders: ["folder-1"] }),
+    });
+    assert.equal(allowedMetadata.status, 200);
+    assert.deepEqual(calls, [
+      { id: "ITEM123", star: 4 },
+      { id: "ITEM123", input: { tags: ["cat"], folders: ["folder-1"] } },
+    ]);
   } finally {
     await viewer.stop();
   }

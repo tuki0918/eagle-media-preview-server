@@ -22,7 +22,6 @@ export interface PreviewInfoProps {
 }
 
 interface MetadataChipEditorProps {
-  initialValues: readonly unknown[];
   inputLabel: string;
   kind: "tag" | "category";
   labelForValue: (value: string) => string;
@@ -182,7 +181,6 @@ function PreviewMetadataEditor({
       <PreviewEditField label="Tags">
         <MetadataChipEditor
           kind="tag"
-          initialValues={tags}
           selected={tags}
           setSelected={setTags}
           placeholder="Add tag"
@@ -195,7 +193,6 @@ function PreviewMetadataEditor({
       <PreviewEditField label="Categories">
         <MetadataChipEditor
           kind="category"
-          initialValues={categories}
           selected={categories}
           setSelected={setCategories}
           placeholder="Add category"
@@ -218,7 +215,6 @@ function PreviewMetadataEditor({
 }
 
 function MetadataChipEditor({
-  initialValues,
   inputLabel,
   kind,
   labelForValue,
@@ -233,10 +229,6 @@ function MetadataChipEditor({
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const requestId = useRef(0);
   const debounceTimer = useRef<number | null>(null);
-
-  useEffect(() => {
-    setSelected(uniqueValues(initialValues.map(normalizeValue).filter(Boolean)));
-  }, []);
 
   const hideSuggestions = () => {
     requestId.current += 1;

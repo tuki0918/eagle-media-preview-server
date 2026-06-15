@@ -529,6 +529,7 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(app, /const RECENT_TAGS_STORAGE_KEY = "eagleRecentTags";/);
   assert.match(app, /const RECENT_FOLDERS_STORAGE_KEY = "eagleRecentFolders";/);
   assert.match(html, /function MetadataChipEditor\(\{/);
+  assert.doesNotMatch(html, /initialValues/);
   assert.match(html, /onPointerDown=\{\(\) => updateSuggestions\(\)\}/);
   assert.match(html, /onPointerDown=\{\(event\) => event\.stopPropagation\(\)\}/);
   assert.match(html, /setQuery\(""\);\s*hideSuggestions\(\);/);
