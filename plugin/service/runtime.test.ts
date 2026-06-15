@@ -335,6 +335,55 @@ test("generated server manager does not restart when only auto start changes whi
   ]);
 });
 
+test("generated server manager does not restart when inactive auth users change while running", async () => {
+  const calls: unknown[] = [];
+  const settings = {
+    ...DEFAULT_SETTINGS,
+    host: "127.0.0.1",
+    port: 0,
+  };
+  const manager = createServerManager({
+    settingsStore: {
+      async load() {
+        return settings;
+      },
+      async save(input: Record<string, unknown>) {
+        Object.assign(settings, input);
+        calls.push(["save", settings.authUsers]);
+        return settings;
+      },
+    },
+    viewerServerFactory() {
+      calls.push(["create"]);
+      return {
+        async start() {
+          calls.push(["start"]);
+        },
+        async stop() {
+          calls.push(["stop"]);
+        },
+        status() {
+          return { state: "running", host: "127.0.0.1", port: 41532 };
+        },
+      };
+    },
+    lanAddressProvider() {
+      return [{ label: "lo0", address: "127.0.0.1" }];
+    },
+  });
+
+  await manager.start();
+  await manager.saveSettings({
+    authUsers: [{ username: "reader", role: "viewer", passwordHash: "hash" }],
+  });
+
+  assert.deepEqual(calls, [
+    ["create"],
+    ["start"],
+    ["save", [{ username: "reader", role: "viewer", passwordHash: "hash" }]],
+  ]);
+});
+
 test("generated server manager restarts after saving binding settings while running", async () => {
   const calls: unknown[] = [];
   let settings = {

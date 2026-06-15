@@ -568,7 +568,7 @@ function createQrDataUrl(value: string) {
 function willRestartServer(status: PluginStatus, nextSettings: Record<string, unknown>) {
   const current = status.settings;
   if (!current || status.state !== "running") return false;
-  return serverSettingsChanged(current, nextSettings);
+  return serverRestartSettingsChanged(current, nextSettings);
 }
 
 function settingsPayloadChanged(current: PluginSettings | undefined, nextSettings: Record<string, unknown>) {
@@ -581,6 +581,18 @@ function serverSettingsChanged(current: PluginSettings, nextSettings: Record<str
   if ((nextSettings.host ?? current.host) !== current.host) return true;
   if (Number(nextSettings.port ?? current.port) !== Number(current.port)) return true;
   if (Boolean(nextSettings.authEnabled ?? current.authEnabled) !== Boolean(current.authEnabled)) return true;
+  if (Boolean(nextSettings.allowMetadataEditing ?? current.allowMetadataEditing) !== Boolean(current.allowMetadataEditing)) return true;
+  if (JSON.stringify(nextSettings.authUsers ?? current.authUsers ?? []) !== JSON.stringify(current.authUsers ?? [])) return true;
+  return false;
+}
+
+function serverRestartSettingsChanged(current: PluginSettings, nextSettings: Record<string, unknown>) {
+  const currentAuthEnabled = Boolean(current.authEnabled);
+  const nextAuthEnabled = Boolean(nextSettings.authEnabled ?? current.authEnabled);
+  if ((nextSettings.host ?? current.host) !== current.host) return true;
+  if (Number(nextSettings.port ?? current.port) !== Number(current.port)) return true;
+  if (nextAuthEnabled !== currentAuthEnabled) return true;
+  if (!currentAuthEnabled && !nextAuthEnabled) return false;
   if (Boolean(nextSettings.allowMetadataEditing ?? current.allowMetadataEditing) !== Boolean(current.allowMetadataEditing)) return true;
   if (JSON.stringify(nextSettings.authUsers ?? current.authUsers ?? []) !== JSON.stringify(current.authUsers ?? [])) return true;
   return false;
