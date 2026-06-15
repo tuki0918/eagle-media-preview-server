@@ -1,4 +1,5 @@
-import { createRoot, type Root } from "react-dom/client";
+import { useSyncExternalStore } from "react";
+import { getPreviewTextState, subscribePreviewTextState } from "../previewTextState";
 
 interface PreviewMetaProps {
   value?: string;
@@ -8,41 +9,22 @@ interface PreviewOriginalNameProps {
   value?: string;
 }
 
-const metaRoots = new WeakMap<HTMLElement, Root>();
-const originalNameRoots = new WeakMap<HTMLElement, Root>();
-
-export function PreviewMeta({ value = "" }: PreviewMetaProps) {
-  return <span id="previewMeta">{value}</span>;
+export function PreviewMeta({ value }: PreviewMetaProps) {
+  const state = useSyncExternalStore(subscribePreviewTextState, getPreviewTextState, getPreviewTextState);
+  return <span id="previewMeta">{value ?? state.meta}</span>;
 }
 
-export function PreviewOriginalName({ value = "" }: PreviewOriginalNameProps) {
+export function PreviewOriginalName({ value }: PreviewOriginalNameProps) {
+  const state = useSyncExternalStore(subscribePreviewTextState, getPreviewTextState, getPreviewTextState);
+  const displayValue = value ?? state.originalName;
+
   return (
     <div
       id="previewOriginalName"
       className="preview-original-name-value w-full min-w-0 whitespace-normal text-sm leading-[1.4] text-app-text [overflow-wrap:anywhere]"
-      title={value || undefined}
+      title={displayValue || undefined}
     >
-      {value}
+      {displayValue}
     </div>
   );
-}
-
-export function renderPreviewMetaView(container: HTMLElement, props: Required<PreviewMetaProps>) {
-  let root = metaRoots.get(container);
-  if (!root) {
-    container.replaceChildren();
-    root = createRoot(container);
-    metaRoots.set(container, root);
-  }
-  root.render(<PreviewMeta {...props} />);
-}
-
-export function renderPreviewOriginalNameView(container: HTMLElement, props: Required<PreviewOriginalNameProps>) {
-  let root = originalNameRoots.get(container);
-  if (!root) {
-    container.replaceChildren();
-    root = createRoot(container);
-    originalNameRoots.set(container, root);
-  }
-  root.render(<PreviewOriginalName {...props} />);
 }

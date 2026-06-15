@@ -44,6 +44,7 @@ async function readAppSources() {
     "../src/viewer/components/PreviewDialog.tsx",
     "../src/viewer/components/PreviewInfo.tsx",
     "../src/viewer/components/PreviewText.tsx",
+    "../src/viewer/previewTextState.ts",
     "../src/viewer/components/RatingStars.tsx",
     "../src/viewer/components/ResultList.tsx",
     "../src/viewer/components/ResultsStatus.tsx",
@@ -329,11 +330,12 @@ test("public file names expose original names in truncated views and preview inf
   assert.match(app, /function originalFileName\(item[^)]*\) \{/);
   assert.match(html, /<strong title=\{originalFileName\(item\)\}>/);
   assert.match(html, /<span className="row-file-name" title=\{originalFileName\(item\)\}>/);
-  assert.match(html, /<section className="[^"]*\bpreview-original-name-section\b[^"]*">[\s\S]*<div id="previewOriginalNameHost">[\s\S]*<PreviewOriginalName \/>[\s\S]*<\/div>[\s\S]*<\/section>[\s\S]*<section className="[^"]*\bpreview-rating-section\b[^"]*">/);
+  assert.match(html, /<section className="[^"]*\bpreview-original-name-section\b[^"]*">[\s\S]*<PreviewOriginalName \/>[\s\S]*<\/section>[\s\S]*<section className="[^"]*\bpreview-rating-section\b[^"]*">/);
   assert.doesNotMatch(html, /File Name/);
-  assert.match(app, /previewOriginalNameHost: document\.querySelector\("#previewOriginalNameHost"\),/);
+  assert.doesNotMatch(app, /previewOriginalNameHost: document\.querySelector\("#previewOriginalNameHost"\),/);
+  assert.doesNotMatch(app, /previewMetaHost: document\.querySelector\("#previewMetaHost"\),/);
   assert.doesNotMatch(app, /previewOriginalName: document\.querySelector\("#previewOriginalName"\),/);
-  assert.match(app, /renderPreviewOriginalNameView\(els\.previewOriginalNameHost, \{ value: originalFileName\(item\) \}\);/);
+  assert.match(app, /setPreviewTextState\(\{[\s\S]*originalName: originalFileName\(item\),[\s\S]*\}\);/);
   assert.doesNotMatch(app, /els\.previewOriginalName\.textContent/);
   assert.match(css, /\.preview-original-name-section\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\);[^}]*padding:\s*8px 8px 14px;[^}]*border-bottom:\s*1px solid rgba\(148,\s*163,\s*184,\s*0\.18\);/s);
   assert.match(css, /@media \(max-width: 540px\)[\s\S]*\.preview-original-name-section\s*\{[^}]*padding:\s*6px 8px 14px;/);

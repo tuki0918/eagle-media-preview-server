@@ -49,10 +49,7 @@ import {
   clearPreviewInfoView,
   renderPreviewInfoView,
 } from "./viewer/components/PreviewInfo";
-import {
-  renderPreviewMetaView,
-  renderPreviewOriginalNameView,
-} from "./viewer/components/PreviewText";
+import { setPreviewTextState } from "./viewer/previewTextState";
 import {
   clearPreviewBodyView,
   renderPreviewBodyView,
@@ -327,8 +324,10 @@ function render() {
 
 function openPreview(item: EagleItem, { skipHistory = false }: OpenPreviewOptions = {}) {
   state.previewItemId = String(item.id || "");
-  renderPreviewMetaView(els.previewMetaHost, { value: itemMeta(item) });
-  renderPreviewOriginalNameView(els.previewOriginalNameHost, { value: originalFileName(item) });
+  setPreviewTextState({
+    meta: itemMeta(item),
+    originalName: originalFileName(item),
+  });
   clearPreviewBodyView(els.previewBody);
   renderRatingView(els.previewRating, {
     className: "rating-control inline-flex items-center gap-px",
@@ -552,8 +551,10 @@ function clearPreviewContents() {
   clearPreviewInfoView(els.previewDetails, els.previewActions);
   clearPreviewBodyView(els.previewBody);
   clearRatingView(els.previewRating);
-  renderPreviewMetaView(els.previewMetaHost, { value: "" });
-  renderPreviewOriginalNameView(els.previewOriginalNameHost, { value: "" });
+  setPreviewTextState({
+    meta: "",
+    originalName: "",
+  });
 }
 
 async function setItemStar(item: EagleItem, star: number) {

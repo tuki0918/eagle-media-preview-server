@@ -109,9 +109,7 @@ export function PreviewDialog() {
         </button>
         <div>
           <strong>Media Preview Server</strong>
-          <span id="previewMetaHost">
-            <PreviewMeta />
-          </span>
+          <PreviewMeta />
         </div>
         <div className="dialog-actions flex items-center justify-end gap-2">
           <button id="toggleInfoPreview" className="icon-button inline-grid min-h-10 w-10 flex-[0_0_40px] place-items-center rounded-app border border-app-border bg-app-surface text-app-text" aria-label="Media information" aria-expanded={previewDialogState.infoOpen} title="Media information" onClick={togglePreviewInfo}>
@@ -132,9 +130,7 @@ export function PreviewDialog() {
           aria-label="Media info"
         >
           <section className="preview-original-name-section grid min-h-8 grid-cols-[minmax(0,1fr)] items-center border-b border-[rgba(148,163,184,0.18)] px-2 pb-3.5 pt-2">
-            <div id="previewOriginalNameHost">
-              <PreviewOriginalName />
-            </div>
+            <PreviewOriginalName />
           </section>
           <section className="preview-rating-section grid min-h-8 grid-cols-[minmax(96px,112px)_minmax(0,1fr)] items-center gap-[18px] px-2">
             <span className="info-label text-xs font-normal text-app-muted">Rating</span>

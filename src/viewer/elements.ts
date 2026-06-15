@@ -10,9 +10,7 @@ export interface ViewerElements {
   resultGridHost: HTMLElement;
   template: HTMLTemplateElement;
   dialog: HTMLDialogElement;
-  previewMetaHost: HTMLElement;
   previewBody: HTMLElement;
-  previewOriginalNameHost: HTMLElement;
   previewRating: HTMLElement;
   previewDetails: HTMLElement;
   previewActions: HTMLElement;
@@ -31,9 +29,7 @@ export function getViewerElements(): ViewerElements {
     resultGridHost: document.querySelector("#resultGridHost"),
     template: document.querySelector("#cardTemplate"),
     dialog: document.querySelector("#previewDialog"),
-    previewMetaHost: document.querySelector("#previewMetaHost"),
     previewBody: document.querySelector("#previewBody"),
-    previewOriginalNameHost: document.querySelector("#previewOriginalNameHost"),
     previewRating: document.querySelector("#previewRating"),
     previewDetails: document.querySelector("#previewDetails"),
     previewActions: document.querySelector("#previewActions"),
