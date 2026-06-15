@@ -160,7 +160,9 @@ test("public viewer exposes sign out when authenticated", async () => {
   const footer = renderToStaticMarkup(createElement(LibraryFooter, { name: "My Library" }));
 
   assert.match(footer, /id="authUserLabel"/);
-  assert.match(footer, /ed \(editor\)/);
+  assert.match(footer, />ed</);
+  assert.match(footer, /id="authRoleLabel"/);
+  assert.match(footer, />Editor</);
   assert.match(footer, /id="logoutButton"/);
   assert.match(footer, /Sign out/);
   assert.doesNotMatch(footer, /authFooterMessage/);
