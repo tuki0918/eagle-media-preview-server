@@ -150,14 +150,16 @@ function App() {
       ? patch.authUsers.map((user) => normalizeAuthUser(user as AuthUser))
       : authUsers;
     if (!validateAuthUsers(effectiveAuthUsers)) return false;
+    const nextAuthEnabled = Boolean(patch.authEnabled ?? authEnabled);
+    const nextAllowMetadataEditing = nextAuthEnabled && effectiveAuthUsers.some((user) => canRoleEditMetadata(user.role));
     const payload: Record<string, unknown> = {
       autoStart: settings.autoStart,
       host: publicNetwork ? "0.0.0.0" : "127.0.0.1",
       port: settings.port || 41532,
-      authEnabled,
-      allowMetadataEditing: authEnabled && effectiveAuthUsers.some((user) => canRoleEditMetadata(user.role)),
-      authUsers: effectiveAuthUsers,
       ...patch,
+      authEnabled: nextAuthEnabled,
+      allowMetadataEditing: nextAllowMetadataEditing,
+      authUsers: effectiveAuthUsers,
     };
     const cleanUserPasswords = Object.fromEntries(effectiveAuthUsers
       .map((user, index) => [String(user.username || "").trim(), passwordDrafts[String(index)] || ""])
