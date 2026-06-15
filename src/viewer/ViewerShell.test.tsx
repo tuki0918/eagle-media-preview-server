@@ -241,7 +241,7 @@ describe("ViewerAppShell", () => {
   test("renders result list as reusable media items", () => {
     const html = renderToStaticMarkup(
       <ResultList
-        items={[{ id: "item-1", name: "Sample.jpg", ext: "jpg", width: 120, height: 80, star: 4 }]}
+        items={[{ id: "item-1", name: "Sample.mp4", ext: "mp4", width: 120, height: 80, duration: 125, star: 4 }]}
         viewMode="tiles"
         onOpenPreview={() => {}}
       />,
@@ -249,8 +249,9 @@ describe("ViewerAppShell", () => {
 
     expect(html).toContain("tile-item");
     expect(html).toContain("thumb-loading");
-    expect(html).toContain('data-ext="jpg"');
-    expect(html).toContain('data-active="true"');
+    expect(html).toContain("2:05");
+    expect(html).not.toContain("file-badge");
+    expect(html).not.toContain("rating-star");
   });
 
   test("renders preview info as reusable detail and action components", () => {

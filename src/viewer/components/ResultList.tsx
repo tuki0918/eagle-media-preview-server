@@ -27,6 +27,7 @@ interface ThumbnailButtonProps {
   style?: CSSProperties;
   variant: "grid" | "row" | "tile";
   withBadges?: boolean;
+  withFileBadge?: boolean;
   withOverlay?: boolean;
 }
 
@@ -69,8 +70,6 @@ const tableMobileMetaClassName =
 const tableHiddenOnMobileClassName = "max-[540px]:hidden";
 const cardRatingClassName =
   "rating-control absolute bottom-1.5 left-1.5 z-[2] inline-flex items-center gap-0 rounded-md bg-[rgba(15,23,42,0.78)] px-1 py-[3px] leading-[1.2] text-white [&_.rating-star]:h-3 [&_.rating-star]:w-3 [&_.rating-star]:text-[10px] [&_.rating-star]:text-[rgba(255,255,255,0.34)] [&_.rating-star[data-active=true]]:text-[#fbbf24]";
-const tileRatingClassName =
-  "rating-control tile-rating absolute bottom-1.5 left-1.5 z-[2] inline-flex max-w-[calc(100%_-_12px)] items-center gap-0 overflow-hidden rounded-md bg-[rgba(15,23,42,0.78)] px-1 py-[3px] leading-[1.2] text-white [&_.rating-star]:h-3 [&_.rating-star]:w-3 [&_.rating-star]:text-[10px] [&_.rating-star]:text-[rgba(255,255,255,0.34)] [&_.rating-star[data-active=true]]:text-[#fbbf24]";
 const tableRatingClassName = "rating-control inline-flex items-center gap-px justify-self-start";
 
 const extensionColorClassNames: Record<string, string> = {
@@ -187,10 +186,9 @@ function TileItem({ item, onOpenPreview }: { item: EagleItem; onOpenPreview: (it
       onOpenPreview={onOpenPreview}
       style={{ aspectRatio: width > 0 && height > 0 ? `${width} / ${height}` : "1 / 1" }}
       withBadges
+      withFileBadge={false}
       withOverlay
-    >
-      <RatingStars item={item} className={tileRatingClassName} />
-    </ThumbnailButton>
+    />
   );
 }
 
@@ -253,7 +251,7 @@ function ExtensionPill({ item }: { item: EagleItem }) {
   );
 }
 
-function ThumbnailButton({ children, item, onOpenPreview, style, variant, withBadges = false, withOverlay = false }: ThumbnailButtonProps) {
+function ThumbnailButton({ children, item, onOpenPreview, style, variant, withBadges = false, withFileBadge = true, withOverlay = false }: ThumbnailButtonProps) {
   const [loading, setLoading] = useState(true);
   const [missing, setMissing] = useState(false);
   const mediaType = thumbnailMediaType(item);
@@ -304,9 +302,11 @@ function ThumbnailButton({ children, item, onOpenPreview, style, variant, withBa
       ) : null}
       {withBadges ? (
         <>
-          <span className={`file-badge absolute left-1.5 top-1.5 max-w-[calc(100%_-_12px)] overflow-hidden text-ellipsis whitespace-nowrap rounded-md px-1.5 py-[3px] text-[10px] font-[720] leading-[1.2] ${fileBadgeColorClassName(item.ext)}`} data-ext={normalizeExt(item.ext || "file")}>
-            {(item.ext || "").toUpperCase()}
-          </span>
+          {withFileBadge ? (
+            <span className={`file-badge absolute left-1.5 top-1.5 max-w-[calc(100%_-_12px)] overflow-hidden text-ellipsis whitespace-nowrap rounded-md px-1.5 py-[3px] text-[10px] font-[720] leading-[1.2] ${fileBadgeColorClassName(item.ext)}`} data-ext={normalizeExt(item.ext || "file")}>
+              {(item.ext || "").toUpperCase()}
+            </span>
+          ) : null}
           <span className={durationBadgeClassName} hidden={!duration}>
             {duration}
           </span>
