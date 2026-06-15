@@ -61,7 +61,6 @@ import {
 import { renderLoginConnectView } from "./viewer/components/LoginView";
 import { renderSearchControlButtonsView } from "./viewer/components/SearchControls";
 import { renderTagChipsView } from "./viewer/components/TagChips";
-import { renderTilesSentinelView } from "./viewer/components/TilesSentinel";
 import {
   clearTagSuggestionsView,
   renderTagSuggestionsView,
@@ -73,6 +72,10 @@ import {
   setPreviewDialogState,
 } from "./viewer/previewDialogState";
 import { setResultsStatusState } from "./viewer/resultsStatusState";
+import {
+  getTilesSentinelElement,
+  setTilesSentinelState,
+} from "./viewer/tilesSentinelState";
 import { clearRatingView, renderRatingView } from "./viewer/components/RatingStars";
 import { setViewerShellActions } from "./viewer/shellActions";
 import { getShellView, setShellView } from "./viewer/shellVisibility";
@@ -616,7 +619,7 @@ function updatePager() {
 }
 
 function renderTilesSentinel(text = "Loading more") {
-  renderTilesSentinelView(els.tilesSentinelHost, {
+  setTilesSentinelState({
     hidden: !shouldShowTileSentinel(tileLoadingState()),
     text,
   });
@@ -629,7 +632,8 @@ function setupTileAutoLoading() {
     if (!entries.some((entry) => entry.isIntersecting)) return;
     loadMoreTiles();
   }, { rootMargin: "600px 0px" });
-  state.tilesObserver.observe(els.tilesSentinelHost);
+  const tilesSentinel = getTilesSentinelElement();
+  if (tilesSentinel) state.tilesObserver.observe(tilesSentinel);
 }
 
 function resetTileAutoLoading() {

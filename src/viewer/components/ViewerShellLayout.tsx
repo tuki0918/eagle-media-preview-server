@@ -19,9 +19,7 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
         <div id="resultGridHost">
           <section id="grid" className="media-grid" aria-label="Eagle assets" />
         </div>
-        <div id="tilesSentinelHost">
-          <TilesSentinel />
-        </div>
+        <TilesSentinel />
         <div id="pagerHost">
           <Pager />
         </div>

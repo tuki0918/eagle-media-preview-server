@@ -55,7 +55,6 @@ const REQUIRED_ELEMENT_IDS = [
   "advancedFilters",
   "resultGridHost",
   "grid",
-  "tilesSentinelHost",
   "tilesSentinel",
   "resultCount",
   "tilesViewButton",
