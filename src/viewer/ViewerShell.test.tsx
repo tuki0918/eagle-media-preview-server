@@ -185,7 +185,7 @@ describe("ViewerAppShell", () => {
     expect(html).toContain("z-[6]");
     expect(html).toContain("border-l");
     expect(html).toContain("translate-x-full");
-    expect(html).toContain("shadow-[-18px_0_44px_rgba");
+    expect(html).toContain("shadow-none");
   });
 
   test("renders video preview layout edge to edge under overlay controls", () => {
@@ -197,8 +197,21 @@ describe("ViewerAppShell", () => {
     expect(html).not.toContain("pt-[calc(60px+env(safe-area-inset-top))]");
     expect(html).toContain("fixed left-2.5 top-[calc(10px+env(safe-area-inset-top))]");
     expect(html).toContain("rounded-full");
-    expect(html).toContain("bg-[rgba(255,255,255,0.12)]");
+    expect(html).toContain("bg-[rgba(15,23,42,0.48)]");
     expect(html).toContain('id="fullscreenPreview"');
+  });
+
+  test("renders image preview actions with media-style controls", () => {
+    setPreviewDialogState({ infoOpen: false, mode: "image", open: true });
+    const dialog = renderToStaticMarkup(<PreviewDialog />);
+    resetPreviewDialogState();
+    const body = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", name: "Sample.jpg" }} kind="image" />);
+
+    expect(dialog).toContain("rounded-full");
+    expect(dialog).toContain("bg-[rgba(15,23,42,0.48)]");
+    expect(body).toContain("image-toolbar");
+    expect(body).toContain("bg-[rgba(255,255,255,0.92)]");
+    expect(body).toContain("text-app-text-soft");
   });
 
   test("hides video overlay buttons when video controls are toggled off", () => {

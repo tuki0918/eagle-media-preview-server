@@ -46,14 +46,16 @@ export function PreviewDialog() {
     previewDialogState.mode === "video" ? "h-dvh max-h-dvh bg-[#05070a]" : "",
   ].filter(Boolean).join(" ");
   const previewInfoClassName = [
-    "preview-info absolute inset-y-0 right-0 z-[6] grid w-[min(360px,calc(100vw-56px))] max-w-full content-start gap-3.5 overflow-auto border-0 border-l border-app-border bg-[rgba(255,255,255,0.96)] p-3.5 shadow-[-18px_0_44px_rgba(15,23,42,0.14)] backdrop-blur-[18px] transition-transform duration-200",
-    previewDialogState.infoOpen ? "translate-x-0 max-[540px]:translate-y-0" : "translate-x-full max-[540px]:translate-x-0 max-[540px]:translate-y-full",
-    "max-[540px]:inset-x-0 max-[540px]:bottom-0 max-[540px]:top-auto max-[540px]:w-auto max-[540px]:max-h-[min(72dvh,560px)] max-[540px]:border-l-0 max-[540px]:border-t max-[540px]:border-app-border max-[540px]:shadow-[0_-18px_44px_rgba(15,23,42,0.14)]",
+    "preview-info absolute inset-y-0 right-0 z-[6] grid w-[min(360px,calc(100vw-56px))] max-w-full content-start gap-3.5 overflow-auto border-0 border-l border-app-border bg-[rgba(255,255,255,0.96)] p-3.5 backdrop-blur-[18px] transition-[box-shadow,transform] duration-200",
+    previewDialogState.infoOpen
+      ? "translate-x-0 shadow-[-18px_0_44px_rgba(15,23,42,0.14)] max-[540px]:translate-y-0 max-[540px]:shadow-[0_-18px_44px_rgba(15,23,42,0.14)]"
+      : "translate-x-full shadow-none max-[540px]:translate-x-0 max-[540px]:translate-y-full",
+    "max-[540px]:inset-x-0 max-[540px]:bottom-0 max-[540px]:top-auto max-[540px]:w-auto max-[540px]:max-h-[min(72dvh,560px)] max-[540px]:border-l-0 max-[540px]:border-t max-[540px]:border-app-border",
   ].join(" ");
   const previewActionButtonClassName = [
     "icon-button inline-grid touch-manipulation select-none place-items-center border backdrop-blur-[12px]",
-    previewDialogState.mode === "video" || previewDialogState.mode === "audio"
-      ? "h-11 w-11 flex-[0_0_44px] rounded-full border-[rgba(255,255,255,0.16)] bg-[rgba(255,255,255,0.12)] text-white hover:bg-[rgba(255,255,255,0.2)] hover:text-white"
+    previewDialogState.mode === "video" || previewDialogState.mode === "audio" || previewDialogState.mode === "image"
+      ? "h-11 w-11 flex-[0_0_44px] rounded-full border-[rgba(255,255,255,0.18)] bg-[rgba(15,23,42,0.48)] text-white shadow-[0_10px_28px_rgba(0,0,0,0.22)] hover:bg-[rgba(15,23,42,0.64)] hover:text-white"
       : "min-h-10 w-10 flex-[0_0_40px] rounded-app border-[rgba(203,213,225,0.82)] bg-[rgba(255,255,255,0.88)] text-app-text hover:border-[rgba(37,99,235,0.28)] hover:bg-white hover:text-app-accent",
   ].join(" ");
   const videoOverlayMenuClassName = [
