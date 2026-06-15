@@ -389,11 +389,7 @@ function openPreview(item: EagleItem, { skipHistory = false }: OpenPreviewOption
     originalName: originalFileName(item),
   });
   clearPreviewBodyState();
-  setPreviewRatingState({
-    canEdit: state.permissions.writeRating,
-    item,
-    onSelect: (star) => setItemStar(item, star),
-  });
+  renderPreviewRating(item);
   renderPreviewDetails(item);
 
   const { kind, srcKind } = previewBodyForItem(item);
@@ -622,13 +618,7 @@ async function setItemStar(item: EagleItem, star: number) {
   item.star = star;
   updateItemInState(String(item.id || ""), { star });
   render();
-  if (isPreviewDialogOpen()) {
-    setPreviewRatingState({
-      canEdit: state.permissions.writeRating,
-      item,
-      onSelect: (nextStar) => setItemStar(item, nextStar),
-    });
-  }
+  if (isPreviewDialogOpen()) renderPreviewRating(item);
 
   try {
     const data = await postJson<{ star?: unknown }>(`/api/items/${encodeURIComponent(String(item.id || ""))}/star`, { star });
@@ -641,14 +631,16 @@ async function setItemStar(item: EagleItem, star: number) {
     alert(error.message);
   } finally {
     render();
-    if (isPreviewDialogOpen()) {
-      setPreviewRatingState({
-        canEdit: state.permissions.writeRating,
-        item,
-        onSelect: (nextStar) => setItemStar(item, nextStar),
-      });
-    }
+    if (isPreviewDialogOpen()) renderPreviewRating(item);
   }
+}
+
+function renderPreviewRating(item: EagleItem) {
+  setPreviewRatingState({
+    canEdit: state.permissions.writeRating,
+    item,
+    onSelect: (star) => setItemStar(item, star),
+  });
 }
 
 function isPreviewDialogOpen() {

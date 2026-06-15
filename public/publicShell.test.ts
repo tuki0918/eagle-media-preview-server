@@ -466,7 +466,10 @@ test("public ratings are static in grid and table but editable in the preview mo
   assert.doesNotMatch(app, /renderRatingView\(els\.previewRating, \{/);
   assert.doesNotMatch(html, /function renderRatingView\(container[^,]*,\s*props: RatingStarsProps\)/);
   assert.doesNotMatch(app, /previewRating: document\.querySelector\("#previewRating"\),/);
-  assert.match(app, /setPreviewRatingState\(\{/);
+  assert.match(app, /function renderPreviewRating\(item: EagleItem\) \{[\s\S]*setPreviewRatingState\(\{/);
+  assert.match(app, /renderPreviewRating\(item\);/);
+  assert.match(app, /if \(isPreviewDialogOpen\(\)\) renderPreviewRating\(item\);/);
+  assert.doesNotMatch(app, /if \(isPreviewDialogOpen\(\)\) \{\s*setPreviewRatingState/s);
   assert.match(html, /const Tag = interactive \? "button" : "span";/);
 });
 
