@@ -18,7 +18,6 @@ export interface ViewerShellActions {
   setViewMode: (mode: ViewerMode) => void;
   closePreview: () => void;
   togglePreviewInfo: () => void;
-  toggleFullscreen: () => void;
   previewPointerDown: (target: EventTarget | null) => void;
   previewClosed: () => void;
   previewDoubleClicked: (target: EventTarget | null, preventDefault: () => void) => void;
@@ -44,7 +43,6 @@ let actions: ViewerShellActions = {
   setViewMode: noop,
   closePreview: noop,
   togglePreviewInfo: noop,
-  toggleFullscreen: noop,
   previewPointerDown: noop,
   previewClosed: noop,
   previewDoubleClicked: noop,
@@ -121,10 +119,6 @@ export function closePreview() {
 
 export function togglePreviewInfo() {
   actions.togglePreviewInfo();
-}
-
-export function toggleFullscreen() {
-  actions.toggleFullscreen();
 }
 
 export function handlePreviewPointerDown(event: { target: EventTarget | null }) {

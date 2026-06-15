@@ -4,7 +4,6 @@ import {
   handlePreviewClose,
   handlePreviewDoubleClick,
   handlePreviewPointerDown,
-  toggleFullscreen,
   togglePreviewInfo,
 } from "../shellActions";
 import { getPreviewDialogState, subscribePreviewDialogState } from "../previewDialogState";
@@ -12,6 +11,7 @@ import { PreviewMeta, PreviewOriginalName } from "./PreviewText";
 
 export function PreviewDialog() {
   const dialogRef = useRef<HTMLDialogElement | null>(null);
+  const previewBodyRef = useRef<HTMLDivElement | null>(null);
   const previewDialogState = useSyncExternalStore(subscribePreviewDialogState, getPreviewDialogState, getPreviewDialogState);
   const dialogClassName = [
     "h-dvh max-h-dvh w-screen max-w-full rounded-none border-0 bg-app-surface p-0 text-app-text",
@@ -65,6 +65,34 @@ export function PreviewDialog() {
     };
   }, []);
 
+  const toggleFullscreen = async () => {
+    const previewBody = previewBodyRef.current;
+    if (!previewBody) return;
+    const target = previewBody.firstElementChild || previewBody;
+    const videoTarget = target instanceof HTMLVideoElement
+      ? target as HTMLVideoElement & { webkitEnterFullscreen?: () => void }
+      : null;
+    try {
+      if (videoTarget?.webkitEnterFullscreen && !document.fullscreenEnabled) {
+        videoTarget.webkitEnterFullscreen();
+        return;
+      }
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+        return;
+      }
+      if (target.requestFullscreen) {
+        await target.requestFullscreen();
+        return;
+      }
+      if (videoTarget?.webkitEnterFullscreen) {
+        videoTarget.webkitEnterFullscreen();
+      }
+    } catch (error) {
+      console.warn("Fullscreen is unavailable in this browser.", error);
+    }
+  };
+
   return (
     <dialog
       ref={dialogRef}
@@ -98,7 +126,7 @@ export function PreviewDialog() {
         </div>
       </div>
       <div className="preview-layout relative grid h-full max-h-full grid-cols-[minmax(0,1fr)] overflow-hidden">
-        <div id="previewBody" className="preview-body relative grid h-full min-h-0 grid-rows-[minmax(0,1fr)] overflow-hidden bg-[#f8fafc] p-0" />
+        <div ref={previewBodyRef} id="previewBody" className="preview-body relative grid h-full min-h-0 grid-rows-[minmax(0,1fr)] overflow-hidden bg-[#f8fafc] p-0" />
         <aside
           className="preview-info absolute inset-y-0 left-0 z-[3] grid max-w-full content-start gap-3.5 overflow-auto border-0 border-r border-app-border bg-[rgba(255,255,255,0.96)] p-3.5 shadow-[18px_0_44px_rgba(15,23,42,0.14)] backdrop-blur-[18px]"
           aria-label="Media info"

@@ -169,7 +169,6 @@ async function init() {
     setViewMode,
     closePreview,
     togglePreviewInfo,
-    toggleFullscreen,
     previewPointerDown: closePreviewInfoFromOutside,
     previewClosed: () => {
       clearPreviewContents();
@@ -406,32 +405,6 @@ function setPreviewInfoOpen(isOpen: boolean) {
   state.previewInfoOpen = isOpen;
   setPreviewDialogInfoOpen(isOpen);
   syncUrlState();
-}
-
-async function toggleFullscreen() {
-  const target = els.previewBody.firstElementChild || els.previewBody;
-  const videoTarget = target instanceof HTMLVideoElement
-    ? target as HTMLVideoElement & { webkitEnterFullscreen?: () => void }
-    : null;
-  try {
-    if (videoTarget?.webkitEnterFullscreen && !document.fullscreenEnabled) {
-      videoTarget.webkitEnterFullscreen();
-      return;
-    }
-    if (document.fullscreenElement) {
-      await document.exitFullscreen();
-      return;
-    }
-    if (target.requestFullscreen) {
-      await target.requestFullscreen();
-      return;
-    }
-    if (videoTarget?.webkitEnterFullscreen) {
-      videoTarget.webkitEnterFullscreen();
-    }
-  } catch (error) {
-    console.warn("Fullscreen is unavailable in this browser.", error);
-  }
 }
 
 function restoreUrlState() {

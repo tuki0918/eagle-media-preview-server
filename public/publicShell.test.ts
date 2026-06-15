@@ -423,6 +423,10 @@ test("public preview info closes when pressing outside the side menu", async () 
   assert.match(html, /dialog\.close\(\)/);
   assert.match(html, /dialog\.addEventListener\(eventName, preventGestureWhileOpen\)/);
   assert.match(html, /dialog\.removeEventListener\(eventName, preventGestureWhileOpen\)/);
+  assert.match(html, /const toggleFullscreen = async \(\) => \{/);
+  assert.match(html, /previewBodyRef\.current/);
+  assert.match(html, /document\.fullscreenElement/);
+  assert.match(html, /target\.requestFullscreen/);
   assert.match(html, /document\.addEventListener\("pointerdown", handlePointerDown\)/);
   assert.match(html, /document\.removeEventListener\("pointerdown", handlePointerDown\)/);
   assert.match(app, /setPreviewDialogState\(\{/);
@@ -433,6 +437,10 @@ test("public preview info closes when pressing outside the side menu", async () 
   assert.doesNotMatch(app, /document\.body\.classList/);
   assert.doesNotMatch(app, /document\.addEventListener\("pointerdown"/);
   assert.doesNotMatch(app, /els\.dialog\.addEventListener/);
+  assert.doesNotMatch(app, /toggleFullscreen,/);
+  assert.doesNotMatch(app, /function toggleFullscreen\(\)/);
+  assert.doesNotMatch(app, /document\.fullscreenElement/);
+  assert.doesNotMatch(app, /requestFullscreen/);
   assert.doesNotMatch(app, /function showPreviewDialog\(\)/);
   assert.doesNotMatch(app, /els\.dialog\.showModal/);
   assert.doesNotMatch(app, /els\.dialog\.close/);
