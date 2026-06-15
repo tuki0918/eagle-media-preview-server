@@ -54,6 +54,8 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.doesNotMatch(app, /title="Editor roles"/);
   assert.doesNotMatch(app, /function EditIcon\(/);
   assert.doesNotMatch(app, /const \[password, setPassword\]/);
+  assert.match(app, /if \(saved && hasUserPasswords\) setUserPasswords\(\{\}\);/);
+  assert.match(app, /if \(hasUserPasswords\) setUserPasswords\(\{\}\);/);
 });
 
 test("plugin app keeps Eagle Node API compatibility with a classic script", async () => {

@@ -139,8 +139,10 @@ function App() {
       } else if (!quiet) {
         setMessage("");
       }
+      return true;
     } catch (error) {
       setErrorMessage(error);
+      return false;
     } finally {
       setBusy(false);
     }
@@ -159,7 +161,8 @@ function App() {
       ...patch,
     };
     const cleanUserPasswords = Object.fromEntries(Object.entries(userPasswords).filter(([, value]) => value.trim()));
-    if (Object.keys(cleanUserPasswords).length) {
+    const hasUserPasswords = Object.keys(cleanUserPasswords).length > 0;
+    if (hasUserPasswords) {
       payload.userPasswords = cleanUserPasswords;
     }
 
@@ -167,11 +170,13 @@ function App() {
       if (willRestartServer(status, payload)) {
         setStatus((current) => ({ ...current, state: "stopped" }));
       }
-      await runCommand(() => managerRef.current?.saveSettings(payload), { quiet: true });
+      const saved = await runCommand(() => managerRef.current?.saveSettings(payload), { quiet: true });
+      if (saved && hasUserPasswords) setUserPasswords({});
       return;
     }
     const nextStatus = await managerRef.current?.saveSettings(payload);
     if (nextStatus) setStatus(nextStatus);
+    if (hasUserPasswords) setUserPasswords({});
     setMessage("");
   }
 

@@ -118,7 +118,6 @@ Build output is created under `dist`:
 - `Options`
   - Auto start
   - BasicAuth protection
-  - Editor roles
   - Public Network
 - `Settings`
   - Port
