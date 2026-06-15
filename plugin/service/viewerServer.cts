@@ -478,7 +478,7 @@ async function handleAuthRoutes(req, url, res, auth: AuthContext) {
     });
     res.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
-      "Set-Cookie": `viewer_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${AUTH_SESSION_MAX_AGE_SECONDS}`,
+      "Set-Cookie": authSessionCookie(token),
     });
     res.end(JSON.stringify({
       authenticated: true,
@@ -497,7 +497,7 @@ async function handleAuthRoutes(req, url, res, auth: AuthContext) {
     if (token) auth.authSessions.delete(token);
     res.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
-      "Set-Cookie": "viewer_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0",
+      "Set-Cookie": authSessionCookie("", 0),
     });
     res.end(JSON.stringify({ authenticated: false }));
     return true;
@@ -859,6 +859,10 @@ function sendAuthRequired(res) {
     "WWW-Authenticate": 'Basic realm="Media Preview Server", charset="UTF-8"',
   });
   res.end(JSON.stringify({ error: "Authentication required" }));
+}
+
+function authSessionCookie(token: string, maxAge = AUTH_SESSION_MAX_AGE_SECONDS) {
+  return `viewer_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}`;
 }
 
 function passwordMatches(value, { viewerPassword = "", passwordHash = "" }: { passwordHash?: string; viewerPassword?: string }) {

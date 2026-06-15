@@ -209,6 +209,9 @@ test("plugin server caches authenticated users per request", async () => {
   assert.match(source, /return rolePermissions\(user\?\.role\)\.manageLibrary;/);
   assert.match(source, /const roleAccess = rolePermissions\(user\?\.role\);/);
   assert.match(source, /\^Basic\\s\+\/i/);
+  assert.match(source, /function authSessionCookie\(token, maxAge = AUTH_SESSION_MAX_AGE_SECONDS\)/);
+  assert.match(source, /"Set-Cookie": authSessionCookie\(token\)/);
+  assert.match(source, /"Set-Cookie": authSessionCookie\("", 0\)/);
   assert.doesNotMatch(source, /const writeMetadata = Boolean\(user && canRoleEditMetadata\(user\.role\)\)/);
   assert.doesNotMatch(source, /const manageLibrary = user\?\.role === "admin"/);
 });
