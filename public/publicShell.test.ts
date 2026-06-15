@@ -163,6 +163,9 @@ test("public viewer exposes sign out when authenticated", async () => {
 
   assert.match(footer, /id="authUserLabel"/);
   assert.match(footer, />ed</);
+  assert.match(footer, /id="authAccountLabel"/);
+  assert.match(footer, /aria-label="ed - Editor\. Can edit ratings, tags, and categories"/);
+  assert.match(footer, /title="Can edit ratings, tags, and categories"/);
   assert.match(footer, /id="authRoleLabel"/);
   assert.match(footer, />Editor</);
   assert.match(footer, /id="logoutButton"/);
