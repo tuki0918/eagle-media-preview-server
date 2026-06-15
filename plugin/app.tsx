@@ -203,7 +203,7 @@ function App() {
   }
 
   function setErrorMessage(error: unknown) {
-    setMessage(error instanceof Error ? error.message : String(error), true);
+    setMessage(errorMessage(error), true);
   }
 
   function updateSettings(patch: PluginSettings) {
@@ -668,6 +668,10 @@ function nextDefaultUser(users: AuthUser[]): AuthUser {
 
 function normalizeServerState(value: unknown): ServerState {
   return value === "running" || value === "error" ? value : "stopped";
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function pluginRequirePath(relativePath: string) {
