@@ -11,7 +11,7 @@ The product has two user-facing surfaces:
   - Manages server start, stop, settings, Endpoint URL, and QR code
 - `Browser viewer`
   - Opens in a phone, tablet, or another computer's browser
-  - Handles library search, filters, pagination, and previews
+  - Handles library search, filters, tag chips, paged/grid/table/tiles views, and previews
 
 External devices connect to the plugin server, not directly to Eagle's Web API.
 
@@ -29,7 +29,7 @@ External devices connect to the plugin server, not directly to Eagle's Web API.
 - Public Internet exposure
 - Multi-user accounts or role management
 - Folder-level or item-level ACLs
-- Full Eagle metadata editing
+- Full Eagle metadata editing beyond rating, tags, and categories
 - Persistent request logs or a log viewer screen
 - Custom video transcoding or audio transcoding
 
@@ -55,8 +55,41 @@ Defaults:
 - Eagle API host: `127.0.0.1`
 - Eagle API port: `41595`
 - BasicAuth: disabled
-- Public Network: disabled
+- Public Network: enabled (`0.0.0.0`)
 - Auto start: disabled
+
+## Codebase Model
+
+The source is managed as a TypeScript / React / Vite / Tailwind CSS / Vitest project.
+
+- `plugin/app.tsx`
+  - React management window loaded by Eagle
+  - Bundled by Vite/esbuild into `dist/plugin/app.js`
+- `src/viewer/**/*.tsx`
+  - Browser viewer shell and reusable React components
+  - Component styling is primarily Tailwind utility classes in the components, with shared structural rules in `src/styles.css`
+- `src/viewer/**/*.ts`
+  - Viewer state, URL sync, media helpers, formatting, API calls, and controller logic
+- `plugin/service/*.cts`
+  - Eagle-compatible service runtime sources
+  - Compiled by `tsconfig.plugin-service.json` to `dist/.generated/plugin-service/*.cjs` files for Eagle's `require` runtime
+- `server/viewerServer.ts`
+  - ESM wrapper that reuses the generated plugin service runtime for tests and local imports
+
+Build output is created under `dist`:
+
+- `dist/manifest.json`
+- `dist/plugin/index.html`
+- `dist/plugin/app.js`
+- `dist/plugin/styles.css`
+- `dist/plugin/assets/*`
+- `dist/plugin/service/*.cjs`
+- `dist/public/index.html`
+- `dist/public/app.js`
+- `dist/public/viewerApp.js`
+- `dist/public/styles.css`
+- `dist/public/assets/*`
+- `dist/public/favicon.ico`
 
 ## Server Management Window
 
@@ -119,10 +152,10 @@ Settings path:
 - Connect to the Eagle API
 - Display the library name and Eagle version
 - Fetch items page by page
-- Filter by folder, uncategorized state, extension, rating, and keyword
-- Switch between grid and table views
+- Filter by folder, uncategorized state, extension/type, rating, keyword, and tag chips
+- Switch between tiles, grid, and table views
 - Preview images, videos, audio, text-like files, PDFs, and unsupported media
-- Change rating from the preview panel
+- Change rating, tags, and categories from the preview panel
 - Open the original file in a new tab
 - Sync search filters, page, view mode, and preview state into the URL
 
@@ -133,9 +166,12 @@ Settings path:
 - Uncategorized filter
 - Extension filter
 - Rating filter
+- Tag filter chips
 - Page size: `30`, `60`, `120`, `240`
+- Tiles view
 - Grid view
 - Table view
+- Infinite loading in tiles view
 - URL history restore
 
 ### Preview Behavior
@@ -159,7 +195,8 @@ Settings path:
   - Displays source content as escaped plain text in a dedicated text preview
 - PDF
   - Preview extension: `pdf`
-  - Embeds the original file from `/file/:id` with the browser's native PDF viewer
+  - Displays the Eagle thumbnail as an image preview
+  - The original PDF is still available through the open-file action
 - Unsupported timed media
   - Shows the thumbnail and an unsupported-format message
 
@@ -193,7 +230,7 @@ Settings path:
 - `POST /api/items/:id/star`
   - Updates rating
 - `POST /api/items/:id/metadata`
-  - API for tag/folder updates. The current UI does not use it
+  - Updates tags and folders/categories from the preview panel
 - `GET|HEAD /api/items/:id/thumb`
   - Serves item thumbnail
 - `GET|HEAD /api/items/:id/file`
@@ -275,9 +312,25 @@ Main status fields:
 3. If the server is already running, settings changes that affect binding or auth restart it automatically
 4. External browser access requires authentication
 
+## Build and Verification
+
+Development and verification commands:
+
+```sh
+npm install
+npm run dev
+npm run typecheck
+npm run build
+npm test
+npm run verify
+```
+
+`npm run build` compiles the plugin service `.cts` files into `dist/.generated/plugin-service` before Vite builds and packages the React surfaces. The Vite package step also copies `manifest.json`, plugin icons/assets, public assets, favicon, generated service `.cjs` files, and CSS into `dist`.
+
+`npm run verify` runs TypeScript checks, the production build, and Vitest.
+
 ## Implementation Notes
 
-- ESM wrapper `server/viewerServer.js` reuses the CommonJS implementation in `plugin/service/viewerServer.cjs`
-- CommonJS runtime for Eagle plugin windows is kept in `plugin/service/runtime.cjs`
-- QR code generation uses `plugin/vendor/qrcode-generator.cjs`
-- Request log UI, diagnostics UI, and shared URL expiration UI are intentionally not part of the current implementation
+- QR code generation is bundled into the plugin window from the `qrcode-generator` dependency.
+- Generated `dist/.generated/plugin-service/*.cjs` files are build artifacts and are not tracked as source.
+- Request log UI, diagnostics UI, and shared URL expiration UI are intentionally not part of the current implementation.

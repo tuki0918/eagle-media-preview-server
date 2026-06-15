@@ -1,0 +1,30 @@
+import { useSyncExternalStore } from "react";
+import { getPreviewTextState, subscribePreviewTextState } from "../previewTextState";
+
+interface PreviewMetaProps {
+  value?: string;
+}
+
+interface PreviewOriginalNameProps {
+  value?: string;
+}
+
+export function PreviewMeta({ value }: PreviewMetaProps) {
+  const state = useSyncExternalStore(subscribePreviewTextState, getPreviewTextState, getPreviewTextState);
+  return <span id="previewMeta">{value ?? state.meta}</span>;
+}
+
+export function PreviewOriginalName({ value }: PreviewOriginalNameProps) {
+  const state = useSyncExternalStore(subscribePreviewTextState, getPreviewTextState, getPreviewTextState);
+  const displayValue = value ?? state.originalName;
+
+  return (
+    <div
+      id="previewOriginalName"
+      className="preview-original-name-value w-full min-w-0 whitespace-normal text-sm leading-[1.4] text-app-text [overflow-wrap:anywhere]"
+      title={displayValue || undefined}
+    >
+      {displayValue}
+    </div>
+  );
+}

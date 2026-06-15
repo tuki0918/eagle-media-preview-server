@@ -1,0 +1,273 @@
+import { test } from "vitest";
+import assert from "node:assert/strict";
+import { mkdir, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createViewerServer, resolveDefaultPublicDir, sha256 } from "./viewerServer.js";
+
+type ItemListOptions = { keywords?: string; tags?: string[] };
+type TagListOptions = { query?: string; limit?: string };
+
+test("createViewerServer starts and stops without the CLI entrypoint", async () => {
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    viewerPassword: "",
+  });
+
+  assert.equal(viewer.status().state, "stopped");
+
+  await viewer.start();
+  const status = viewer.status();
+
+  assert.equal(status.state, "running");
+  assert.equal(status.host, "127.0.0.1");
+  assert.ok(status.port > 0);
+
+  const response = await fetch(`http://127.0.0.1:${status.port}/api/auth/status`);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    required: false,
+    authenticated: true,
+  });
+
+  await viewer.stop();
+  assert.equal(viewer.status().state, "stopped");
+});
+
+test("resolveDefaultPublicDir prefers Vite output when running from source", () => {
+  const existingDist = (path: string) => path === "/repo/dist/public";
+  assert.equal(resolveDefaultPublicDir("/repo/plugin/service", existingDist), "/repo/dist/public");
+  assert.equal(resolveDefaultPublicDir("/repo/dist/plugin/service", existingDist), "/repo/dist/public");
+  assert.equal(resolveDefaultPublicDir("/repo/plugin/service", () => false), "/repo/public");
+});
+
+test("createViewerServer reports a port conflict as an error state", async () => {
+  const first = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    viewerPassword: "",
+  });
+  await first.start();
+
+  const conflict = createViewerServer({
+    host: "127.0.0.1",
+    port: first.status().port,
+    viewerPassword: "",
+  });
+
+  await assert.rejects(() => conflict.start(), /EADDRINUSE|already in use/);
+  assert.equal(conflict.status().state, "error");
+
+  await first.stop();
+});
+
+test("createViewerServer protects static viewer with BasicAuth when password hash is set", async () => {
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    passwordHash: sha256("secret"),
+    basicAuthUsername: "eagle",
+  });
+
+  await viewer.start();
+  const status = viewer.status();
+  const rootUrl = `http://127.0.0.1:${status.port}/`;
+
+  const denied = await fetch(rootUrl);
+  assert.equal(denied.status, 401);
+  assert.match(denied.headers.get("www-authenticate") || "", /Basic/);
+
+  const allowed = await fetch(rootUrl, {
+    headers: {
+      Authorization: `Basic ${Buffer.from("eagle:secret").toString("base64")}`,
+    },
+  });
+  assert.equal(allowed.status, 200);
+
+  await viewer.stop();
+});
+
+test("createViewerServer serves direct file routes from /file/:id", async () => {
+  const root = join(tmpdir(), `eagle-media-preview-server-${Date.now()}`);
+  await mkdir(root, { recursive: true });
+  const filePath = join(root, "asset.jpg");
+  await writeFile(filePath, "demo-file");
+
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: root, name: "Test Library" };
+      },
+      async itemById(id: string) {
+        return {
+          data: [{ id, filePath }],
+        };
+      },
+    },
+  });
+
+  await viewer.start();
+  const status = viewer.status();
+  const response = await fetch(`http://127.0.0.1:${status.port}/file/ITEM123`);
+
+  assert.equal(response.status, 200);
+  assert.equal(await response.text(), "demo-file");
+
+  await viewer.stop();
+});
+
+test("createViewerServer serves text and markdown direct file routes inline as raw text", async () => {
+  const root = join(tmpdir(), `eagle-media-preview-server-text-${Date.now()}`);
+  await mkdir(root, { recursive: true });
+  const filePath = join(root, "notes.md");
+  await writeFile(filePath, "# demo\n\nplain markdown");
+
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: root, name: "Test Library" };
+      },
+      async itemById(id: string) {
+        return {
+          data: [{ id, filePath }],
+        };
+      },
+    },
+  });
+
+  await viewer.start();
+  const status = viewer.status();
+  const response = await fetch(`http://127.0.0.1:${status.port}/file/TEXT123`);
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("content-type"), "text/plain; charset=utf-8");
+  assert.equal(response.headers.get("content-disposition"), "inline");
+  assert.equal(await response.text(), "# demo\n\nplain markdown");
+
+  await viewer.stop();
+});
+
+test("createViewerServer uses Eagle item extension as a PDF MIME fallback", async () => {
+  const root = join(tmpdir(), `eagle-media-preview-server-pdf-${Date.now()}`);
+  await mkdir(root, { recursive: true });
+  const filePath = join(root, "original");
+  await writeFile(filePath, "%PDF-1.1\n%%EOF\n");
+
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: root, name: "Test Library" };
+      },
+      async itemById(id: string) {
+        return {
+          data: [{ id, filePath, name: "sample", ext: "pdf" }],
+        };
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const response = await fetch(`http://127.0.0.1:${status.port}/file/PDF123/sample.pdf`);
+
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("content-type"), "application/pdf");
+    assert.match(response.headers.get("content-disposition") || "", /^inline;/);
+    assert.match(response.headers.get("content-disposition") || "", /filename="sample\.pdf"/);
+    assert.equal(await response.text(), "%PDF-1.1\n%%EOF\n");
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer forwards repeated tag filters to item listing", async () => {
+  const calls: ItemListOptions[] = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    viewerPassword: "",
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/tmp/Test.library", name: "Test Library" };
+      },
+      async listItems(options: ItemListOptions) {
+        calls.push(options);
+        return { items: [], total: 0, offset: 0, limit: 30 };
+      },
+      async searchItems() {
+        throw new Error("searchItems should not be used when tag filters are present");
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const response = await fetch(`http://127.0.0.1:${status.port}/api/items?q=cat&tags=photo&tags=favorite`);
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { items: [], total: 0, offset: 0, limit: 30 });
+    assert.deepEqual(calls[0].tags, ["photo", "favorite"]);
+    assert.equal(calls[0].keywords, "cat");
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer serves tag autocomplete suggestions", async () => {
+  const calls: TagListOptions[] = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    viewerPassword: "",
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/tmp/Test.library", name: "Test Library" };
+      },
+      async listTags(options: TagListOptions) {
+        calls.push(options);
+        return { items: [{ name: "photo", count: 12 }], total: 1, offset: 0, limit: 20 };
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const response = await fetch(`http://127.0.0.1:${status.port}/api/tags?q=pho&limit=20`);
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      items: [{ name: "photo", count: 12 }],
+      total: 1,
+      offset: 0,
+      limit: 20,
+    });
+    assert.deepEqual(calls[0], { query: "pho", limit: "20" });
+  } finally {
+    await viewer.stop();
+  }
+});

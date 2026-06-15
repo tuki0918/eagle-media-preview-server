@@ -1,0 +1,288 @@
+const { mkdir, readFile, writeFile } = require("fs").promises;
+const { createHash } = require("crypto");
+const { dirname, join } = require("path");
+const { homedir, networkInterfaces } = require("os");
+const { createViewerServer } = require("./viewerServer.cjs");
+
+type ServerStatus = "error" | "running" | "stopped";
+
+interface PluginSettings {
+  autoStart: boolean;
+  authEnabled: boolean;
+  basicAuthUser: string;
+  host: string;
+  lastServerStatus: ServerStatus;
+  passwordHash: string;
+  port: number;
+  preferredLanAddress: string;
+}
+
+type SettingsInput = Partial<Omit<PluginSettings, "port">> & {
+  confirmPassword?: unknown;
+  password?: unknown;
+  port?: unknown;
+};
+
+interface SettingsStore {
+  filePath?: string;
+  load(): Promise<PluginSettings>;
+  save(input?: SettingsInput): Promise<PluginSettings>;
+}
+
+interface LanAddress {
+  address: string;
+  label: string;
+}
+
+interface ViewerStatus {
+  host: string;
+  lastError?: string;
+  port: number;
+  state: string;
+}
+
+interface ManagedViewer {
+  start(): Promise<unknown>;
+  stop(): Promise<unknown>;
+  status(): ViewerStatus;
+}
+
+interface ServerManagerOptions {
+  lanAddressProvider?: () => LanAddress[];
+  settingsStore?: SettingsStore;
+  viewerServerFactory?: (settings: {
+    basicAuthUsername: string;
+    host: string;
+    passwordHash: string;
+    port: number;
+  }) => ManagedViewer;
+}
+
+interface NetworkEntry {
+  address: string;
+  family: string;
+  internal: boolean;
+}
+
+const DEFAULT_SETTINGS: PluginSettings = {
+  autoStart: false,
+  host: "0.0.0.0",
+  port: 41532,
+  authEnabled: false,
+  basicAuthUser: "eagle",
+  passwordHash: "",
+  preferredLanAddress: "",
+  lastServerStatus: "stopped",
+};
+
+function defaultSettingsPath() {
+  return join(homedir(), ".eagle-media-preview-server", "settings.json");
+}
+
+function createSettingsStore({ filePath = defaultSettingsPath() }: { filePath?: string } = {}) {
+  return {
+    filePath,
+
+    async load() {
+      try {
+        const raw = await readFile(filePath, "utf8");
+        return normalizeSettings(JSON.parse(raw));
+      } catch (error) {
+        if (error.code === "ENOENT") return { ...DEFAULT_SETTINGS };
+        throw error;
+      }
+    },
+
+    async save(input: SettingsInput = {}) {
+      const current = await this.load();
+      const next = normalizeSettings({ ...current, ...input });
+
+      if (input.password || input.confirmPassword) {
+        if (String(input.password || "") !== String(input.confirmPassword || "")) {
+          throw new Error("Password confirmation does not match");
+        }
+        if (!String(input.password || "").trim()) throw new Error("Password is required");
+        next.passwordHash = hashPassword(input.password);
+      }
+
+      if (next.authEnabled && !next.passwordHash) {
+        throw new Error("Password is required when password protection is enabled");
+      }
+      if (!next.authEnabled) next.passwordHash = "";
+
+      await mkdir(dirname(filePath), { recursive: true });
+      await writeFile(filePath, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+      return next;
+    },
+  };
+}
+
+function normalizeSettings(input: SettingsInput = {}): PluginSettings {
+  const port = Number.parseInt(String(input.port ?? DEFAULT_SETTINGS.port), 10);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error("port must be an integer from 1-65535");
+  }
+  return {
+    autoStart: Boolean(input.autoStart ?? DEFAULT_SETTINGS.autoStart),
+    host: String(input.host || DEFAULT_SETTINGS.host).trim() || DEFAULT_SETTINGS.host,
+    port,
+    authEnabled: Boolean(input.authEnabled ?? DEFAULT_SETTINGS.authEnabled),
+    basicAuthUser: String(input.basicAuthUser || DEFAULT_SETTINGS.basicAuthUser).trim() || DEFAULT_SETTINGS.basicAuthUser,
+    passwordHash: String(input.passwordHash || ""),
+    preferredLanAddress: String(input.preferredLanAddress || ""),
+    lastServerStatus: isServerStatus(input.lastServerStatus)
+      ? input.lastServerStatus
+      : DEFAULT_SETTINGS.lastServerStatus,
+  };
+}
+
+function isServerStatus(value: unknown): value is ServerStatus {
+  return value === "running" || value === "stopped" || value === "error";
+}
+
+function hashPassword(value: unknown) {
+  return createHash("sha256").update(String(value)).digest("hex");
+}
+
+function getLanAddresses() {
+  const output: LanAddress[] = [];
+  for (const [label, entries] of Object.entries(networkInterfaces()) as Array<[string, NetworkEntry[]]>) {
+    for (const entry of entries || []) {
+      if (entry.family === "IPv4" && !entry.internal) output.push({ label, address: entry.address });
+    }
+  }
+  return output;
+}
+
+function buildAccessUrl({ host = "0.0.0.0", port = 41532, preferredLanAddress = "", lanAddresses = [] }: {
+  host?: string;
+  lanAddresses?: LanAddress[];
+  port?: number;
+  preferredLanAddress?: string;
+} = {}) {
+  const address = selectLanAddress({ preferredLanAddress, lanAddresses, host });
+  return `http://${address}:${port}`;
+}
+
+function selectLanAddress({ preferredLanAddress = "", lanAddresses = [], host = "0.0.0.0" }: {
+  host?: string;
+  lanAddresses?: LanAddress[];
+  preferredLanAddress?: string;
+} = {}) {
+  if (preferredLanAddress && lanAddresses.some((entry) => entry.address === preferredLanAddress)) return preferredLanAddress;
+  if (host === "127.0.0.1" || host === "localhost") return "localhost";
+  if (host && host !== "0.0.0.0") return host;
+  if (lanAddresses[0]?.address) return lanAddresses[0].address;
+  return "localhost";
+}
+
+function createServerManager({
+  settingsStore = createSettingsStore(),
+  viewerServerFactory = createViewerServer,
+  lanAddressProvider = getLanAddresses,
+}: ServerManagerOptions = {}) {
+  let viewer: ManagedViewer | null = null;
+  let stateOverride: ServerStatus = "stopped";
+  let lastError = "";
+
+  async function snapshot(settings: PluginSettings | null = null) {
+    const loadedSettings = settings || await settingsStore.load();
+    const lanAddresses = lanAddressProvider();
+    const status = viewer ? viewer.status() : {
+      state: stateOverride,
+      host: loadedSettings.host,
+      port: loadedSettings.port,
+      lastError,
+    };
+    return {
+      ...status,
+      settings: loadedSettings,
+      lanAddresses,
+      url: buildAccessUrl({
+        host: loadedSettings.host,
+        port: status.port || loadedSettings.port,
+        preferredLanAddress: loadedSettings.preferredLanAddress,
+        lanAddresses,
+      }),
+      lastError: status.lastError || lastError,
+    };
+  }
+
+  async function createViewer(settings: PluginSettings) {
+    return viewerServerFactory({
+      host: settings.host,
+      port: settings.port,
+      basicAuthUsername: settings.basicAuthUser,
+      passwordHash: settings.authEnabled ? settings.passwordHash : "",
+    });
+  }
+
+  function needsServerRestart(prev: PluginSettings, next: PluginSettings) {
+    return prev.host !== next.host
+      || prev.port !== next.port
+      || prev.authEnabled !== next.authEnabled
+      || prev.basicAuthUser !== next.basicAuthUser
+      || prev.passwordHash !== next.passwordHash;
+  }
+
+  return {
+    async init() {
+      const settings = await settingsStore.load();
+      if (settings.autoStart) return this.start();
+      return snapshot(settings);
+    },
+
+    async start() {
+      const settings = await settingsStore.load();
+      if (!viewer) viewer = await createViewer(settings);
+      try {
+        await viewer.start();
+        stateOverride = "running";
+        lastError = "";
+      } catch (error) {
+        stateOverride = "error";
+        lastError = error.message || String(error);
+      }
+      return snapshot(settings);
+    },
+
+    async stop() {
+      if (viewer) {
+        await viewer.stop();
+        viewer = null;
+      }
+      stateOverride = "stopped";
+      return snapshot();
+    },
+
+    async restart() {
+      await this.stop();
+      return this.start();
+    },
+
+    async saveSettings(input: SettingsInput) {
+      const wasRunning = viewer?.status().state === "running";
+      const current = await settingsStore.load();
+      const settings = await settingsStore.save(input);
+      if (wasRunning && needsServerRestart(current, settings)) {
+        await this.stop();
+        return this.start();
+      }
+      return snapshot(settings);
+    },
+
+    async status() {
+      return snapshot();
+    },
+  };
+}
+
+module.exports = {
+  DEFAULT_SETTINGS,
+  buildAccessUrl,
+  createServerManager,
+  createSettingsStore,
+  getLanAddresses,
+  hashPassword,
+  normalizeSettings,
+};

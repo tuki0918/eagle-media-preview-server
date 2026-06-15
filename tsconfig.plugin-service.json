@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "strict": false,
+    "noImplicitAny": false,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "types": ["node"],
+    "rootDir": "plugin/service",
+    "outDir": "dist/.generated/plugin-service"
+  },
+  "include": ["plugin/service/*.cts"],
+  "exclude": ["plugin/service/*.test.cts"]
+}
