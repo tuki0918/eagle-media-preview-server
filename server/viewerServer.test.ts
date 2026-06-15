@@ -446,6 +446,17 @@ test("createViewerServer logs out cookie sessions", async () => {
     assert.equal(missingUsername.status, 401);
     assert.deepEqual(await missingUsername.json(), { error: "Invalid username or password" });
 
+    const wrongPassword = await fetch(`${origin}/api/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: origin,
+      },
+      body: JSON.stringify({ username: "eagle", password: "wrong" }),
+    });
+    assert.equal(wrongPassword.status, 401);
+    assert.deepEqual(await wrongPassword.json(), { error: "Invalid username or password" });
+
     const login = await fetch(`${origin}/api/auth/login`, {
       method: "POST",
       headers: {

@@ -36,6 +36,7 @@ const PASSWORD_HASH_ALGORITHM = "sha256";
 const PASSWORD_HASH_KEY_LENGTH = 32;
 const AUTH_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 const AUTH_USER_CACHE = Symbol("authUser");
+const INVALID_LOGIN_MESSAGE = "Invalid username or password";
 const MIN_PASSWORD_HASH_ITERATIONS = 100000;
 const MAX_PASSWORD_HASH_ITERATIONS = 1000000;
 
@@ -480,7 +481,7 @@ async function handleAuthRoutes(req, url, res, auth: AuthContext) {
     const body = await readJson(req);
     const user = findPasswordUser(String(body.username || ""), String(body.password || ""), auth);
     if (!user) {
-      sendJson(res, 401, { error: "Invalid username or password" });
+      sendJson(res, 401, { error: INVALID_LOGIN_MESSAGE });
       return true;
     }
     pruneAuthSessions(auth.authSessions);
