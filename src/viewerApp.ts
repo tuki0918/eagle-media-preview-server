@@ -9,7 +9,7 @@ import {
   playableVideoExts,
   textPreviewExts,
 } from "./viewer/constants";
-import { debounce, getJson, postJson } from "./viewer/api";
+import { ApiError, debounce, getJson, postJson } from "./viewer/api";
 import {
   flattenFolders,
   isTimedMedia,
@@ -199,6 +199,7 @@ async function connect(credentials?: { password: string; username: string }) {
     showViewer(data);
     await Promise.all([loadFolders(), loadItems()]);
   } catch (error) {
+    if (handleAuthError(error)) return;
     showLogin();
     setConnectMessage(error.message, true);
   } finally {
@@ -255,6 +256,18 @@ function normalizePermissions(value: AuthStatusResponse["permissions"], readFall
     writeMetadata: Boolean(value?.writeMetadata),
     writeRating: Boolean(value?.writeRating),
   };
+}
+
+function handleAuthError(error: unknown) {
+  if (!(error instanceof ApiError) || error.status !== 401) return false;
+  authAuthenticated = false;
+  authUser = null;
+  state.permissions = defaultPermissions(!authRequired);
+  clearViewerSessionState();
+  renderLoginConnect();
+  showLogin();
+  setConnectMessage(error.message, true);
+  return true;
 }
 
 function showLogin() {
@@ -364,6 +377,7 @@ async function loadItems({ append = false }: LoadItemsOptions = {}) {
     syncPreviewFromState();
   } catch (error) {
     if (requestId !== state.requestId) return;
+    if (handleAuthError(error)) return;
     state.tilesLoadingMore = false;
     if (append) {
       renderTilesSentinel(error.message);

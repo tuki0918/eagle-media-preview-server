@@ -1,3 +1,13 @@
+export class ApiError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 export async function getJson<T = unknown>(url: string): Promise<T> {
   return requestJson<T>(url);
 }
@@ -13,7 +23,7 @@ export async function postJson<T = unknown>(url: string, body: unknown): Promise
 async function requestJson<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, options);
   const data = await response.json() as unknown;
-  if (!response.ok) throw new Error(responseErrorMessage(data, response.status));
+  if (!response.ok) throw new ApiError(response.status, responseErrorMessage(data, response.status));
   return data as T;
 }
 
