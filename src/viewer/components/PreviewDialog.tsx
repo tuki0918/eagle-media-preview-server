@@ -79,6 +79,11 @@ export function PreviewDialog() {
       try {
         if (!dialog.open) {
           dialog.showModal();
+          requestAnimationFrame(() => {
+            if (document.activeElement instanceof HTMLElement && dialog.contains(document.activeElement)) {
+              document.activeElement.blur();
+            }
+          });
         }
         return;
       } catch {

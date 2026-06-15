@@ -51,6 +51,10 @@
     font: inherit;
   }
 
+  button {
+    -webkit-tap-highlight-color: transparent;
+  }
+
   button,
   select {
     @apply cursor-pointer;
@@ -73,6 +77,13 @@
     @apply outline-0;
     border-color: rgba(37, 99, 235, 0.72);
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  }
+
+  @media (hover: none) and (pointer: coarse) {
+    button:focus-visible {
+      border-color: revert;
+      box-shadow: none;
+    }
   }
 
   [hidden] {
