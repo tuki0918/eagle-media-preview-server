@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 
-function Icon({ children }: { children: ReactNode }) {
+function Icon({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
+    <svg className={`h-5 w-5 fill-none stroke-current [stroke-linecap:round] [stroke-linejoin:round] [stroke-width:2] ${className}`.trim()} viewBox="0 0 24 24" aria-hidden="true">
       {children}
     </svg>
   );
@@ -38,7 +38,7 @@ export function PanelLeftIcon() {
 
 export function SearchIcon() {
   return (
-    <Icon>
+    <Icon className="flex-none text-app-muted">
       <circle cx="11" cy="11" r="8" />
       <path d="m21 21-4.3-4.3" />
     </Icon>

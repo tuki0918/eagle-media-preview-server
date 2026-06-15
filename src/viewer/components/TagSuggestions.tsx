@@ -26,7 +26,7 @@ export function TagSuggestions({ hidden, items, onSelect }: Partial<TagSuggestio
         <button
           key={item.name}
           type="button"
-          className="tag-suggestion"
+          className="tag-suggestion grid min-h-[34px] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md border-0 bg-transparent px-2.5 text-left text-[13px] text-app-text hover:bg-app-accent-soft hover:text-app-accent-strong"
           role="option"
           onPointerDown={(event) => {
             event.preventDefault();
@@ -34,7 +34,7 @@ export function TagSuggestions({ hidden, items, onSelect }: Partial<TagSuggestio
           }}
         >
           <span>{item.name || ""}</span>
-          {Number.isFinite(item.count) ? <span className="tag-suggestion-count">{Number(item.count).toLocaleString()}</span> : null}
+          {Number.isFinite(item.count) ? <span className="tag-suggestion-count text-app-muted [font-variant-numeric:tabular-nums]">{Number(item.count).toLocaleString()}</span> : null}
         </button>
       ))}
     </div>

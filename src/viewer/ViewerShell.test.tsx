@@ -125,7 +125,7 @@ describe("ViewerAppShell", () => {
     expect(button).toContain("disabled");
     expect(message).toContain('id="connectMessage"');
     expect(message).toContain("No Eagle");
-    expect(message).toContain("error-text");
+    expect(message).toContain("text-app-danger");
   });
 
   test("exports independently renderable shell components", () => {
@@ -159,7 +159,7 @@ describe("ViewerAppShell", () => {
   test("renders tag chips as a reusable component", () => {
     const html = renderToStaticMarkup(<TagChips tags={["alpha"]} onRemove={() => {}} />);
 
-    expect(html).toContain('class="tag-chip"');
+    expect(html).toContain('class="tag-chip ');
     expect(html).toContain("Remove tag alpha");
   });
 
@@ -226,8 +226,8 @@ describe("ViewerAppShell", () => {
   test("renders tag suggestions as a reusable component", () => {
     const html = renderToStaticMarkup(<TagSuggestions items={[{ name: "alpha", count: 12 }]} onSelect={() => {}} />);
 
-    expect(html).toContain('class="tag-suggestion"');
-    expect(html).toContain('class="tag-suggestion-count"');
+    expect(html).toContain('class="tag-suggestion ');
+    expect(html).toContain('class="tag-suggestion-count ');
   });
 
   test("renders result state as a reusable component", () => {

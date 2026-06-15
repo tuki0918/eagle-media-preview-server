@@ -31,7 +31,7 @@ export function LoginView({ hidden = false }: LoginViewProps) {
             alt=""
             aria-hidden="true"
           />
-          <h1>Media Preview Server</h1>
+          <h1 className="m-0 whitespace-nowrap text-[19px] font-[760] leading-[1.15] tracking-[0]">Media Preview Server</h1>
           <p className="m-0 whitespace-nowrap text-xs leading-[1.35] text-app-muted">A local media server for your Eagle library.</p>
         </div>
 
@@ -52,7 +52,7 @@ export function ConnectButton({ disabled }: ConnectButtonProps) {
   return (
     <button
       id="connectButton"
-      className="inline-flex min-h-[46px] items-center justify-center gap-[9px] rounded-app border border-app-accent bg-app-accent text-sm font-[720] text-white shadow-[0_10px_22px_rgba(37,99,235,0.18)]"
+      className="inline-flex min-h-[46px] items-center justify-center gap-[9px] rounded-app border border-app-accent bg-app-accent text-sm font-[720] text-white shadow-[0_10px_22px_rgba(37,99,235,0.18)] hover:border-app-accent-strong hover:bg-app-accent-strong disabled:border-app-border disabled:bg-app-surface-strong disabled:text-app-muted"
       type="submit"
       disabled={disabled ?? state.disabled}
     >
@@ -69,7 +69,7 @@ export function ConnectMessage({ isError, message }: ConnectMessageProps) {
   return (
     <p
       id="connectMessage"
-      className={`connect-message fixed bottom-[max(24px,env(safe-area-inset-bottom))] left-1/2 z-10 w-[min(320px,calc(100vw-32px))] -translate-x-1/2 px-2 text-center text-app-muted${displayIsError ? " error-text" : ""}`}
+      className={`connect-message fixed bottom-[max(24px,env(safe-area-inset-bottom))] left-1/2 z-10 w-[min(320px,calc(100vw-32px))] -translate-x-1/2 px-2 text-center text-app-muted empty:hidden${displayIsError ? " text-app-danger" : ""}`}
       aria-live="polite"
     >
       {displayMessage}

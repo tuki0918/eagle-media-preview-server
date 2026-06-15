@@ -81,105 +81,12 @@
 }
 
 @layer components {
-.login-panel {
-  width: min(320px, 100%);
-  @apply grid gap-[18px] rounded-[14px] border border-app-border backdrop-blur-xl;
-  padding: 42px 30px 30px;
-  background: rgba(255, 255, 255, 0.95);
-  box-shadow: var(--shadow);
-}
-
-.login-panel h1 {
-  margin: 0;
-  font-size: 19px;
-  font-weight: 760;
-  letter-spacing: 0;
-  white-space: nowrap;
-}
-
-.login-panel p {
-  margin: 0;
-  @apply text-xs text-app-muted;
-  line-height: 1.35;
-  white-space: nowrap;
-}
-
-.login-panel button {
-  @apply inline-flex min-h-[46px] items-center justify-center gap-[9px] rounded-app border border-app-accent bg-app-accent text-sm font-[720] text-white;
-  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.18);
-}
-
-#connectButton,
-#connectButton span {
-  color: #fff;
-}
-
-.login-panel button svg {
-  width: 18px;
-  height: 18px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 2;
-}
-
-.login-panel button:not(:disabled):hover {
-  @apply border-app-accent-strong bg-app-accent-strong;
-}
-
-.login-panel button:disabled {
-  @apply border-app-border bg-app-surface-strong text-app-muted;
-}
-
-.connect-message {
-  display: none;
-  position: fixed;
-  left: 50%;
-  bottom: max(24px, env(safe-area-inset-bottom));
-  @apply z-10 px-2;
-  width: min(320px, calc(100vw - 32px));
-  transform: translateX(-50%);
-}
-
-.login-panel .connect-message {
-  @apply text-app-muted;
-  text-align: center;
-  white-space: normal;
-}
-
-.connect-message:not(:empty) {
-  display: block;
-}
-
-.connect-message.error-text {
-  @apply text-app-danger;
-}
-
 h1 {
   margin: 0;
   font-size: 19px;
   line-height: 1.15;
 }
 
-.controls {
-  @apply grid gap-4 pb-2;
-}
-
-.search-row {
-  @apply grid items-stretch gap-3;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-}
-
-.search-box {
-  @apply relative flex min-h-[50px] items-center gap-2.5 rounded-app border border-app-border bg-app-surface px-4 py-[7px] shadow-app-soft;
-}
-
-.search-box:hover {
-  @apply border-app-border-strong;
-}
-
-.search-box svg,
 .icon-button svg {
   @apply h-5 w-5;
   fill: none;
@@ -188,100 +95,6 @@ h1 {
   stroke-linejoin: round;
   stroke-width: 2;
 }
-
-.search-box svg {
-  @apply flex-none text-app-muted;
-}
-
-.search-box input {
-  @apply w-full border-0 bg-transparent text-[15px] text-app-text outline-0;
-}
-
-.filter-row {
-  @apply grid gap-6;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.filter-row label {
-  @apply grid gap-2;
-}
-
-.filter-row label > span {
-  @apply text-xs font-[760] text-app-text;
-}
-
-.filter-reset-button,
-.filter-toggle-button {
-  @apply min-h-[50px] w-[50px] min-w-[50px] self-stretch;
-}
-
-.filter-reset-button:disabled {
-  @apply cursor-default opacity-[0.42];
-}
-
-.search-composer {
-  @apply flex min-w-0 flex-auto flex-wrap items-center gap-x-2 gap-y-1.5;
-}
-
-.unified-search-input {
-  @apply min-h-[34px] min-w-[180px] flex-[1_1_220px];
-}
-
-.tag-chips {
-  @apply flex min-h-6 flex-wrap gap-1.5;
-}
-
-.tag-chip {
-  @apply inline-flex min-h-7 max-w-full items-center gap-1.5 rounded-app border border-[rgba(37,99,235,0.18)] bg-app-accent-soft text-xs font-[720] text-app-accent-strong;
-  padding: 3px 4px 3px 9px;
-}
-
-.tag-chip > span {
-  @apply min-w-0 overflow-hidden text-ellipsis whitespace-nowrap;
-}
-
-.tag-chip button {
-  @apply inline-grid h-[22px] w-[22px] place-items-center rounded-md border-0 bg-transparent text-current;
-}
-
-.tag-chip button:hover {
-  @apply bg-[rgba(37,99,235,0.12)];
-}
-
-.tag-chip svg {
-  @apply h-3.5 w-3.5;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 2;
-}
-
-.tag-suggestions {
-  @apply absolute z-20 grid max-h-[280px] overflow-auto rounded-app border border-app-border bg-app-surface p-1.5 shadow-app-soft;
-  top: calc(100% + 6px);
-  left: 42px;
-  right: 12px;
-}
-
-.tag-suggestions[hidden] {
-  display: none;
-}
-
-.tag-suggestion {
-  @apply grid min-h-[34px] items-center gap-3 rounded-md border-0 bg-transparent px-2.5 text-left text-[13px] text-app-text;
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-
-.tag-suggestion:hover {
-  @apply bg-app-accent-soft text-app-accent-strong;
-}
-
-.tag-suggestion-count {
-  @apply text-app-muted;
-  font-variant-numeric: tabular-nums;
-}
-
 
 select,
 .pager button,
@@ -1478,58 +1291,6 @@ select:hover {
 }
 
 @media (max-width: 540px) {
-  .search-row {
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    gap: 8px;
-  }
-
-  .search-box {
-    min-height: 44px;
-    padding: 5px 10px;
-    @apply gap-2;
-  }
-
-  .search-composer {
-    flex-wrap: nowrap;
-    overflow: hidden;
-    @apply gap-1.5;
-  }
-
-  .tag-chips {
-    flex: 0 1 auto;
-    flex-wrap: nowrap;
-    max-width: 58%;
-    min-height: 24px;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .tag-chips::-webkit-scrollbar {
-    display: none;
-  }
-
-  .tag-chip {
-    flex: 0 0 auto;
-    @apply max-w-[132px];
-  }
-
-  .unified-search-input {
-    min-width: 0;
-    flex-basis: 72px;
-  }
-
-  .filter-reset-button,
-  .filter-toggle-button {
-    width: 44px;
-    min-width: 44px;
-    min-height: 44px;
-  }
-
-  .filter-row {
-    grid-template-columns: 1fr;
-    @apply gap-3;
-  }
-
   .media-tiles {
     column-count: 3;
     column-width: auto;

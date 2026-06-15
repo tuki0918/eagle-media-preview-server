@@ -90,7 +90,7 @@ test("public login no longer renders advanced Eagle connection settings", async 
 
   assert.match(login, /class="[^"]*\bapp-logo\b/);
   assert.match(login, /src="[^"]*icon_on\.svg/);
-  assert.match(login, /<h1>Media Preview Server<\/h1>/);
+  assert.match(login, /<h1 class="[^"]*">Media Preview Server<\/h1>/);
   assert.match(login, /A local media server for your Eagle library\./);
   assert.doesNotMatch(login, /id="viewerPasswordField"/);
   assert.doesNotMatch(login, /id="viewerPasswordInput"/);
@@ -115,6 +115,7 @@ test("public UI no longer shows connect lock icon or connection settings button"
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
   const button = renderToStaticMarkup(createElement(ConnectButton, { disabled: false }));
   const message = renderToStaticMarkup(createElement(ConnectMessage, { message: "Connecting", isError: false }));
+  const login = renderToStaticMarkup(createElement(LoginView, { hidden: false }));
   const controls = renderToStaticMarkup(createElement(SearchControls, {
     filtersOpen: true,
     folders: [{ id: "folder-1", name: "Folder 1", imageCount: 2 }],
@@ -166,10 +167,12 @@ test("public UI no longer shows connect lock icon or connection settings button"
   assert.doesNotMatch(html, /id="showHeaderButton"/);
   assert.doesNotMatch(app, /setHeaderHidden/);
   assert.doesNotMatch(app, /setConnectionStatus/);
-  assert.match(css, /\.login-panel\s*\{[^}]*width:\s*min\(320px,\s*100%\);[^}]*padding:\s*42px 30px 30px;/s);
-  assert.match(css, /\.connect-message\s*\{[^}]*display:\s*none;[^}]*position:\s*fixed;[^}]*left:\s*50%;[^}]*bottom:\s*max\(24px,\s*env\(safe-area-inset-bottom\)\);[^}]*transform:\s*translateX\(-50%\);/s);
-  assert.match(css, /\.login-panel \.connect-message\s*\{[^}]*text-align:\s*center;[^}]*white-space:\s*normal;/s);
-  assert.match(css, /\.connect-message:not\(:empty\)\s*\{[^}]*display:\s*block;/s);
+  assert.match(login, /w-\[min\(320px,100%\)\]/);
+  assert.match(login, /pt-\[42px\]/);
+  assert.match(message, /bottom-\[max\(24px,env\(safe-area-inset-bottom\)\)\]/);
+  assert.match(message, /empty:hidden/);
+  assert.doesNotMatch(css, /\.login-panel\s*\{/);
+  assert.doesNotMatch(css, /\.connect-message\s*\{/);
   assert.match(html, /className="status-line grid grid-cols-\[minmax\(0,1fr\)_auto\]/);
   assert.match(html, /max-\[540px\]:gap-2 max-\[540px\]:text-xs/);
   assert.doesNotMatch(css, /\.status-line\s*\{/);
@@ -636,20 +639,16 @@ test("public UI supports tag filter chips", async () => {
   assert.match(app, /function removeTagFilter\(tag[^)]*\) \{/);
   assert.match(app, /function renderTagChips\(\) \{/);
   assert.match(app, /Object\.assign\(state, resetFilterState\(\)\);/);
-  assert.match(css, /\.search-composer\s*\{/);
-  assert.match(css, /\.search-row\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) auto auto;/s);
-  assert.match(css, /\.filter-reset-button,\s*\.filter-toggle-button\s*\{/);
-  assert.match(css, /\.filter-reset-button:disabled\s*\{/);
-  assert.match(css, /\.unified-search-input\s*\{/);
+  assert.match(controls, /search-composer[^"]*max-\[540px\]:flex-nowrap/);
+  assert.match(controls, /search-row[^"]*grid-cols-\[minmax\(0,1fr\)_auto_auto\]/);
+  assert.match(controls, /filter-reset-button[^"]*max-\[540px\]:w-11/);
+  assert.match(controls, /filter-reset-button[^"]*disabled:opacity-\[0\.42\]/);
+  assert.match(controls, /unified-search-input[^"]*max-\[540px\]:basis-\[72px\]/);
   assert.doesNotMatch(css, /\.tag-input\s*\{/);
-  assert.match(css, /\.tag-suggestions\s*\{/);
-  assert.match(css, /\.tag-chips\s*\{/);
-  assert.match(css, /\.tag-chip\s*\{/);
-  assert.match(css, /@media \(max-width: 540px\)[\s\S]*\.search-box\s*\{[^}]*min-height:\s*44px;[^}]*padding:\s*5px 10px;/);
-  assert.match(css, /@media \(max-width: 540px\)[\s\S]*\.search-composer\s*\{[^}]*flex-wrap:\s*nowrap;[^}]*overflow:\s*hidden;/);
-  assert.match(css, /@media \(max-width: 540px\)[\s\S]*\.tag-chips\s*\{[^}]*flex-wrap:\s*nowrap;[^}]*overflow-x:\s*auto;/);
-  assert.match(css, /@media \(max-width: 540px\)[\s\S]*\.unified-search-input\s*\{[^}]*min-width:\s*0;[^}]*flex-basis:\s*72px;/);
-  assert.match(css, /@media \(max-width: 540px\)[\s\S]*\.filter-reset-button,\s*\.filter-toggle-button\s*\{[^}]*width:\s*44px;[^}]*min-width:\s*44px;[^}]*min-height:\s*44px;/);
+  assert.doesNotMatch(css, /\.tag-suggestions\s*\{/);
+  assert.doesNotMatch(css, /\.tag-chips\s*\{/);
+  assert.doesNotMatch(css, /\.tag-chip\s*\{/);
+  assert.doesNotMatch(css, /@media \(max-width: 540px\)[\s\S]*\.search-box\s*\{/);
 });
 
 test("public UI adds a masonry tiles view with infinite loading", async () => {
