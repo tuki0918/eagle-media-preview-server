@@ -27,12 +27,14 @@ interface AuthUser {
 }
 
 interface AuthSession {
+  expiresAt: number;
   role: UserRole;
   username: string;
 }
 
 const PASSWORD_HASH_ALGORITHM = "sha256";
 const PASSWORD_HASH_KEY_LENGTH = 32;
+const AUTH_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 const MIN_PASSWORD_HASH_ITERATIONS = 100000;
 const MAX_PASSWORD_HASH_ITERATIONS = 1000000;
 
@@ -262,6 +264,7 @@ function createViewerServer({
     },
 
     status() {
+      pruneAuthSessions(authSessions);
       return {
         state,
         host,
@@ -438,6 +441,7 @@ interface AuthContext {
 
 async function handleAuthRoutes(req, url, res, auth: AuthContext) {
   if (url.pathname === "/api/auth/status") {
+    pruneAuthSessions(auth.authSessions);
     const user = authenticatedUser(req, auth);
     const authenticated = !authRequired(auth) || Boolean(user);
     sendJson(res, 200, {
@@ -465,10 +469,14 @@ async function handleAuthRoutes(req, url, res, auth: AuthContext) {
       return true;
     }
     const token = randomUUID();
-    auth.authSessions.set(token, { role: user.role, username: user.username });
+    auth.authSessions.set(token, {
+      expiresAt: Date.now() + AUTH_SESSION_MAX_AGE_SECONDS * 1000,
+      role: user.role,
+      username: user.username,
+    });
     res.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
-      "Set-Cookie": `viewer_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000`,
+      "Set-Cookie": `viewer_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${AUTH_SESSION_MAX_AGE_SECONDS}`,
     });
     res.end(JSON.stringify({
       authenticated: true,
@@ -730,9 +738,29 @@ function hasAdminAccess(req, auth: AuthContext) {
 function authenticatedUser(req, auth: AuthContext): AuthSession | null {
   if (!authRequired(auth)) return null;
   const basicUser = basicAuthUser(req.headers.authorization || "", auth);
-  if (basicUser) return { role: basicUser.role, username: basicUser.username };
+  if (basicUser) {
+    return {
+      expiresAt: Date.now() + AUTH_SESSION_MAX_AGE_SECONDS * 1000,
+      role: basicUser.role,
+      username: basicUser.username,
+    };
+  }
   const token = parseCookies(req.headers.cookie || "").viewer_session;
-  return token ? auth.authSessions.get(token) || null : null;
+  if (!token) return null;
+  const session = auth.authSessions.get(token);
+  if (!session) return null;
+  if (session.expiresAt <= Date.now()) {
+    auth.authSessions.delete(token);
+    return null;
+  }
+  return session;
+}
+
+function pruneAuthSessions(authSessions: Map<string, AuthSession>) {
+  const now = Date.now();
+  for (const [token, session] of authSessions) {
+    if (session.expiresAt <= now) authSessions.delete(token);
+  }
 }
 
 function basicAuthUser(header, auth: AuthContext): AuthUser | null {

@@ -377,6 +377,55 @@ test("createViewerServer logs out cookie sessions", async () => {
   }
 });
 
+test("createViewerServer expires cookie sessions server side", async () => {
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    passwordHash: sha256("secret"),
+    basicAuthUsername: "eagle",
+  });
+  const originalNow = Date.now;
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const origin = `http://127.0.0.1:${status.port}`;
+    const login = await fetch(`${origin}/api/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: origin,
+      },
+      body: JSON.stringify({ username: "eagle", password: "secret" }),
+    });
+    assert.equal(login.status, 200);
+    const cookie = login.headers.get("set-cookie") || "";
+    assert.match(cookie, /Max-Age=2592000/);
+    assert.equal(viewer.status().activeSessions, 1);
+
+    Date.now = () => originalNow() + 31 * 24 * 60 * 60 * 1000;
+    const expired = await fetch(`${origin}/api/auth/status`, {
+      headers: { Cookie: cookie },
+    });
+
+    assert.deepEqual(await expired.json(), {
+      required: true,
+      authenticated: false,
+      user: null,
+      permissions: {
+        manageLibrary: false,
+        read: false,
+        writeMetadata: false,
+        writeRating: false,
+      },
+    });
+    assert.equal(viewer.status().activeSessions, 0);
+  } finally {
+    Date.now = originalNow;
+    await viewer.stop();
+  }
+});
+
 test("createViewerServer returns 400 for invalid JSON request bodies", async () => {
   const viewer = createViewerServer({
     host: "127.0.0.1",
