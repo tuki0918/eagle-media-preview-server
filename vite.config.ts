@@ -2,12 +2,14 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { cp, mkdir, rm } from "node:fs/promises";
 import { resolve } from "node:path";
+import { build as esbuild } from "esbuild";
 
 const distDir = resolve("dist");
 
 function copyPluginPackageAssets() {
   const includeRuntimeAsset = (sourcePath: string) => !/\.test\.(?:cjs|js|ts|tsx)$/.test(sourcePath)
-    && !/\.(?:cts|mts|ts|tsx)$/.test(sourcePath);
+    && !/\.(?:cts|mts|ts|tsx)$/.test(sourcePath)
+    && !/plugin[\\/]app\.(?:js|tsx)$/.test(sourcePath);
 
   return {
     name: "copy-plugin-package-assets",
@@ -22,6 +24,18 @@ function copyPluginPackageAssets() {
         cp("public/favicon.ico", resolve(distDir, "public/favicon.ico")),
         cp("public/assets", resolve(distDir, "public/assets"), { recursive: true }),
       ]);
+      await esbuild({
+        bundle: true,
+        define: {
+          "process.env.NODE_ENV": JSON.stringify("production"),
+        },
+        entryPoints: ["plugin/app.tsx"],
+        format: "iife",
+        jsx: "automatic",
+        outfile: resolve(distDir, "plugin/app.js"),
+        platform: "browser",
+      });
+      await cp(resolve(distDir, "public/styles.css"), resolve(distDir, "plugin/styles.css"));
     },
   };
 }

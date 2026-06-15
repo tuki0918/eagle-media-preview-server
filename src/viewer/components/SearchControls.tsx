@@ -18,6 +18,7 @@ import {
 } from "../shellActions";
 import type { EagleFolder } from "../types";
 import { FolderOptions } from "./FolderOptions";
+import { SearchIcon } from "./Icons";
 import { TagChips } from "./TagChips";
 import { TagSuggestions } from "./TagSuggestions";
 
@@ -64,7 +65,7 @@ export function SearchControls({
     <section className="controls grid gap-4 pb-2" aria-label="Search and filters">
       <div className="search-row grid grid-cols-[minmax(0,1fr)_auto_auto] items-stretch gap-3">
         <div className="search-box relative flex min-h-[50px] items-center gap-2.5 rounded-app border border-app-border bg-app-surface px-4 py-[7px] shadow-app-soft">
-          <span data-lucide="search" />
+          <SearchIcon />
           <div className="search-composer flex min-w-0 flex-auto flex-wrap items-center gap-x-2 gap-y-1.5">
             <TagChips />
             <SearchInput value={displaySearchQuery} />

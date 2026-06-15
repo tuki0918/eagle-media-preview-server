@@ -20,7 +20,6 @@ import {
   previewFileName,
 } from "./viewer/format";
 import { hasActiveFilters, resetFilterState } from "./viewer/filters";
-import { renderLucideIcons } from "./viewer/icons";
 import { itemQueryParams } from "./viewer/itemQuery";
 import { setLoginConnectState } from "./viewer/loginConnectState";
 import {
@@ -99,7 +98,6 @@ export function initViewer() {
 }
 
 async function init() {
-  renderLucideIcons();
   restoreUrlState();
   restoreViewMode();
   setViewerShellActions({

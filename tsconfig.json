@@ -18,5 +18,5 @@
     "noEmit": true,
     "jsx": "react-jsx"
   },
-  "include": ["src", "public/**/*.ts", "plugin/**/*.ts", "server/**/*.ts", "vite.config.ts", "vitest.config.ts"]
+  "include": ["src", "public/**/*.ts", "plugin/**/*.ts", "plugin/**/*.tsx", "server/**/*.ts", "vite.config.ts", "vitest.config.ts"]
 }

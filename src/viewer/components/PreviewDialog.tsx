@@ -8,6 +8,7 @@ import {
 } from "../shellActions";
 import { getPreviewDialogState, subscribePreviewDialogState } from "../previewDialogState";
 import { PreviewBodyHost } from "./PreviewBody";
+import { ChevronLeftIcon, MaximizeIcon, PanelLeftIcon, XIcon } from "./Icons";
 import { PreviewInfoActions, PreviewInfoDetails } from "./PreviewInfo";
 import { PreviewRating } from "./RatingStars";
 import { PreviewMeta, PreviewOriginalName } from "./PreviewText";
@@ -107,7 +108,7 @@ export function PreviewDialog() {
     >
       <div className="dialog-header fixed right-2.5 top-[calc(10px+env(safe-area-inset-top))] z-[4] flex items-center justify-end gap-3 border-0 bg-transparent p-0">
         <button id="backPreview" className="text-icon-button inline-flex min-h-10 items-center gap-2 border-0 bg-transparent px-2 text-sm font-[680] text-app-text" type="button" aria-label="Back to results" onClick={closePreview}>
-          <span data-lucide="chevron-left" />
+          <ChevronLeftIcon />
           <span>Back to Results</span>
         </button>
         <div>
@@ -116,13 +117,13 @@ export function PreviewDialog() {
         </div>
         <div className="dialog-actions flex items-center justify-end gap-2">
           <button id="toggleInfoPreview" className="icon-button inline-grid min-h-10 w-10 flex-[0_0_40px] place-items-center rounded-app border border-app-border bg-app-surface text-app-text" aria-label="Media information" aria-expanded={previewDialogState.infoOpen} title="Media information" onClick={togglePreviewInfo}>
-            <span data-lucide="panel-left" />
+            <PanelLeftIcon />
           </button>
           <button id="fullscreenPreview" className="icon-button inline-grid min-h-10 w-10 flex-[0_0_40px] place-items-center rounded-app border border-app-border bg-app-surface text-app-text" aria-label="Fullscreen" title="Fullscreen" onClick={toggleFullscreen}>
-            <span data-lucide="maximize" />
+            <MaximizeIcon />
           </button>
           <button id="closePreview" className="icon-button inline-grid min-h-10 w-10 flex-[0_0_40px] place-items-center rounded-app border border-app-border bg-app-surface text-app-text" aria-label="Close" title="Close" onClick={closePreview}>
-            <span data-lucide="x" />
+            <XIcon />
           </button>
         </div>
       </div>

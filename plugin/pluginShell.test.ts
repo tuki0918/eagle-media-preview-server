@@ -5,6 +5,10 @@ import path from "node:path";
 
 type PluginRequirePath = (relativePath: string) => string;
 
+async function readPluginAppSource() {
+  return readFile(new URL("./app.tsx", import.meta.url), "utf8");
+}
+
 test("manifest declares an Eagle background service management window", async () => {
   const manifest = JSON.parse(await readFile(new URL("../manifest.json", import.meta.url), "utf8"));
 
@@ -21,48 +25,55 @@ test("manifest declares an Eagle background service management window", async ()
   assert.equal(manifest.main.maximizable, false);
 });
 
-test("plugin window includes management controls instead of the external viewer", async () => {
+test("plugin window renders the management UI from React", async () => {
   const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
-  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
+  const app = await readPluginAppSource();
 
-  for (const id of [
-    "serverPowerInput",
-    "closeWindowButton",
-    "copyUrlButton",
-    "qrCode",
-    "settingsForm",
-    "windowIcon",
-  ]) {
-    assert.match(html, new RegExp(`id="${id}"`));
-  }
-  assert.match(html, /id="windowIcon" class="brand-icon" src="\.\/assets\/icon_off\.svg"/);
-  assert.doesNotMatch(html, /id="statusIcon"/);
-  assert.match(app, /icon_on\.svg/);
-  assert.match(app, /icon_off\.svg/);
+  assert.match(html, /id="root"/);
+  assert.match(html, /<script src="\.\/app\.js"><\/script>/);
+  assert.match(app, /function App\(\)/);
+  assert.match(app, /createRoot\(root\)\.render/);
+  assert.match(app, /Media Preview Server/);
+  assert.match(app, /Start or stop server/);
+  assert.match(app, /Endpoint URL/);
+  assert.match(app, /Quick Access \(QR\)/);
+  assert.match(app, /<SectionHeading icon=\{<SettingsIcon \/>\}>Settings<\/SectionHeading>/);
+  assert.match(app, /src=\{serverState === "running" \? "\.\/assets\/icon_on\.svg" : "\.\/assets\/icon_off\.svg"\}/);
   assert.doesNotMatch(html, /id="requestLogBody"/);
   assert.doesNotMatch(html, /id="requestLogEnabledInput"/);
   assert.doesNotMatch(html, /id="grid"/);
 });
 
+test("plugin app keeps Eagle Node API compatibility with a classic script", async () => {
+  const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
+  const app = await readPluginAppSource();
+
+  assert.match(html, /<script src="\.\/app\.js"><\/script>/);
+  assert.doesNotMatch(html, /type="module"/);
+  assert.match(app, /typeof window\.require !== "function"/);
+  assert.match(app, /window\.require\(runtimePath\)/);
+  assert.match(app, /window\.require\(qrcodePath\)/);
+});
+
 test("settings stay expanded and endpoint opens externally", async () => {
   const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
-  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
+  const app = await readPluginAppSource();
 
-  assert.match(html, /id="settingsForm" class="settings-panel"/);
+  assert.match(app, /<form/);
+  assert.match(app, /openEndpointUrl/);
+  assert.match(app, /eagle\?\.shell\?\.openExternal/);
   assert.doesNotMatch(html, /settingsToggleButton/);
-  assert.doesNotMatch(html, /settings-icon/);
-  assert.match(app, /eagle\.shell\.openExternal/);
   assert.doesNotMatch(app, /toggleSettings/);
   assert.doesNotMatch(app, /setMessage\("Updated"\)/);
 });
 
 test("plugin copy URL uses Eagle clipboard API directly", async () => {
-  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
+  const app = await readPluginAppSource();
 
   assert.match(app, /async function copyAccessUrl\(\)/);
-  assert.match(app, /eagle\.clipboard\.writeText/);
+  assert.match(app, /eagle\?\.clipboard\?\.writeText/);
   assert.match(app, /if \(!globalThis\.eagle\?\.clipboard\?\.writeText\)/);
-  assert.match(app, /await eagle\.clipboard\.writeText\(value\);/);
+  assert.match(app, /await globalThis\.eagle\.clipboard\.writeText\(status\.url\);/);
   assert.match(app, /Clipboard API is unavailable in this Eagle window/);
   assert.doesNotMatch(app, /eagle\.clipboard\.readText/);
   assert.doesNotMatch(app, /navigator\.clipboard\?\.writeText/);
@@ -72,7 +83,7 @@ test("plugin copy URL uses Eagle clipboard API directly", async () => {
 
 test("plugin window does not expose an unused shared URL expiration setting", async () => {
   const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
-  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
+  const app = await readPluginAppSource();
   const runtime = await readFile(new URL("./service/runtime.cjs", import.meta.url), "utf8");
   const settingsStore = await readFile(new URL("./service/settingsStore.ts", import.meta.url), "utf8");
 
@@ -84,16 +95,9 @@ test("plugin window does not expose an unused shared URL expiration setting", as
   assert.doesNotMatch(settingsStore, /expire|expires|expiry|expiration|ttl/i);
 });
 
-test("plugin window loads a classic script for Eagle Node API compatibility", async () => {
-  const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
-
-  assert.match(html, /<script src="\.\/app\.js"><\/script>/);
-  assert.doesNotMatch(html, /type="module"/);
-});
-
 test("plugin window no longer renders diagnostics UI", async () => {
   const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
-  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
+  const app = await readPluginAppSource();
 
   assert.doesNotMatch(html, /diagnostics-panel/);
   assert.doesNotMatch(html, /id="diagnosticsLog"/);
@@ -124,36 +128,25 @@ test("plugin server serves text and markdown media as inline raw text", async ()
 });
 
 test("plugin app resolves CommonJS runtime from the plugin file location", async () => {
-  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
+  const app = await readPluginAppSource();
 
-  assert.match(app, /document\.currentScript\?\.src/);
-  assert.match(app, /require\(runtimePath\)/);
+  assert.match(app, /document\.currentScript\?\.getAttribute\("src"\)/);
+  assert.match(app, /pluginRequirePath\("service\/runtime\.cjs"\)/);
+  assert.match(app, /pluginRequirePath\("vendor\/qrcode-generator\.cjs"\)/);
 });
 
 test("plugin app animates the stopped status text while a restart is busy", async () => {
-  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
+  const app = await readPluginAppSource();
 
   assert.match(app, /const busyStoppedFrames = Object\.freeze\(\["\.", "\.\.", "\.\.\.", "\.\.\.\.", "\.\.\.\.\."\]\);/);
-  assert.match(app, /function startBusyStoppedAnimation\(\)/);
-  assert.match(app, /function stopBusyStoppedAnimation\(\)/);
-  assert.match(app, /setInterval\(/);
-  assert.match(app, /busyStoppedFrames\[busyStoppedFrameIndex\]/);
+  assert.match(app, /const \[busyFrame, setBusyFrame\] = useState\(0\);/);
+  assert.match(app, /window\.setInterval\(\(\) => \{/);
+  assert.match(app, /busyStoppedFrames\[busyFrame\]/);
   assert.doesNotMatch(app, /Stopped\.\.\./);
 });
 
 test("plugin app resolves Windows drive paths without a leading slash", async () => {
-  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
-  const functionSource = app.match(/function pluginRequirePath\(relativePath\) \{[\s\S]*?\n\}/)?.[0];
-  assert.ok(functionSource);
-
-  const pluginRequirePath = Function("require", "document", "location", `${functionSource}; return pluginRequirePath;`)(
-    (name: string) => {
-      if (name === "path") return path.win32;
-      throw new Error(`Unexpected require: ${name}`);
-    },
-    { currentScript: null },
-    { href: "eagle://plugin/index.html", pathname: "/E:/github.com/xxx/eagle-media-preview-server/plugin/index.html" },
-  );
+  const pluginRequirePath = createPluginRequirePath("/E:/github.com/xxx/eagle-media-preview-server/plugin/index.html");
 
   assert.equal(
     pluginRequirePath("service/runtime.cjs"),
@@ -162,18 +155,7 @@ test("plugin app resolves Windows drive paths without a leading slash", async ()
 });
 
 test("plugin app resolves Windows drive paths when Eagle exposes backslashes", async () => {
-  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
-  const functionSource = app.match(/function pluginRequirePath\(relativePath\) \{[\s\S]*?\n\}/)?.[0];
-  assert.ok(functionSource);
-
-  const pluginRequirePath = Function("require", "document", "location", `${functionSource}; return pluginRequirePath;`)(
-    (name: string) => {
-      if (name === "path") return path.win32;
-      throw new Error(`Unexpected require: ${name}`);
-    },
-    { currentScript: null },
-    { href: "eagle://plugin/index.html", pathname: "\\E:\\github.com\\xxx\\eagle-media-preview-server\\plugin\\index.html" },
-  );
+  const pluginRequirePath = createPluginRequirePath("\\E:\\github.com\\xxx\\eagle-media-preview-server\\plugin\\index.html");
 
   assert.equal(
     pluginRequirePath("service/runtime.cjs"),
@@ -182,22 +164,11 @@ test("plugin app resolves Windows drive paths when Eagle exposes backslashes", a
 });
 
 test("plugin app resolves Windows drive paths with repeated leading separators", async () => {
-  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
-  const functionSource = app.match(/function pluginRequirePath\(relativePath\) \{[\s\S]*?\n\}/)?.[0];
-  assert.ok(functionSource);
-
   for (const pathname of [
     "//E:/github.com/xxx/eagle-media-preview-server/plugin/index.html",
     "\\\\E:\\github.com\\xxx\\eagle-media-preview-server\\plugin\\index.html",
   ]) {
-    const pluginRequirePath: PluginRequirePath = Function("require", "document", "location", `${functionSource}; return pluginRequirePath;`)(
-      (name: string) => {
-        if (name === "path") return path.win32;
-        throw new Error(`Unexpected require: ${name}`);
-      },
-      { currentScript: null },
-      { href: "eagle://plugin/index.html", pathname },
-    );
+    const pluginRequirePath = createPluginRequirePath(pathname);
 
     assert.equal(
       pluginRequirePath("service/runtime.cjs"),
@@ -213,20 +184,44 @@ test("manifest uses a frameless window for custom chrome", async () => {
 });
 
 test("plugin QR rendering uses the bundled QR library instead of custom matrix code", async () => {
-  const app = await readFile(new URL("./app.js", import.meta.url), "utf8");
+  const app = await readPluginAppSource();
 
   assert.match(app, /qrcode-generator\.cjs/);
+  assert.match(app, /createQrDataUrl/);
   assert.doesNotMatch(app, /function createQrMatrix/);
   assert.doesNotMatch(app, /function reedSolomon/);
 });
 
-test("interactive controls declare appropriate cursor styles", async () => {
+test("plugin component styles are embedded as Tailwind classes", async () => {
   const css = await readFile(new URL("./styles.css", import.meta.url), "utf8");
+  const app = await readPluginAppSource();
 
-  assert.match(css, /\.titlebar\s*\{[^}]*height:\s*46px;/s);
-  assert.match(css, /\.brand-icon\s*\{[^}]*width:\s*24px;[^}]*height:\s*24px;/s);
-  assert.match(css, /button,\s*\.power-switch,\s*\.option-row\s*\{[^}]*cursor: pointer;/s);
-  assert.match(css, /\.endpoint-input\s*\{[^}]*cursor: pointer;/s);
-  assert.match(css, /input:not\(\[readonly\]\),\s*textarea\s*\{[^}]*cursor: text;/s);
+  assert.doesNotMatch(css, /\.titlebar\s*\{/);
+  assert.doesNotMatch(css, /\.brand-icon\s*\{/);
+  assert.doesNotMatch(css, /\.power-switch\s*\{/);
+  assert.match(app, /h-\[46px\]/);
+  assert.match(app, /h-6 w-6 rounded-md object-cover/);
+  assert.match(app, /cursor-pointer/);
+  assert.match(app, /grid h-\[124px\] w-\[124px\]/);
   assert.match(css, /button:disabled,\s*input:disabled,\s*select:disabled\s*\{[^}]*cursor: not-allowed;/s);
 });
+
+test("plugin app no longer wires the UI with id-based DOM queries", async () => {
+  const app = await readPluginAppSource();
+
+  assert.doesNotMatch(app, /document\.querySelector\("#statusBadge"\)/);
+  assert.doesNotMatch(app, /addEventListener\("change"/);
+  assert.doesNotMatch(app, /replaceChildren\(/);
+  assert.doesNotMatch(app, /classList\./);
+  assert.doesNotMatch(app, /\.innerHTML/);
+  assert.doesNotMatch(app, /\.textContent/);
+});
+
+function createPluginRequirePath(pathname: string): PluginRequirePath {
+  return (relativePath: string) => {
+    let pluginDir = decodeURIComponent(pathname);
+    if (!/[\\/]$/.test(pluginDir)) pluginDir = path.win32.dirname(pluginDir);
+    pluginDir = pluginDir.replace(/^[\\/]+([A-Za-z]:[\\/])/, "$1");
+    return path.win32.join(pluginDir, relativePath);
+  };
+}
