@@ -638,6 +638,7 @@ describe("ViewerAppShell", () => {
     const statik = renderToStaticMarkup(<RatingStars className="rating-control" item={{ star: 3 }} />);
     const interactive = renderToStaticMarkup(<RatingStars className="rating-control" item={{ star: 2 }} interactive onSelect={() => {}} />);
     const disabled = renderToStaticMarkup(<RatingStars className="rating-control" item={{ star: 2 }} interactive disabled onSelect={() => {}} />);
+    const saving = renderToStaticMarkup(<RatingStars className="rating-control" item={{ star: 2 }} interactive disabled disabledLabel="Saving rating" onSelect={() => {}} />);
 
     expect(statik).toContain("rating-star");
     expect(statik).toContain("rating-star-static");
@@ -648,5 +649,7 @@ describe("ViewerAppShell", () => {
     expect(interactive).toContain('aria-label="Rating"');
     expect(interactive).toContain("Rating 2");
     expect(disabled).toContain("disabled");
+    expect(saving).toContain('aria-label="Saving rating"');
+    expect(saving).toContain('title="Saving rating"');
   });
 });
