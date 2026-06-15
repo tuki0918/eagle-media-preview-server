@@ -492,6 +492,35 @@ describe("ViewerAppShell", () => {
     expect(details).not.toContain("preview-edit-form");
   });
 
+  test("deduplicates preview metadata chips from existing item values", () => {
+    const readOnly = renderToStaticMarkup(
+      <PreviewDetailsPanel
+        item={{ id: "item-1", tags: ["alpha", " alpha "], folders: ["folder-1", "folder-1"] }}
+        folders={[{ id: "folder-1", name: "Folder 1" }]}
+        detailRows={[{ label: "Type", value: "Image" }]}
+        onTagSuggestions={() => []}
+        onFolderSuggestions={() => []}
+        onSaveMetadata={async () => {}}
+      />,
+    );
+    const editable = renderToStaticMarkup(
+      <PreviewDetailsPanel
+        canEditMetadata
+        item={{ id: "item-1", tags: ["alpha", " alpha "], folders: ["folder-1", "folder-1"] }}
+        folders={[{ id: "folder-1", name: "Folder 1" }]}
+        detailRows={[{ label: "Type", value: "Image" }]}
+        onTagSuggestions={() => []}
+        onFolderSuggestions={() => []}
+        onSaveMetadata={async () => {}}
+      />,
+    );
+
+    expect(readOnly.match(/>alpha</g)?.length).toBe(1);
+    expect(readOnly.match(/>Folder 1</g)?.length).toBe(1);
+    expect(editable.match(/>alpha</g)?.length).toBe(1);
+    expect(editable.match(/>Folder 1</g)?.length).toBe(1);
+  });
+
   test("renders preview body media variants", () => {
     const video = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", name: "Sample.mp4", ext: "mp4" }} kind="video" />);
     const audio = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", name: "Sample.mp3", ext: "mp3" }} kind="audio" />);

@@ -381,11 +381,11 @@ function folderLabel(id: string, folders: readonly EagleFolder[]) {
 }
 
 function tagValues(value: unknown) {
-  return itemTags({ tags: value });
+  return uniqueValues(itemTags({ tags: value }));
 }
 
 function categoryValues(value: unknown) {
-  return folderIds(value);
+  return uniqueValues(folderIds(value));
 }
 
 function sameStringValues(left: readonly string[], right: readonly string[]) {
