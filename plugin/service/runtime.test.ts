@@ -38,6 +38,42 @@ test("generated settings store hashes password", async () => {
   assert.equal(saved.passwordHash, hashPassword("secret"));
 });
 
+test("generated settings store saves multiple auth users with roles", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-runtime-"));
+  const store = createSettingsStore({ filePath: join(dir, "settings.json") });
+
+  const saved = await store.save({
+    authEnabled: true,
+    authUsers: [
+      { username: "reader", role: "viewer", passwordHash: "" },
+      { username: "editor", role: "editor", passwordHash: "" },
+    ],
+    userPasswords: {
+      reader: "read-secret",
+      editor: "edit-secret",
+    },
+  });
+
+  assert.deepEqual(saved.authUsers, [
+    { username: "reader", role: "viewer", passwordHash: hashPassword("read-secret") },
+    { username: "editor", role: "editor", passwordHash: hashPassword("edit-secret") },
+  ]);
+  assert.equal(saved.allowMetadataEditing, true);
+  assert.equal(saved.basicAuthUser, "reader");
+});
+
+test("generated settings store migrates legacy auth settings into a viewer user", () => {
+  const settings = normalizeSettings({
+    authEnabled: true,
+    basicAuthUser: "legacy",
+    passwordHash: hashPassword("secret"),
+  });
+
+  assert.deepEqual(settings.authUsers, [
+    { username: "legacy", role: "viewer", passwordHash: hashPassword("secret") },
+  ]);
+});
+
 test("generated settings store rejects enabled auth without a password", async () => {
   const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-runtime-"));
   const store = createSettingsStore({ filePath: join(dir, "settings.json") });
@@ -72,6 +108,7 @@ test("generated settings store clears metadata editing when BasicAuth is disable
 
   assert.equal(saved.authEnabled, false);
   assert.equal(saved.allowMetadataEditing, false);
+  assert.equal(saved.authUsers.length, 1);
 });
 
 test("generated server manager restarts after metadata editing setting changes while running", async () => {

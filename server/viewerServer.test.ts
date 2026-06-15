@@ -29,6 +29,7 @@ test("createViewerServer starts and stops without the CLI entrypoint", async () 
   assert.deepEqual(await response.json(), {
     required: false,
     authenticated: true,
+    user: null,
     permissions: {
       read: true,
       writeMetadata: false,
@@ -112,6 +113,10 @@ test("createViewerServer allows metadata writes when editing is enabled for an a
     assert.deepEqual(await authStatus.json(), {
       required: true,
       authenticated: true,
+      user: {
+        role: "editor",
+        username: "eagle",
+      },
       permissions: {
         read: true,
         writeMetadata: true,
@@ -135,6 +140,77 @@ test("createViewerServer allows metadata writes when editing is enabled for an a
       folders: ["folder-1"],
     });
     assert.deepEqual(calls, [{ id: "ITEM123", input: { tags: ["cat"], folders: ["folder-1"] } }]);
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer authorizes metadata writes by user role", async () => {
+  const calls: unknown[] = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    authUsers: [
+      { username: "reader", passwordHash: sha256("read"), role: "viewer" },
+      { username: "ed", passwordHash: sha256("edit"), role: "editor" },
+    ],
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/tmp/Test.library", name: "Test Library" };
+      },
+      async updateItemStar(id: string, star: unknown) {
+        calls.push({ id, star });
+        return { id, star };
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const origin = `http://127.0.0.1:${status.port}`;
+    const reader = `Basic ${Buffer.from("reader:read").toString("base64")}`;
+    const editor = `Basic ${Buffer.from("ed:edit").toString("base64")}`;
+
+    const readerStatus = await fetch(`${origin}/api/auth/status`, {
+      headers: { Authorization: reader },
+    });
+    assert.deepEqual(await readerStatus.json(), {
+      required: true,
+      authenticated: true,
+      user: { username: "reader", role: "viewer" },
+      permissions: {
+        read: true,
+        writeMetadata: false,
+        writeRating: false,
+      },
+    });
+
+    const denied = await fetch(`${origin}/api/items/ITEM123/star`, {
+      method: "POST",
+      headers: {
+        Authorization: reader,
+        "Content-Type": "application/json",
+        Origin: origin,
+      },
+      body: JSON.stringify({ star: 4 }),
+    });
+    assert.equal(denied.status, 403);
+
+    const allowed = await fetch(`${origin}/api/items/ITEM123/star`, {
+      method: "POST",
+      headers: {
+        Authorization: editor,
+        "Content-Type": "application/json",
+        Origin: origin,
+      },
+      body: JSON.stringify({ star: 4 }),
+    });
+    assert.equal(allowed.status, 200);
+    assert.deepEqual(calls, [{ id: "ITEM123", star: 4 }]);
   } finally {
     await viewer.stop();
   }
@@ -256,6 +332,10 @@ test("createViewerServer logs out cookie sessions", async () => {
     assert.deepEqual(await authenticated.json(), {
       required: true,
       authenticated: true,
+      user: {
+        role: "viewer",
+        username: "eagle",
+      },
       permissions: {
         read: true,
         writeMetadata: false,
@@ -280,6 +360,7 @@ test("createViewerServer logs out cookie sessions", async () => {
     assert.deepEqual(await afterLogout.json(), {
       required: true,
       authenticated: false,
+      user: null,
       permissions: {
         read: false,
         writeMetadata: false,

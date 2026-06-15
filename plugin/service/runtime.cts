@@ -5,9 +5,17 @@ const { homedir, networkInterfaces } = require("os");
 const { createViewerServer } = require("./viewerServer.cjs");
 
 type ServerStatus = "error" | "running" | "stopped";
+type UserRole = "admin" | "editor" | "viewer";
+
+interface AuthUser {
+  passwordHash: string;
+  role: UserRole;
+  username: string;
+}
 
 interface PluginSettings {
   allowMetadataEditing: boolean;
+  authUsers: AuthUser[];
   autoStart: boolean;
   authEnabled: boolean;
   basicAuthUser: string;
@@ -22,6 +30,7 @@ type SettingsInput = Partial<Omit<PluginSettings, "port">> & {
   confirmPassword?: unknown;
   password?: unknown;
   port?: unknown;
+  userPasswords?: unknown;
 };
 
 interface SettingsStore {
@@ -53,6 +62,7 @@ interface ServerManagerOptions {
   settingsStore?: SettingsStore;
   viewerServerFactory?: (settings: {
     allowMetadataEditing: boolean;
+    authUsers: AuthUser[];
     basicAuthUsername: string;
     host: string;
     passwordHash: string;
@@ -68,6 +78,7 @@ interface NetworkEntry {
 
 const DEFAULT_SETTINGS: PluginSettings = {
   allowMetadataEditing: false,
+  authUsers: [],
   autoStart: false,
   host: "0.0.0.0",
   port: 41532,
@@ -99,6 +110,7 @@ function createSettingsStore({ filePath = defaultSettingsPath() }: { filePath?: 
     async save(input: SettingsInput = {}) {
       const current = await this.load();
       const next = normalizeSettings({ ...current, ...input });
+      const userPasswords = normalizeUserPasswords(input.userPasswords);
 
       if (input.password || input.confirmPassword) {
         if (String(input.password || "") !== String(input.confirmPassword || "")) {
@@ -106,10 +118,30 @@ function createSettingsStore({ filePath = defaultSettingsPath() }: { filePath?: 
         }
         if (!String(input.password || "").trim()) throw new Error("Password is required");
         next.passwordHash = hashPassword(input.password);
+        next.authUsers = upsertAuthUser(next.authUsers, {
+          username: next.basicAuthUser,
+          passwordHash: next.passwordHash,
+          role: next.allowMetadataEditing ? "editor" : "viewer",
+        });
       }
 
-      if (next.authEnabled && !next.passwordHash) {
-        throw new Error("Password is required when password protection is enabled");
+      if (userPasswords.size) {
+        next.authUsers = next.authUsers.map((user) => {
+          const password = userPasswords.get(user.username);
+          return password ? { ...user, passwordHash: hashPassword(password) } : user;
+        });
+      }
+
+      if (next.authEnabled && !next.authUsers.length && next.passwordHash) {
+        next.authUsers = [{
+          username: next.basicAuthUser,
+          passwordHash: next.passwordHash,
+          role: next.allowMetadataEditing ? "editor" : "viewer",
+        }];
+      }
+
+      if (next.authEnabled && (!next.authUsers.length || next.authUsers.some((user) => !user.passwordHash))) {
+        throw new Error("Password is required for every enabled user");
       }
       if (!next.authEnabled) {
         if (input.allowMetadataEditing === true) {
@@ -117,6 +149,11 @@ function createSettingsStore({ filePath = defaultSettingsPath() }: { filePath?: 
         }
         next.passwordHash = "";
         next.allowMetadataEditing = false;
+      }
+      if (next.authUsers.length) {
+        next.basicAuthUser = next.authUsers[0].username;
+        next.passwordHash = next.authUsers[0].passwordHash;
+        next.allowMetadataEditing = next.authEnabled && next.authUsers.some((user) => canRoleEditMetadata(user.role));
       }
 
       await mkdir(dirname(filePath), { recursive: true });
@@ -134,6 +171,7 @@ function normalizeSettings(input: SettingsInput = {}): PluginSettings {
   return {
     autoStart: Boolean(input.autoStart ?? DEFAULT_SETTINGS.autoStart),
     allowMetadataEditing: Boolean(input.allowMetadataEditing ?? DEFAULT_SETTINGS.allowMetadataEditing),
+    authUsers: normalizeAuthUsers(input.authUsers, input),
     host: String(input.host || DEFAULT_SETTINGS.host).trim() || DEFAULT_SETTINGS.host,
     port,
     authEnabled: Boolean(input.authEnabled ?? DEFAULT_SETTINGS.authEnabled),
@@ -152,6 +190,72 @@ function isServerStatus(value: unknown): value is ServerStatus {
 
 function hashPassword(value: unknown) {
   return createHash("sha256").update(String(value)).digest("hex");
+}
+
+function normalizeAuthUsers(value: unknown, input: SettingsInput = {}) {
+  const rawUsers = Array.isArray(value) ? value : [];
+  const users = rawUsers
+    .map((user) => normalizeAuthUser(user))
+    .filter((user): user is AuthUser => Boolean(user));
+  if (users.length) return uniqueAuthUsers(users);
+
+  const username = String(input.basicAuthUser || "").trim();
+  const passwordHash = String(input.passwordHash || "");
+  if (!username || !passwordHash) return [];
+  return [{
+    username,
+    passwordHash,
+    role: Boolean(input.allowMetadataEditing) ? "editor" as const : "viewer" as const,
+  }];
+}
+
+function normalizeAuthUser(value: unknown): AuthUser | null {
+  if (!value || typeof value !== "object") return null;
+  const input = value as { passwordHash?: unknown; role?: unknown; username?: unknown };
+  const username = String(input.username || "").trim();
+  if (!username) return null;
+  return {
+    username,
+    passwordHash: String(input.passwordHash || ""),
+    role: normalizeRole(input.role),
+  };
+}
+
+function normalizeRole(value: unknown): UserRole {
+  return value === "admin" || value === "editor" ? value : "viewer";
+}
+
+function uniqueAuthUsers(users: AuthUser[]) {
+  const output: AuthUser[] = [];
+  const seen = new Set<string>();
+  for (const user of users) {
+    const key = user.username.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    output.push(user);
+  }
+  return output;
+}
+
+function upsertAuthUser(users: AuthUser[], nextUser: AuthUser) {
+  const matched = users.some((user) => user.username.toLowerCase() === nextUser.username.toLowerCase());
+  if (!matched) return uniqueAuthUsers([...users, nextUser]);
+  return users.map((user) => user.username.toLowerCase() === nextUser.username.toLowerCase() ? nextUser : user);
+}
+
+function normalizeUserPasswords(value: unknown) {
+  const output = new Map<string, string>();
+  if (!value || typeof value !== "object") return output;
+  for (const [username, password] of Object.entries(value as Record<string, unknown>)) {
+    const cleanUsername = username.trim();
+    const cleanPassword = String(password || "").trim();
+    if (cleanUsername && cleanPassword) output.set(cleanUsername, cleanPassword);
+  }
+  return output;
+}
+
+function canRoleEditMetadata(role: UserRole) {
+  return role === "admin" || role === "editor";
 }
 
 function getLanAddresses() {
@@ -224,6 +328,7 @@ function createServerManager({
       port: settings.port,
       basicAuthUsername: settings.basicAuthUser,
       allowMetadataEditing: settings.allowMetadataEditing,
+      authUsers: settings.authEnabled ? settings.authUsers : [],
       passwordHash: settings.authEnabled ? settings.passwordHash : "",
     });
   }
@@ -233,6 +338,7 @@ function createServerManager({
       || prev.port !== next.port
       || prev.authEnabled !== next.authEnabled
       || prev.allowMetadataEditing !== next.allowMetadataEditing
+      || JSON.stringify(prev.authUsers) !== JSON.stringify(next.authUsers)
       || prev.basicAuthUser !== next.basicAuthUser
       || prev.passwordHash !== next.passwordHash;
   }

@@ -8,6 +8,7 @@ const { buildConnectionCandidates, createConnectionContext } = require("./connec
 
 interface ViewerServerOptions {
   allowMetadataEditing?: boolean;
+  authUsers?: AuthUser[];
   basicAuthUsername?: string;
   eagleClient?: EagleClient;
   host?: string;
@@ -15,6 +16,19 @@ interface ViewerServerOptions {
   port?: number;
   publicDir?: string;
   viewerPassword?: string;
+}
+
+type UserRole = "admin" | "editor" | "viewer";
+
+interface AuthUser {
+  passwordHash: string;
+  role: UserRole;
+  username: string;
+}
+
+interface AuthSession {
+  role: UserRole;
+  username: string;
 }
 
 interface EagleLibraryInfo {
@@ -125,6 +139,7 @@ class HttpError extends Error {
 function createViewerServer({
   host = "0.0.0.0",
   allowMetadataEditing = false,
+  authUsers = [],
   port = 41532,
   publicDir = defaultPublicDir,
   viewerPassword = "",
@@ -138,7 +153,8 @@ function createViewerServer({
   let boundPort = 0;
   let lastError = "";
   let requestCount = 0;
-  const authSessions = new Set<string>();
+  const resolvedAuthUsers = resolveAuthUsers({ allowMetadataEditing, authUsers, basicAuthUsername, passwordHash, viewerPassword });
+  const authSessions = new Map<string, AuthSession>();
   let currentSession = createConnectionContext({
     connection: {
       host: "127.0.0.1",
@@ -152,7 +168,7 @@ function createViewerServer({
   const server = createServer(async (req, res) => {
     try {
       const url = new URL(req.url || "/", `http://${req.headers.host}`);
-      const auth = { allowMetadataEditing, authSessions, viewerPassword, passwordHash, basicAuthUsername };
+      const auth = { allowMetadataEditing, authSessions, users: resolvedAuthUsers, viewerPassword, passwordHash, basicAuthUsername };
       if (!isTrustedUnsafeRequest(req, url)) {
         sendJson(res, 403, { error: "Cross-origin writes are not allowed" });
         return;
@@ -404,24 +420,22 @@ async function handleApi(req, url, res, { auth, getSession, setSession }: ApiCon
 
 interface AuthContext {
   allowMetadataEditing?: boolean;
-  authSessions: Set<string>;
+  authSessions: Map<string, AuthSession>;
   basicAuthUsername?: string;
   passwordHash?: string;
+  users: AuthUser[];
   viewerPassword?: string;
 }
 
-async function handleAuthRoutes(req, url, res, { allowMetadataEditing, authSessions, viewerPassword, passwordHash, basicAuthUsername }: AuthContext) {
+async function handleAuthRoutes(req, url, res, auth: AuthContext) {
   if (url.pathname === "/api/auth/status") {
-    const authenticated = isAuthorized(req, { authSessions, viewerPassword, passwordHash, basicAuthUsername });
-    const canEditMetadata = Boolean(allowMetadataEditing && authRequired({ viewerPassword, passwordHash }) && authenticated);
+    const user = authenticatedUser(req, auth);
+    const authenticated = !authRequired(auth) || Boolean(user);
     sendJson(res, 200, {
-      required: authRequired({ viewerPassword, passwordHash }),
+      required: authRequired(auth),
       authenticated,
-      permissions: {
-        read: authenticated,
-        writeMetadata: canEditMetadata,
-        writeRating: canEditMetadata,
-      },
+      user: user ? { role: user.role, username: user.username } : null,
+      permissions: permissionsForUser(user, { authenticated }),
     });
     return true;
   }
@@ -431,27 +445,27 @@ async function handleAuthRoutes(req, url, res, { allowMetadataEditing, authSessi
       sendJson(res, 405, { error: "Method not allowed" });
       return true;
     }
-    if (!authRequired({ viewerPassword, passwordHash })) {
+    if (!authRequired(auth)) {
       sendJson(res, 200, { authenticated: true });
       return true;
     }
     const body = await readJson(req);
-    if (String(body.username || basicAuthUsername) !== basicAuthUsername || !passwordMatches(String(body.password || ""), { viewerPassword, passwordHash })) {
+    const user = findPasswordUser(String(body.username || auth.basicAuthUsername), String(body.password || ""), auth);
+    if (!user) {
       sendJson(res, 401, { error: "Invalid password" });
       return true;
     }
     const token = randomUUID();
-    authSessions.add(token);
-    const permissions = {
-      read: true,
-      writeMetadata: Boolean(allowMetadataEditing),
-      writeRating: Boolean(allowMetadataEditing),
-    };
+    auth.authSessions.set(token, { role: user.role, username: user.username });
     res.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
       "Set-Cookie": `viewer_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000`,
     });
-    res.end(JSON.stringify({ authenticated: true, permissions }));
+    res.end(JSON.stringify({
+      authenticated: true,
+      user: { role: user.role, username: user.username },
+      permissions: permissionsForUser(user),
+    }));
     return true;
   }
 
@@ -461,7 +475,7 @@ async function handleAuthRoutes(req, url, res, { allowMetadataEditing, authSessi
       return true;
     }
     const token = parseCookies(req.headers.cookie || "").viewer_session;
-    if (token) authSessions.delete(token);
+    if (token) auth.authSessions.delete(token);
     res.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
       "Set-Cookie": "viewer_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0",
@@ -662,15 +676,13 @@ function sendJson(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
-function authRequired({ viewerPassword, passwordHash }: { passwordHash?: string; viewerPassword?: string }) {
-  return Boolean(viewerPassword || passwordHash);
+function authRequired({ users = [], viewerPassword, passwordHash }: { passwordHash?: string; users?: AuthUser[]; viewerPassword?: string }) {
+  return Boolean(users.length || viewerPassword || passwordHash);
 }
 
 function isAuthorized(req, auth) {
   if (!authRequired(auth)) return true;
-  if (basicAuthMatches(req.headers.authorization || "", auth)) return true;
-  const token = parseCookies(req.headers.cookie || "").viewer_session;
-  return Boolean(token && auth.authSessions.has(token));
+  return Boolean(authenticatedUser(req, auth));
 }
 
 function isTrustedUnsafeRequest(req, requestUrl) {
@@ -697,21 +709,84 @@ function headerValue(value) {
 }
 
 function hasMetadataWriteAccess(req, auth: AuthContext) {
-  return Boolean(auth.allowMetadataEditing && authRequired(auth) && isAuthorized(req, auth));
+  const user = authenticatedUser(req, auth);
+  return Boolean(user && canRoleEditMetadata(user.role));
 }
 
-function basicAuthMatches(header, { basicAuthUsername, viewerPassword, passwordHash }) {
-  if (!header.startsWith("Basic ")) return false;
+function authenticatedUser(req, auth: AuthContext): AuthSession | null {
+  if (!authRequired(auth)) return null;
+  const basicUser = basicAuthUser(req.headers.authorization || "", auth);
+  if (basicUser) return { role: basicUser.role, username: basicUser.username };
+  const token = parseCookies(req.headers.cookie || "").viewer_session;
+  return token ? auth.authSessions.get(token) || null : null;
+}
+
+function basicAuthUser(header, auth: AuthContext): AuthUser | null {
+  if (!header.startsWith("Basic ")) return null;
   try {
     const decoded = Buffer.from(header.slice(6), "base64").toString("utf8");
     const separator = decoded.indexOf(":");
-    if (separator === -1) return false;
+    if (separator === -1) return null;
     const username = decoded.slice(0, separator);
     const password = decoded.slice(separator + 1);
-    return username === basicAuthUsername && passwordMatches(password, { viewerPassword, passwordHash });
+    return findPasswordUser(username, password, auth);
   } catch {
-    return false;
+    return null;
   }
+}
+
+function findPasswordUser(username, password, auth: AuthContext): AuthUser | null {
+  const user = auth.users.find((entry) => entry.username === username);
+  if (user?.passwordHash && passwordMatches(password, { passwordHash: user.passwordHash })) return user;
+  if (!auth.users.length && username === auth.basicAuthUsername && passwordMatches(password, auth)) {
+    return {
+      username,
+      passwordHash: auth.passwordHash || "",
+      role: auth.allowMetadataEditing ? "editor" as const : "viewer" as const,
+    };
+  }
+  return null;
+}
+
+function permissionsForUser(user: AuthSession | AuthUser | null, { authenticated = Boolean(user) } = {}) {
+  const read = authenticated;
+  const writeMetadata = Boolean(user && canRoleEditMetadata(user.role));
+  return {
+    read,
+    writeMetadata,
+    writeRating: writeMetadata,
+  };
+}
+
+function canRoleEditMetadata(role: UserRole) {
+  return role === "admin" || role === "editor";
+}
+
+function resolveAuthUsers({ allowMetadataEditing, authUsers, basicAuthUsername, passwordHash, viewerPassword }: {
+  allowMetadataEditing?: boolean;
+  authUsers?: AuthUser[];
+  basicAuthUsername?: string;
+  passwordHash?: string;
+  viewerPassword?: string;
+}): AuthUser[] {
+  const users = Array.isArray(authUsers)
+    ? authUsers.map((user) => ({
+        username: String(user.username || "").trim(),
+        passwordHash: String(user.passwordHash || ""),
+        role: normalizeRole(user.role),
+      })).filter((user) => user.username && user.passwordHash)
+    : [];
+  if (users.length) return users;
+  const legacyPasswordHash = passwordHash || (viewerPassword ? sha256(viewerPassword) : "");
+  return legacyPasswordHash ? [{
+    username: basicAuthUsername || "eagle",
+    passwordHash: legacyPasswordHash,
+    role: allowMetadataEditing ? "editor" as const : "viewer" as const,
+  }] : [];
+}
+
+function normalizeRole(value): UserRole {
+  return value === "admin" || value === "editor" ? value : "viewer";
 }
 
 function sendAuthRequired(res) {
@@ -722,7 +797,7 @@ function sendAuthRequired(res) {
   res.end(JSON.stringify({ error: "Authentication required" }));
 }
 
-function passwordMatches(value, { viewerPassword, passwordHash }) {
+function passwordMatches(value, { viewerPassword = "", passwordHash = "" }: { passwordHash?: string; viewerPassword?: string }) {
   const expectedValue = passwordHash || viewerPassword;
   const actualValue = passwordHash ? sha256(value) : value;
   const expected = Buffer.from(expectedValue);

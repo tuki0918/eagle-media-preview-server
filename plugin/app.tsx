@@ -3,9 +3,17 @@ import { createRoot } from "react-dom/client";
 import qrcodeFactory from "qrcode-generator";
 
 type ServerState = "error" | "running" | "stopped";
+type UserRole = "admin" | "editor" | "viewer";
+
+interface AuthUser {
+  passwordHash?: string;
+  role?: UserRole;
+  username?: string;
+}
 
 interface PluginSettings {
   allowMetadataEditing?: boolean;
+  authUsers?: AuthUser[];
   authEnabled?: boolean;
   autoStart?: boolean;
   basicAuthUser?: string;
@@ -62,10 +70,12 @@ function App() {
   const [messageIsError, setMessageIsError] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [password, setPassword] = useState("");
+  const [userPasswords, setUserPasswords] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<PluginStatus>(() => ({
     settings: {
       autoStart: false,
       allowMetadataEditing: false,
+      authUsers: [],
       authEnabled: false,
       basicAuthUser: "eagle",
       host: "0.0.0.0",
@@ -82,7 +92,8 @@ function App() {
   const restartingStopped = busy && serverState === "stopped";
   const statusLabel = restartingStopped ? busyStoppedFrames[busyFrame] : titleCase(serverState);
   const authEnabled = Boolean(settings.authEnabled);
-  const allowMetadataEditing = Boolean(settings.allowMetadataEditing);
+  const authUsers = normalizedAuthUsers(settings);
+  const allowMetadataEditing = authUsers.some((user) => canRoleEditMetadata(user.role));
   const publicNetwork = (settings.host || "0.0.0.0") === "0.0.0.0";
   const selectedLanAddress = settings.preferredLanAddress || "";
   const qrSrc = useMemo(() => {
@@ -142,7 +153,8 @@ function App() {
       host: publicNetwork ? "0.0.0.0" : "127.0.0.1",
       port: settings.port || 41532,
       authEnabled,
-      allowMetadataEditing,
+      allowMetadataEditing: authEnabled && allowMetadataEditing,
+      authUsers,
       basicAuthUser: settings.basicAuthUser || "eagle",
       preferredLanAddress: selectedLanAddress,
       ...patch,
@@ -150,6 +162,10 @@ function App() {
     if (password) {
       payload.password = password;
       payload.confirmPassword = password;
+    }
+    const cleanUserPasswords = Object.fromEntries(Object.entries(userPasswords).filter(([, value]) => value.trim()));
+    if (Object.keys(cleanUserPasswords).length) {
+      payload.userPasswords = cleanUserPasswords;
     }
 
     if (restartRunning) {
@@ -181,6 +197,34 @@ function App() {
         ...patch,
       },
     }));
+  }
+
+  function updateAuthUser(index: number, patch: AuthUser) {
+    const nextUsers = authUsers.map((user, userIndex) => userIndex === index ? normalizeAuthUser({ ...user, ...patch }) : user);
+    updateSettings({
+      authUsers: nextUsers,
+      allowMetadataEditing: nextUsers.some((user) => canRoleEditMetadata(user.role)),
+      basicAuthUser: nextUsers[0]?.username || "eagle",
+    });
+  }
+
+  function addAuthUser() {
+    const nextUsers = [...authUsers, nextDefaultUser(authUsers)];
+    updateSettings({
+      authUsers: nextUsers,
+      allowMetadataEditing: nextUsers.some((user) => canRoleEditMetadata(user.role)),
+    });
+  }
+
+  function removeAuthUser(index: number) {
+    if (authUsers.length <= 1) return;
+    const nextUsers = authUsers.filter((_, userIndex) => userIndex !== index);
+    updateSettings({
+      authUsers: nextUsers,
+      allowMetadataEditing: nextUsers.some((user) => canRoleEditMetadata(user.role)),
+      basicAuthUser: nextUsers[0]?.username || "eagle",
+    });
+    saveSettings({ patch: { authUsers: nextUsers } });
   }
 
   async function startOrStopServer(checked: boolean) {
@@ -287,8 +331,8 @@ function App() {
                 title="BasicAuth protection"
                 description="Require username & password to access."
                 onChange={(checked) => {
-                  if (checked && !settings.passwordHash && !password) {
-                    setMessage("Enter a password to enable BasicAuth protection.", true);
+                  if (checked && authUsers.some((user) => !user.passwordHash && !userPasswords[String(user.username || "")]?.trim())) {
+                    setMessage("Enter a password for every user to enable BasicAuth protection.", true);
                     return;
                   }
                   const patch = checked
@@ -300,18 +344,11 @@ function App() {
               />
               <OptionRow
                 checked={allowMetadataEditing}
-                disabled={formDisabled || !authEnabled}
+                disabled
                 icon={<EditIcon />}
-                title="Allow metadata editing"
-                description="Requires BasicAuth. Allows rating, tag, and category updates."
-                onChange={(checked) => {
-                  if (checked && !authEnabled) {
-                    setMessage("Enable BasicAuth protection before allowing metadata editing.", true);
-                    return;
-                  }
-                  updateSettings({ allowMetadataEditing: checked });
-                  saveSettings({ patch: { allowMetadataEditing: checked } });
-                }}
+                title="Editor roles"
+                description="Editor and Admin users can update rating, tags, and categories."
+                onChange={() => {}}
               />
               <OptionRow
                 checked={publicNetwork}
@@ -360,32 +397,53 @@ function App() {
               onBlur={(event) => saveSettings({ patch: { port: event.currentTarget.value } })}
             />
           </SettingRow>
-          <SettingRow label="User" help="BasicAuth username.">
-            <input
-              className="h-7 w-full rounded-md border border-[#d7d9de] bg-white px-2 text-[11px] text-[#111] outline-0 focus:border-[rgba(31,116,255,0.58)] focus:shadow-[0_0_0_3px_rgba(31,116,255,0.12)]"
-              type="text"
-              autoComplete="username"
-              disabled={formDisabled}
-              value={settings.basicAuthUser || "eagle"}
-              onChange={(event) => updateSettings({ basicAuthUser: event.currentTarget.value })}
-              onBlur={(event) => saveSettings({ patch: { basicAuthUser: event.currentTarget.value } })}
-            />
-          </SettingRow>
-          <SettingRow label="Password" help="BasicAuth password.">
-            <div className="relative">
-              <input
-                className="h-7 w-full rounded-md border border-[#d7d9de] bg-white px-2 pr-[30px] text-[11px] text-[#111] outline-0 focus:border-[rgba(31,116,255,0.58)] focus:shadow-[0_0_0_3px_rgba(31,116,255,0.12)]"
-                type={passwordVisible ? "text" : "password"}
-                autoComplete="new-password"
-                disabled={formDisabled}
-                placeholder={!password && settings.authEnabled && settings.passwordHash ? "••••••••" : ""}
-                value={password}
-                onChange={(event) => setPassword(event.currentTarget.value)}
-                onBlur={() => saveSettings()}
-              />
-              <button className="absolute right-1 top-1 grid h-[22px] w-[22px] place-items-center rounded-[5px] border-0 bg-transparent p-1 text-[#555c66] hover:bg-[#f4f5f7]" type="button" aria-label={passwordVisible ? "Hide password" : "Show password"} title={passwordVisible ? "Hide password" : "Show password"} disabled={formDisabled} onClick={() => setPasswordVisible((current) => !current)}>
-                {passwordVisible ? <EyeIcon className="h-[13px] w-[13px]" /> : <EyeOffIcon className="h-[13px] w-[13px]" />}
-              </button>
+          <SettingRow label="Users" help="Viewer can browse. Editor can edit metadata. Admin is reserved for full management permissions.">
+            <div className="grid gap-2">
+              {authUsers.map((user, index) => (
+                <div key={`${user.username}-${index}`} className="grid grid-cols-[minmax(80px,1fr)_86px_minmax(76px,0.8fr)_28px] items-center gap-1.5">
+                  <input
+                    className="h-7 min-w-0 rounded-md border border-[#d7d9de] bg-white px-2 text-[11px] text-[#111] outline-0 focus:border-[rgba(31,116,255,0.58)] focus:shadow-[0_0_0_3px_rgba(31,116,255,0.12)]"
+                    type="text"
+                    autoComplete="username"
+                    disabled={formDisabled}
+                    value={user.username}
+                    onChange={(event) => updateAuthUser(index, { username: event.currentTarget.value })}
+                    onBlur={() => saveSettings()}
+                  />
+                  <select
+                    className="h-7 rounded-md border border-[#d7d9de] bg-white px-1.5 text-[11px] text-[#111] outline-0"
+                    disabled={formDisabled}
+                    value={user.role}
+                    onChange={(event) => {
+                      updateAuthUser(index, { role: event.currentTarget.value as UserRole });
+                      saveSettings({ patch: { authUsers: authUsers.map((entry, entryIndex) => entryIndex === index ? { ...entry, role: event.currentTarget.value as UserRole } : entry) } });
+                    }}
+                  >
+                    <option value="viewer">Viewer</option>
+                    <option value="editor">Editor</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                  <input
+                    className="h-7 min-w-0 rounded-md border border-[#d7d9de] bg-white px-2 text-[11px] text-[#111] outline-0 focus:border-[rgba(31,116,255,0.58)] focus:shadow-[0_0_0_3px_rgba(31,116,255,0.12)]"
+                    type={passwordVisible ? "text" : "password"}
+                    autoComplete="new-password"
+                    disabled={formDisabled}
+                    placeholder={user.passwordHash ? "••••••••" : "Password"}
+                    value={userPasswords[String(user.username || "")] || ""}
+                    onChange={(event) => setUserPasswords((current) => ({ ...current, [String(user.username || "")]: event.currentTarget.value }))}
+                    onBlur={() => saveSettings()}
+                  />
+                  <button className="grid h-7 w-7 place-items-center rounded-md border border-[#d7d9de] bg-white text-[#555c66] hover:bg-[#f4f5f7]" type="button" aria-label={`Remove ${user.username || "user"}`} title="Remove user" disabled={formDisabled || authUsers.length <= 1} onClick={() => removeAuthUser(index)}>
+                    <CloseIcon className="h-[11px] w-[11px]" />
+                  </button>
+                </div>
+              ))}
+              <div className="flex items-center justify-between gap-2">
+                <button className="h-7 rounded-md border border-[#d7d9de] bg-white px-2 text-[11px] font-medium text-[#111] hover:bg-[#f8f9fb]" type="button" disabled={formDisabled} onClick={addAuthUser}>Add user</button>
+                <button className="grid h-7 w-7 place-items-center rounded-md border border-[#d7d9de] bg-white p-1 text-[#555c66] hover:bg-[#f4f5f7]" type="button" aria-label={passwordVisible ? "Hide passwords" : "Show passwords"} title={passwordVisible ? "Hide passwords" : "Show passwords"} disabled={formDisabled} onClick={() => setPasswordVisible((current) => !current)}>
+                  {passwordVisible ? <EyeIcon className="h-[13px] w-[13px]" /> : <EyeOffIcon className="h-[13px] w-[13px]" />}
+                </button>
+              </div>
             </div>
           </SettingRow>
           <select
@@ -496,8 +554,46 @@ function willRestartServer(status: PluginStatus, nextSettings: Record<string, un
   if (Number(nextSettings.port ?? current.port) !== Number(current.port)) return true;
   if (Boolean(nextSettings.authEnabled ?? current.authEnabled) !== Boolean(current.authEnabled)) return true;
   if (Boolean(nextSettings.allowMetadataEditing ?? current.allowMetadataEditing) !== Boolean(current.allowMetadataEditing)) return true;
+  if (JSON.stringify(nextSettings.authUsers ?? current.authUsers ?? []) !== JSON.stringify(current.authUsers ?? [])) return true;
   if ((nextSettings.basicAuthUser ?? current.basicAuthUser) !== current.basicAuthUser) return true;
   return Boolean(nextSettings.password);
+}
+
+function normalizedAuthUsers(settings: PluginSettings): AuthUser[] {
+  const users = Array.isArray(settings.authUsers) ? settings.authUsers.map(normalizeAuthUser).filter((user) => user.username) : [];
+  if (users.length) return users;
+  return [{
+    username: settings.basicAuthUser || "eagle",
+    passwordHash: settings.passwordHash || "",
+    role: settings.allowMetadataEditing ? "editor" : "viewer",
+  }];
+}
+
+function normalizeAuthUser(user: AuthUser): AuthUser {
+  return {
+    username: String(user.username || "").trim(),
+    passwordHash: String(user.passwordHash || ""),
+    role: normalizeRole(user.role),
+  };
+}
+
+function normalizeRole(role: unknown): UserRole {
+  return role === "admin" || role === "editor" ? role : "viewer";
+}
+
+function canRoleEditMetadata(role: unknown) {
+  return role === "admin" || role === "editor";
+}
+
+function nextDefaultUser(users: AuthUser[]): AuthUser {
+  let index = users.length + 1;
+  const names = new Set(users.map((user) => String(user.username || "").toLowerCase()));
+  while (names.has(`viewer${index}`)) index += 1;
+  return {
+    username: `viewer${index}`,
+    passwordHash: "",
+    role: "viewer",
+  };
 }
 
 function normalizeServerState(value: unknown): ServerState {

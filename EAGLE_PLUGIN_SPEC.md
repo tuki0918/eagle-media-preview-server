@@ -100,8 +100,8 @@ Build output is created under `dist`:
 - Toggle auto-start
 - Toggle Public Network access
 - Configure the port
-- Configure BasicAuth enablement, username, and password
-- Configure authenticated metadata editing
+- Configure BasicAuth enablement
+- Configure multiple users with Viewer, Editor, and Admin roles
 - Display and copy the Endpoint URL
 - Display the Endpoint URL as a QR code
 
@@ -119,18 +119,23 @@ Build output is created under `dist`:
 - `Options`
   - Auto start
   - BasicAuth protection
-  - Allow metadata editing
+  - Editor roles
   - Public Network
 - `Settings`
   - Port
-  - User
-  - Password
+  - Users
+  - Per-user role and password
 
 ### Persisted Settings
 
 ```ts
 type Settings = {
   allowMetadataEditing: boolean;
+  authUsers: Array<{
+    username: string;
+    role: "viewer" | "editor" | "admin";
+    passwordHash: string;
+  }>;
   autoStart: boolean;
   host: string;
   port: number;
@@ -215,7 +220,7 @@ Settings path:
 ### API Routes
 
 - `GET /api/auth/status`
-  - Returns whether authentication is required, whether the current request is authenticated, and viewer permissions
+  - Returns whether authentication is required, whether the current request is authenticated, the current user, and viewer permissions
 - `POST /api/auth/login`
   - Issues a BasicAuth session cookie
 - `POST /api/auth/logout`
@@ -264,6 +269,12 @@ Supported authentication paths:
 - BasicAuth header
 - `viewer_session` cookie issued by the login API
 
+Roles:
+
+- Viewer: can browse and preview media
+- Editor: can browse and update rating, tags, and categories
+- Admin: currently has Editor permissions and is reserved for future remote management capabilities
+
 Password handling:
 
 - Plain text passwords are never persisted
@@ -272,8 +283,7 @@ Password handling:
 Authorization:
 
 - Browsing is read-only by default
-- `allowMetadataEditing` requires BasicAuth protection
-- `POST /api/items/:id/star` and `POST /api/items/:id/metadata` require authenticated metadata editing permission
+- `POST /api/items/:id/star` and `POST /api/items/:id/metadata` require an Editor or Admin user
 - Unsafe methods reject mismatched `Origin` or `Referer` headers before API handlers run
 - JSON request bodies are capped at 1 MiB; malformed bodies return `400` and oversized bodies return `413`
 
