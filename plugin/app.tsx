@@ -468,17 +468,17 @@ function App() {
                     onChange={(event) => setUserPasswords((current) => ({ ...current, [String(index)]: event.currentTarget.value }))}
                     onBlur={() => saveSettings()}
                   />
-                  <button className="grid h-7 w-7 place-items-center rounded-md border border-[#d7d9de] bg-white text-[#555c66] hover:bg-[#f4f5f7]" type="button" aria-label={`Remove ${user.username || "user"}`} title="Remove user" disabled={formDisabled || authUsers.length <= 1} onClick={() => removeAuthUser(index)}>
+                  <button className="grid h-7 w-7 place-items-center rounded-md border border-[#d7d9de] bg-white text-[#555c66] hover:bg-[#f4f5f7] disabled:cursor-not-allowed disabled:opacity-45" type="button" aria-label={`Remove ${user.username || "user"}`} title="Remove user" disabled={formDisabled || authUsers.length <= 1} onClick={() => removeAuthUser(index)}>
                     <CloseIcon className="h-[11px] w-[11px]" />
                   </button>
                 </div>
               ))}
               <div className="flex items-center justify-between gap-2">
-                <button className="inline-flex h-7 items-center gap-1.5 rounded-md border border-[#d7d9de] bg-white px-2 text-[11px] font-medium text-[#111] hover:bg-[#f8f9fb]" type="button" disabled={formDisabled} onClick={addAuthUser}>
+                <button className="inline-flex h-7 items-center gap-1.5 rounded-md border border-[#d7d9de] bg-white px-2 text-[11px] font-medium text-[#111] hover:bg-[#f8f9fb] disabled:cursor-not-allowed disabled:opacity-45" type="button" disabled={formDisabled} onClick={addAuthUser}>
                   <PlusIcon className="h-[12px] w-[12px]" />
                   <span>Add user</span>
                 </button>
-                <button className="grid h-7 w-7 place-items-center rounded-md border border-[#d7d9de] bg-white p-1 text-[#555c66] hover:bg-[#f4f5f7]" type="button" aria-label={passwordVisible ? "Hide passwords" : "Show passwords"} title={passwordVisible ? "Hide passwords" : "Show passwords"} disabled={formDisabled} onClick={() => setPasswordVisible((current) => !current)}>
+                <button className="grid h-7 w-7 place-items-center rounded-md border border-[#d7d9de] bg-white p-1 text-[#555c66] hover:bg-[#f4f5f7] disabled:cursor-not-allowed disabled:opacity-45" type="button" aria-label={passwordVisible ? "Hide passwords" : "Show passwords"} title={passwordVisible ? "Hide passwords" : "Show passwords"} disabled={formDisabled} onClick={() => setPasswordVisible((current) => !current)}>
                   {passwordVisible ? <EyeIcon className="h-[13px] w-[13px]" /> : <EyeOffIcon className="h-[13px] w-[13px]" />}
                 </button>
               </div>
