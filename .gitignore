@@ -1,4 +1,6 @@
 logs
 node_modules
 dist
+storybook-static
+.storybook-home
 *.eagleplugin

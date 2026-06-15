@@ -47,7 +47,10 @@ function copyPluginPackageAssets() {
 }
 
 export default defineConfig({
-  plugins: [react(), copyPluginPackageAssets()],
+  plugins: [
+    react(),
+    ...(process.env.STORYBOOK === "1" ? [] : [copyPluginPackageAssets()]),
+  ],
   publicDir: false,
   build: {
     outDir: "dist/public",

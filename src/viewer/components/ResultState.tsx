@@ -1,4 +1,4 @@
-type ResultStateViewProps =
+export type ResultStateViewProps =
   | { kind: "message"; text: string; className?: string }
   | { kind: "empty"; hasActiveFilters: boolean; onClearFilters: () => void };
 
