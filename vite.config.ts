@@ -47,6 +47,11 @@ function copyPluginPackageAssets() {
 }
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      "@": resolve("src"),
+    },
+  },
   plugins: [
     react(),
     ...(process.env.STORYBOOK === "1" ? [] : [copyPluginPackageAssets()]),
