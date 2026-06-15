@@ -509,7 +509,7 @@ async function handleAuthRoutes(req, url, res, auth: AuthContext) {
       "Content-Type": "application/json; charset=utf-8",
       "Set-Cookie": authSessionCookie("", 0),
     });
-    res.end(JSON.stringify(authStatusResponse(auth, null, { authenticated: false })));
+    res.end(JSON.stringify(authStatusResponse(auth, null, { authenticated: !authRequired(auth) })));
     return true;
   }
 
