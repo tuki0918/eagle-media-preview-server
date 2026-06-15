@@ -31,6 +31,7 @@ test("createViewerServer starts and stops without the CLI entrypoint", async () 
     authenticated: true,
     user: null,
     permissions: {
+      manageLibrary: false,
       read: true,
       writeMetadata: false,
       writeRating: false,
@@ -118,6 +119,7 @@ test("createViewerServer allows metadata writes when editing is enabled for an a
         username: "eagle",
       },
       permissions: {
+        manageLibrary: false,
         read: true,
         writeMetadata: true,
         writeRating: true,
@@ -183,6 +185,7 @@ test("createViewerServer authorizes metadata writes by user role", async () => {
       authenticated: true,
       user: { username: "reader", role: "viewer" },
       permissions: {
+        manageLibrary: false,
         read: true,
         writeMetadata: false,
         writeRating: false,
@@ -337,6 +340,7 @@ test("createViewerServer logs out cookie sessions", async () => {
         username: "eagle",
       },
       permissions: {
+        manageLibrary: false,
         read: true,
         writeMetadata: false,
         writeRating: false,
@@ -362,6 +366,7 @@ test("createViewerServer logs out cookie sessions", async () => {
       authenticated: false,
       user: null,
       permissions: {
+        manageLibrary: false,
         read: false,
         writeMetadata: false,
         writeRating: false,
@@ -467,6 +472,64 @@ test("createViewerServer protects static viewer with BasicAuth when password has
   assert.equal(allowed.status, 200);
 
   await viewer.stop();
+});
+
+test("createViewerServer restricts library switching to admins", async () => {
+  const calls: unknown[] = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    authUsers: [
+      { username: "reader", passwordHash: sha256("read"), role: "viewer" },
+      { username: "owner", passwordHash: sha256("own"), role: "admin" },
+    ],
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: calls.length ? "/tmp/B.library" : "/tmp/A.library", name: "Test Library" };
+      },
+      async switchLibrary(libraryPath: string) {
+        calls.push(libraryPath);
+        return {};
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const origin = `http://127.0.0.1:${status.port}`;
+    const reader = `Basic ${Buffer.from("reader:read").toString("base64")}`;
+    const admin = `Basic ${Buffer.from("owner:own").toString("base64")}`;
+
+    const denied = await fetch(`${origin}/api/library/switch`, {
+      method: "POST",
+      headers: {
+        Authorization: reader,
+        "Content-Type": "application/json",
+        Origin: origin,
+      },
+      body: JSON.stringify({ libraryPath: "/tmp/B.library" }),
+    });
+    assert.equal(denied.status, 403);
+    assert.deepEqual(await denied.json(), { error: "Admin permission is required" });
+
+    const allowed = await fetch(`${origin}/api/library/switch`, {
+      method: "POST",
+      headers: {
+        Authorization: admin,
+        "Content-Type": "application/json",
+        Origin: origin,
+      },
+      body: JSON.stringify({ libraryPath: "/tmp/B.library" }),
+    });
+    assert.equal(allowed.status, 200);
+    assert.deepEqual(calls, ["/tmp/B.library"]);
+  } finally {
+    await viewer.stop();
+  }
 });
 
 test("createViewerServer serves direct file routes from /file/:id", async () => {

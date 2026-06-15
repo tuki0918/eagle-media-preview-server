@@ -27,7 +27,6 @@ External devices connect to the plugin server, not directly to Eagle's Web API.
 ## Non-Goals
 
 - Public Internet exposure
-- Multi-user accounts or role management
 - Folder-level or item-level ACLs
 - Full Eagle metadata editing beyond rating, tags, and categories
 - Persistent request logs or a log viewer screen
@@ -273,7 +272,7 @@ Roles:
 
 - Viewer: can browse and preview media
 - Editor: can browse and update rating, tags, and categories
-- Admin: currently has Editor permissions and is reserved for future remote management capabilities
+- Admin: can browse, edit metadata, and switch the active Eagle library
 
 Password handling:
 
@@ -284,6 +283,7 @@ Authorization:
 
 - Browsing is read-only by default
 - `POST /api/items/:id/star` and `POST /api/items/:id/metadata` require an Editor or Admin user
+- `POST /api/library/switch` requires an Admin user
 - Unsafe methods reject mismatched `Origin` or `Referer` headers before API handlers run
 - JSON request bodies are capped at 1 MiB; malformed bodies return `400` and oversized bodies return `413`
 
@@ -315,7 +315,7 @@ Main status fields:
 
 1. Open the server management window in Eagle
 2. Enable `Public Network`
-3. If needed, enable `BasicAuth protection` and set User and Password
+3. If needed, add Viewer, Editor, or Admin users and enable `BasicAuth protection`
 4. Confirm the Port setting
 5. Start the server with the power toggle
 6. Open the Endpoint URL or scan the QR code from a phone
@@ -330,10 +330,11 @@ Main status fields:
 
 ### Protected access
 
-1. Enable BasicAuth protection
-2. Set User and Password
-3. If the server is already running, settings changes that affect binding or auth restart it automatically
-4. External browser access requires authentication
+1. Add at least one user with a password
+2. Assign Viewer, Editor, or Admin roles
+3. Enable BasicAuth protection
+4. If the server is already running, settings changes that affect binding or auth restart it automatically
+5. External browser access requires authentication
 
 ## Build and Verification
 

@@ -200,6 +200,7 @@ async function loadAuthStatus() {
 
 function defaultPermissions(): ViewerPermissions {
   return {
+    manageLibrary: false,
     read: true,
     writeMetadata: false,
     writeRating: false,
@@ -209,6 +210,7 @@ function defaultPermissions(): ViewerPermissions {
 function normalizePermissions(value: AuthStatusResponse["permissions"]): ViewerPermissions {
   return {
     ...defaultPermissions(),
+    manageLibrary: Boolean(value?.manageLibrary),
     read: Boolean(value?.read ?? true),
     writeMetadata: Boolean(value?.writeMetadata),
     writeRating: Boolean(value?.writeRating),

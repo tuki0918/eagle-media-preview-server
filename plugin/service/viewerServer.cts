@@ -321,6 +321,10 @@ async function handleApi(req, url, res, { auth, getSession, setSession }: ApiCon
       sendJson(res, 405, { error: "Method not allowed" });
       return;
     }
+    if (!hasAdminAccess(req, auth)) {
+      sendJson(res, 403, { error: "Admin permission is required" });
+      return;
+    }
     const body = await readJson(req);
     const libraryPath = String(body.libraryPath || "").trim();
     if (!libraryPath) {
@@ -713,6 +717,11 @@ function hasMetadataWriteAccess(req, auth: AuthContext) {
   return Boolean(user && canRoleEditMetadata(user.role));
 }
 
+function hasAdminAccess(req, auth: AuthContext) {
+  const user = authenticatedUser(req, auth);
+  return user?.role === "admin";
+}
+
 function authenticatedUser(req, auth: AuthContext): AuthSession | null {
   if (!authRequired(auth)) return null;
   const basicUser = basicAuthUser(req.headers.authorization || "", auth);
@@ -751,7 +760,9 @@ function findPasswordUser(username, password, auth: AuthContext): AuthUser | nul
 function permissionsForUser(user: AuthSession | AuthUser | null, { authenticated = Boolean(user) } = {}) {
   const read = authenticated;
   const writeMetadata = Boolean(user && canRoleEditMetadata(user.role));
+  const manageLibrary = user?.role === "admin";
   return {
+    manageLibrary,
     read,
     writeMetadata,
     writeRating: writeMetadata,

@@ -55,6 +55,7 @@ export interface ConnectResponse {
 }
 
 export interface ViewerPermissions {
+  manageLibrary: boolean;
   read: boolean;
   writeMetadata: boolean;
   writeRating: boolean;
