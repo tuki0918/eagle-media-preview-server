@@ -540,13 +540,13 @@ function OptionRow({ checked, description, disabled, icon, onChange, title }: {
 
 function SettingRow({ children, help, label }: { children: React.ReactNode; help: string; label: string }) {
   return (
-    <label className="grid grid-cols-[72px_minmax(0,1fr)] gap-2.5 border-t border-[#e1e3e7] py-2 first:border-t-0 max-[520px]:grid-cols-1">
+    <div className="grid grid-cols-[72px_minmax(0,1fr)] gap-2.5 border-t border-[#e1e3e7] py-2 first:border-t-0 max-[520px]:grid-cols-1">
       <span className="pt-[7px] text-[11px] font-medium text-[#111]">{label}</span>
       <span className="grid gap-1">
         {children}
         <small className="text-[9px] text-[#8a8f99]">{help}</small>
       </span>
-    </label>
+    </div>
   );
 }
 
