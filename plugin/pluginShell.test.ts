@@ -254,6 +254,8 @@ test("plugin server caches authenticated users per request", async () => {
   assert.match(source, /authStatusResponse\(auth, null, \{ authenticated: true \}\)/);
   assert.match(source, /authStatusResponse\(auth, user, \{ authenticated: true \}\)/);
   assert.match(source, /authStatusResponse\(auth, null, \{ authenticated: !authRequired\(auth\) \}\)/);
+  assert.match(source, /Invalid username or password/);
+  assert.doesNotMatch(source, /Invalid password/);
   assert.match(source, /const auth = \{ authSessions, users: resolvedAuthUsers \};/);
   assert.match(source, /function authRequired\(\{ users = \[\] \}/);
   assert.doesNotMatch(source, /username === auth\.basicAuthUsername/);

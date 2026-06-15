@@ -480,7 +480,7 @@ async function handleAuthRoutes(req, url, res, auth: AuthContext) {
     const body = await readJson(req);
     const user = findPasswordUser(String(body.username || ""), String(body.password || ""), auth);
     if (!user) {
-      sendJson(res, 401, { error: "Invalid password" });
+      sendJson(res, 401, { error: "Invalid username or password" });
       return true;
     }
     pruneAuthSessions(auth.authSessions);
