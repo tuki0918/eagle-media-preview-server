@@ -23,7 +23,6 @@ interface ImageState {
   fitScale: number;
   naturalScale: number;
   naturalSize: { width: number; height: number } | null;
-  statusVisible: boolean;
   transform: PreviewTransform;
 }
 
@@ -57,8 +56,6 @@ const textPreviewClassName =
 const unsupportedThumbClassName = "unsupported-thumb max-h-[min(62dvh,640px)] w-[min(640px,calc(100vw_-_48px))] max-w-full object-contain";
 const previewNoticeClassName = "preview-notice m-0 max-w-[560px] text-center text-[13px] leading-normal text-app-muted";
 const imageViewportClassName = "image-viewport relative grid h-full min-h-0 w-full min-w-0 cursor-grab touch-none place-items-center overflow-hidden active:cursor-grabbing";
-const imageStatusClassName =
-  "image-status absolute left-3.5 top-[calc(14px+env(safe-area-inset-top))] z-[2] inline-flex min-h-[34px] max-w-[calc(100%_-_104px)] items-center rounded-full border border-[rgba(203,213,225,0.82)] bg-[rgba(255,255,255,0.88)] px-3 text-xs font-bold leading-none text-app-text-soft shadow-[0_8px_24px_rgba(15,23,42,0.12)] backdrop-blur-[12px] max-[540px]:left-3 max-[540px]:top-[calc(12px+env(safe-area-inset-top))] max-[540px]:min-h-8 max-[540px]:max-w-[calc(100%_-_88px)] max-[540px]:px-2.5 max-[540px]:text-[11px]";
 const previewImageClassName =
   "preview-image absolute left-1/2 top-1/2 block max-h-none max-w-none select-none object-contain [transform-origin:center] [will-change:transform] [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:bg-[#05070a] [&:fullscreen]:object-contain";
 const imageToolbarClassName =
@@ -305,7 +302,6 @@ function ImagePreview({ item, srcKind }: { item: EagleItem; srcKind: "file" | "t
   const [imageState, setImageState] = useState<ImageState>(() => ({
     ...initialPreviewScales(),
     naturalSize: null,
-    statusVisible: false,
   }));
 
   useEffect(() => {
@@ -315,7 +311,6 @@ function ImagePreview({ item, srcKind }: { item: EagleItem; srcKind: "file" | "t
     setImageState({
       ...initialPreviewScales(),
       naturalSize: null,
-      statusVisible: false,
     });
   }, [item.id, srcKind]);
 
@@ -340,9 +335,6 @@ function ImagePreview({ item, srcKind }: { item: EagleItem; srcKind: "file" | "t
     return () => window.removeEventListener("resize", refreshLayout);
   }, []);
 
-  const statusText = imageState.naturalSize
-    ? `${imageState.naturalSize.width} × ${imageState.naturalSize.height} · ${Math.round((imageState.transform.scale / imageState.naturalScale) * 100)}%`
-    : "";
   const imageStyle = imageState.naturalSize
     ? {
         height: `${imageState.naturalSize.height}px`,
@@ -472,17 +464,10 @@ function ImagePreview({ item, srcKind }: { item: EagleItem; srcKind: "file" | "t
               fitScale: scales.fitScale,
               naturalScale: scales.naturalScale,
               naturalSize: { width: image.naturalWidth, height: image.naturalHeight },
-              statusVisible: true,
               transform: setPreviewZoom(scales.fitScale, { x: 0, y: 0 }),
             });
           }}
-          onError={() => {
-            setImageState((current) => ({ ...current, statusVisible: false }));
-          }}
         />
-        <div className={imageStatusClassName} hidden={!imageState.statusVisible}>
-          {statusText}
-        </div>
       </div>
       <ImageToolbar
         onActualSize={() => setImageZoom(imageState.naturalScale, { x: 0, y: 0 })}
