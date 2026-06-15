@@ -65,6 +65,10 @@ export interface AuthStatusResponse {
   authenticated?: boolean;
   permissions?: Partial<ViewerPermissions>;
   required?: boolean;
+  user?: {
+    role?: string;
+    username?: string;
+  } | null;
 }
 
 export interface LoadFoldersResponse {

@@ -120,6 +120,7 @@ test("public login renders credentials when server auth is required", async () =
     disabled: false,
     isError: false,
     message: "",
+    user: null,
   });
   const login = renderToStaticMarkup(createElement(LoginView, { hidden: false }));
   const button = renderToStaticMarkup(createElement(ConnectButton, { disabled: false }));
@@ -138,6 +139,7 @@ test("public login renders credentials when server auth is required", async () =
     disabled: false,
     isError: false,
     message: "",
+    user: null,
   });
 });
 
@@ -149,11 +151,16 @@ test("public viewer exposes sign out when authenticated", async () => {
     disabled: false,
     isError: false,
     message: "",
+    user: { role: "editor", username: "ed" },
   });
   const footer = renderToStaticMarkup(createElement(LibraryFooter, { name: "My Library" }));
 
+  assert.match(footer, /id="authUserLabel"/);
+  assert.match(footer, /ed \(editor\)/);
   assert.match(footer, /id="logoutButton"/);
   assert.match(footer, /Sign out/);
+  assert.match(app, /authUser = login\.user \?\? null/);
+  assert.match(app, /authUser = data\.user \?\? null/);
   assert.match(app, /postJson<AuthStatusResponse>\("\/api\/auth\/logout", \{\}\)/);
   assert.match(app, /showLogin\(\);/);
 
@@ -163,6 +170,7 @@ test("public viewer exposes sign out when authenticated", async () => {
     disabled: false,
     isError: false,
     message: "",
+    user: null,
   });
 });
 

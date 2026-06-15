@@ -95,6 +95,7 @@ let connectMessageIsError = false;
 let connectBusy = false;
 let authAuthenticated = false;
 let authRequired = false;
+let authUser: NonNullable<AuthStatusResponse["user"]> | null = null;
 
 export function initViewer() {
   init();
@@ -188,6 +189,7 @@ async function connect(credentials?: { password: string; username: string }) {
       }
       const login = await postJson<AuthStatusResponse>("/api/auth/login", { username, password });
       authAuthenticated = Boolean(login.authenticated);
+      authUser = login.user ?? null;
       state.permissions = normalizePermissions(login.permissions);
       renderLoginConnect();
       setConnectMessage("Connecting", false);
@@ -210,6 +212,7 @@ async function logout() {
   try {
     await postJson<AuthStatusResponse>("/api/auth/logout", {});
     authAuthenticated = false;
+    authUser = null;
     state.permissions = defaultPermissions();
     renderLoginConnect();
     showLogin();
@@ -225,10 +228,12 @@ async function loadAuthStatus() {
     const data = await getJson<AuthStatusResponse>("/api/auth/status");
     authAuthenticated = Boolean(data.authenticated);
     authRequired = Boolean(data.required);
+    authUser = data.user ?? null;
     state.permissions = normalizePermissions(data.permissions);
   } catch {
     authAuthenticated = false;
     authRequired = false;
+    authUser = null;
     state.permissions = defaultPermissions();
   }
   renderLoginConnect();
@@ -286,6 +291,7 @@ function renderLoginConnect() {
     disabled: connectBusy,
     isError: connectMessageIsError,
     message: connectMessageText,
+    user: authUser,
   });
 }
 
