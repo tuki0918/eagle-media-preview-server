@@ -190,7 +190,7 @@ async function connect(credentials?: { password: string; username: string }) {
       const login = await postJson<AuthStatusResponse>("/api/auth/login", { username, password });
       authAuthenticated = Boolean(login.authenticated);
       authUser = login.user ?? null;
-      state.permissions = normalizePermissions(login.permissions);
+      state.permissions = normalizePermissions(login.permissions, authAuthenticated);
       renderLoginConnect();
       setConnectMessage("Connecting", false);
     }
@@ -213,7 +213,7 @@ async function logout() {
     await postJson<AuthStatusResponse>("/api/auth/logout", {});
     authAuthenticated = false;
     authUser = null;
-    state.permissions = defaultPermissions();
+    state.permissions = defaultPermissions(!authRequired);
     renderLoginConnect();
     showLogin();
   } catch (error) {
@@ -229,7 +229,7 @@ async function loadAuthStatus() {
     authAuthenticated = Boolean(data.authenticated);
     authRequired = Boolean(data.required);
     authUser = data.user ?? null;
-    state.permissions = normalizePermissions(data.permissions);
+    state.permissions = normalizePermissions(data.permissions, !authRequired || authAuthenticated);
   } catch {
     authAuthenticated = false;
     authRequired = false;
@@ -239,18 +239,18 @@ async function loadAuthStatus() {
   renderLoginConnect();
 }
 
-function defaultPermissions(): ViewerPermissions {
+function defaultPermissions(read = true): ViewerPermissions {
   return {
-    read: true,
+    read,
     writeMetadata: false,
     writeRating: false,
   };
 }
 
-function normalizePermissions(value: AuthStatusResponse["permissions"]): ViewerPermissions {
+function normalizePermissions(value: AuthStatusResponse["permissions"], readFallback = true): ViewerPermissions {
   return {
-    ...defaultPermissions(),
-    read: Boolean(value?.read ?? true),
+    ...defaultPermissions(readFallback),
+    read: Boolean(value?.read ?? readFallback),
     writeMetadata: Boolean(value?.writeMetadata),
     writeRating: Boolean(value?.writeRating),
   };

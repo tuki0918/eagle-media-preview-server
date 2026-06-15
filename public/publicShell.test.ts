@@ -166,6 +166,10 @@ test("public viewer exposes sign out when authenticated", async () => {
   assert.doesNotMatch(footer, /authFooterMessage/);
   assert.match(app, /authUser = login\.user \?\? null/);
   assert.match(app, /authUser = data\.user \?\? null/);
+  assert.match(app, /state\.permissions = normalizePermissions\(login\.permissions, authAuthenticated\);/);
+  assert.match(app, /state\.permissions = normalizePermissions\(data\.permissions, !authRequired \|\| authAuthenticated\);/);
+  assert.match(app, /state\.permissions = defaultPermissions\(!authRequired\);/);
+  assert.match(app, /function normalizePermissions\(value: AuthStatusResponse\["permissions"\], readFallback = true\)/);
   assert.match(app, /postJson<AuthStatusResponse>\("\/api\/auth\/logout", \{\}\)/);
   assert.match(app, /showLogin\(\);/);
   assert.doesNotMatch(app, /manageLibrary/);
