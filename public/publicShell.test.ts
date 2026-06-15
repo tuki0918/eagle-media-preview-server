@@ -127,9 +127,11 @@ test("public login renders credentials when server auth is required", async () =
 
   assert.match(login, /id="authUsernameInput"/);
   assert.match(login, /name="username"/);
+  assert.match(login, /aria-label="Username"/);
   assert.match(login, /id="authUsernameInput"[\s\S]*required=""/);
   assert.match(login, /id="authPasswordInput"/);
   assert.match(login, /name="password"/);
+  assert.match(login, /aria-label="Password"/);
   assert.match(login, /id="authPasswordInput"[\s\S]*required=""/);
   assert.match(button, /Sign in/);
   assert.match(app, /postJson<AuthStatusResponse>\("\/api\/auth\/login", \{ username, password \}\)/);

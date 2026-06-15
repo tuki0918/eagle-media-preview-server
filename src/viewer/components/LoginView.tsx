@@ -57,6 +57,7 @@ function LoginCredentials({ disabled }: { disabled: boolean }) {
         id="authUsernameInput"
         name="username"
         className="min-h-[42px] rounded-app border border-app-border bg-white px-3 text-sm text-app-text outline-none focus:border-app-accent focus:shadow-[0_0_0_3px_rgba(37,99,235,0.12)]"
+        aria-label="Username"
         autoComplete="username"
         disabled={disabled}
         placeholder="Username"
@@ -67,6 +68,7 @@ function LoginCredentials({ disabled }: { disabled: boolean }) {
         id="authPasswordInput"
         name="password"
         className="min-h-[42px] rounded-app border border-app-border bg-white px-3 text-sm text-app-text outline-none focus:border-app-accent focus:shadow-[0_0_0_3px_rgba(37,99,235,0.12)]"
+        aria-label="Password"
         autoComplete="current-password"
         disabled={disabled}
         placeholder="Password"
