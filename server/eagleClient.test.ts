@@ -14,7 +14,7 @@ const {
   normalizePaginatedResponse,
   pathFromFileValue,
   resolveLibraryItemFile,
-} = require("../.generated/plugin-service/eagleClient.cjs");
+} = require("../dist/.generated/plugin-service/eagleClient.cjs");
 
 test("clampLimit keeps page sizes bounded for large libraries", () => {
   assert.equal(clampLimit(0), 60);

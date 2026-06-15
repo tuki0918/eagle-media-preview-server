@@ -72,7 +72,7 @@ The source is managed as a TypeScript / React / Vite / Tailwind CSS / Vitest pro
   - Viewer state, URL sync, media helpers, formatting, API calls, and controller logic
 - `plugin/service/*.cts`
   - Eagle-compatible service runtime sources
-  - Compiled by `tsconfig.plugin-service.json` to `.generated/plugin-service/*.cjs` files for Eagle's `require` runtime
+  - Compiled by `tsconfig.plugin-service.json` to `dist/.generated/plugin-service/*.cjs` files for Eagle's `require` runtime
 - `server/viewerServer.ts`
   - ESM wrapper that reuses the generated plugin service runtime for tests and local imports
 
@@ -325,12 +325,12 @@ npm test
 npm run verify
 ```
 
-`npm run build` compiles the plugin service `.cts` files into `.generated/plugin-service` before Vite builds and packages the React surfaces. The Vite package step also copies `manifest.json`, plugin icons/assets, public assets, favicon, generated service `.cjs` files, and CSS into `dist`.
+`npm run build` compiles the plugin service `.cts` files into `dist/.generated/plugin-service` before Vite builds and packages the React surfaces. The Vite package step also copies `manifest.json`, plugin icons/assets, public assets, favicon, generated service `.cjs` files, and CSS into `dist`.
 
 `npm run verify` runs TypeScript checks, the production build, and Vitest.
 
 ## Implementation Notes
 
 - QR code generation is bundled into the plugin window from the `qrcode-generator` dependency.
-- Generated `.generated/plugin-service/*.cjs` files are build artifacts and are not tracked as source.
+- Generated `dist/.generated/plugin-service/*.cjs` files are build artifacts and are not tracked as source.
 - Request log UI, diagnostics UI, and shared URL expiration UI are intentionally not part of the current implementation.

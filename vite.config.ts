@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import { build as esbuild } from "esbuild";
 
 const distDir = resolve("dist");
-const generatedPluginServiceDir = resolve(".generated", "plugin-service");
+const generatedPluginServiceDir = resolve(distDir, ".generated", "plugin-service");
 
 function copyPluginPackageAssets() {
   const includeRuntimeAsset = (sourcePath: string) => !/\.test\.(?:cjs|js|ts|tsx)$/.test(sourcePath)
@@ -15,7 +15,11 @@ function copyPluginPackageAssets() {
   return {
     name: "copy-plugin-package-assets",
     async buildStart() {
-      await rm(distDir, { force: true, recursive: true });
+      await Promise.all([
+        rm(resolve(distDir, "manifest.json"), { force: true }),
+        rm(resolve(distDir, "plugin"), { force: true, recursive: true }),
+        rm(resolve(distDir, "public"), { force: true, recursive: true }),
+      ]);
     },
     async closeBundle() {
       await mkdir(distDir, { recursive: true });

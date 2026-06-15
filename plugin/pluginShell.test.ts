@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 type PluginRequirePath = (relativePath: string) => string;
-const generatedServiceUrl = new URL("../.generated/plugin-service/", import.meta.url);
+const generatedServiceUrl = new URL("../dist/.generated/plugin-service/", import.meta.url);
 
 async function readPluginAppSource() {
   return readFile(new URL("./app.tsx", import.meta.url), "utf8");
