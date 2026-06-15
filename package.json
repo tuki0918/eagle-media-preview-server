@@ -4,12 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "npm run build:cjs && vite build",
-    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "build": "npm run build:plugin-service && vite build",
+    "build:plugin-service": "tsc -p tsconfig.plugin-service.json",
     "dev": "vite --host 127.0.0.1",
-    "test": "npm run build:cjs && vitest run",
-    "typecheck": "tsc --noEmit && npm run typecheck:cjs",
-    "typecheck:cjs": "tsc -p tsconfig.cjs.json --noEmit",
+    "test": "npm run build:plugin-service && vitest run",
+    "typecheck": "tsc --noEmit && npm run typecheck:plugin-service",
+    "typecheck:plugin-service": "tsc -p tsconfig.plugin-service.json --noEmit",
     "verify": "npm run typecheck && npm run build && npm test"
   },
   "engines": {

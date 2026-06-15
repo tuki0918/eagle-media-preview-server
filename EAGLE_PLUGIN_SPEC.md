@@ -277,7 +277,7 @@ Main status fields:
 
 ## Implementation Notes
 
-- ESM wrapper `server/viewerServer.ts` reuses the CommonJS implementation in `plugin/service/viewerServer.cjs`
-- CommonJS runtime for Eagle plugin windows is kept in `plugin/service/runtime.cjs`
-- QR code generation uses `plugin/vendor/qrcode-generator.cjs`
+- ESM wrapper `server/viewerServer.ts` reuses the generated Eagle-compatible plugin service runtime.
+- Eagle plugin service sources live in `plugin/service/*.cts`; build output generates `.cjs` files for the Eagle `require` runtime.
+- QR code generation is bundled into the plugin window from the `qrcode-generator` dependency.
 - Request log UI, diagnostics UI, and shared URL expiration UI are intentionally not part of the current implementation

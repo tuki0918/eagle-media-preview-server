@@ -1,7 +1,11 @@
-const assert = require("node:assert/strict");
-const { mkdtemp } = require("fs").promises;
-const { join } = require("path");
-const { tmpdir } = require("os");
+import { test } from "vitest";
+import assert from "node:assert/strict";
+import { mkdtemp } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+const require = createRequire(import.meta.url);
 const {
   DEFAULT_SETTINGS,
   createServerManager,
@@ -10,18 +14,18 @@ const {
   normalizeSettings,
 } = require("./runtime.cjs");
 
-test("CommonJS runtime loads with require for Eagle plugin windows", () => {
+test("generated CommonJS runtime loads with require for Eagle plugin windows", () => {
   assert.equal(normalizeSettings({}).port, DEFAULT_SETTINGS.port);
   assert.equal("requestLogEnabled" in normalizeSettings({ requestLogEnabled: false }), false);
 });
 
-test("CommonJS settings store uses the product settings directory by default", () => {
+test("generated settings store uses the product settings directory by default", () => {
   const store = createSettingsStore();
   assert.match(store.filePath, /[\\/]\.eagle-media-preview-server[\\/]settings\.json$/);
   assert.equal(store.filePath.includes(".eagle-api-viewer-plugin"), false);
 });
 
-test("CommonJS settings store hashes password", async () => {
+test("generated settings store hashes password", async () => {
   const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-runtime-"));
   const store = createSettingsStore({ filePath: join(dir, "settings.json") });
 
@@ -34,7 +38,7 @@ test("CommonJS settings store hashes password", async () => {
   assert.equal(saved.passwordHash, hashPassword("secret"));
 });
 
-test("CommonJS server manager can start and stop a viewer server", async () => {
+test("generated server manager can start and stop a viewer server", async () => {
   const settings = {
     ...DEFAULT_SETTINGS,
     host: "127.0.0.1",
@@ -45,7 +49,7 @@ test("CommonJS server manager can start and stop a viewer server", async () => {
       async load() {
         return settings;
       },
-      async save(input) {
+      async save(input: Record<string, unknown>) {
         Object.assign(settings, input);
         return settings;
       },
@@ -65,7 +69,7 @@ test("CommonJS server manager can start and stop a viewer server", async () => {
   assert.equal(stopped.state, "stopped");
 });
 
-test("CommonJS server manager reports localhost URL when public network is disabled", async () => {
+test("generated server manager reports localhost URL when public network is disabled", async () => {
   const settings = {
     ...DEFAULT_SETTINGS,
     host: "127.0.0.1",
@@ -76,7 +80,7 @@ test("CommonJS server manager reports localhost URL when public network is disab
       async load() {
         return settings;
       },
-      async save(input) {
+      async save(input: Record<string, unknown>) {
         Object.assign(settings, input);
         return settings;
       },
@@ -90,8 +94,8 @@ test("CommonJS server manager reports localhost URL when public network is disab
   assert.equal(status.url, "http://localhost:41532");
 });
 
-test("CommonJS server manager does not restart when only auto start changes while running", async () => {
-  const calls = [];
+test("generated server manager does not restart when only auto start changes while running", async () => {
+  const calls: unknown[] = [];
   const settings = {
     ...DEFAULT_SETTINGS,
     host: "127.0.0.1",
@@ -102,7 +106,7 @@ test("CommonJS server manager does not restart when only auto start changes whil
       async load() {
         return settings;
       },
-      async save(input) {
+      async save(input: Record<string, unknown>) {
         Object.assign(settings, input);
         calls.push(["save", settings.autoStart]);
         return settings;

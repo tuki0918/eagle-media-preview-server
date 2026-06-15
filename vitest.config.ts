@@ -10,7 +10,6 @@ export default defineConfig({
       "public/**/*.test.ts",
       "plugin/**/*.test.ts",
       "server/**/*.test.ts",
-      "plugin/**/*.test.cjs",
     ],
   },
 });

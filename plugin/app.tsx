@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import qrcodeFactory from "qrcode-generator";
 
 type ServerState = "error" | "running" | "stopped";
 
@@ -54,7 +55,6 @@ const busyStoppedFrames = Object.freeze([".", "..", "...", "....", "....."]);
 
 function App() {
   const managerRef = useRef<ServerManager | null>(null);
-  const qrFactoryRef = useRef<null | ((typeNumber: number, errorCorrectionLevel: string) => QrCodeFactoryResult)>(null);
   const [busy, setBusy] = useState(false);
   const [busyFrame, setBusyFrame] = useState(0);
   const [message, setMessageState] = useState("");
@@ -83,8 +83,8 @@ function App() {
   const publicNetwork = (settings.host || "0.0.0.0") === "0.0.0.0";
   const selectedLanAddress = settings.preferredLanAddress || "";
   const qrSrc = useMemo(() => {
-    if (!status.url || serverState !== "running" || !qrFactoryRef.current) return "";
-    return createQrDataUrl(qrFactoryRef.current, status.url);
+    if (!status.url || serverState !== "running") return "";
+    return createQrDataUrl(status.url);
   }, [serverState, status.url]);
 
   useEffect(() => {
@@ -93,9 +93,7 @@ function App() {
         throw new Error("Node require() is not available in this Eagle plugin window");
       }
       const runtimePath = pluginRequirePath("service/runtime.cjs");
-      const qrcodePath = pluginRequirePath("vendor/qrcode-generator.cjs");
       const runtime = window.require(runtimePath) as { createServerManager: () => ServerManager };
-      qrFactoryRef.current = window.require(qrcodePath) as (typeNumber: number, errorCorrectionLevel: string) => QrCodeFactoryResult;
       managerRef.current = runtime.createServerManager();
       const init = () => runCommand(() => managerRef.current?.init(), { quiet: true });
       if (globalThis.eagle?.onPluginCreate) {
@@ -461,8 +459,8 @@ interface QrCodeFactoryResult {
   make(): void;
 }
 
-function createQrDataUrl(factory: (typeNumber: number, errorCorrectionLevel: string) => QrCodeFactoryResult, value: string) {
-  const qr = factory(0, "M");
+function createQrDataUrl(value: string) {
+  const qr = qrcodeFactory(0, "M") as QrCodeFactoryResult;
   qr.addData(value);
   qr.make();
   const svg = qr.createSvgTag({ cellSize: 4, margin: 16, scalable: true, alt: value });

@@ -52,7 +52,8 @@ test("plugin app keeps Eagle Node API compatibility with a classic script", asyn
   assert.doesNotMatch(html, /type="module"/);
   assert.match(app, /typeof window\.require !== "function"/);
   assert.match(app, /window\.require\(runtimePath\)/);
-  assert.match(app, /window\.require\(qrcodePath\)/);
+  assert.doesNotMatch(app, /window\.require\(qrcodePath\)/);
+  assert.match(app, /import qrcodeFactory from "qrcode-generator"/);
 });
 
 test("settings stay expanded and endpoint opens externally", async () => {
@@ -132,7 +133,7 @@ test("plugin app resolves CommonJS runtime from the plugin file location", async
 
   assert.match(app, /document\.currentScript\?\.getAttribute\("src"\)/);
   assert.match(app, /pluginRequirePath\("service\/runtime\.cjs"\)/);
-  assert.match(app, /pluginRequirePath\("vendor\/qrcode-generator\.cjs"\)/);
+  assert.doesNotMatch(app, /pluginRequirePath\("vendor\/qrcode-generator\.cjs"\)/);
 });
 
 test("plugin app animates the stopped status text while a restart is busy", async () => {
@@ -186,7 +187,7 @@ test("manifest uses a frameless window for custom chrome", async () => {
 test("plugin QR rendering uses the bundled QR library instead of custom matrix code", async () => {
   const app = await readPluginAppSource();
 
-  assert.match(app, /qrcode-generator\.cjs/);
+  assert.match(app, /qrcode-generator/);
   assert.match(app, /createQrDataUrl/);
   assert.doesNotMatch(app, /function createQrMatrix/);
   assert.doesNotMatch(app, /function reedSolomon/);
