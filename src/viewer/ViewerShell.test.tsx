@@ -238,7 +238,7 @@ describe("ViewerAppShell", () => {
     expect(empty).toContain("Clear filters");
   });
 
-  test("renders tiles empty state without masonry columns", () => {
+  test("renders tiles empty state with dense grid layout", () => {
     const html = renderToStaticMarkup(
       <ResultSurface
         state={{
@@ -251,9 +251,12 @@ describe("ViewerAppShell", () => {
     );
 
     expect(html).toContain("media-tiles");
+    expect(html).toContain("grid");
+    expect(html).toContain("[grid-auto-flow:dense]");
+    expect(html).toContain("[grid-auto-rows:4px]");
+    expect(html).toContain("max-[540px]:grid-cols-3");
     expect(html).toContain("is-empty");
-    expect(html).toContain("[column-count:auto]");
-    expect(html).toContain("max-[540px]:[column-count:auto]");
+    expect(html).not.toContain("column-count");
   });
 
   test("renders result list as reusable media items", () => {
@@ -267,6 +270,7 @@ describe("ViewerAppShell", () => {
 
     expect(html).toContain("tile-item");
     expect(html).toContain("thumb-loading");
+    expect(html).toContain("grid-row-end:span");
     expect(html).toContain("2:05");
     expect(html).not.toContain("file-badge");
     expect(html).not.toContain("rating-star");

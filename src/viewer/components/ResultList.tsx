@@ -45,7 +45,7 @@ const overlayIconPaths = {
 const mediaCardClassName = "media-card min-w-0 overflow-hidden rounded-app border border-app-border bg-app-surface p-0 shadow-app-soft";
 const cardMetaClassName = "card-meta px-2 pb-2 pt-[9px] [&>span]:mt-0.5 [&>span]:block [&>span]:min-w-0 [&>span]:overflow-hidden [&>span]:text-ellipsis [&>span]:whitespace-nowrap [&>span]:text-xs [&>span]:text-app-muted [&>strong]:block [&>strong]:min-w-0 [&>strong]:overflow-hidden [&>strong]:text-ellipsis [&>strong]:whitespace-nowrap [&>strong]:text-[13px] [&>strong]:font-[420] [&>strong]:leading-[1.3]";
 const tileButtonClassName =
-  "tile-item relative mb-1 block w-full cursor-zoom-in overflow-hidden border-0 bg-app-surface-strong p-0 shadow-none [break-inside:avoid] [border-radius:0] [contain:layout_paint] max-[540px]:mb-[3px] [&>img]:block [&>img]:h-full [&>img]:w-full [&>img]:object-cover";
+  "tile-item relative block h-full w-full cursor-zoom-in overflow-hidden border-0 bg-app-surface-strong p-0 shadow-none [border-radius:0] [contain:layout_paint] [&>img]:block [&>img]:h-full [&>img]:w-full [&>img]:object-contain";
 const gridThumbButtonClassName =
   "thumb-button relative block aspect-[3/2] w-full touch-manipulation overflow-hidden border-0 bg-app-surface-strong p-0 shadow-none [border-radius:0] [transition:border-color_150ms_ease,box-shadow_150ms_ease,background-color_150ms_ease] hover:border-[rgba(37,99,235,0.45)] hover:shadow-[inset_0_0_0_1px_rgba(37,99,235,0.18)] focus-visible:border-[rgba(37,99,235,0.45)] focus-visible:shadow-[inset_0_0_0_1px_rgba(37,99,235,0.18)] [&>img]:block [&>img]:h-full [&>img]:w-full [&>img]:object-cover";
 const rowThumbButtonClassName =
@@ -71,6 +71,9 @@ const tableHiddenOnMobileClassName = "max-[540px]:hidden";
 const cardRatingClassName =
   "rating-control absolute bottom-1.5 left-1.5 z-[2] inline-flex items-center gap-0 rounded-md bg-[rgba(15,23,42,0.78)] px-1 py-[3px] leading-[1.2] text-white [&_.rating-star]:h-3 [&_.rating-star]:w-3 [&_.rating-star]:text-[10px] [&_.rating-star]:text-[rgba(255,255,255,0.34)] [&_.rating-star[data-active=true]]:text-[#fbbf24]";
 const tableRatingClassName = "rating-control inline-flex items-center gap-px justify-self-start";
+const tileMasonryBaseWidth = 168;
+const tileMasonryGap = 4;
+const tileMasonryRowHeight = 4;
 
 const extensionColorClassNames: Record<string, string> = {
   jpg: "border-[#bbf7d0] bg-[#f0fdf4] text-[#15803d]",
@@ -184,12 +187,22 @@ function TileItem({ item, onOpenPreview }: { item: EagleItem; onOpenPreview: (it
       variant="tile"
       item={item}
       onOpenPreview={onOpenPreview}
-      style={{ aspectRatio: width > 0 && height > 0 ? `${width} / ${height}` : "1 / 1" }}
+      style={{
+        aspectRatio: width > 0 && height > 0 ? `${width} / ${height}` : "1 / 1",
+        gridRowEnd: `span ${tileMasonrySpan(width, height)}`,
+      }}
       withBadges
       withFileBadge={false}
       withOverlay
     />
   );
+}
+
+function tileMasonrySpan(width: number, height: number) {
+  if (!(width > 0) || !(height > 0)) return 22;
+  const targetHeight = tileMasonryBaseWidth * (height / width);
+  const span = Math.ceil((targetHeight + tileMasonryGap) / (tileMasonryRowHeight + tileMasonryGap));
+  return Math.min(96, Math.max(12, span));
 }
 
 function TableHeader() {
