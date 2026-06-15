@@ -761,6 +761,8 @@ function currentFetchLimit() {
 
 function goToPage(page: number) {
   state.offset = (page - 1) * state.limit;
+  resetPreviewState();
+  syncUrlState();
   loadItems();
 }
 

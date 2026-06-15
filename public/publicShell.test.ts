@@ -808,6 +808,7 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   assert.match(html, /onClick=\{trigger\.onClick\}/);
   assert.match(app, /setResultSurfaceState\(\{[\s\S]*kind: "list",/);
   assert.match(app, /setPagerState\(\{/);
+  assert.match(app, /function goToPage\(page: number\) \{[\s\S]*state\.offset = \(page - 1\) \* state\.limit;[\s\S]*resetPreviewState\(\);[\s\S]*syncUrlState\(\);[\s\S]*loadItems\(\);[\s\S]*\}/);
   assert.match(app, /setTilesSentinelState\(\{/);
   assert.match(app, /getTilesSentinelElement\(\)/);
   assert.match(app, /function setupTileAutoLoading\(\) \{/);
