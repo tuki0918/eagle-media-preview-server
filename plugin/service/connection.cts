@@ -1,7 +1,8 @@
-// @ts-nocheck
 const { createEagleClient } = require("./eagleClient.cjs");
 
-function normalizeConnectionInput(input = {}, { requestHost = "", requireRemoteToken = false } = {}) {
+type LooseRecord = Record<string, any>;
+
+function normalizeConnectionInput(input: LooseRecord = {}, { requestHost = "", requireRemoteToken = false }: LooseRecord = {}) {
   const host = String(input.host || "127.0.0.1").trim() || "127.0.0.1";
   const parsedPort = Number.parseInt(input.port || "41595", 10);
 
@@ -22,7 +23,7 @@ function normalizeConnectionInput(input = {}, { requestHost = "", requireRemoteT
   };
 }
 
-function buildConnectionCandidates({ input = {}, requestHost = "" } = {}) {
+function buildConnectionCandidates({ input = {}, requestHost = "" }: LooseRecord = {}) {
   const primary = normalizeConnectionInput(input, { requestHost, requireRemoteToken: true });
   const viewerHost = extractHostname(requestHost);
 
@@ -45,12 +46,12 @@ function buildConnectionCandidates({ input = {}, requestHost = "" } = {}) {
   return [primary];
 }
 
-function requiresToken({ host, requestHost = "" }) {
+function requiresToken({ host, requestHost = "" }: LooseRecord) {
   const viewerHost = extractHostname(requestHost);
   return !["127.0.0.1", "localhost", "::1", viewerHost].includes(host);
 }
 
-function createConnectionContext({ input, connection, fetchImpl = globalThis.fetch, client } = {}) {
+function createConnectionContext({ input, connection, fetchImpl = globalThis.fetch, client }: LooseRecord = {}) {
   const resolvedConnection = connection || normalizeConnectionInput(input);
   const resolvedClient = client || createEagleClient({
     baseUrl: resolvedConnection.baseUrl,
@@ -72,7 +73,7 @@ function createConnectionContext({ input, connection, fetchImpl = globalThis.fet
   };
 }
 
-function extractHostname(hostHeader) {
+function extractHostname(hostHeader: string) {
   if (!hostHeader) return "";
   if (hostHeader.startsWith("[")) {
     return hostHeader.slice(1, hostHeader.indexOf("]"));

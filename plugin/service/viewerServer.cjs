@@ -1,6 +1,5 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-// @ts-nocheck
 const { createReadStream, existsSync } = require("fs");
 const { stat } = require("fs").promises;
 const { createServer } = require("http");
@@ -82,7 +81,6 @@ function createViewerServer({ host = "0.0.0.0", port = 41532, publicDir = defaul
                     setSession: (nextSession) => {
                         currentSession = nextSession;
                     },
-                    publicDir,
                 });
                 return;
             }

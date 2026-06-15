@@ -1,6 +1,5 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-// @ts-nocheck
 const { createEagleClient } = require("./eagleClient.cjs");
 function normalizeConnectionInput(input = {}, { requestHost = "", requireRemoteToken = false } = {}) {
     const host = String(input.host || "127.0.0.1").trim() || "127.0.0.1";

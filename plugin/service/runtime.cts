@@ -1,9 +1,10 @@
-// @ts-nocheck
 const { mkdir, readFile, writeFile } = require("fs").promises;
 const { createHash } = require("crypto");
 const { dirname, join } = require("path");
 const { homedir, networkInterfaces } = require("os");
 const { createViewerServer } = require("./viewerServer.cjs");
+
+type LooseRecord = Record<string, any>;
 
 const DEFAULT_SETTINGS = {
   autoStart: false,
@@ -20,7 +21,7 @@ function defaultSettingsPath() {
   return join(homedir(), ".eagle-media-preview-server", "settings.json");
 }
 
-function createSettingsStore({ filePath = defaultSettingsPath() } = {}) {
+function createSettingsStore({ filePath = defaultSettingsPath() }: LooseRecord = {}) {
   return {
     filePath,
 
@@ -34,7 +35,7 @@ function createSettingsStore({ filePath = defaultSettingsPath() } = {}) {
       }
     },
 
-    async save(input = {}) {
+    async save(input: LooseRecord = {}) {
       const current = await this.load();
       const next = normalizeSettings({ ...current, ...input });
 
@@ -58,7 +59,7 @@ function createSettingsStore({ filePath = defaultSettingsPath() } = {}) {
   };
 }
 
-function normalizeSettings(input = {}) {
+function normalizeSettings(input: LooseRecord = {}) {
   const port = Number.parseInt(input.port ?? DEFAULT_SETTINGS.port, 10);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error("port must be an integer from 1-65535");
@@ -82,8 +83,8 @@ function hashPassword(value) {
 }
 
 function getLanAddresses() {
-  const output = [];
-  for (const [label, entries] of Object.entries(networkInterfaces())) {
+  const output: LooseRecord[] = [];
+  for (const [label, entries] of Object.entries(networkInterfaces()) as Array<[string, any[]]>) {
     for (const entry of entries || []) {
       if (entry.family === "IPv4" && !entry.internal) output.push({ label, address: entry.address });
     }
@@ -91,12 +92,12 @@ function getLanAddresses() {
   return output;
 }
 
-function buildAccessUrl({ host = "0.0.0.0", port = 41532, preferredLanAddress = "", lanAddresses = [] } = {}) {
+function buildAccessUrl({ host = "0.0.0.0", port = 41532, preferredLanAddress = "", lanAddresses = [] }: LooseRecord = {}) {
   const address = selectLanAddress({ preferredLanAddress, lanAddresses, host });
   return `http://${address}:${port}`;
 }
 
-function selectLanAddress({ preferredLanAddress = "", lanAddresses = [], host = "0.0.0.0" } = {}) {
+function selectLanAddress({ preferredLanAddress = "", lanAddresses = [], host = "0.0.0.0" }: LooseRecord = {}) {
   if (preferredLanAddress && lanAddresses.some((entry) => entry.address === preferredLanAddress)) return preferredLanAddress;
   if (host === "127.0.0.1" || host === "localhost") return "localhost";
   if (host && host !== "0.0.0.0") return host;
@@ -108,12 +109,12 @@ function createServerManager({
   settingsStore = createSettingsStore(),
   viewerServerFactory = createViewerServer,
   lanAddressProvider = getLanAddresses,
-} = {}) {
+}: LooseRecord = {}) {
   let viewer = null;
   let stateOverride = "stopped";
   let lastError = "";
 
-  async function snapshot(settings = null) {
+  async function snapshot(settings: LooseRecord | null = null) {
     const loadedSettings = settings || await settingsStore.load();
     const lanAddresses = lanAddressProvider();
     const status = viewer ? viewer.status() : {
@@ -136,7 +137,7 @@ function createServerManager({
     };
   }
 
-  async function createViewer(settings) {
+  async function createViewer(settings: LooseRecord) {
     return viewerServerFactory({
       host: settings.host,
       port: settings.port,
@@ -145,7 +146,7 @@ function createServerManager({
     });
   }
 
-  function needsServerRestart(prev, next) {
+  function needsServerRestart(prev: LooseRecord, next: LooseRecord) {
     return prev.host !== next.host
       || prev.port !== next.port
       || prev.authEnabled !== next.authEnabled
@@ -188,7 +189,7 @@ function createServerManager({
       return this.start();
     },
 
-    async saveSettings(input) {
+    async saveSettings(input: LooseRecord) {
       const wasRunning = viewer?.status().state === "running";
       const current = await settingsStore.load();
       const settings = await settingsStore.save(input);

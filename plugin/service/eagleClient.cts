@@ -1,7 +1,8 @@
-// @ts-nocheck
 const { fileURLToPath } = require("url");
 const { readdir } = require("fs").promises;
 const { extname, join } = require("path");
+
+type LooseRecord = Record<string, any>;
 
 const ITEM_FIELDS = [
   "id",
@@ -57,10 +58,10 @@ function createEagleClient({
   baseUrl = process.env.EAGLE_BASE_URL || "http://localhost:41595",
   token = process.env.EAGLE_TOKEN || "",
   fetchImpl = globalThis.fetch,
-} = {}) {
+}: LooseRecord = {}) {
   const root = baseUrl.replace(/\/+$/, "");
 
-  async function request(pathname, { method = "GET", body, searchParams } = {}) {
+  async function request(pathname: string, { method = "GET", body, searchParams }: LooseRecord = {}) {
     const url = new URL(`${root}${pathname}`);
     if (token) url.searchParams.set("token", token);
     if (searchParams) {
@@ -108,7 +109,7 @@ function createEagleClient({
       );
     },
 
-    async folders({ offset = 0, limit = 1000 } = {}) {
+    async folders({ offset = 0, limit = 1000 }: LooseRecord = {}) {
       return normalizePaginatedResponse(
         await request("/api/v2/folder/get", {
           searchParams: { offset: normalizeOffset(offset), limit: clampLimit(limit, 1000) },
@@ -116,8 +117,8 @@ function createEagleClient({
       );
     },
 
-    async listItems({ offset = 0, limit = 30, folderId, isUnfiled = false, ext, rating, keywords, tags } = {}) {
-      const body = {
+    async listItems({ offset = 0, limit = 30, folderId, isUnfiled = false, ext, rating, keywords, tags }: LooseRecord = {}) {
+      const body: LooseRecord = {
         offset: normalizeOffset(offset),
         limit: clampLimit(limit),
         fields: ITEM_FIELDS,
@@ -185,8 +186,8 @@ function createEagleClient({
       );
     },
 
-    async updateItemMetadata(id, { tags, folders } = {}) {
-      const body = { id };
+    async updateItemMetadata(id, { tags, folders }: LooseRecord = {}) {
+      const body: LooseRecord = { id };
       if (tags !== undefined) body.tags = normalizeStringArray(tags, "tags");
       if (folders !== undefined) body.folders = normalizeStringArray(folders, "folders");
       if (!body.id) throw new Error("id is required");

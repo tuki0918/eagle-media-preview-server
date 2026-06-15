@@ -1,6 +1,5 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-// @ts-nocheck
 const { fileURLToPath } = require("url");
 const { readdir } = require("fs").promises;
 const { extname, join } = require("path");

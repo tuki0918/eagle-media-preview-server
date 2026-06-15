@@ -1,6 +1,5 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-// @ts-nocheck
 const { mkdir, readFile, writeFile } = require("fs").promises;
 const { createHash } = require("crypto");
 const { dirname, join } = require("path");

@@ -1,4 +1,3 @@
-// @ts-nocheck
 const { createReadStream, existsSync } = require("fs");
 const { stat } = require("fs").promises;
 const { createServer } = require("http");
@@ -6,6 +5,8 @@ const { createHash, randomUUID, timingSafeEqual } = require("crypto");
 const { extname, join, normalize, resolve } = require("path");
 const { createEagleClient, pathFromFileValue, resolveLibraryItemFile } = require("./eagleClient.cjs");
 const { buildConnectionCandidates, createConnectionContext } = require("./connection.cjs");
+
+type LooseRecord = Record<string, any>;
 
 function resolveDefaultPublicDir(baseDir = __dirname, pathExists = existsSync) {
   const packagedPublicDir = resolve(baseDir, "..", "..", "public");
@@ -52,7 +53,7 @@ function createViewerServer({
   passwordHash = "",
   basicAuthUsername = "eagle",
   eagleClient = createEagleClient(),
-} = {}) {
+}: LooseRecord = {}) {
   let serverInstance = null;
   let state = "stopped";
   let boundAddress = "";
@@ -92,7 +93,6 @@ function createViewerServer({
           setSession: (nextSession) => {
             currentSession = nextSession;
           },
-          publicDir,
         });
         return;
       }
@@ -117,7 +117,7 @@ function createViewerServer({
       state = "starting";
       lastError = "";
       try {
-        await new Promise((resolveStart, rejectStart) => {
+        await new Promise<void>((resolveStart, rejectStart) => {
           server.once("error", rejectStart);
           server.listen(port, host, () => {
             server.off("error", rejectStart);
@@ -143,7 +143,7 @@ function createViewerServer({
         return this.status();
       }
       state = "stopping";
-      await new Promise((resolveStop, rejectStop) => {
+      await new Promise<void>((resolveStop, rejectStop) => {
         serverInstance.close((error) => {
           if (error) rejectStop(error);
           else resolveStop();
@@ -173,7 +173,7 @@ function createViewerServer({
   };
 }
 
-async function handleApi(req, url, res, { getSession, setSession }) {
+async function handleApi(req, url, res, { getSession, setSession }: LooseRecord) {
   if (url.pathname === "/api/connect") {
     if (req.method !== "POST") {
       sendJson(res, 405, { error: "Method not allowed" });
@@ -580,8 +580,8 @@ function sha256(value) {
   return createHash("sha256").update(String(value)).digest("hex");
 }
 
-function parseCookies(header) {
-  const output = {};
+function parseCookies(header: string): Record<string, string> {
+  const output: Record<string, string> = {};
   for (const part of header.split(";")) {
     const index = part.indexOf("=");
     if (index === -1) continue;
