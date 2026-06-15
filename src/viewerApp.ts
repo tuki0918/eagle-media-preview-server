@@ -261,6 +261,7 @@ function normalizePermissions(value: AuthStatusResponse["permissions"], readFall
 function handleAuthError(error: unknown) {
   if (!(error instanceof ApiError) || error.status !== 401) return false;
   authAuthenticated = false;
+  authRequired = true;
   authUser = null;
   state.permissions = defaultPermissions(!authRequired);
   clearViewerSessionState();
