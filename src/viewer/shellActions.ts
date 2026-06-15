@@ -2,6 +2,7 @@ import type { ViewerMode } from "./types";
 
 export interface ViewerShellActions {
   connect: () => void;
+  urlPopped: () => void;
   searchChanged: (query: string) => void;
   searchFocused: (query: string) => void;
   searchKeyDown: (key: string) => void;
@@ -27,6 +28,7 @@ const noop = () => {};
 
 let actions: ViewerShellActions = {
   connect: noop,
+  urlPopped: noop,
   searchChanged: noop,
   searchFocused: noop,
   searchKeyDown: noop,
@@ -55,6 +57,10 @@ export function setViewerShellActions(nextActions: ViewerShellActions) {
 export function submitConnection(event: { preventDefault: () => void }) {
   event.preventDefault();
   actions.connect();
+}
+
+export function handleUrlPop() {
+  actions.urlPopped();
 }
 
 export function changeSearchQuery(event: { currentTarget: { value: string } }) {

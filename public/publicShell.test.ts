@@ -617,9 +617,14 @@ test("public extension pills use varied colors for common text formats", async (
 });
 
 test("public UI syncs filters, pagination, and preview state into the URL history", async () => {
+  const html = await readAppSources();
   const app = await readViewerSources();
 
-  assert.match(app, /window\.addEventListener\("popstate"/);
+  assert.match(html, /window\.addEventListener\("popstate", handleUrlPop\)/);
+  assert.match(html, /window\.removeEventListener\("popstate", handleUrlPop\)/);
+  assert.match(app, /urlPopped: \(\) => \{/);
+  assert.match(app, /export function handleUrlPop\(\) \{/);
+  assert.doesNotMatch(app, /window\.addEventListener\("popstate"/);
   assert.match(app, /pushState/);
   assert.match(app, /if \(state\.viewMode !== "tiles"\) params\.set\("page", String\(currentPage\(state\)\)\);/);
   assert.match(app, /offset: viewMode === "tiles" \? 0 : \(Math\.max\(1, Number\.parseInt\(params\.get\("page"\) \|\| "1", 10\)\) - 1\) \* limit,/);

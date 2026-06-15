@@ -1,10 +1,16 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { LoginView } from "./components/LoginView";
 import { ViewerShellLayout } from "./components/ViewerShellLayout";
+import { handleUrlPop } from "./shellActions";
 import { getShellView, subscribeShellView } from "./shellVisibility";
 
 export function ViewerAppShell() {
   const shellView = useSyncExternalStore(subscribeShellView, getShellView, getShellView);
+
+  useEffect(() => {
+    window.addEventListener("popstate", handleUrlPop);
+    return () => window.removeEventListener("popstate", handleUrlPop);
+  }, []);
 
   return (
     <>

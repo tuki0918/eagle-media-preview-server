@@ -114,6 +114,12 @@ async function init() {
   restoreViewMode();
   setViewerShellActions({
     connect,
+    urlPopped: () => {
+      restoreUrlState();
+      applyControlsFromState();
+      if (getShellView() !== "viewer") return;
+      loadItems();
+    },
     searchChanged: debounce((query: string) => {
       applyFilterChange({ query: query.trim() });
       loadTagSuggestions();
@@ -173,12 +179,6 @@ async function init() {
         preventDefault();
       }
     },
-  });
-  window.addEventListener("popstate", () => {
-    restoreUrlState();
-    applyControlsFromState();
-    if (getShellView() !== "viewer") return;
-    loadItems();
   });
   showLogin();
 }
