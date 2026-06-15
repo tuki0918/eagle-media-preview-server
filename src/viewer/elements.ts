@@ -1,9 +1,5 @@
 export interface ViewerElements {
-  searchInputHost: HTMLElement;
   tagSuggestionsHost: HTMLElement;
-  resetFiltersButtonHost: HTMLElement;
-  toggleFiltersButtonHost: HTMLElement;
-  advancedFiltersHost: HTMLElement;
   resultGridHost: HTMLElement;
   template: HTMLTemplateElement;
   dialog: HTMLDialogElement;
@@ -15,11 +11,7 @@ export interface ViewerElements {
 
 export function getViewerElements(): ViewerElements {
   const elements = {
-    searchInputHost: document.querySelector("#searchInputHost"),
     tagSuggestionsHost: document.querySelector("#tagSuggestionsHost"),
-    resetFiltersButtonHost: document.querySelector("#resetFiltersButtonHost"),
-    toggleFiltersButtonHost: document.querySelector("#toggleFiltersButtonHost"),
-    advancedFiltersHost: document.querySelector("#advancedFiltersHost"),
     resultGridHost: document.querySelector("#resultGridHost"),
     template: document.querySelector("#cardTemplate"),
     dialog: document.querySelector("#previewDialog"),

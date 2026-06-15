@@ -38,6 +38,7 @@ import {
   totalPages,
 } from "./viewer/pagination";
 import { setPagerState } from "./viewer/pagerState";
+import { setSearchControlsState } from "./viewer/searchControlsState";
 import {
   clearResultStateView,
   renderResultStateView,
@@ -56,7 +57,6 @@ import {
   renderPreviewBodyView,
   type PreviewBodyKind,
 } from "./viewer/components/PreviewBody";
-import { renderSearchControlButtonsView } from "./viewer/components/SearchControls";
 import { setTagChipsState } from "./viewer/tagChipsState";
 import {
   clearTagSuggestionsView,
@@ -513,7 +513,7 @@ function syncResetFiltersButton() {
 }
 
 function renderSearchControlButtons() {
-  renderSearchControlButtonsView(els.searchInputHost, els.resetFiltersButtonHost, els.toggleFiltersButtonHost, els.advancedFiltersHost, {
+  setSearchControlsState({
     filtersOpen: state.filtersOpen,
     folders: state.folders,
     hasActiveFilters: hasActiveFilters(state),

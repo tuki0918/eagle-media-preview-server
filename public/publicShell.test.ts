@@ -50,6 +50,7 @@ async function readAppSources() {
     "../src/viewer/components/ResultList.tsx",
     "../src/viewer/components/ResultsStatus.tsx",
     "../src/viewer/components/SearchControls.tsx",
+    "../src/viewer/searchControlsState.ts",
     "../src/viewer/components/TagChips.tsx",
     "../src/viewer/tagChipsState.ts",
     "../src/viewer/components/TagSuggestions.tsx",
@@ -496,21 +497,23 @@ test("public UI supports tag filter chips", async () => {
   assert.match(html, /id="tagChips"/);
   assert.match(html, /id="tagSuggestionsHost"/);
   assert.match(html, /id="tagSuggestions"/);
-  assert.match(html, /<div className="[^"]*\bsearch-box\b[^"]*"[\s\S]*<TagChips \/>[\s\S]*id="searchInputHost"[\s\S]*id="tagSuggestionsHost"[\s\S]*<\/div>[\s\S]*id="resetFiltersButtonHost"[\s\S]*id="toggleFiltersButtonHost"/);
+  assert.match(html, /<div className="[^"]*\bsearch-box\b[^"]*"[\s\S]*<TagChips \/>[\s\S]*<SearchInput value=\{displaySearchQuery\} \/>[\s\S]*id="tagSuggestionsHost"[\s\S]*<\/div>[\s\S]*<ResetFiltersButton hasActiveFilters=\{displayHasActiveFilters\} \/>[\s\S]*<ToggleFiltersButton filtersOpen=\{displayFiltersOpen\} \/>/);
   assert.match(html, /id="resetFiltersButton"[\s\S]*aria-label="Reset filters"[\s\S]*disabled=\{!hasActiveFilters\}/);
   assert.match(html, /id="resetFiltersButton"[\s\S]*<FunnelXIcon \/>/);
   assert.doesNotMatch(html, /id="tagInput"/);
   assert.doesNotMatch(advancedFiltersSource, /id="tagChips"/);
-  assert.match(html, /id="advancedFiltersHost"[\s\S]*<AdvancedFilters[\s\S]*filtersOpen=\{filtersOpen\}/);
+  assert.doesNotMatch(html, /id="advancedFiltersHost"/);
+  assert.match(html, /<AdvancedFilters[\s\S]*filtersOpen=\{displayFiltersOpen\}/);
   assert.match(app, /tags:\s*\[\]/);
   assert.doesNotMatch(app, /tagChips: document\.querySelector\("#tagChips"\),/);
-  assert.match(app, /searchInputHost: document\.querySelector\("#searchInputHost"\),/);
+  assert.doesNotMatch(app, /searchInputHost: document\.querySelector\("#searchInputHost"\),/);
   assert.doesNotMatch(app, /searchInput: document\.querySelector\("#searchInput"\),/);
   assert.match(app, /tagSuggestionsHost: document\.querySelector\("#tagSuggestionsHost"\),/);
   assert.doesNotMatch(app, /tagSuggestions: document\.querySelector\("#tagSuggestions"\),/);
   assert.doesNotMatch(app, /els\.tagSuggestions\.hidden/);
-  assert.match(app, /resetFiltersButtonHost: document\.querySelector\("#resetFiltersButtonHost"\),/);
-  assert.match(app, /advancedFiltersHost: document\.querySelector\("#advancedFiltersHost"\),/);
+  assert.doesNotMatch(app, /resetFiltersButtonHost: document\.querySelector\("#resetFiltersButtonHost"\),/);
+  assert.doesNotMatch(app, /toggleFiltersButtonHost: document\.querySelector\("#toggleFiltersButtonHost"\),/);
+  assert.doesNotMatch(app, /advancedFiltersHost: document\.querySelector\("#advancedFiltersHost"\),/);
   assert.doesNotMatch(app, /resetFiltersButton: document\.querySelector\("#resetFiltersButton"\),/);
   assert.doesNotMatch(app, /advancedFilters: document\.querySelector\("#advancedFilters"\),/);
   assert.doesNotMatch(app, /els\.advancedFilters\.hidden/);
@@ -518,6 +521,7 @@ test("public UI supports tag filter chips", async () => {
   assert.match(html, /<option value=\{UNCATEGORIZED_FOLDER_ID\}>Uncategorized<\/option>/);
   assert.doesNotMatch(app, /renderFolderOptionsView/);
   assert.match(app, /setTagChipsState\(\{/);
+  assert.match(app, /setSearchControlsState\(\{/);
   assert.doesNotMatch(app, /folderSelect: document\.querySelector\("#folderSelect"\),/);
   assert.doesNotMatch(app, /extSelect: document\.querySelector\("#extSelect"\),/);
   assert.doesNotMatch(app, /ratingSelect: document\.querySelector\("#ratingSelect"\),/);
@@ -533,7 +537,7 @@ test("public UI supports tag filter chips", async () => {
   assert.match(app, /setViewerShellActions\(\{/);
   assert.match(app, /resetFilters,/);
   assert.match(app, /function syncResetFiltersButton\(\) \{/);
-  assert.match(app, /renderSearchControlButtonsView\(els\.searchInputHost, els\.resetFiltersButtonHost, els\.toggleFiltersButtonHost, els\.advancedFiltersHost, \{/);
+  assert.match(app, /setSearchControlsState\(\{/);
   assert.match(app, /searchQuery:\s*state\.query,/);
   assert.match(app, /selectedFolderId:\s*state\.folderId,/);
   assert.match(app, /selectedLimit:\s*state\.limit,/);

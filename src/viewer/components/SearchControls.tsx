@@ -1,6 +1,9 @@
-import { useEffect, useState } from "react";
-import { createRoot, type Root } from "react-dom/client";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { MEDIA_TYPE_OPTIONS, PAGE_SIZE_OPTIONS, RATING_OPTIONS } from "../shellConfig";
+import {
+  getSearchControlsState,
+  subscribeSearchControlsState,
+} from "../searchControlsState";
 import {
   changeFolder,
   changeMediaType,
@@ -29,22 +32,28 @@ interface SearchControlsProps {
   selectedRating?: string;
 }
 
-const resetButtonRoots = new WeakMap<HTMLElement, Root>();
-const toggleButtonRoots = new WeakMap<HTMLElement, Root>();
-const advancedFiltersRoots = new WeakMap<HTMLElement, Root>();
-const searchInputRoots = new WeakMap<HTMLElement, Root>();
 const noopTagSelect = () => {};
 
 export function SearchControls({
-  filtersOpen = false,
-  folders = [],
-  hasActiveFilters = false,
-  searchQuery = "",
-  selectedExt = "",
-  selectedFolderId = "",
-  selectedLimit = 30,
-  selectedRating = "",
+  filtersOpen,
+  folders,
+  hasActiveFilters,
+  searchQuery,
+  selectedExt,
+  selectedFolderId,
+  selectedLimit,
+  selectedRating,
 }: SearchControlsProps) {
+  const state = useSyncExternalStore(subscribeSearchControlsState, getSearchControlsState, getSearchControlsState);
+  const displayFiltersOpen = filtersOpen ?? state.filtersOpen;
+  const displayFolders = folders ?? state.folders;
+  const displayHasActiveFilters = hasActiveFilters ?? state.hasActiveFilters;
+  const displaySearchQuery = searchQuery ?? state.searchQuery;
+  const displaySelectedExt = selectedExt ?? state.selectedExt;
+  const displaySelectedFolderId = selectedFolderId ?? state.selectedFolderId;
+  const displaySelectedLimit = selectedLimit ?? state.selectedLimit;
+  const displaySelectedRating = selectedRating ?? state.selectedRating;
+
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
       handleSearchOutsidePointerDown(event.target);
@@ -60,32 +69,24 @@ export function SearchControls({
           <span data-lucide="search" />
           <div className="search-composer flex min-w-0 flex-auto flex-wrap items-center gap-x-2 gap-y-1.5">
             <TagChips />
-            <div id="searchInputHost" className="contents">
-              <SearchInput value={searchQuery} />
-            </div>
+            <SearchInput value={displaySearchQuery} />
           </div>
           <div id="tagSuggestionsHost">
             <TagSuggestions hidden items={[]} onSelect={noopTagSelect} />
           </div>
         </div>
-        <div id="resetFiltersButtonHost" className="contents">
-          <ResetFiltersButton hasActiveFilters={hasActiveFilters} />
-        </div>
-        <div id="toggleFiltersButtonHost" className="contents">
-          <ToggleFiltersButton filtersOpen={filtersOpen} />
-        </div>
+        <ResetFiltersButton hasActiveFilters={displayHasActiveFilters} />
+        <ToggleFiltersButton filtersOpen={displayFiltersOpen} />
       </div>
 
-      <div id="advancedFiltersHost">
-        <AdvancedFilters
-          filtersOpen={filtersOpen}
-          folders={folders}
-          selectedExt={selectedExt}
-          selectedFolderId={selectedFolderId}
-          selectedLimit={selectedLimit}
-          selectedRating={selectedRating}
-        />
-      </div>
+      <AdvancedFilters
+        filtersOpen={displayFiltersOpen}
+        folders={displayFolders}
+        selectedExt={displaySelectedExt}
+        selectedFolderId={displaySelectedFolderId}
+        selectedLimit={displaySelectedLimit}
+        selectedRating={displaySelectedRating}
+      />
     </section>
   );
 }
@@ -222,54 +223,5 @@ function SlidersHorizontalIcon() {
       <line x1="8" x2="8" y1="10" y2="14" />
       <line x1="16" x2="16" y1="18" y2="22" />
     </svg>
-  );
-}
-
-export function renderSearchControlButtonsView(
-  searchInputContainer: HTMLElement,
-  resetContainer: HTMLElement,
-  toggleContainer: HTMLElement,
-  advancedFiltersContainer: HTMLElement,
-  props: Required<SearchControlsProps>,
-) {
-  let searchInputRoot = searchInputRoots.get(searchInputContainer);
-  if (!searchInputRoot) {
-    searchInputContainer.replaceChildren();
-    searchInputRoot = createRoot(searchInputContainer);
-    searchInputRoots.set(searchInputContainer, searchInputRoot);
-  }
-  searchInputRoot.render(<SearchInput value={props.searchQuery} />);
-
-  let resetRoot = resetButtonRoots.get(resetContainer);
-  if (!resetRoot) {
-    resetContainer.replaceChildren();
-    resetRoot = createRoot(resetContainer);
-    resetButtonRoots.set(resetContainer, resetRoot);
-  }
-  resetRoot.render(<ResetFiltersButton hasActiveFilters={props.hasActiveFilters} />);
-
-  let toggleRoot = toggleButtonRoots.get(toggleContainer);
-  if (!toggleRoot) {
-    toggleContainer.replaceChildren();
-    toggleRoot = createRoot(toggleContainer);
-    toggleButtonRoots.set(toggleContainer, toggleRoot);
-  }
-  toggleRoot.render(<ToggleFiltersButton filtersOpen={props.filtersOpen} />);
-
-  let advancedFiltersRoot = advancedFiltersRoots.get(advancedFiltersContainer);
-  if (!advancedFiltersRoot) {
-    advancedFiltersContainer.replaceChildren();
-    advancedFiltersRoot = createRoot(advancedFiltersContainer);
-    advancedFiltersRoots.set(advancedFiltersContainer, advancedFiltersRoot);
-  }
-  advancedFiltersRoot.render(
-    <AdvancedFilters
-      filtersOpen={props.filtersOpen}
-      folders={props.folders}
-      selectedExt={props.selectedExt}
-      selectedFolderId={props.selectedFolderId}
-      selectedLimit={props.selectedLimit}
-      selectedRating={props.selectedRating}
-    />,
   );
 }
