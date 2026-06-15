@@ -409,7 +409,7 @@ function App() {
         <div className="mt-2.5 grid">
           <SettingRow label="Port" help="The port the server listens on.">
             <input
-              className="h-7 w-full rounded-md border border-[#d7d9de] bg-white px-2 text-[11px] text-[#111] outline-0 focus:border-[rgba(31,116,255,0.58)] focus:shadow-[0_0_0_3px_rgba(31,116,255,0.12)]"
+              className="h-7 w-full rounded-md border border-[#d7d9de] bg-white px-2 text-[11px] text-[#111] outline-0 focus:border-[rgba(31,116,255,0.58)] focus:shadow-[0_0_0_3px_rgba(31,116,255,0.12)] disabled:cursor-not-allowed disabled:bg-[#f4f5f7] disabled:text-[#8a8f99]"
               type="number"
               min="1"
               max="65535"
@@ -435,7 +435,7 @@ function App() {
               {authUsers.map((user, index) => (
                 <div key={index} className="grid grid-cols-[minmax(80px,1fr)_86px_minmax(76px,0.8fr)_28px] items-center gap-1.5">
                   <input
-                    className="h-7 min-w-0 rounded-md border border-[#d7d9de] bg-white px-2 text-[11px] text-[#111] outline-0 focus:border-[rgba(31,116,255,0.58)] focus:shadow-[0_0_0_3px_rgba(31,116,255,0.12)]"
+                    className="h-7 min-w-0 rounded-md border border-[#d7d9de] bg-white px-2 text-[11px] text-[#111] outline-0 focus:border-[rgba(31,116,255,0.58)] focus:shadow-[0_0_0_3px_rgba(31,116,255,0.12)] disabled:cursor-not-allowed disabled:bg-[#f4f5f7] disabled:text-[#8a8f99]"
                     type="text"
                     aria-label={`Username for user ${index + 1}`}
                     autoComplete="username"
@@ -445,7 +445,7 @@ function App() {
                     onBlur={() => saveSettings()}
                   />
                   <select
-                    className="h-7 rounded-md border border-[#d7d9de] bg-white px-1.5 text-[11px] text-[#111] outline-0"
+                    className="h-7 rounded-md border border-[#d7d9de] bg-white px-1.5 text-[11px] text-[#111] outline-0 disabled:cursor-not-allowed disabled:bg-[#f4f5f7] disabled:text-[#8a8f99]"
                     aria-label={`Role for ${user.username || `user ${index + 1}`}`}
                     disabled={formDisabled}
                     value={user.role}
@@ -458,7 +458,7 @@ function App() {
                     <option value="admin">Admin</option>
                   </select>
                   <input
-                    className="h-7 min-w-0 rounded-md border border-[#d7d9de] bg-white px-2 text-[11px] text-[#111] outline-0 focus:border-[rgba(31,116,255,0.58)] focus:shadow-[0_0_0_3px_rgba(31,116,255,0.12)]"
+                    className="h-7 min-w-0 rounded-md border border-[#d7d9de] bg-white px-2 text-[11px] text-[#111] outline-0 focus:border-[rgba(31,116,255,0.58)] focus:shadow-[0_0_0_3px_rgba(31,116,255,0.12)] disabled:cursor-not-allowed disabled:bg-[#f4f5f7] disabled:text-[#8a8f99]"
                     type={passwordVisible ? "text" : "password"}
                     aria-label={`Password for ${user.username || `user ${index + 1}`}`}
                     autoComplete="new-password"
