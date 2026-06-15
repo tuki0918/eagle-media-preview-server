@@ -241,6 +241,12 @@ function MetadataChipEditor({
   const requestId = useRef(0);
   const debounceTimer = useRef<number | null>(null);
 
+  const clearDebounceTimer = () => {
+    if (!debounceTimer.current) return;
+    window.clearTimeout(debounceTimer.current);
+    debounceTimer.current = null;
+  };
+
   const hideSuggestions = () => {
     requestId.current += 1;
     setSuggestions([]);
@@ -248,9 +254,16 @@ function MetadataChipEditor({
   };
 
   useEffect(() => {
+    return () => {
+      requestId.current += 1;
+      clearDebounceTimer();
+    };
+  }, []);
+
+  useEffect(() => {
     if (!disabled) return;
     requestId.current += 1;
-    if (debounceTimer.current) window.clearTimeout(debounceTimer.current);
+    clearDebounceTimer();
     setSuggestions([]);
     setSuggestionsOpen(false);
   }, [disabled]);
@@ -270,7 +283,7 @@ function MetadataChipEditor({
 
   const queueSuggestions = (nextQuery: string) => {
     if (disabled) return;
-    if (debounceTimer.current) window.clearTimeout(debounceTimer.current);
+    clearDebounceTimer();
     debounceTimer.current = window.setTimeout(() => updateSuggestions(nextQuery), 160);
   };
 

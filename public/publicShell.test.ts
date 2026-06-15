@@ -573,6 +573,8 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(app, /const RECENT_FOLDERS_STORAGE_KEY = "eagleRecentFolders";/);
   assert.match(html, /function MetadataChipEditor\(\{/);
   assert.doesNotMatch(html, /initialValues/);
+  assert.match(html, /const clearDebounceTimer = \(\) => \{/);
+  assert.match(html, /return \(\) => \{\s*requestId\.current \+= 1;\s*clearDebounceTimer\(\);\s*\};/);
   assert.match(html, /onPointerDown=\{\(\) => updateSuggestions\(\)\}/);
   assert.match(html, /onPointerDown=\{\(event\) => event\.stopPropagation\(\)\}/);
   assert.match(html, /setQuery\(""\);\s*hideSuggestions\(\);/);
