@@ -159,10 +159,36 @@ test("public viewer exposes sign out when authenticated", async () => {
   assert.match(footer, /ed \(editor\)/);
   assert.match(footer, /id="logoutButton"/);
   assert.match(footer, /Sign out/);
+  assert.doesNotMatch(footer, /authFooterMessage/);
   assert.match(app, /authUser = login\.user \?\? null/);
   assert.match(app, /authUser = data\.user \?\? null/);
   assert.match(app, /postJson<AuthStatusResponse>\("\/api\/auth\/logout", \{\}\)/);
   assert.match(app, /showLogin\(\);/);
+
+  setLoginConnectState({
+    authenticated: false,
+    authRequired: false,
+    disabled: false,
+    isError: false,
+    message: "",
+    user: null,
+  });
+});
+
+test("public viewer exposes auth errors in the footer", () => {
+  setLoginConnectState({
+    authenticated: true,
+    authRequired: true,
+    disabled: false,
+    isError: true,
+    message: "Sign out failed",
+    user: { role: "viewer", username: "reader" },
+  });
+  const footer = renderToStaticMarkup(createElement(LibraryFooter, { name: "My Library" }));
+
+  assert.match(footer, /id="authFooterMessage"/);
+  assert.match(footer, /role="alert"/);
+  assert.match(footer, /Sign out failed/);
 
   setLoginConnectState({
     authenticated: false,

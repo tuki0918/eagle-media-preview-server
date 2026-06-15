@@ -14,6 +14,7 @@ export function LibraryFooter({ name }: LibraryFooterProps) {
   const username = loginState.user?.username?.trim();
   const role = loginState.user?.role?.trim();
   const userLabel = username ? `${username}${role ? ` (${role})` : ""}` : "";
+  const authError = loginState.isError ? loginState.message.trim() : "";
   return (
     <div className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs leading-[1.4] text-app-muted">
       <p id="libraryFooterName" className="library-footer-name text-center">
@@ -31,6 +32,7 @@ export function LibraryFooter({ name }: LibraryFooterProps) {
           >
             Sign out
           </button>
+          {authError ? <span id="authFooterMessage" className="text-app-danger" role="alert">{authError}</span> : null}
         </span>
       ) : null}
     </div>
