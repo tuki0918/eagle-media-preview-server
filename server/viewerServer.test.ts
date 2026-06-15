@@ -29,10 +29,115 @@ test("createViewerServer starts and stops without the CLI entrypoint", async () 
   assert.deepEqual(await response.json(), {
     required: false,
     authenticated: true,
+    permissions: {
+      read: true,
+      writeMetadata: false,
+      writeRating: false,
+    },
   });
 
   await viewer.stop();
   assert.equal(viewer.status().state, "stopped");
+});
+
+test("createViewerServer blocks metadata writes unless editing is enabled for an authenticated viewer", async () => {
+  const calls: unknown[] = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    passwordHash: sha256("secret"),
+    basicAuthUsername: "eagle",
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/tmp/Test.library", name: "Test Library" };
+      },
+      async updateItemStar(id: string, star: unknown) {
+        calls.push({ id, star });
+        return { id, star };
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const response = await fetch(`http://127.0.0.1:${status.port}/api/items/ITEM123/star`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${Buffer.from("eagle:secret").toString("base64")}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ star: 4 }),
+    });
+
+    assert.equal(response.status, 403);
+    assert.deepEqual(calls, []);
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer allows metadata writes when editing is enabled for an authenticated viewer", async () => {
+  const calls: unknown[] = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    allowMetadataEditing: true,
+    passwordHash: sha256("secret"),
+    basicAuthUsername: "eagle",
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/tmp/Test.library", name: "Test Library" };
+      },
+      async updateItemMetadata(id: string, input: unknown) {
+        calls.push({ id, input });
+        return { id, tags: ["cat"], folders: ["folder-1"] };
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const authHeader = `Basic ${Buffer.from("eagle:secret").toString("base64")}`;
+    const authStatus = await fetch(`http://127.0.0.1:${status.port}/api/auth/status`, {
+      headers: { Authorization: authHeader },
+    });
+    assert.deepEqual(await authStatus.json(), {
+      required: true,
+      authenticated: true,
+      permissions: {
+        read: true,
+        writeMetadata: true,
+        writeRating: true,
+      },
+    });
+
+    const response = await fetch(`http://127.0.0.1:${status.port}/api/items/ITEM123/metadata`, {
+      method: "POST",
+      headers: {
+        Authorization: authHeader,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ tags: ["cat"], folders: ["folder-1"] }),
+    });
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      id: "ITEM123",
+      tags: ["cat"],
+      folders: ["folder-1"],
+    });
+    assert.deepEqual(calls, [{ id: "ITEM123", input: { tags: ["cat"], folders: ["folder-1"] } }]);
+  } finally {
+    await viewer.stop();
+  }
 });
 
 test("resolveDefaultPublicDir prefers Vite output when running from source", () => {

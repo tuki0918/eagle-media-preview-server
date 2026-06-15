@@ -54,7 +54,7 @@ export function PreviewRating() {
     <RatingStars
       id="previewRating"
       className="rating-control inline-flex items-center gap-2.5 [&_.rating-star]:h-6 [&_.rating-star]:w-6 [&_.rating-star]:text-xl"
-      interactive
+      interactive={state.canEdit}
       item={state.item}
       onSelect={state.onSelect}
     />

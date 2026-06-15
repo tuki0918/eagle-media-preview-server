@@ -7,6 +7,7 @@ const { createEagleClient, pathFromFileValue, resolveLibraryItemFile } = require
 const { buildConnectionCandidates, createConnectionContext } = require("./connection.cjs");
 
 interface ViewerServerOptions {
+  allowMetadataEditing?: boolean;
   basicAuthUsername?: string;
   eagleClient?: EagleClient;
   host?: string;
@@ -113,6 +114,7 @@ const mimeTypes = {
 
 function createViewerServer({
   host = "0.0.0.0",
+  allowMetadataEditing = false,
   port = 41532,
   publicDir = defaultPublicDir,
   viewerPassword = "",
@@ -126,7 +128,7 @@ function createViewerServer({
   let boundPort = 0;
   let lastError = "";
   let requestCount = 0;
-  const authSessions = new Set();
+  const authSessions = new Set<string>();
   let currentSession = createConnectionContext({
     connection: {
       host: "127.0.0.1",
@@ -140,7 +142,7 @@ function createViewerServer({
   const server = createServer(async (req, res) => {
     try {
       const url = new URL(req.url || "/", `http://${req.headers.host}`);
-      const auth = { authSessions, viewerPassword, passwordHash, basicAuthUsername };
+      const auth = { allowMetadataEditing, authSessions, viewerPassword, passwordHash, basicAuthUsername };
       if (authRequired(auth) && !url.pathname.startsWith("/api/auth/") && !isAuthorized(req, auth)) {
         sendAuthRequired(res);
         return;
@@ -155,6 +157,7 @@ function createViewerServer({
           return;
         }
         await handleApi(req, url, res, {
+          auth,
           getSession: () => currentSession,
           setSession: (nextSession) => {
             currentSession = nextSession;
@@ -239,7 +242,7 @@ function createViewerServer({
   };
 }
 
-async function handleApi(req, url, res, { getSession, setSession }: ApiContext) {
+async function handleApi(req, url, res, { auth, getSession, setSession }: ApiContext & { auth: AuthContext }) {
   if (url.pathname === "/api/connect") {
     if (req.method !== "POST") {
       sendJson(res, 405, { error: "Method not allowed" });
@@ -340,6 +343,10 @@ async function handleApi(req, url, res, { getSession, setSession }: ApiContext) 
       sendJson(res, 405, { error: "Method not allowed" });
       return;
     }
+    if (!hasMetadataWriteAccess(req, auth)) {
+      sendJson(res, 403, { error: "Metadata editing is not allowed for this viewer" });
+      return;
+    }
     const itemId = decodeURIComponent(starMatch[1]);
     const body = await readJson(req);
     const item = await session.client.updateItemStar(itemId, body.star);
@@ -351,6 +358,10 @@ async function handleApi(req, url, res, { getSession, setSession }: ApiContext) 
   if (metadataMatch) {
     if (req.method !== "POST") {
       sendJson(res, 405, { error: "Method not allowed" });
+      return;
+    }
+    if (!hasMetadataWriteAccess(req, auth)) {
+      sendJson(res, 403, { error: "Metadata editing is not allowed for this viewer" });
       return;
     }
     const itemId = decodeURIComponent(metadataMatch[1]);
@@ -376,11 +387,26 @@ async function handleApi(req, url, res, { getSession, setSession }: ApiContext) 
   sendJson(res, 404, { error: "Not found" });
 }
 
-async function handleAuthRoutes(req, url, res, { authSessions, viewerPassword, passwordHash, basicAuthUsername }) {
+interface AuthContext {
+  allowMetadataEditing?: boolean;
+  authSessions: Set<string>;
+  basicAuthUsername?: string;
+  passwordHash?: string;
+  viewerPassword?: string;
+}
+
+async function handleAuthRoutes(req, url, res, { allowMetadataEditing, authSessions, viewerPassword, passwordHash, basicAuthUsername }: AuthContext) {
   if (url.pathname === "/api/auth/status") {
+    const authenticated = isAuthorized(req, { authSessions, viewerPassword, passwordHash, basicAuthUsername });
+    const canEditMetadata = Boolean(allowMetadataEditing && authRequired({ viewerPassword, passwordHash }) && authenticated);
     sendJson(res, 200, {
       required: authRequired({ viewerPassword, passwordHash }),
-      authenticated: isAuthorized(req, { authSessions, viewerPassword, passwordHash, basicAuthUsername }),
+      authenticated,
+      permissions: {
+        read: authenticated,
+        writeMetadata: canEditMetadata,
+        writeRating: canEditMetadata,
+      },
     });
     return true;
   }
@@ -401,11 +427,16 @@ async function handleAuthRoutes(req, url, res, { authSessions, viewerPassword, p
     }
     const token = randomUUID();
     authSessions.add(token);
+    const permissions = {
+      read: true,
+      writeMetadata: Boolean(allowMetadataEditing),
+      writeRating: Boolean(allowMetadataEditing),
+    };
     res.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
       "Set-Cookie": `viewer_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000`,
     });
-    res.end(JSON.stringify({ authenticated: true }));
+    res.end(JSON.stringify({ authenticated: true, permissions }));
     return true;
   }
 
@@ -601,7 +632,7 @@ function sendJson(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
-function authRequired({ viewerPassword, passwordHash }) {
+function authRequired({ viewerPassword, passwordHash }: { passwordHash?: string; viewerPassword?: string }) {
   return Boolean(viewerPassword || passwordHash);
 }
 
@@ -610,6 +641,10 @@ function isAuthorized(req, auth) {
   if (basicAuthMatches(req.headers.authorization || "", auth)) return true;
   const token = parseCookies(req.headers.cookie || "").viewer_session;
   return Boolean(token && auth.authSessions.has(token));
+}
+
+function hasMetadataWriteAccess(req, auth: AuthContext) {
+  return Boolean(auth.allowMetadataEditing && authRequired(auth) && isAuthorized(req, auth));
 }
 
 function basicAuthMatches(header, { basicAuthUsername, viewerPassword, passwordHash }) {

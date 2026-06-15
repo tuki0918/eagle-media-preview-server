@@ -101,6 +101,7 @@ Build output is created under `dist`:
 - Toggle Public Network access
 - Configure the port
 - Configure BasicAuth enablement, username, and password
+- Configure authenticated metadata editing
 - Display and copy the Endpoint URL
 - Display the Endpoint URL as a QR code
 
@@ -118,6 +119,7 @@ Build output is created under `dist`:
 - `Options`
   - Auto start
   - BasicAuth protection
+  - Allow metadata editing
   - Public Network
 - `Settings`
   - Port
@@ -128,6 +130,7 @@ Build output is created under `dist`:
 
 ```ts
 type Settings = {
+  allowMetadataEditing: boolean;
   autoStart: boolean;
   host: string;
   port: number;
@@ -155,7 +158,7 @@ Settings path:
 - Filter by folder, uncategorized state, extension/type, rating, keyword, and tag chips
 - Switch between tiles, grid, and table views
 - Preview images, videos, audio, text-like files, PDFs, and unsupported media
-- Change rating, tags, and categories from the preview panel
+- Change rating, tags, and categories from the preview panel when authenticated metadata editing is enabled
 - Open the original file in a new tab
 - Sync search filters, page, view mode, and preview state into the URL
 
@@ -212,7 +215,7 @@ Settings path:
 ### API Routes
 
 - `GET /api/auth/status`
-  - Returns whether authentication is required and whether the current request is authenticated
+  - Returns whether authentication is required, whether the current request is authenticated, and viewer permissions
 - `POST /api/auth/login`
   - Issues a BasicAuth session cookie
 - `POST /api/connect`
@@ -263,6 +266,12 @@ Password handling:
 
 - Plain text passwords are never persisted
 - The settings file stores a SHA-256 hash
+
+Authorization:
+
+- Browsing is read-only by default
+- `allowMetadataEditing` requires BasicAuth protection
+- `POST /api/items/:id/star` and `POST /api/items/:id/metadata` require authenticated metadata editing permission
 
 ## Runtime State
 

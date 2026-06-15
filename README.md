@@ -11,7 +11,8 @@ You can preview your media from other devices on the same network.
 - One-click local preview server
 - Access from devices on the same network
 - Basic authentication
-- Read-only media browsing, with rating updates supported
+- Read-only media browsing by default
+- Optional authenticated metadata editing for rating, tags, and categories
 
 ## Requirements
 

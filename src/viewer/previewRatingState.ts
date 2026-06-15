@@ -1,6 +1,7 @@
 import type { EagleItem } from "./types";
 
 interface PreviewRatingState {
+  canEdit: boolean;
   item: EagleItem | null;
   onSelect: (value: number) => void;
 }
@@ -8,6 +9,7 @@ interface PreviewRatingState {
 const noopSelect = () => {};
 const listeners = new Set<() => void>();
 let currentPreviewRating: PreviewRatingState = {
+  canEdit: false,
   item: null,
   onSelect: noopSelect,
 };
@@ -25,6 +27,7 @@ export function setPreviewRatingState(nextState: PreviewRatingState) {
 
 export function clearPreviewRatingState() {
   setPreviewRatingState({
+    canEdit: false,
     item: null,
     onSelect: noopSelect,
   });

@@ -20,4 +20,9 @@ export const state: ViewerState = {
   previewItemId: "",
   previewInfoOpen: false,
   restoringHistory: false,
+  permissions: {
+    read: true,
+    writeMetadata: false,
+    writeRating: false,
+  },
 };

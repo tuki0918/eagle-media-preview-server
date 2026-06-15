@@ -73,6 +73,7 @@ import {
 } from "./viewer/tileLoading";
 import type {
   ConnectResponse,
+  AuthStatusResponse,
   EagleItem,
   ItemPatch,
   LoadFoldersResponse,
@@ -80,6 +81,7 @@ import type {
   LoadItemsResponse,
   OpenPreviewOptions,
   TagSuggestionApiItem,
+  ViewerPermissions,
 } from "./viewer/types";
 import { buildViewerUrl, currentPage, parseViewerUrlState } from "./viewer/urlState";
 import {
@@ -99,6 +101,7 @@ export function initViewer() {
 async function init() {
   restoreUrlState();
   restoreViewMode();
+  await loadAuthStatus();
   setViewerShellActions({
     connect,
     urlPopped: () => {
@@ -184,6 +187,32 @@ async function connect() {
   } finally {
     setConnectBusy(false);
   }
+}
+
+async function loadAuthStatus() {
+  try {
+    const data = await getJson<AuthStatusResponse>("/api/auth/status");
+    state.permissions = normalizePermissions(data.permissions);
+  } catch {
+    state.permissions = defaultPermissions();
+  }
+}
+
+function defaultPermissions(): ViewerPermissions {
+  return {
+    read: true,
+    writeMetadata: false,
+    writeRating: false,
+  };
+}
+
+function normalizePermissions(value: AuthStatusResponse["permissions"]): ViewerPermissions {
+  return {
+    ...defaultPermissions(),
+    read: Boolean(value?.read ?? true),
+    writeMetadata: Boolean(value?.writeMetadata),
+    writeRating: Boolean(value?.writeRating),
+  };
 }
 
 function showLogin() {
@@ -315,6 +344,7 @@ function openPreview(item: EagleItem, { skipHistory = false }: OpenPreviewOption
   });
   clearPreviewBodyState();
   setPreviewRatingState({
+    canEdit: state.permissions.writeRating,
     item,
     onSelect: (star) => setItemStar(item, star),
   });
@@ -541,12 +571,14 @@ function clearPreviewContents() {
 }
 
 async function setItemStar(item: EagleItem, star: number) {
+  if (!state.permissions.writeRating) return;
   const previous = Number(item.star || 0);
   item.star = star;
   updateItemInState(String(item.id || ""), { star });
   render();
   if (isPreviewDialogOpen()) {
     setPreviewRatingState({
+      canEdit: state.permissions.writeRating,
       item,
       onSelect: (nextStar) => setItemStar(item, nextStar),
     });
@@ -565,6 +597,7 @@ async function setItemStar(item: EagleItem, star: number) {
     render();
     if (isPreviewDialogOpen()) {
       setPreviewRatingState({
+        canEdit: state.permissions.writeRating,
         item,
         onSelect: (nextStar) => setItemStar(item, nextStar),
       });
@@ -660,6 +693,7 @@ function renderPreviewDetails(item: EagleItem) {
   setPreviewInfoState({
     item,
     detailRows: previewDetailRows(item),
+    canEditMetadata: state.permissions.writeMetadata,
     folders: state.folders,
     onTagSuggestions: tagSuggestionItems,
     onFolderSuggestions: folderSuggestionItems,
@@ -668,6 +702,9 @@ function renderPreviewDetails(item: EagleItem) {
 }
 
 async function savePreviewMetadata(item: EagleItem, { tags, folders }: { tags: string[]; folders: string[] }) {
+  if (!state.permissions.writeMetadata) {
+    throw new Error("Metadata editing is not allowed for this viewer");
+  }
   try {
     const data = await postJson<{
       tags?: unknown;

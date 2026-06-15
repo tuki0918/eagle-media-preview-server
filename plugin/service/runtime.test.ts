@@ -48,6 +48,84 @@ test("generated settings store rejects enabled auth without a password", async (
   );
 });
 
+test("generated settings store requires BasicAuth before metadata editing can be enabled", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-runtime-"));
+  const store = createSettingsStore({ filePath: join(dir, "settings.json") });
+
+  await assert.rejects(
+    () => store.save({ allowMetadataEditing: true }),
+    /BasicAuth/i,
+  );
+});
+
+test("generated settings store clears metadata editing when BasicAuth is disabled", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-runtime-"));
+  const store = createSettingsStore({ filePath: join(dir, "settings.json") });
+
+  await store.save({
+    authEnabled: true,
+    allowMetadataEditing: true,
+    password: "secret",
+    confirmPassword: "secret",
+  });
+  const saved = await store.save({ authEnabled: false });
+
+  assert.equal(saved.authEnabled, false);
+  assert.equal(saved.allowMetadataEditing, false);
+});
+
+test("generated server manager restarts after metadata editing setting changes while running", async () => {
+  const calls: unknown[] = [];
+  let settings = {
+    ...DEFAULT_SETTINGS,
+    authEnabled: true,
+    passwordHash: hashPassword("secret"),
+    host: "127.0.0.1",
+    port: 41532,
+  };
+  const manager = createServerManager({
+    settingsStore: {
+      async load() {
+        return settings;
+      },
+      async save(input: Record<string, unknown>) {
+        settings = { ...settings, ...input };
+        calls.push(["save", settings.allowMetadataEditing]);
+        return settings;
+      },
+    },
+    viewerServerFactory(options: { allowMetadataEditing: boolean }) {
+      calls.push(["create", options.allowMetadataEditing]);
+      return {
+        async start() {
+          calls.push(["start", options.allowMetadataEditing]);
+        },
+        async stop() {
+          calls.push(["stop", options.allowMetadataEditing]);
+        },
+        status() {
+          return { state: "running", host: "127.0.0.1", port: 41532 };
+        },
+      };
+    },
+    lanAddressProvider() {
+      return [{ label: "lo0", address: "127.0.0.1" }];
+    },
+  });
+
+  await manager.start();
+  await manager.saveSettings({ allowMetadataEditing: true });
+
+  assert.deepEqual(calls, [
+    ["create", false],
+    ["start", false],
+    ["save", true],
+    ["stop", false],
+    ["create", true],
+    ["start", true],
+  ]);
+});
+
 test("generated server manager can start and stop a viewer server", async () => {
   let settings = {
     ...DEFAULT_SETTINGS,

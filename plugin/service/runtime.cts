@@ -7,6 +7,7 @@ const { createViewerServer } = require("./viewerServer.cjs");
 type ServerStatus = "error" | "running" | "stopped";
 
 interface PluginSettings {
+  allowMetadataEditing: boolean;
   autoStart: boolean;
   authEnabled: boolean;
   basicAuthUser: string;
@@ -51,6 +52,7 @@ interface ServerManagerOptions {
   lanAddressProvider?: () => LanAddress[];
   settingsStore?: SettingsStore;
   viewerServerFactory?: (settings: {
+    allowMetadataEditing: boolean;
     basicAuthUsername: string;
     host: string;
     passwordHash: string;
@@ -65,6 +67,7 @@ interface NetworkEntry {
 }
 
 const DEFAULT_SETTINGS: PluginSettings = {
+  allowMetadataEditing: false,
   autoStart: false,
   host: "0.0.0.0",
   port: 41532,
@@ -108,7 +111,13 @@ function createSettingsStore({ filePath = defaultSettingsPath() }: { filePath?: 
       if (next.authEnabled && !next.passwordHash) {
         throw new Error("Password is required when password protection is enabled");
       }
-      if (!next.authEnabled) next.passwordHash = "";
+      if (!next.authEnabled) {
+        if (input.allowMetadataEditing === true) {
+          throw new Error("BasicAuth protection is required when metadata editing is enabled");
+        }
+        next.passwordHash = "";
+        next.allowMetadataEditing = false;
+      }
 
       await mkdir(dirname(filePath), { recursive: true });
       await writeFile(filePath, `${JSON.stringify(next, null, 2)}\n`, "utf8");
@@ -124,6 +133,7 @@ function normalizeSettings(input: SettingsInput = {}): PluginSettings {
   }
   return {
     autoStart: Boolean(input.autoStart ?? DEFAULT_SETTINGS.autoStart),
+    allowMetadataEditing: Boolean(input.allowMetadataEditing ?? DEFAULT_SETTINGS.allowMetadataEditing),
     host: String(input.host || DEFAULT_SETTINGS.host).trim() || DEFAULT_SETTINGS.host,
     port,
     authEnabled: Boolean(input.authEnabled ?? DEFAULT_SETTINGS.authEnabled),
@@ -213,6 +223,7 @@ function createServerManager({
       host: settings.host,
       port: settings.port,
       basicAuthUsername: settings.basicAuthUser,
+      allowMetadataEditing: settings.allowMetadataEditing,
       passwordHash: settings.authEnabled ? settings.passwordHash : "",
     });
   }
@@ -221,6 +232,7 @@ function createServerManager({
     return prev.host !== next.host
       || prev.port !== next.port
       || prev.authEnabled !== next.authEnabled
+      || prev.allowMetadataEditing !== next.allowMetadataEditing
       || prev.basicAuthUser !== next.basicAuthUser
       || prev.passwordHash !== next.passwordHash;
   }

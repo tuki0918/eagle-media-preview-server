@@ -5,6 +5,7 @@ import qrcodeFactory from "qrcode-generator";
 type ServerState = "error" | "running" | "stopped";
 
 interface PluginSettings {
+  allowMetadataEditing?: boolean;
   authEnabled?: boolean;
   autoStart?: boolean;
   basicAuthUser?: string;
@@ -64,6 +65,7 @@ function App() {
   const [status, setStatus] = useState<PluginStatus>(() => ({
     settings: {
       autoStart: false,
+      allowMetadataEditing: false,
       authEnabled: false,
       basicAuthUser: "eagle",
       host: "0.0.0.0",
@@ -80,6 +82,7 @@ function App() {
   const restartingStopped = busy && serverState === "stopped";
   const statusLabel = restartingStopped ? busyStoppedFrames[busyFrame] : titleCase(serverState);
   const authEnabled = Boolean(settings.authEnabled);
+  const allowMetadataEditing = Boolean(settings.allowMetadataEditing);
   const publicNetwork = (settings.host || "0.0.0.0") === "0.0.0.0";
   const selectedLanAddress = settings.preferredLanAddress || "";
   const qrSrc = useMemo(() => {
@@ -139,6 +142,7 @@ function App() {
       host: publicNetwork ? "0.0.0.0" : "127.0.0.1",
       port: settings.port || 41532,
       authEnabled,
+      allowMetadataEditing,
       basicAuthUser: settings.basicAuthUser || "eagle",
       preferredLanAddress: selectedLanAddress,
       ...patch,
@@ -287,8 +291,26 @@ function App() {
                     setMessage("Enter a password to enable BasicAuth protection.", true);
                     return;
                   }
-                  updateSettings({ authEnabled: checked });
-                  saveSettings({ patch: { authEnabled: checked } });
+                  const patch = checked
+                    ? { authEnabled: true }
+                    : { authEnabled: false, allowMetadataEditing: false };
+                  updateSettings(patch);
+                  saveSettings({ patch });
+                }}
+              />
+              <OptionRow
+                checked={allowMetadataEditing}
+                disabled={formDisabled}
+                icon={<EditIcon />}
+                title="Allow metadata editing"
+                description="Let authenticated viewers update rating, tags, and categories."
+                onChange={(checked) => {
+                  if (checked && !authEnabled) {
+                    setMessage("Enable BasicAuth protection before allowing metadata editing.", true);
+                    return;
+                  }
+                  updateSettings({ allowMetadataEditing: checked });
+                  saveSettings({ patch: { allowMetadataEditing: checked } });
                 }}
               />
               <OptionRow
@@ -473,6 +495,7 @@ function willRestartServer(status: PluginStatus, nextSettings: Record<string, un
   if ((nextSettings.host ?? current.host) !== current.host) return true;
   if (Number(nextSettings.port ?? current.port) !== Number(current.port)) return true;
   if (Boolean(nextSettings.authEnabled ?? current.authEnabled) !== Boolean(current.authEnabled)) return true;
+  if (Boolean(nextSettings.allowMetadataEditing ?? current.allowMetadataEditing) !== Boolean(current.allowMetadataEditing)) return true;
   if ((nextSettings.basicAuthUser ?? current.basicAuthUser) !== current.basicAuthUser) return true;
   return Boolean(nextSettings.password);
 }
@@ -520,6 +543,10 @@ function CopyIcon({ className }: { className?: string }) {
 
 function EmptyQrIcon({ className }: { className?: string }) {
   return <Svg className={className}><path d="m15 18-.722-3.25" /><path d="M2 8a10.645 10.645 0 0 0 20 0" /><path d="m20 15-1.726-2.05" /><path d="m4 15 1.726-2.05" /><path d="m9 18 .722-3.25" /></Svg>;
+}
+
+function EditIcon() {
+  return <Svg><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></Svg>;
 }
 
 function EyeIcon({ className }: { className?: string }) {

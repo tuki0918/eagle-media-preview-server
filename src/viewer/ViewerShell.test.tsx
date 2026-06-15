@@ -373,6 +373,7 @@ describe("ViewerAppShell", () => {
   test("renders preview info as reusable detail and action components", () => {
     const details = renderToStaticMarkup(
       <PreviewDetailsPanel
+        canEditMetadata
         item={{ id: "item-1", tags: ["alpha"], folders: ["folder-1"] }}
         folders={[{ id: "folder-1", name: "Folder 1" }]}
         detailRows={[{ label: "Type", value: "Image" }]}
@@ -387,6 +388,25 @@ describe("ViewerAppShell", () => {
     expect(details).toContain("preview-edit-form");
     expect(actions).toContain("direct-file-link");
     expect(actions).toContain("preview-info-cta");
+  });
+
+  test("renders preview metadata as read-only chips without edit permission", () => {
+    const details = renderToStaticMarkup(
+      <PreviewDetailsPanel
+        item={{ id: "item-1", tags: ["alpha"], folders: ["folder-1"] }}
+        folders={[{ id: "folder-1", name: "Folder 1" }]}
+        detailRows={[{ label: "Type", value: "Image" }]}
+        onTagSuggestions={() => []}
+        onFolderSuggestions={() => []}
+        onSaveMetadata={async () => {}}
+      />,
+    );
+
+    expect(details).toContain("Tags");
+    expect(details).toContain("alpha");
+    expect(details).toContain("Categories");
+    expect(details).toContain("Folder 1");
+    expect(details).not.toContain("preview-edit-form");
   });
 
   test("renders preview body media variants", () => {

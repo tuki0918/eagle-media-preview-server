@@ -12,6 +12,7 @@ export interface PreviewDetailRow {
 }
 
 export interface PreviewInfoProps {
+  canEditMetadata?: boolean;
   detailRows: readonly PreviewDetailRow[];
   folders: readonly EagleFolder[];
   item: EagleItem;
@@ -53,20 +54,24 @@ const previewChipInputClassName = "preview-chip-input min-h-[34px] w-full min-w-
 const previewChipSuggestionsClassName = "preview-chip-suggestions absolute left-0 right-0 top-[calc(100%+4px)] z-[8] grid max-h-[184px] overflow-auto rounded-app border border-[rgba(148,163,184,0.28)] bg-white p-1 shadow-[0_16px_36px_rgba(15,23,42,0.16)]";
 const previewChipSuggestionClassName = "preview-chip-suggestion flex min-h-8 cursor-pointer items-center justify-between gap-3 rounded-md border-0 bg-transparent px-2 text-left text-[13px] text-[#0f172a] hover:bg-[#eff6ff] focus-visible:bg-[#eff6ff] focus-visible:outline-none";
 
-export function PreviewDetailsPanel({ detailRows, folders, item, onFolderSuggestions, onSaveMetadata, onTagSuggestions }: PreviewInfoProps) {
+export function PreviewDetailsPanel({ canEditMetadata = false, detailRows, folders, item, onFolderSuggestions, onSaveMetadata, onTagSuggestions }: PreviewInfoProps) {
   return (
     <section className={previewDetailsSectionClassName}>
       {detailRows.map((row) => (
         <PreviewDetail key={row.label} {...row} />
       ))}
-      <PreviewMetadataEditor
-        key={String(item.id || item.name || "")}
-        folders={folders}
-        item={item}
-        onFolderSuggestions={onFolderSuggestions}
-        onSaveMetadata={onSaveMetadata}
-        onTagSuggestions={onTagSuggestions}
-      />
+      {canEditMetadata ? (
+        <PreviewMetadataEditor
+          key={String(item.id || item.name || "")}
+          folders={folders}
+          item={item}
+          onFolderSuggestions={onFolderSuggestions}
+          onSaveMetadata={onSaveMetadata}
+          onTagSuggestions={onTagSuggestions}
+        />
+      ) : (
+        <PreviewMetadataSummary folders={folders} item={item} />
+      )}
     </section>
   );
 }
@@ -117,6 +122,18 @@ function PreviewChipList({ values }: { values: string | readonly string[] }) {
         </span>
       ))}
     </div>
+  );
+}
+
+function PreviewMetadataSummary({ folders, item }: { folders: readonly EagleFolder[]; item: EagleItem }) {
+  const tags = tagValues(item.tags);
+  const categories = categoryValues(item.folders).map((value) => folderLabel(value, folders));
+  if (!tags.length && !categories.length) return null;
+  return (
+    <>
+      {tags.length ? <PreviewDetail label="Tags" value={tags} chips /> : null}
+      {categories.length ? <PreviewDetail label="Categories" value={categories} chips /> : null}
+    </>
   );
 }
 
