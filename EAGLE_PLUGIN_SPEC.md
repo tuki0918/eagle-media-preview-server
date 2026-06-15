@@ -165,6 +165,7 @@ Settings path:
 - Change rating, tags, and categories from the preview panel when authenticated metadata editing is enabled
 - Open the original file in a new tab
 - Sync search filters, page, view mode, and preview state into the URL
+- Clear viewer state and return to the login screen when an authenticated viewer API request returns `401`
 
 ### Supported Browsing Features
 
@@ -270,6 +271,7 @@ Supported authentication paths:
 
 - BasicAuth header
 - `viewer_session` cookie issued by the login API; cookie and server-side session tokens expire after 30 days
+- If a cookie session expires or is rejected, viewer API requests return `401`; the browser viewer treats that as an auth reset and prompts for login again
 
 Roles:
 

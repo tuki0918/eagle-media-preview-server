@@ -30,6 +30,8 @@ Authentication is optional. When BasicAuth protection is enabled, browser access
 
 Plain text passwords are never persisted. New passwords are saved as salted PBKDF2-SHA-256 hashes, and existing legacy SHA-256 hashes remain accepted for migration compatibility. The viewer session is a server-side cookie session rather than a JWT.
 
+If a viewer session expires or an authenticated API call returns `401`, the browser viewer clears the current library state and returns to the login screen.
+
 ## Development
 
 This project is managed as a TypeScript / React / Vite / Tailwind CSS / Vitest codebase.
