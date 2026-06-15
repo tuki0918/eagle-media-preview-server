@@ -162,11 +162,6 @@ h1 {
   line-height: 1.15;
 }
 
-main {
-  width: min(1180px, 100%);
-  @apply mx-auto px-3 py-[30px];
-}
-
 .controls {
   @apply grid gap-4 pb-2;
 }
