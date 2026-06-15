@@ -87,14 +87,14 @@ test("plugin window does not expose an unused shared URL expiration setting", as
   const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
   const app = await readPluginAppSource();
   const runtime = await readFile(new URL("runtime.cjs", generatedServiceUrl), "utf8");
-  const settingsStore = await readFile(new URL("./service/settingsStore.ts", import.meta.url), "utf8");
+  const runtimeSource = await readFile(new URL("./service/runtime.cts", import.meta.url), "utf8");
 
   assert.doesNotMatch(html, /共有URL/);
   assert.doesNotMatch(html, /有効期限/);
   assert.doesNotMatch(html, /expire|expires|expiry|expiration|ttl/i);
   assert.doesNotMatch(app, /expire|expires|expiry|expiration|ttl/i);
   assert.doesNotMatch(runtime, /expire|expires|expiry|expiration|ttl/i);
-  assert.doesNotMatch(settingsStore, /expire|expires|expiry|expiration|ttl/i);
+  assert.doesNotMatch(runtimeSource, /expire|expires|expiry|expiration|ttl/i);
 });
 
 test("plugin window no longer renders diagnostics UI", async () => {
