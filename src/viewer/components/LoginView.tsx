@@ -17,6 +17,9 @@ interface LoginViewProps {
 }
 
 export function LoginView({ hidden = false }: LoginViewProps) {
+  const state = useSyncExternalStore(subscribeLoginConnectState, getLoginConnectState, getLoginConnectState);
+  const showCredentials = state.authRequired && !state.authenticated;
+
   return (
     <section id="loginView" className="login-view grid min-h-dvh place-items-center px-4 py-9" hidden={hidden}>
       <form
@@ -37,12 +40,38 @@ export function LoginView({ hidden = false }: LoginViewProps) {
 
         <div className="login-primary">
           <div className="form-actions grid grid-cols-1 gap-2.5">
+            {showCredentials ? <LoginCredentials disabled={state.disabled} /> : null}
             <ConnectButton />
           </div>
         </div>
         <ConnectMessage />
       </form>
     </section>
+  );
+}
+
+function LoginCredentials({ disabled }: { disabled: boolean }) {
+  return (
+    <div className="grid gap-2">
+      <input
+        id="authUsernameInput"
+        name="username"
+        className="min-h-[42px] rounded-app border border-app-border bg-white px-3 text-sm text-app-text outline-none focus:border-app-accent focus:shadow-[0_0_0_3px_rgba(37,99,235,0.12)]"
+        autoComplete="username"
+        disabled={disabled}
+        placeholder="Username"
+        type="text"
+      />
+      <input
+        id="authPasswordInput"
+        name="password"
+        className="min-h-[42px] rounded-app border border-app-border bg-white px-3 text-sm text-app-text outline-none focus:border-app-accent focus:shadow-[0_0_0_3px_rgba(37,99,235,0.12)]"
+        autoComplete="current-password"
+        disabled={disabled}
+        placeholder="Password"
+        type="password"
+      />
+    </div>
   );
 }
 
@@ -56,7 +85,7 @@ export function ConnectButton({ disabled }: ConnectButtonProps) {
       type="submit"
       disabled={disabled ?? state.disabled}
     >
-      <span>Connect</span>
+      <span>{state.authRequired && !state.authenticated ? "Sign in" : "Connect"}</span>
     </button>
   );
 }

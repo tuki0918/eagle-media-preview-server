@@ -1,7 +1,7 @@
 import type { ViewerMode } from "./types";
 
 export interface ViewerShellActions {
-  connect: () => void;
+  connect: (credentials?: { password: string; username: string }) => void;
   urlPopped: () => void;
   searchChanged: (query: string) => void;
   searchFocused: (query: string) => void;
@@ -52,9 +52,13 @@ export function setViewerShellActions(nextActions: ViewerShellActions) {
   actions = nextActions;
 }
 
-export function submitConnection(event: { preventDefault: () => void }) {
+export function submitConnection(event: { currentTarget: HTMLFormElement; preventDefault: () => void }) {
   event.preventDefault();
-  actions.connect();
+  const data = new FormData(event.currentTarget);
+  actions.connect({
+    password: String(data.get("password") || ""),
+    username: String(data.get("username") || ""),
+  });
 }
 
 export function handleUrlPop() {

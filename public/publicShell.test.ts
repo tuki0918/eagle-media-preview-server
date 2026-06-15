@@ -13,6 +13,7 @@ import {
   ResultList,
   SearchControls,
 } from "../src/viewer/ViewerShell";
+import { setLoginConnectState } from "../src/viewer/loginConnectState";
 import { PAGE_SIZE_OPTIONS } from "../src/viewer/shellConfig";
 
 async function readViewerSources() {
@@ -108,6 +109,35 @@ test("public login no longer renders advanced Eagle connection settings", async 
   assert.doesNotMatch(app, /advancedButton/);
   assert.doesNotMatch(app, /advancedFields/);
   assert.doesNotMatch(app, /restoreConnectionForm/);
+});
+
+test("public login renders credentials when server auth is required", async () => {
+  const app = await readViewerSources();
+  setLoginConnectState({
+    authenticated: false,
+    authRequired: true,
+    disabled: false,
+    isError: false,
+    message: "",
+  });
+  const login = renderToStaticMarkup(createElement(LoginView, { hidden: false }));
+  const button = renderToStaticMarkup(createElement(ConnectButton, { disabled: false }));
+
+  assert.match(login, /id="authUsernameInput"/);
+  assert.match(login, /name="username"/);
+  assert.match(login, /id="authPasswordInput"/);
+  assert.match(login, /name="password"/);
+  assert.match(button, /Sign in/);
+  assert.match(app, /postJson<AuthStatusResponse>\("\/api\/auth\/login", \{ username, password \}\)/);
+  assert.match(app, /Enter username and password\./);
+
+  setLoginConnectState({
+    authenticated: false,
+    authRequired: false,
+    disabled: false,
+    isError: false,
+    message: "",
+  });
 });
 
 test("public UI no longer shows connect lock icon or connection settings button", async () => {

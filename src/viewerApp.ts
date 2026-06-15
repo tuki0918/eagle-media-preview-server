@@ -93,6 +93,8 @@ import {
 let connectMessageText = "";
 let connectMessageIsError = false;
 let connectBusy = false;
+let authAuthenticated = false;
+let authRequired = false;
 
 export function initViewer() {
   init();
@@ -172,11 +174,23 @@ async function init() {
   showLogin();
 }
 
-async function connect() {
-  setConnectMessage("Connecting", false);
+async function connect(credentials?: { password: string; username: string }) {
+  setConnectMessage(authRequired && !authAuthenticated ? "Signing in" : "Connecting", false);
   setConnectBusy(true);
 
   try {
+    if (authRequired && !authAuthenticated) {
+      const username = String(credentials?.username || "").trim();
+      const password = String(credentials?.password || "");
+      if (!username || !password) {
+        throw new Error("Enter username and password.");
+      }
+      const login = await postJson<AuthStatusResponse>("/api/auth/login", { username, password });
+      authAuthenticated = Boolean(login.authenticated);
+      state.permissions = normalizePermissions(login.permissions);
+      renderLoginConnect();
+      setConnectMessage("Connecting", false);
+    }
     const connection = { ...DEFAULT_EAGLE_CONNECTION };
     const data = await postJson<ConnectResponse>("/api/connect", connection);
     showViewer(data);
@@ -192,10 +206,15 @@ async function connect() {
 async function loadAuthStatus() {
   try {
     const data = await getJson<AuthStatusResponse>("/api/auth/status");
+    authAuthenticated = Boolean(data.authenticated);
+    authRequired = Boolean(data.required);
     state.permissions = normalizePermissions(data.permissions);
   } catch {
+    authAuthenticated = false;
+    authRequired = false;
     state.permissions = defaultPermissions();
   }
+  renderLoginConnect();
 }
 
 function defaultPermissions(): ViewerPermissions {
@@ -245,6 +264,8 @@ function setConnectBusy(isBusy: boolean) {
 
 function renderLoginConnect() {
   setLoginConnectState({
+    authenticated: authAuthenticated,
+    authRequired,
     disabled: connectBusy,
     isError: connectMessageIsError,
     message: connectMessageText,
