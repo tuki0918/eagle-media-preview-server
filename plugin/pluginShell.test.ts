@@ -277,6 +277,7 @@ test("plugin server caches authenticated users per request", async () => {
   assert.match(source, /const metadataPatch = normalizeMetadataPatch\(body\);/);
   assert.match(source, /normalizeStringArray\(body\.tags, "tags"\)/);
   assert.doesNotMatch(source, /function normalizeMetadataValues/);
+  assert.doesNotMatch(source, /function canRoleEditMetadata/);
   assert.doesNotMatch(source, /const writeMetadata = Boolean\(user && canRoleEditMetadata\(user\.role\)\)/);
   assert.doesNotMatch(source, /writeRating: roleAccess\.writeMetadata/);
   assert.doesNotMatch(source, /const manageLibrary = user\?\.role === "admin"/);

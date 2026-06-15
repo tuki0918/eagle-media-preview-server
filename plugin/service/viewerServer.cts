@@ -856,13 +856,9 @@ function permissionsForUser(user: AuthSession | AuthUser | null, { authenticated
   };
 }
 
-function canRoleEditMetadata(role: UserRole) {
-  return role === "admin" || role === "editor";
-}
-
 function rolePermissions(role: UserRole | undefined) {
   const manageLibrary = role === "admin";
-  const writeMetadata = Boolean(role && canRoleEditMetadata(role));
+  const writeMetadata = role === "admin" || role === "editor";
   const writeRating = writeMetadata;
   return {
     manageLibrary,
