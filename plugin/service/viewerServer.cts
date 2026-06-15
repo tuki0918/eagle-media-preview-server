@@ -111,6 +111,16 @@ const mimeTypes = {
   ".txt": "text/plain; charset=utf-8",
   ".md": "text/plain; charset=utf-8",
 };
+const MAX_JSON_BODY_BYTES = 1024 * 1024;
+
+class HttpError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
 
 function createViewerServer({
   host = "0.0.0.0",
@@ -180,7 +190,8 @@ function createViewerServer({
       }
       await serveStatic(url.pathname, res, publicDir);
     } catch (error) {
-      sendJson(res, 500, { error: error.message || "Internal server error" });
+      const status = error instanceof HttpError ? error.status : 500;
+      sendJson(res, status, { error: error.message || "Internal server error" });
     }
   });
 
@@ -737,11 +748,20 @@ function getSession(session) {
 
 async function readJson(req) {
   const chunks = [];
+  let size = 0;
   for await (const chunk of req) {
+    size += chunk.length;
+    if (size > MAX_JSON_BODY_BYTES) {
+      throw new HttpError(413, "Request body is too large");
+    }
     chunks.push(chunk);
   }
   if (!chunks.length) return {};
-  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  } catch {
+    throw new HttpError(400, "Invalid JSON body");
+  }
 }
 
 function parseRange(header, size) {

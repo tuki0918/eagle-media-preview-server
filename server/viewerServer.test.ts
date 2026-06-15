@@ -226,6 +226,50 @@ test("createViewerServer accepts same-origin metadata writes", async () => {
   }
 });
 
+test("createViewerServer returns 400 for invalid JSON request bodies", async () => {
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+  });
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const response = await fetch(`http://127.0.0.1:${status.port}/api/connect`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{",
+    });
+
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), { error: "Invalid JSON body" });
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer returns 413 for oversized JSON request bodies", async () => {
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+  });
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const response = await fetch(`http://127.0.0.1:${status.port}/api/connect`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payload: "x".repeat(1024 * 1024) }),
+    });
+
+    assert.equal(response.status, 413);
+    assert.deepEqual(await response.json(), { error: "Request body is too large" });
+  } finally {
+    await viewer.stop();
+  }
+});
+
 test("resolveDefaultPublicDir prefers Vite output when running from source", () => {
   const existingDist = (path: string) => path === "/repo/dist/public";
   assert.equal(resolveDefaultPublicDir("/repo/plugin/service", existingDist), "/repo/dist/public");

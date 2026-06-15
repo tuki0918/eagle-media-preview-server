@@ -273,6 +273,7 @@ Authorization:
 - `allowMetadataEditing` requires BasicAuth protection
 - `POST /api/items/:id/star` and `POST /api/items/:id/metadata` require authenticated metadata editing permission
 - Unsafe methods reject mismatched `Origin` or `Referer` headers before API handlers run
+- JSON request bodies are capped at 1 MiB; malformed bodies return `400` and oversized bodies return `413`
 
 ## Runtime State
 
