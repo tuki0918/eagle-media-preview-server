@@ -149,6 +149,7 @@ function App() {
   }
 
   async function saveSettings({ restartRunning = true, patch = {} }: { restartRunning?: boolean; patch?: Record<string, unknown> } = {}) {
+    if (!validateAuthUsers(authUsers)) return false;
     const payload: Record<string, unknown> = {
       autoStart: settings.autoStart,
       host: publicNetwork ? "0.0.0.0" : "127.0.0.1",
@@ -172,12 +173,18 @@ function App() {
       }
       const saved = await runCommand(() => managerRef.current?.saveSettings(payload), { quiet: true });
       if (saved && hasUserPasswords) setUserPasswords({});
-      return;
+      return saved;
     }
-    const nextStatus = await managerRef.current?.saveSettings(payload);
-    if (nextStatus) setStatus(nextStatus);
-    if (hasUserPasswords) setUserPasswords({});
-    setMessage("");
+    try {
+      const nextStatus = await managerRef.current?.saveSettings(payload);
+      if (nextStatus) setStatus(nextStatus);
+      if (hasUserPasswords) setUserPasswords({});
+      setMessage("");
+      return true;
+    } catch (error) {
+      setErrorMessage(error);
+      return false;
+    }
   }
 
   function setMessage(value: string, isError = false) {
@@ -197,6 +204,19 @@ function App() {
         ...patch,
       },
     }));
+  }
+
+  function validateAuthUsers(users: AuthUser[]) {
+    if (users.some((user) => !String(user.username || "").trim())) {
+      setMessage("Enter a username for every user.", true);
+      return false;
+    }
+    const duplicate = duplicateUsername(users);
+    if (duplicate) {
+      setMessage(`Username "${duplicate}" is already used.`, true);
+      return false;
+    }
+    return true;
   }
 
   function updateAuthUser(index: number, patch: AuthUser) {
@@ -230,7 +250,8 @@ function App() {
   async function startOrStopServer(checked: boolean) {
     if (busy) return;
     if (checked) {
-      await saveSettings({ restartRunning: false });
+      const saved = await saveSettings({ restartRunning: false });
+      if (!saved) return;
       await runCommand(() => managerRef.current?.start());
     } else {
       await runCommand(() => managerRef.current?.stop());
@@ -552,7 +573,7 @@ function willRestartServer(status: PluginStatus, nextSettings: Record<string, un
 }
 
 function normalizedAuthUsers(settings: PluginSettings): AuthUser[] {
-  const users = Array.isArray(settings.authUsers) ? settings.authUsers.map(normalizeAuthUser).filter((user) => user.username) : [];
+  const users = Array.isArray(settings.authUsers) ? settings.authUsers.map(normalizeAuthUser) : [];
   if (users.length) return users;
   return [{
     username: settings.basicAuthUser || "eagle",
@@ -575,6 +596,17 @@ function normalizeRole(role: unknown): UserRole {
 
 function canRoleEditMetadata(role: unknown) {
   return role === "admin" || role === "editor";
+}
+
+function duplicateUsername(users: AuthUser[]) {
+  const seen = new Set<string>();
+  for (const user of users) {
+    const username = String(user.username || "").trim().toLowerCase();
+    if (!username) continue;
+    if (seen.has(username)) return user.username || username;
+    seen.add(username);
+  }
+  return "";
 }
 
 function nextDefaultUser(users: AuthUser[]): AuthUser {

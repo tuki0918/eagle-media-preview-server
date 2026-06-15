@@ -112,6 +112,7 @@ function createSettingsStore({ filePath = defaultSettingsPath() }: { filePath?: 
 
     async save(input: SettingsInput = {}) {
       const current = await this.load();
+      validateAuthUsersInput(input.authUsers);
       const next = normalizeSettings({ ...current, ...input });
       const userPasswords = normalizeUserPasswords(input.userPasswords);
 
@@ -246,6 +247,19 @@ function uniqueAuthUsers(users: AuthUser[]) {
     output.push(user);
   }
   return output;
+}
+
+function validateAuthUsersInput(value: unknown) {
+  if (value === undefined) return;
+  if (!Array.isArray(value)) throw new Error("authUsers must be an array");
+  const seen = new Set<string>();
+  for (const user of value) {
+    const username = user && typeof user === "object" ? String((user as { username?: unknown }).username || "").trim() : "";
+    if (!username) throw new Error("Username is required for every user");
+    const key = username.toLowerCase();
+    if (seen.has(key)) throw new Error(`Duplicate username: ${username}`);
+    seen.add(key);
+  }
 }
 
 function upsertAuthUser(users: AuthUser[], nextUser: AuthUser) {

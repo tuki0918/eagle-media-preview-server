@@ -90,6 +90,25 @@ test("generated settings store rejects enabled auth without a password", async (
   );
 });
 
+test("generated settings store rejects invalid auth users", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-runtime-"));
+  const store = createSettingsStore({ filePath: join(dir, "settings.json") });
+
+  await assert.rejects(
+    () => store.save({ authUsers: [{ username: "", role: "viewer", passwordHash: "hash" }] }),
+    /username/i,
+  );
+  await assert.rejects(
+    () => store.save({
+      authUsers: [
+        { username: "reader", role: "viewer", passwordHash: "hash" },
+        { username: "Reader", role: "editor", passwordHash: "hash" },
+      ],
+    }),
+    /duplicate username/i,
+  );
+});
+
 test("generated settings store requires BasicAuth before metadata editing can be enabled", async () => {
   const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-runtime-"));
   const store = createSettingsStore({ filePath: join(dir, "settings.json") });
