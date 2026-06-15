@@ -1,4 +1,5 @@
-import { createRoot, type Root } from "react-dom/client";
+import { useSyncExternalStore } from "react";
+import { getTagSuggestionsState, subscribeTagSuggestionsState } from "../tagSuggestionsState";
 import type { TagSuggestionApiItem } from "../types";
 
 interface TagSuggestionsProps {
@@ -7,18 +8,21 @@ interface TagSuggestionsProps {
   onSelect: (value: unknown) => void;
 }
 
-const roots = new WeakMap<HTMLElement, Root>();
+export function TagSuggestions({ hidden, items, onSelect }: Partial<TagSuggestionsProps>) {
+  const state = useSyncExternalStore(subscribeTagSuggestionsState, getTagSuggestionsState, getTagSuggestionsState);
+  const displayHidden = hidden ?? state.hidden;
+  const displayItems = items ?? state.items;
+  const handleSelect = onSelect ?? state.onSelect;
 
-export function TagSuggestions({ hidden = false, items, onSelect }: TagSuggestionsProps) {
   return (
     <div
       id="tagSuggestions"
       className="tag-suggestions absolute left-[42px] right-3 top-[calc(100%+6px)] z-20 grid max-h-[280px] overflow-auto rounded-app border border-app-border bg-app-surface p-1.5 shadow-app-soft"
       role="listbox"
       aria-label="Tag suggestions"
-      hidden={hidden}
+      hidden={displayHidden}
     >
-      {items.map((item) => (
+      {displayItems.map((item) => (
         <button
           key={item.name}
           type="button"
@@ -26,7 +30,7 @@ export function TagSuggestions({ hidden = false, items, onSelect }: TagSuggestio
           role="option"
           onPointerDown={(event) => {
             event.preventDefault();
-            onSelect(item.name);
+            handleSelect(item.name);
           }}
         >
           <span>{item.name || ""}</span>
@@ -35,22 +39,4 @@ export function TagSuggestions({ hidden = false, items, onSelect }: TagSuggestio
       ))}
     </div>
   );
-}
-
-export function renderTagSuggestionsView(container: HTMLElement, props: Required<TagSuggestionsProps>) {
-  let root = roots.get(container);
-  if (!root) {
-    container.replaceChildren();
-    root = createRoot(container);
-    roots.set(container, root);
-  }
-  root.render(<TagSuggestions {...props} />);
-}
-
-export function clearTagSuggestionsView(container: HTMLElement) {
-  renderTagSuggestionsView(container, {
-    hidden: true,
-    items: [],
-    onSelect: () => {},
-  });
 }

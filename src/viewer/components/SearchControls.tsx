@@ -32,8 +32,6 @@ interface SearchControlsProps {
   selectedRating?: string;
 }
 
-const noopTagSelect = () => {};
-
 export function SearchControls({
   filtersOpen,
   folders,
@@ -71,9 +69,7 @@ export function SearchControls({
             <TagChips />
             <SearchInput value={displaySearchQuery} />
           </div>
-          <div id="tagSuggestionsHost">
-            <TagSuggestions hidden items={[]} onSelect={noopTagSelect} />
-          </div>
+          <TagSuggestions />
         </div>
         <ResetFiltersButton hasActiveFilters={displayHasActiveFilters} />
         <ToggleFiltersButton filtersOpen={displayFiltersOpen} />

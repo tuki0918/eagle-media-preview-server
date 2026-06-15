@@ -42,7 +42,6 @@ const REQUIRED_ELEMENT_IDS = [
   "pageSizeSelect",
   "searchInput",
   "tagChips",
-  "tagSuggestionsHost",
   "tagSuggestions",
   "resetFiltersButton",
   "toggleFiltersButton",

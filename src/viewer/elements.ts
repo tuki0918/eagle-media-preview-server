@@ -1,5 +1,4 @@
 export interface ViewerElements {
-  tagSuggestionsHost: HTMLElement;
   resultGridHost: HTMLElement;
   template: HTMLTemplateElement;
   dialog: HTMLDialogElement;
@@ -11,7 +10,6 @@ export interface ViewerElements {
 
 export function getViewerElements(): ViewerElements {
   const elements = {
-    tagSuggestionsHost: document.querySelector("#tagSuggestionsHost"),
     resultGridHost: document.querySelector("#resultGridHost"),
     template: document.querySelector("#cardTemplate"),
     dialog: document.querySelector("#previewDialog"),

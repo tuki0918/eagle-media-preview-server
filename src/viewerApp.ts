@@ -59,9 +59,9 @@ import {
 } from "./viewer/components/PreviewBody";
 import { setTagChipsState } from "./viewer/tagChipsState";
 import {
-  clearTagSuggestionsView,
-  renderTagSuggestionsView,
-} from "./viewer/components/TagSuggestions";
+  clearTagSuggestionsState,
+  setTagSuggestionsState,
+} from "./viewer/tagSuggestionsState";
 import { previewDetailRows } from "./viewer/previewDetails";
 import {
   resetPreviewDialogState,
@@ -492,7 +492,7 @@ function renderTagSuggestions(items: readonly TagSuggestionApiItem[]) {
     return;
   }
 
-  renderTagSuggestionsView(els.tagSuggestionsHost, {
+  setTagSuggestionsState({
     hidden: false,
     items,
     onSelect: addTagFilter,
@@ -501,7 +501,7 @@ function renderTagSuggestions(items: readonly TagSuggestionApiItem[]) {
 
 function hideTagSuggestions() {
   state.tagSuggestionsRequestId += 1;
-  clearTagSuggestionsView(els.tagSuggestionsHost);
+  clearTagSuggestionsState();
 }
 
 function syncAdvancedFiltersUi() {
