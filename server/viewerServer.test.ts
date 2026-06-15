@@ -128,7 +128,7 @@ test("createViewerServer allows metadata writes when editing is enabled for an a
       },
       async updateItemMetadata(id: string, input: unknown) {
         calls.push({ id, input });
-        return { id, tags: ["cat"], folders: ["folder-1"] };
+        return { id };
       },
     },
   });
@@ -161,7 +161,7 @@ test("createViewerServer allows metadata writes when editing is enabled for an a
         Authorization: authHeader,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ tags: ["cat"], folders: ["folder-1"] }),
+      body: JSON.stringify({ tags: [" cat ", "cat", ""], folders: ["folder-1", " folder-1 "] }),
     });
 
     assert.equal(response.status, 200);

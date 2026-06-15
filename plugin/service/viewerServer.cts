@@ -430,14 +430,12 @@ async function handleApi(req, url, res, { auth, getSession, setSession }: ApiCon
     }
     const itemId = decodeURIComponent(metadataMatch[1]);
     const body = await readJson(req);
-    const item = await session.client.updateItemMetadata(itemId, {
-      tags: body.tags,
-      folders: body.folders,
-    });
+    const metadataPatch = normalizeMetadataPatch(body);
+    const item = await session.client.updateItemMetadata(itemId, metadataPatch);
     sendJson(res, 200, {
       id: item.id || itemId,
-      tags: Array.isArray(item.tags) ? item.tags : body.tags,
-      folders: Array.isArray(item.folders) ? item.folders : body.folders,
+      tags: Array.isArray(item.tags) ? item.tags : metadataPatch.tags,
+      folders: Array.isArray(item.folders) ? item.folders : metadataPatch.folders,
     });
     return;
   }
@@ -729,6 +727,18 @@ function sendMethodNotAllowed(res, methods) {
     "Content-Type": "application/json; charset=utf-8",
   });
   res.end(JSON.stringify({ error: "Method not allowed" }));
+}
+
+function normalizeMetadataPatch(body) {
+  return {
+    tags: body.tags === undefined ? undefined : normalizeMetadataValues(body.tags, "tags"),
+    folders: body.folders === undefined ? undefined : normalizeMetadataValues(body.folders, "folders"),
+  };
+}
+
+function normalizeMetadataValues(value, fieldName) {
+  if (!Array.isArray(value)) throw new Error(`${fieldName} must be an array`);
+  return [...new Set(value.map((item) => String(item).trim()).filter(Boolean))];
 }
 
 function authRequired({ users = [], viewerPassword, passwordHash }: { passwordHash?: string; users?: AuthUser[]; viewerPassword?: string }) {
