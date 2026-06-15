@@ -22,6 +22,7 @@ import {
 import { hasActiveFilters, resetFilterState } from "./viewer/filters";
 import { renderLucideIcons } from "./viewer/icons";
 import { itemQueryParams } from "./viewer/itemQuery";
+import { setLoginConnectState } from "./viewer/loginConnectState";
 import {
   folderSuggestionItems as buildFolderSuggestionItems,
   type MetadataSuggestion,
@@ -55,7 +56,6 @@ import {
   renderPreviewBodyView,
   type PreviewBodyKind,
 } from "./viewer/components/PreviewBody";
-import { renderLoginConnectView } from "./viewer/components/LoginView";
 import { renderSearchControlButtonsView } from "./viewer/components/SearchControls";
 import { renderTagChipsView } from "./viewer/components/TagChips";
 import {
@@ -226,7 +226,7 @@ function setConnectBusy(isBusy: boolean) {
 }
 
 function renderLoginConnect() {
-  renderLoginConnectView(els.connectButtonHost, els.connectMessageHost, {
+  setLoginConnectState({
     disabled: connectBusy,
     isError: connectMessageIsError,
     message: connectMessageText,

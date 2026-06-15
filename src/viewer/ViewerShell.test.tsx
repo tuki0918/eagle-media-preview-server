@@ -33,9 +33,7 @@ import { MEDIA_TYPE_OPTIONS, PAGE_SIZE_OPTIONS, RATING_OPTIONS } from "./shellCo
 const REQUIRED_ELEMENT_IDS = [
   "loginView",
   "connectForm",
-  "connectButtonHost",
   "connectButton",
-  "connectMessageHost",
   "connectMessage",
   "viewerShell",
   "folderSelect",

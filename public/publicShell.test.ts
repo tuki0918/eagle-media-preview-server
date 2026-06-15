@@ -39,6 +39,7 @@ async function readAppSources() {
     "../src/viewer/components/FolderOptions.tsx",
     "../src/viewer/components/LibraryFooter.tsx",
     "../src/viewer/components/LoginView.tsx",
+    "../src/viewer/loginConnectState.ts",
     "../src/viewer/components/Pager.tsx",
     "../src/viewer/components/PreviewBody.tsx",
     "../src/viewer/components/PreviewDialog.tsx",
@@ -92,16 +93,16 @@ test("public UI no longer shows connect lock icon or connection settings button"
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.doesNotMatch(html, /id="connectButtonIcon"/);
-  assert.match(html, /id="connectButtonHost"[\s\S]*<ConnectButton \/>/);
-  assert.match(html, /id="connectMessageHost"[\s\S]*<ConnectMessage \/>/);
+  assert.match(html, /<ConnectButton \/>/);
+  assert.match(html, /<ConnectMessage \/>/);
   assert.doesNotMatch(html, /aria-label="Connection settings"/);
   assert.doesNotMatch(html, /id="changeConnectionButton"/);
   assert.doesNotMatch(app, /changeConnectionButton/);
   assert.doesNotMatch(app, /connectButtonIcon/);
-  assert.match(app, /connectButtonHost: document\.querySelector\("#connectButtonHost"\),/);
-  assert.match(app, /connectMessageHost: document\.querySelector\("#connectMessageHost"\),/);
+  assert.doesNotMatch(app, /connectButtonHost: document\.querySelector\("#connectButtonHost"\),/);
+  assert.doesNotMatch(app, /connectMessageHost: document\.querySelector\("#connectMessageHost"\),/);
   assert.doesNotMatch(app, /connectButton: document\.querySelector\("#connectButton"\),/);
-  assert.match(app, /renderLoginConnectView\(els\.connectButtonHost, els\.connectMessageHost, \{/);
+  assert.match(app, /setLoginConnectState\(\{/);
   assert.doesNotMatch(app, /els\.connectMessage\.textContent/);
   assert.doesNotMatch(app, /els\.connectMessage\.classList/);
   assert.match(app, /import \{ getShellView, setShellView \} from "\.\/viewer\/shellVisibility";/);

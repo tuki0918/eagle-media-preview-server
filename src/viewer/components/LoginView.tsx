@@ -1,5 +1,6 @@
-import { createRoot, type Root } from "react-dom/client";
+import { useSyncExternalStore } from "react";
 import iconOnUrl from "../../assets/icon_on.svg";
+import { getLoginConnectState, subscribeLoginConnectState } from "../loginConnectState";
 import { submitConnection } from "../shellActions";
 
 interface ConnectButtonProps {
@@ -10,9 +11,6 @@ interface ConnectMessageProps {
   isError?: boolean;
   message?: string;
 }
-
-const connectButtonRoots = new WeakMap<HTMLElement, Root>();
-const connectMessageRoots = new WeakMap<HTMLElement, Root>();
 
 interface LoginViewProps {
   hidden?: boolean;
@@ -39,62 +37,42 @@ export function LoginView({ hidden = false }: LoginViewProps) {
 
         <div className="login-primary">
           <div className="form-actions grid grid-cols-1 gap-2.5">
-            <div id="connectButtonHost">
-              <ConnectButton />
-            </div>
+            <ConnectButton />
           </div>
         </div>
-        <div id="connectMessageHost">
-          <ConnectMessage />
-        </div>
+        <ConnectMessage />
       </form>
     </section>
   );
 }
 
-export function ConnectButton({ disabled = false }: ConnectButtonProps) {
+export function ConnectButton({ disabled }: ConnectButtonProps) {
+  const state = useSyncExternalStore(subscribeLoginConnectState, getLoginConnectState, getLoginConnectState);
+
   return (
     <button
       id="connectButton"
       className="inline-flex min-h-[46px] items-center justify-center gap-[9px] rounded-app border border-app-accent bg-app-accent text-sm font-[720] text-white shadow-[0_10px_22px_rgba(37,99,235,0.18)]"
       type="submit"
-      disabled={disabled}
+      disabled={disabled ?? state.disabled}
     >
       <span>Connect</span>
     </button>
   );
 }
 
-export function ConnectMessage({ isError = false, message = "" }: ConnectMessageProps) {
+export function ConnectMessage({ isError, message }: ConnectMessageProps) {
+  const state = useSyncExternalStore(subscribeLoginConnectState, getLoginConnectState, getLoginConnectState);
+  const displayIsError = isError ?? state.isError;
+  const displayMessage = message ?? state.message;
+
   return (
     <p
       id="connectMessage"
-      className={`connect-message fixed bottom-[max(24px,env(safe-area-inset-bottom))] left-1/2 z-10 w-[min(320px,calc(100vw-32px))] -translate-x-1/2 px-2 text-center text-app-muted${isError ? " error-text" : ""}`}
+      className={`connect-message fixed bottom-[max(24px,env(safe-area-inset-bottom))] left-1/2 z-10 w-[min(320px,calc(100vw-32px))] -translate-x-1/2 px-2 text-center text-app-muted${displayIsError ? " error-text" : ""}`}
       aria-live="polite"
     >
-      {message}
+      {displayMessage}
     </p>
   );
-}
-
-export function renderLoginConnectView(
-  buttonContainer: HTMLElement,
-  messageContainer: HTMLElement,
-  props: Required<ConnectButtonProps & ConnectMessageProps>,
-) {
-  let buttonRoot = connectButtonRoots.get(buttonContainer);
-  if (!buttonRoot) {
-    buttonContainer.replaceChildren();
-    buttonRoot = createRoot(buttonContainer);
-    connectButtonRoots.set(buttonContainer, buttonRoot);
-  }
-  buttonRoot.render(<ConnectButton disabled={props.disabled} />);
-
-  let messageRoot = connectMessageRoots.get(messageContainer);
-  if (!messageRoot) {
-    messageContainer.replaceChildren();
-    messageRoot = createRoot(messageContainer);
-    connectMessageRoots.set(messageContainer, messageRoot);
-  }
-  messageRoot.render(<ConnectMessage isError={props.isError} message={props.message} />);
 }
