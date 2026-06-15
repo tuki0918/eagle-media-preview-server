@@ -57,6 +57,9 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(app, /const metadataEditingEnabled = authEnabled && authUsersCanEditMetadata\(authUsers\);/);
   assert.match(app, /Active editors/);
   assert.match(app, /Active viewers/);
+  assert.match(app, /metadataEditingEnabled\s*\?\s*"border-\[#b5ebc1\] bg-\[#e7f8eb\] text-\[#178c35\]"/);
+  assert.match(app, /"border-\[#c5d4f3\] bg-\[#edf3ff\] text-\[#2f5fbd\]"/);
+  assert.match(app, /id="authUsersStatus"[^>]+role="status"/);
   assert.match(app, /Saved users apply when BasicAuth protection is enabled\./);
   assert.match(app, /Admin can also switch libraries\./);
   assert.match(app, /aria-label=\{`Username for user \$\{index \+ 1\}`\}/);

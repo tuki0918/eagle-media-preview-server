@@ -89,9 +89,11 @@ function App() {
   const authUsersStatusLabel = authEnabled
     ? metadataEditingEnabled ? "Active editors" : "Active viewers"
     : "Inactive";
-  const authUsersStatusClassName = authEnabled
-    ? "border-[#b5ebc1] bg-[#e7f8eb] text-[#178c35]"
-    : "border-[#d5d9df] bg-[#f3f4f6] text-[#626975]";
+  const authUsersStatusClassName = !authEnabled
+    ? "border-[#d5d9df] bg-[#f3f4f6] text-[#626975]"
+    : metadataEditingEnabled
+      ? "border-[#b5ebc1] bg-[#e7f8eb] text-[#178c35]"
+      : "border-[#c5d4f3] bg-[#edf3ff] text-[#2f5fbd]";
   const publicNetwork = (settings.host || "0.0.0.0") === "0.0.0.0";
   const qrSrc = useMemo(() => {
     if (!status.url || serverState !== "running") return "";
@@ -420,7 +422,7 @@ function App() {
           <SettingRow label="Users" help={authEnabled ? "Viewer can browse. Editor can edit metadata. Admin can also switch libraries." : "Saved users apply when BasicAuth protection is enabled."}>
             <div className="grid gap-2">
               <div className="flex justify-end">
-                <span id="authUsersStatus" className={`inline-flex min-h-5 items-center rounded-md border px-2 text-[10px] font-medium ${authUsersStatusClassName}`}>
+                <span id="authUsersStatus" className={`inline-flex min-h-5 items-center rounded-md border px-2 text-[10px] font-medium ${authUsersStatusClassName}`} role="status">
                   {authUsersStatusLabel}
                 </span>
               </div>
