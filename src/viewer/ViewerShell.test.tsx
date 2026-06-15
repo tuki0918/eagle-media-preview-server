@@ -337,6 +337,8 @@ describe("ViewerAppShell", () => {
 
     expect(video).toContain("video-player");
     expect(video).toContain("Playback position");
+    expect(video).toContain("cursor-pointer");
+    expect(video).toContain("Toggle video playback");
     expect(audio).toContain("audio-player-shell");
     expect(audio).toContain("audio-artwork");
     expect(audio).toContain("Playback speed");

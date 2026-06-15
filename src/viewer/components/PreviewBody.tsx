@@ -29,7 +29,7 @@ interface ImageState {
 const checkerboardClassName =
   "bg-[#f8fafc] bg-[linear-gradient(45deg,rgba(148,163,184,0.24)_25%,transparent_25%),linear-gradient(-45deg,rgba(148,163,184,0.24)_25%,transparent_25%),linear-gradient(45deg,transparent_75%,rgba(148,163,184,0.24)_75%),linear-gradient(-45deg,transparent_75%,rgba(148,163,184,0.24)_75%)] [background-position:0_0,0_12px,12px_-12px,-12px_0] [background-size:24px_24px]";
 const previewVideoClassName =
-  "preview-video h-full w-full max-h-full bg-[#05070a] object-contain [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:max-h-none [&:fullscreen]:max-w-none [&:fullscreen]:bg-[#05070a] [&:fullscreen]:object-contain";
+  "preview-video h-full w-full max-h-full cursor-pointer bg-[#05070a] object-contain [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:max-h-none [&:fullscreen]:max-w-none [&:fullscreen]:bg-[#05070a] [&:fullscreen]:object-contain";
 const mediaPlayerClassName =
   "media-player pointer-events-auto grid w-full gap-3 rounded-none border-0 bg-transparent text-white max-[540px]:gap-2.5";
 const videoPlayerClassName =
@@ -92,14 +92,26 @@ function VideoPreview({ item }: { item: EagleItem }) {
     videoRef.current?.play().catch(() => {});
   }, [item.id]);
 
+  const toggleVideoPlayback = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) {
+      video.play().catch(() => {});
+    } else {
+      video.pause();
+    }
+  };
+
   return (
     <>
       <video
         ref={videoRef}
         className={previewVideoClassName}
         src={mediaUrl(String(item.id || ""), "file")}
+        aria-label="Toggle video playback"
         playsInline
         preload="metadata"
+        onClick={toggleVideoPlayback}
         onError={(event) => setNotice(videoErrorMessage(event.currentTarget.error))}
       />
       <MediaControls mediaRef={videoRef} item={item} variant="video" />
