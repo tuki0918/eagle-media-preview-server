@@ -19,4 +19,20 @@ describe("viewer API helpers", () => {
       status: 401,
     } satisfies Partial<ApiError>);
   });
+
+  test("throws ApiError with response status when the error body is not JSON", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: false,
+      status: 502,
+      json: async () => {
+        throw new SyntaxError("Unexpected token");
+      },
+    } as unknown as Response);
+
+    await expect(getJson("/api/items")).rejects.toMatchObject({
+      message: "HTTP 502",
+      name: "ApiError",
+      status: 502,
+    } satisfies Partial<ApiError>);
+  });
 });

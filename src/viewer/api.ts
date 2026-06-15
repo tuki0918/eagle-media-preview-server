@@ -22,9 +22,17 @@ export async function postJson<T = unknown>(url: string, body: unknown): Promise
 
 async function requestJson<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, options);
-  const data = await response.json() as unknown;
+  const data = await safeJson(response);
   if (!response.ok) throw new ApiError(response.status, responseErrorMessage(data, response.status));
   return data as T;
+}
+
+async function safeJson(response: Response) {
+  try {
+    return await response.json() as unknown;
+  } catch {
+    return null;
+  }
 }
 
 function responseErrorMessage(data: unknown, status: number) {
