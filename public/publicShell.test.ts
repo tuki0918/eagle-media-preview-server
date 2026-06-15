@@ -190,16 +190,16 @@ test("public UI no longer shows connect lock icon or connection settings button"
 
 test("public thumbnails lazy-load with visible loading states", async () => {
   const html = await readAppSources();
-  const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(html, /loading="lazy"/);
   assert.match(html, /loading \? " thumb-loading" : ""/);
-  assert.match(html, /missing \? " thumb-missing" : ""/);
+  assert.match(html, /missing \? ` thumb-missing \$\{missingThumbClassName\}` : ""/);
   assert.match(html, /onLoad=\{\(\) => \{\s*setLoading\(false\);\s*setMissing\(false\);\s*\}\}/);
   assert.match(html, /onError=\{\(\) => \{\s*setLoading\(false\);\s*setMissing\(true\);\s*\}\}/);
-  assert.match(css, /\.thumb-button\s*\{[^}]*aspect-ratio:\s*3\s*\/\s*2;/s);
-  assert.match(css, /\.thumb-button\.thumb-loading::after,\s*\.row-thumb\.thumb-loading::after/);
-  assert.match(css, /animation:\s*thumb-spinner 0\.75s linear infinite;/);
+  assert.match(html, /const gridThumbButtonClassName =[\s\S]*aspect-\[3\/2\]/);
+  assert.match(html, /function LoadingIndicator\(\{ variant \}/);
+  assert.match(html, /animate-spin rounded-full border-2/);
+  assert.match(html, /NO PREVIEW/);
 });
 
 test("public image preview fit mode scales to the viewport and refreshes on resize", async () => {
@@ -219,17 +219,18 @@ test("public image preview fit mode scales to the viewport and refreshes on resi
   assert.match(app, /const naturalScale = 1;/);
   assert.match(app, /const keepFitted = Math\.abs\(previousTransform\.scale - previousFitScale\) < 0\.01;/);
   assert.match(html, /transform: `translate\(-50%, -50%\) translate3d\(\$\{imageState\.transform\.x\}px, \$\{imageState\.transform\.y\}px, 0\) scale\(\$\{imageState\.transform\.scale\}\)`/);
-  assert.match(css, /\.preview-layout\s*\{[^}]*height:\s*100%;[^}]*max-height:\s*100%;/s);
-  assert.match(css, /\.preview-image\s*\{[^}]*position:\s*absolute;[^}]*left:\s*50%;[^}]*top:\s*50%;[^}]*max-width:\s*none;[^}]*max-height:\s*none;/s);
-  assert.match(css, /\.preview-body img:not\(\.preview-image\),\s*\.preview-body video/);
+  assert.match(html, /const previewLayoutClassName = \[/);
+  assert.match(html, /const previewImageClassName =[\s\S]*"preview-image absolute left-1\/2 top-1\/2/);
+  assert.match(html, /backdrop:bg-\[rgba\(15,23,42,0\.32\)\]/);
+  assert.match(html, /\[&:fullscreen\]:h-screen \[&:fullscreen\]:w-screen/);
 });
 
 test("public video preview reserves top space for floating action buttons", async () => {
-  const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
+  const html = await readAppSources();
 
-  assert.match(css, /#previewDialog\.video-mode \.preview-layout\s*\{[^}]*padding-top:\s*calc\(60px \+ env\(safe-area-inset-top\)\);[^}]*background:\s*#05070a;/s);
-  assert.match(css, /\.video-mode \.preview-body\s*\{[^}]*min-height:\s*0;[^}]*height:\s*100%;/s);
-  assert.match(css, /\.preview-video\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;/s);
+  assert.match(html, /previewDialogState\.mode === "video" \? "h-dvh max-h-dvh bg-\[#05070a\] pt-\[calc\(60px\+env\(safe-area-inset-top\)\)\]"/);
+  assert.match(html, /if \(kind === "video"\) return `\$\{base\} bg-\[#05070a\] max-h-full`;/);
+  assert.match(html, /const previewVideoClassName =[\s\S]*"preview-video h-full w-full max-h-full bg-\[#05070a\] object-contain/);
 });
 
 test("public audio preview uses video-style dark action buttons", async () => {
@@ -249,7 +250,7 @@ test("public UI exposes direct original file URLs for each media item", async ()
   assert.match(app, /function directFileUrl\(item[^)]*\)/);
   assert.match(app, /function previewFileName\(item[^)]*\)/);
   assert.match(directFileUrlSource, /return new URL\(`\/file\/\$\{encodeURIComponent\(String\(item\.id \|\| ""\)\)\}`,\s*baseUrl\)\.href;/);
-  assert.match(actions, /class="direct-file-link preview-info-cta"/);
+  assert.match(actions, /class="[^"]*\bdirect-file-link\b[^"]*\bpreview-info-cta\b/);
   assert.match(actions, /href="http:\/\/localhost\/file\/item%201"/);
   assert.match(actions, /Open file/);
   assert.doesNotMatch(directFileUrlSource, /connectionId/);
@@ -298,8 +299,8 @@ test("public preview renders text-like files and PDFs from their thumbnails", as
   assert.match(app, /function previewFileName\(item[^)]*\) \{/);
   assert.match(app, /PreviewDialogMode = "" \| "audio" \| "image" \| "text" \| "unsupported" \| "video"/);
   assert.doesNotMatch(app, /pdf-mode/);
-  assert.match(css, /\.text-mode \.preview-body/);
-  assert.match(css, /\.text-preview/);
+  assert.match(html, /if \(kind === "text"\) return `\$\{base\} overflow-auto bg-\[#f8fafc\] p-\[18px\]`;/);
+  assert.match(html, /const textPreviewClassName =/);
   assert.doesNotMatch(css, /\.pdf-mode \.preview-body/);
   assert.doesNotMatch(css, /\.pdf-preview/);
   assert.match(server, /"\.html": "text\/html; charset=utf-8"/);
@@ -385,7 +386,8 @@ test("public file names expose original names in truncated views and preview inf
 
   assert.match(app, /function originalFileName\(item[^)]*\) \{/);
   assert.match(html, /<strong title=\{originalFileName\(item\)\}>/);
-  assert.match(html, /<span className="row-file-name" title=\{originalFileName\(item\)\}>/);
+  assert.match(html, /const rowFileNameClassName =[\s\S]*row-file-name/);
+  assert.match(html, /<span className=\{rowFileNameClassName\} title=\{originalFileName\(item\)\}>/);
   assert.match(html, /<section className="[^"]*\bpreview-original-name-section\b[^"]*">[\s\S]*<PreviewOriginalName \/>[\s\S]*<\/section>[\s\S]*<section className="[^"]*\bpreview-rating-section\b[^"]*">/);
   assert.doesNotMatch(html, /File Name/);
   assert.doesNotMatch(app, /previewOriginalNameHost: document\.querySelector\("#previewOriginalNameHost"\),/);
@@ -395,11 +397,11 @@ test("public file names expose original names in truncated views and preview inf
   assert.doesNotMatch(app, /document\.querySelector/);
   assert.match(app, /setPreviewTextState\(\{[\s\S]*originalName: originalFileName\(item\),[\s\S]*\}\);/);
   assert.doesNotMatch(app, /els\.previewOriginalName\.textContent/);
-  assert.match(css, /\.preview-original-name-section\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\);[^}]*padding:\s*8px 8px 14px;[^}]*border-bottom:\s*1px solid rgba\(148,\s*163,\s*184,\s*0\.18\);/s);
-  assert.match(css, /@media \(max-width: 540px\)[\s\S]*\.preview-original-name-section\s*\{[^}]*padding:\s*6px 8px 14px;/);
-  assert.match(css, /\.preview-rating-section\s*\{[^}]*padding:\s*0 8px 0;/s);
-  assert.doesNotMatch(css, /\.preview-rating-section\s*\{[^}]*border-bottom:/s);
-  assert.match(css, /\.preview-original-name-value\s*\{[^}]*width:\s*100%;[^}]*overflow-wrap:\s*anywhere;[^}]*white-space:\s*normal;/s);
+  assert.match(html, /preview-original-name-section grid min-h-8 grid-cols-\[minmax\(0,1fr\)\]/);
+  assert.match(html, /max-\[540px\]:pb-3\.5 max-\[540px\]:pt-1\.5/);
+  assert.match(html, /preview-rating-section grid min-h-8 grid-cols-\[minmax\(96px,112px\)_minmax\(0,1fr\)\]/);
+  assert.doesNotMatch(html, /preview-rating-section[^"]*border-b/);
+  assert.match(html, /preview-original-name-value w-full min-w-0 whitespace-normal/);
 });
 
 test("public preview info uses chip lists and a full-width open file CTA", async () => {
@@ -407,14 +409,14 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
-  assert.match(html, /<section className="preview-details-section">/);
+  assert.match(html, /const previewDetailsSectionClassName = "preview-details-section/);
   assert.match(html, /function PreviewInfoDetails\(\)/);
   assert.match(html, /function PreviewInfoActions\(\)/);
   assert.match(html, /function PreviewChipList\(\{ values \}/);
-  assert.match(html, /className="preview-chip"/);
+  assert.match(html, /const previewChipClassName = "preview-chip/);
   assert.doesNotMatch(app, /preview-chip-empty/);
   assert.doesNotMatch(app, /previewActions: document\.querySelector\("#previewActions"\),/);
-  assert.match(html, /className="direct-file-link preview-info-cta"/);
+  assert.match(html, /const directFileLinkClassName =[\s\S]*direct-file-link preview-info-cta/);
   assert.match(html, /function ExternalLinkIcon\(\)/);
   assert.match(app, /{ label: "Type", value: mediaTypeLabel\(item\) }/);
   assert.doesNotMatch(app, /renderPreviewInfoView\(els\.previewDetails, els\.previewActions, \{/);
@@ -438,7 +440,7 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(app, /function writeRecentList\(key[^,]*,\s*values[^)]*\) \{/);
   assert.match(app, /function tagSuggestionItems\(\{/);
   assert.match(app, /function folderSuggestionItems\(\{/);
-  assert.match(html, /className="preview-edit-row"/);
+  assert.match(html, /const previewEditRowClassName =[\s\S]*"preview-edit-row/);
   assert.doesNotMatch(app, /const row = document\.createElement\("label"\);/);
   assert.doesNotMatch(app, /render\(\);\s*if \(els\.dialog\.open && state\.previewItemId === item\.id\) \{\s*renderPreviewDetails\(item\);/s);
   assert.match(app, /{ label: "Date Modified", value: formatItemDate\(item, DATE_KEYS_MODIFIED\) \|\| "-" }/);
@@ -450,38 +452,32 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(html, /\{previewInfoState \? <PreviewDetailsPanel \{\.\.\.previewInfoState\} \/> : null\}/);
   assert.match(html, /<div id="previewActions" className="preview-info-actions/);
   assert.match(html, /\{previewInfoState \? <PreviewActions item=\{previewInfoState\.item\} \/> : null\}/);
-  assert.match(css, /\.preview-details-section\s*\{/);
+  assert.match(html, /const previewDetailsSectionClassName =[\s\S]*gap-1\.5/);
   assert.doesNotMatch(css, /\.preview-detail-row-divider\s*\{/);
-  assert.match(css, /\.preview-rating-section\s*\{[^}]*min-height:\s*32px;/s);
-  assert.match(css, /\.preview-detail-row\s*\{[^}]*min-height:\s*28px;/s);
-  assert.match(css, /\.preview-chip-list\s*\{/);
-  assert.match(css, /\.preview-chip\s*\{/);
-  assert.match(css, /\.preview-rating-section \.rating-star\s*\{[^}]*width:\s*24px;[^}]*height:\s*24px;[^}]*font-size:\s*20px;/s);
-  assert.match(css, /\.info-label,\s*\.preview-detail-label\s*\{[^}]*font-size:\s*12px;[^}]*font-weight:\s*400;/s);
-  assert.match(css, /\.preview-detail-value\s*\{[^}]*font-size:\s*14px;/s);
-  assert.match(css, /\.preview-chip\s*\{[^}]*min-height:\s*24px;[^}]*background:\s*#e2e8f0;[^}]*font-size:\s*11px;[^}]*font-weight:\s*500;/s);
+  assert.match(html, /preview-rating-section grid min-h-8/);
+  assert.match(html, /const previewDetailRowClassName =[\s\S]*min-h-7/);
+  assert.match(html, /const previewChipListClassName = "preview-chip-list/);
+  assert.match(html, /const previewChipClassName =[\s\S]*min-h-6[\s\S]*bg-\[#e2e8f0\][\s\S]*text-\[11px\][\s\S]*font-medium/);
+  assert.match(html, /className="rating-control inline-flex items-center gap-2\.5 \[&_\.rating-star\]:h-6 \[&_\.rating-star\]:w-6 \[&_\.rating-star\]:text-xl"/);
+  assert.match(html, /const previewLabelClassName = "preview-detail-label text-xs font-normal text-app-muted"/);
+  assert.match(html, /const previewDetailValueClassName =[\s\S]*text-sm[\s\S]*max-\[540px\]:text-\[13px\]/);
   assert.doesNotMatch(css, /\.preview-chip-empty/);
-  assert.match(css, /\.preview-info-actions\s*\{[^}]*padding:\s*12px 8px 0;[^}]*border-top:\s*1px solid rgba\(148,\s*163,\s*184,\s*0\.22\);/s);
-  assert.match(css, /\.preview-edit-form\s*\{/);
-  assert.match(css, /\.preview-edit-row\s*\{[^}]*grid-template-columns:\s*minmax\(96px,\s*112px\) minmax\(0,\s*1fr\);/s);
-  assert.match(css, /\.preview-chip-editor\s*\{/);
-  assert.match(css, /\.preview-edit-chip-list\s*\{/);
-  assert.match(css, /\.preview-edit-chip svg\s*\{[^}]*fill:\s*none;[^}]*stroke:\s*currentColor;[^}]*stroke-linecap:\s*round;[^}]*stroke-linejoin:\s*round;[^}]*stroke-width:\s*2;/s);
-  assert.match(css, /\.preview-chip-input\s*\{/);
-  assert.match(css, /\.preview-chip-suggestions\s*\{/);
-  assert.match(css, /\.preview-chip-suggestion\s*\{/);
-  assert.match(css, /\.preview-edit-actions\s*\{/);
-  assert.match(css, /\.preview-info-cta\s*\{/);
-  assert.match(css, /width:\s*100%;/);
-  assert.match(css, /background:\s*var\(--accent\);/);
-  assert.match(css, /color:\s*#fff;/);
-  assert.match(css, /@media \(max-width: 540px\)[\s\S]*max-height:\s*min\(72dvh,\s*560px\);/);
-  assert.match(css, /@media \(max-width: 540px\)[\s\S]*\.preview-detail-row\s*\{[^}]*grid-template-columns:\s*minmax\(96px,\s*112px\) minmax\(0,\s*1fr\);/);
-  assert.match(css, /@media \(max-width: 540px\)[\s\S]*\.preview-rating-section\s*\{[^}]*grid-template-columns:\s*minmax\(96px,\s*112px\) minmax\(0,\s*1fr\);/);
-  assert.match(css, /@media \(max-width: 540px\)[\s\S]*\.preview-detail-value\s*\{[^}]*font-size:\s*13px;/);
-  assert.match(css, /\.preview-details\s*\{[^}]*gap:\s*10px;/s);
-  assert.match(css, /\.preview-details-section\s*\{[^}]*gap:\s*6px;/s);
-  assert.doesNotMatch(css, /\.preview-info-cta\s*\{[^}]*linear-gradient/s);
+  assert.match(html, /className="preview-info-actions border-t border-\[rgba\(148,163,184,0\.22\)\] px-2 pt-3"/);
+  assert.match(html, /const previewEditFormClassName = "preview-edit-form/);
+  assert.match(html, /const previewEditRowClassName =[\s\S]*grid-cols-\[minmax\(96px,112px\)_minmax\(0,1fr\)\]/);
+  assert.match(html, /const previewChipEditorClassName = "preview-chip-editor/);
+  assert.match(html, /const previewEditChipListClassName = "preview-edit-chip-list/);
+  assert.match(html, /\[&_svg\]:h-\[13px\][\s\S]*\[&_svg\]:\[stroke-width:2\]/);
+  assert.match(html, /const previewChipInputClassName = "preview-chip-input/);
+  assert.match(html, /const previewChipSuggestionsClassName = "preview-chip-suggestions/);
+  assert.match(html, /const previewChipSuggestionClassName = "preview-chip-suggestion/);
+  assert.match(html, /className="preview-edit-actions flex items-center justify-end gap-2\.5"/);
+  assert.match(html, /const directFileLinkClassName =[\s\S]*min-h-\[52px\] w-full[\s\S]*bg-app-accent[\s\S]*text-white/);
+  assert.match(html, /max-\[540px\]:max-h-\[min\(72dvh,560px\)\]/);
+  assert.match(html, /max-\[540px\]:gap-3/);
+  assert.match(html, /<div id="previewDetails" className="preview-details grid gap-2\.5">/);
+  assert.match(html, /const previewDetailsSectionClassName =[\s\S]*gap-1\.5/);
+  assert.doesNotMatch(html, /preview-info-cta[^"]*linear-gradient/);
 });
 
 test("public preview info closes when pressing outside the side menu", async () => {
@@ -674,7 +670,7 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   assert.match(app, /state\.viewMode === "tiles"/);
   assert.match(html, /export function ResultList\(\{ items, viewMode, onOpenPreview \}[^)]*\) \{/);
   assert.match(html, /style=\{\{ aspectRatio: width > 0 && height > 0 \? `\$\{width\} \/ \$\{height\}` : "1 \/ 1" \}\}/);
-  assert.match(html, /<RatingStars item=\{item\} className="rating-control tile-rating" \/>/);
+  assert.match(html, /<RatingStars item=\{item\} className=\{tileRatingClassName\} \/>/);
   assert.match(html, /onPointerDown=\{trigger\.onPointerDown\}/);
   assert.match(html, /onClick=\{trigger\.onClick\}/);
   assert.match(app, /setResultSurfaceState\(\{[\s\S]*kind: "list",/);
@@ -695,32 +691,29 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   assert.match(app, /return Math\.min\(limit \* TILE_PREFETCH_PAGES, MAX_PAGE_SIZE\);/);
   assert.match(app, /params\.get\("view"\) === "tiles"/);
   assert.match(html, /media-tiles content-start \[column-width:180px\] \[column-gap:4px\]/);
-  assert.match(css, /\.tile-item\s*\{/);
-  assert.match(css, /\.tile-item\s*\{[^}]*position:\s*relative;/s);
-  assert.match(css, /\.tile-item\s*\{[^}]*contain:\s*layout paint;/s);
-  assert.match(css, /\.tile-item img\s*\{[^}]*height:\s*100%;/s);
-  assert.match(css, /\.tile-item\.thumb-loading::before\s*\{/);
-  assert.match(css, /animation:\s*tile-skeleton 1\.1s ease-in-out infinite;/);
-  assert.match(css, /@keyframes tile-skeleton/);
-  assert.match(css, /\.tile-item \.tile-rating\s*\{/);
+  assert.match(html, /const tileButtonClassName =[\s\S]*tile-item[\s\S]*\[contain:layout_paint\]/);
+  assert.match(html, /animate-pulse bg-\[linear-gradient/);
+  assert.match(html, /const tileRatingClassName =[\s\S]*tile-rating/);
   assert.match(html, /max-\[540px\]:\[column-count:3\] max-\[540px\]:\[column-width:auto\]/);
-  assert.match(html, /tile-item max-\[540px\]:mb-\[3px\]/);
+  assert.match(html, /const tileButtonClassName =[\s\S]*tile-item[\s\S]*max-\[540px\]:mb-\[3px\]/);
   assert.match(html, /className="tiles-sentinel mt-3 grid min-h-\[52px\] place-items-center text-\[13px\] font-\[680\] text-app-muted"/);
 });
 
 test("public extension pills use varied colors for common text formats", async () => {
-  const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
+  const html = await readAppSources();
 
-  assert.match(css, /\.ext-pill\[data-ext="html"\]\s*\{[^}]*background:\s*#fff7ed;[^}]*color:\s*#c2410c;/s);
-  assert.match(css, /\.ext-pill\[data-ext="css"\]\s*\{[^}]*background:\s*#eff6ff;[^}]*color:\s*#2563eb;/s);
-  assert.match(css, /\.ext-pill\[data-ext="js"\],[\s\S]*\.ext-pill\[data-ext="mjs"\],[\s\S]*\.ext-pill\[data-ext="cjs"\]\s*\{[^}]*background:\s*#fefce8;[^}]*color:\s*#a16207;/s);
-  assert.match(css, /\.ext-pill\[data-ext="md"\]\s*\{[^}]*background:\s*#f8fafc;[^}]*color:\s*#475569;/s);
-  assert.match(css, /\.ext-pill\[data-ext="txt"\],[\s\S]*\.ext-pill\[data-ext="log"\]\s*\{[^}]*background:\s*#f1f5f9;[^}]*color:\s*#334155;/s);
-  assert.match(css, /\.file-badge\[data-ext="html"\]\s*\{[^}]*background:\s*#fff7ed;[^}]*color:\s*#c2410c;/s);
-  assert.match(css, /\.file-badge\[data-ext="css"\]\s*\{[^}]*background:\s*#eff6ff;[^}]*color:\s*#2563eb;/s);
-  assert.match(css, /\.file-badge\[data-ext="js"\],[\s\S]*\.file-badge\[data-ext="mjs"\],[\s\S]*\.file-badge\[data-ext="cjs"\]\s*\{[^}]*background:\s*#fefce8;[^}]*color:\s*#a16207;/s);
-  assert.match(css, /\.file-badge\[data-ext="md"\]\s*\{[^}]*background:\s*#f8fafc;[^}]*color:\s*#475569;/s);
-  assert.match(css, /\.file-badge\[data-ext="txt"\],[\s\S]*\.file-badge\[data-ext="log"\]\s*\{[^}]*background:\s*#f1f5f9;[^}]*color:\s*#334155;/s);
+  assert.match(html, /const extensionColorClassNames: Record<string, string> = \{/);
+  assert.match(html, /html: "border-\[#fed7aa\] bg-\[#fff7ed\] text-\[#c2410c\]"/);
+  assert.match(html, /css: "border-\[#bfdbfe\] bg-\[#eff6ff\] text-\[#2563eb\]"/);
+  assert.match(html, /js: "border-\[#fde68a\] bg-\[#fefce8\] text-\[#a16207\]"/);
+  assert.match(html, /md: "border-\[#cbd5e1\] bg-\[#f8fafc\] text-\[#475569\]"/);
+  assert.match(html, /txt: "border-\[#cbd5e1\] bg-\[#f1f5f9\] text-\[#334155\]"/);
+  assert.match(html, /const fileBadgeColorClassNames: Record<string, string> = \{/);
+  assert.match(html, /html: "bg-\[#fff7ed\] text-\[#c2410c\]"/);
+  assert.match(html, /css: "bg-\[#eff6ff\] text-\[#2563eb\]"/);
+  assert.match(html, /js: "bg-\[#fefce8\] text-\[#a16207\]"/);
+  assert.match(html, /md: "bg-\[#f8fafc\] text-\[#475569\]"/);
+  assert.match(html, /txt: "bg-\[#f1f5f9\] text-\[#334155\]"/);
 });
 
 test("public UI syncs filters, pagination, and preview state into the URL history", async () => {

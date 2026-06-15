@@ -266,9 +266,10 @@ describe("ViewerAppShell", () => {
     );
     const actions = renderToStaticMarkup(<PreviewActions item={{ id: "item-1" }} />);
 
-    expect(details).toContain('class="preview-details-section"');
-    expect(details).toContain('class="preview-edit-form"');
-    expect(actions).toContain('class="direct-file-link preview-info-cta"');
+    expect(details).toContain("preview-details-section");
+    expect(details).toContain("preview-edit-form");
+    expect(actions).toContain("direct-file-link");
+    expect(actions).toContain("preview-info-cta");
   });
 
   test("renders preview body media variants", () => {
@@ -276,10 +277,10 @@ describe("ViewerAppShell", () => {
     const text = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", name: "Sample.txt" }} kind="text" />);
     const unsupported = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", ext: "avi" }} kind="unsupported" />);
 
-    expect(image).toContain('class="image-viewport"');
-    expect(image).toContain('class="image-toolbar"');
-    expect(text).toContain('class="text-preview"');
-    expect(unsupported).toContain('class="unsupported-thumb"');
+    expect(image).toContain("image-viewport");
+    expect(image).toContain("image-toolbar");
+    expect(text).toContain("text-preview");
+    expect(unsupported).toContain("unsupported-thumb");
   });
 
   test("renders rating stars as reusable static and interactive controls", () => {

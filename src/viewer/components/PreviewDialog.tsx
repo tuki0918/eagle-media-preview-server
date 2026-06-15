@@ -19,9 +19,20 @@ export function PreviewDialog() {
   const previewDialogState = useSyncExternalStore(subscribePreviewDialogState, getPreviewDialogState, getPreviewDialogState);
   const dialogClassName = [
     "h-dvh max-h-dvh w-screen max-w-full rounded-none border-0 bg-app-surface p-0 text-app-text",
+    "backdrop:bg-[rgba(15,23,42,0.32)]",
     previewDialogState.mode ? `${previewDialogState.mode}-mode` : "",
     previewDialogState.infoOpen ? "info-open" : "",
+    previewDialogState.mode === "video" ? "bg-[#05070a]" : "",
   ].filter(Boolean).join(" ");
+  const previewLayoutClassName = [
+    "preview-layout relative grid h-full max-h-full grid-cols-[minmax(0,1fr)] overflow-hidden p-0",
+    previewDialogState.mode === "video" ? "h-dvh max-h-dvh bg-[#05070a] pt-[calc(60px+env(safe-area-inset-top))]" : "",
+  ].filter(Boolean).join(" ");
+  const previewInfoClassName = [
+    "preview-info absolute inset-y-0 left-0 z-[3] grid w-[min(360px,calc(100vw-56px))] max-w-full content-start gap-3.5 overflow-auto border-0 border-r border-app-border bg-[rgba(255,255,255,0.96)] p-3.5 shadow-[18px_0_44px_rgba(15,23,42,0.14)] backdrop-blur-[18px] transition-transform duration-200",
+    previewDialogState.infoOpen ? "translate-x-0 max-[540px]:translate-y-0" : "-translate-x-full max-[540px]:translate-x-0 max-[540px]:translate-y-full",
+    "max-[540px]:inset-x-0 max-[540px]:bottom-0 max-[540px]:top-auto max-[540px]:w-auto max-[540px]:max-h-[min(72dvh,560px)] max-[540px]:border-r-0 max-[540px]:border-t max-[540px]:border-app-border max-[540px]:shadow-[0_-18px_44px_rgba(15,23,42,0.14)]",
+  ].join(" ");
   const previewActionButtonClassName = [
     "icon-button inline-grid min-h-10 w-10 flex-[0_0_40px] touch-manipulation select-none place-items-center rounded-app border backdrop-blur-[12px]",
     previewDialogState.mode === "video" || previewDialogState.mode === "audio"
@@ -133,16 +144,16 @@ export function PreviewDialog() {
           </button>
         </div>
       </div>
-      <div className="preview-layout relative grid h-full max-h-full grid-cols-[minmax(0,1fr)] overflow-hidden">
+      <div className={previewLayoutClassName}>
         <PreviewBodyHost ref={previewBodyRef} />
         <aside
-          className="preview-info absolute inset-y-0 left-0 z-[3] grid max-w-full content-start gap-3.5 overflow-auto border-0 border-r border-app-border bg-[rgba(255,255,255,0.96)] p-3.5 shadow-[18px_0_44px_rgba(15,23,42,0.14)] backdrop-blur-[18px]"
+          className={previewInfoClassName}
           aria-label="Media info"
         >
-          <section className="preview-original-name-section grid min-h-8 grid-cols-[minmax(0,1fr)] items-center border-b border-[rgba(148,163,184,0.18)] px-2 pb-3.5 pt-2">
+          <section className="preview-original-name-section grid min-h-8 grid-cols-[minmax(0,1fr)] items-center border-b border-[rgba(148,163,184,0.18)] px-2 pb-3.5 pt-2 max-[540px]:pb-3.5 max-[540px]:pt-1.5">
             <PreviewOriginalName />
           </section>
-          <section className="preview-rating-section grid min-h-8 grid-cols-[minmax(96px,112px)_minmax(0,1fr)] items-center gap-[18px] px-2">
+          <section className="preview-rating-section grid min-h-8 grid-cols-[minmax(96px,112px)_minmax(0,1fr)] items-center gap-[18px] px-2 max-[540px]:gap-3">
             <span className="info-label text-xs font-normal text-app-muted">Rating</span>
             <PreviewRating />
           </section>

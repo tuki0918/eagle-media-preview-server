@@ -48,12 +48,12 @@ export function nextStarValue(current: number, selected: number) {
 export function PreviewRating() {
   const state = useSyncExternalStore(subscribePreviewRatingState, getPreviewRatingState, getPreviewRatingState);
   if (!state.item) {
-    return <div id="previewRating" className="rating-control inline-flex items-center gap-px" aria-label="Rating" />;
+    return <div id="previewRating" className="rating-control inline-flex items-center gap-2.5 [&_.rating-star]:h-6 [&_.rating-star]:w-6 [&_.rating-star]:text-xl" aria-label="Rating" />;
   }
   return (
     <RatingStars
       id="previewRating"
-      className="rating-control inline-flex items-center gap-px"
+      className="rating-control inline-flex items-center gap-2.5 [&_.rating-star]:h-6 [&_.rating-star]:w-6 [&_.rating-star]:text-xl"
       interactive
       item={state.item}
       onSelect={state.onSelect}

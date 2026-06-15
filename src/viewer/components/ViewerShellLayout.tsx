@@ -14,7 +14,7 @@ interface ViewerShellLayoutProps {
 export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
   return (
     <div id="viewerShell" hidden={hidden}>
-      <main className="mx-auto w-[min(1180px,100%)] px-3 py-[30px]">
+      <main className="mx-auto w-[min(1180px,100%)] px-3 py-[30px] min-[720px]:px-5 min-[1180px]:px-0">
         <SearchControls />
         <ResultsStatus />
         <ResultSurface />

@@ -27,6 +27,25 @@ interface ImageState {
   transform: PreviewTransform;
 }
 
+const checkerboardClassName =
+  "bg-[#f8fafc] bg-[linear-gradient(45deg,rgba(148,163,184,0.24)_25%,transparent_25%),linear-gradient(-45deg,rgba(148,163,184,0.24)_25%,transparent_25%),linear-gradient(45deg,transparent_75%,rgba(148,163,184,0.24)_75%),linear-gradient(-45deg,transparent_75%,rgba(148,163,184,0.24)_75%)] [background-position:0_0,0_12px,12px_-12px,-12px_0] [background-size:24px_24px]";
+const previewVideoClassName =
+  "preview-video h-full w-full max-h-full bg-[#05070a] object-contain [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:max-h-none [&:fullscreen]:max-w-none [&:fullscreen]:bg-[#05070a] [&:fullscreen]:object-contain";
+const audioClassName = "w-[min(540px,calc(100%_-_32px))]";
+const textPreviewClassName =
+  "text-preview m-0 min-w-0 overflow-auto rounded-app border border-app-border bg-white p-[18px] font-mono text-[13px] leading-[1.55] text-app-text shadow-app-soft [overflow-wrap:anywhere] [white-space:pre-wrap]";
+const unsupportedThumbClassName = "unsupported-thumb max-h-[min(62dvh,640px)] w-[min(640px,calc(100vw_-_48px))] max-w-full object-contain";
+const previewNoticeClassName = "preview-notice m-0 max-w-[560px] text-center text-[13px] leading-normal text-app-muted";
+const imageViewportClassName = "image-viewport relative grid h-full min-h-0 w-full min-w-0 cursor-grab touch-none place-items-center overflow-hidden active:cursor-grabbing";
+const imageStatusClassName =
+  "image-status absolute left-3.5 top-[calc(14px+env(safe-area-inset-top))] z-[2] inline-flex min-h-[34px] max-w-[calc(100%_-_104px)] items-center rounded-full border border-[rgba(203,213,225,0.82)] bg-[rgba(255,255,255,0.88)] px-3 text-xs font-bold leading-none text-app-text-soft shadow-[0_8px_24px_rgba(15,23,42,0.12)] backdrop-blur-[12px] max-[540px]:left-3 max-[540px]:top-[calc(12px+env(safe-area-inset-top))] max-[540px]:min-h-8 max-[540px]:max-w-[calc(100%_-_88px)] max-[540px]:px-2.5 max-[540px]:text-[11px]";
+const previewImageClassName =
+  "preview-image absolute left-1/2 top-1/2 block max-h-none max-w-none select-none object-contain [transform-origin:center] [will-change:transform] [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:bg-[#05070a] [&:fullscreen]:object-contain";
+const imageToolbarClassName =
+  "image-toolbar absolute bottom-[calc(14px+env(safe-area-inset-bottom))] left-1/2 z-[2] inline-flex -translate-x-1/2 items-center gap-1.5 rounded-[10px] border border-[rgba(203,213,225,0.86)] bg-[rgba(255,255,255,0.92)] p-1.5 shadow-[0_10px_30px_rgba(15,23,42,0.16)] backdrop-blur-[16px]";
+const toolbarButtonClassName =
+  "inline-grid min-h-[38px] w-[38px] touch-manipulation select-none place-items-center rounded-app border-0 bg-transparent text-app-text-soft hover:bg-app-accent-soft hover:text-app-accent [&_svg]:h-[18px] [&_svg]:w-[18px] [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-linecap:round] [&_svg]:[stroke-linejoin:round] [&_svg]:[stroke-width:2]";
+
 export function PreviewBody({ item, kind, srcKind = "file" }: PreviewBodyProps) {
   if (kind === "video") return <VideoPreview item={item} />;
   if (kind === "audio") return <AudioPreview item={item} />;
@@ -41,7 +60,7 @@ export const PreviewBodyHost = forwardRef<HTMLDivElement>(function PreviewBodyHo
     <div
       ref={ref}
       id="previewBody"
-      className="preview-body relative grid h-full min-h-0 grid-rows-[minmax(0,1fr)] overflow-hidden bg-[#f8fafc] p-0"
+      className={previewBodyClassName(previewBodyState?.kind)}
     >
       {previewBodyState ? <PreviewBody {...previewBodyState} /> : null}
     </div>
@@ -60,7 +79,7 @@ function VideoPreview({ item }: { item: EagleItem }) {
     <>
       <video
         ref={videoRef}
-        className="preview-video"
+        className={previewVideoClassName}
         src={mediaUrl(String(item.id || ""), "file")}
         controls
         playsInline
@@ -79,7 +98,7 @@ function AudioPreview({ item }: { item: EagleItem }) {
     audioRef.current?.play().catch(() => {});
   }, [item.id]);
 
-  return <audio ref={audioRef} src={mediaUrl(String(item.id || ""), "file")} controls preload="metadata" />;
+  return <audio ref={audioRef} className={audioClassName} src={mediaUrl(String(item.id || ""), "file")} controls preload="metadata" />;
 }
 
 function TextPreview({ item }: { item: EagleItem }) {
@@ -104,7 +123,7 @@ function TextPreview({ item }: { item: EagleItem }) {
   }, [item.id]);
 
   return (
-    <pre className="text-preview">
+    <pre className={textPreviewClassName}>
       <code>{text}</code>
     </pre>
   );
@@ -113,7 +132,7 @@ function TextPreview({ item }: { item: EagleItem }) {
 function UnsupportedPreview({ item }: { item: EagleItem }) {
   return (
     <>
-      <img className="unsupported-thumb" src={mediaUrl(String(item.id || ""), "thumb")} alt={item.name || item.id || ""} />
+      <img className={unsupportedThumbClassName} src={mediaUrl(String(item.id || ""), "thumb")} alt={item.name || item.id || ""} />
       <PreviewNotice message={`${(item.ext || "This format").toUpperCase()} is not supported in this browser.`} />
     </>
   );
@@ -259,7 +278,7 @@ function ImagePreview({ item, srcKind }: { item: EagleItem; srcKind: "file" | "t
     <>
       <div
         ref={viewportRef}
-        className="image-viewport"
+        className={imageViewportClassName}
         onPointerDown={startImageDrag}
         onPointerMove={moveImageDrag}
         onPointerUp={endImageDrag}
@@ -274,7 +293,7 @@ function ImagePreview({ item, srcKind }: { item: EagleItem; srcKind: "file" | "t
       >
         <img
           ref={imageRef}
-          className="preview-image"
+          className={previewImageClassName}
           src={mediaUrl(String(item.id || ""), srcKind)}
           alt={item.name || item.id || ""}
           draggable={false}
@@ -303,7 +322,7 @@ function ImagePreview({ item, srcKind }: { item: EagleItem; srcKind: "file" | "t
             setImageState((current) => ({ ...current, statusVisible: false }));
           }}
         />
-        <div className="image-status" hidden={!imageState.statusVisible}>
+        <div className={imageStatusClassName} hidden={!imageState.statusVisible}>
           {statusText}
         </div>
       </div>
@@ -329,7 +348,7 @@ function ImageToolbar({
   onZoomOut: () => void;
 }) {
   return (
-    <div className="image-toolbar">
+    <div className={imageToolbarClassName}>
       <ToolbarButton label="Zoom out" icon={<MinusIcon />} onClick={onZoomOut} />
       <ToolbarButton label="Fit" icon={<MaximizeIcon />} onClick={onFit} />
       <ToolbarButton label="Actual size" icon={<Maximize2Icon />} onClick={onActualSize} />
@@ -340,14 +359,23 @@ function ImageToolbar({
 
 function ToolbarButton({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
   return (
-    <button type="button" title={label} aria-label={label} onClick={onClick}>
+    <button type="button" className={toolbarButtonClassName} title={label} aria-label={label} onClick={onClick}>
       {icon}
     </button>
   );
 }
 
 function PreviewNotice({ message }: { message: string }) {
-  return <p className="preview-notice">{message}</p>;
+  return <p className={previewNoticeClassName}>{message}</p>;
+}
+
+function previewBodyClassName(kind?: PreviewBodyKind) {
+  const base = "preview-body relative grid h-full min-h-0 grid-rows-[minmax(0,1fr)] overflow-hidden p-0";
+  if (kind === "video") return `${base} bg-[#05070a] max-h-full`;
+  if (kind === "audio") return `${base} place-items-center bg-[#05070a]`;
+  if (kind === "text") return `${base} overflow-auto bg-[#f8fafc] p-[18px]`;
+  if (kind === "unsupported") return `${base} content-center justify-items-center gap-4 bg-[#05070a] p-8 [&_.preview-notice]:text-white`;
+  return `${base} ${checkerboardClassName}`;
 }
 
 function videoErrorMessage(error: MediaError | null) {

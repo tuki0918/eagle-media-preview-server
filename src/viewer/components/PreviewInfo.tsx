@@ -34,10 +34,28 @@ interface MetadataChipEditorProps {
 
 const textActionButtonClassName =
   "rounded-app border border-app-border bg-app-surface px-3 text-[13px] font-[680] text-app-accent hover:border-[rgba(37,99,235,0.22)] hover:bg-app-accent-soft hover:text-app-accent-strong";
+const previewLabelClassName = "preview-detail-label text-xs font-normal text-app-muted";
+const directFileLinkClassName =
+  "direct-file-link preview-info-cta inline-flex min-h-[52px] w-full cursor-pointer items-center justify-center gap-3 whitespace-nowrap rounded-[10px] border border-app-accent bg-app-accent px-2 text-[15px] font-[760] leading-none text-white no-underline shadow-none hover:border-app-accent-strong hover:bg-app-accent-strong hover:text-white focus-visible:border-app-accent-strong focus-visible:bg-app-accent-strong focus-visible:text-white [&_svg]:h-5 [&_svg]:w-5 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-width:2]";
+const previewDetailsSectionClassName = "preview-details-section grid gap-1.5 px-2 pt-1";
+const previewDetailRowClassName =
+  "preview-detail-row grid min-h-7 grid-cols-[minmax(96px,112px)_minmax(0,1fr)] items-start gap-[18px] max-[540px]:gap-3";
+const previewDetailValueClassName = "preview-detail-value min-w-0 text-sm leading-[1.35] text-[#0f172a] [overflow-wrap:anywhere] max-[540px]:text-[13px]";
+const previewChipListClassName = "preview-chip-list flex flex-wrap gap-x-2.5 gap-y-2";
+const previewChipClassName = "preview-chip inline-flex min-h-6 items-center rounded-app bg-[#e2e8f0] px-2 text-[11px] font-medium text-[#1e293b]";
+const previewEditFormClassName = "preview-edit-form grid gap-2.5 border-t border-[rgba(148,163,184,0.18)] pt-1.5";
+const previewEditRowClassName =
+  "preview-edit-row grid min-h-8 grid-cols-[minmax(96px,112px)_minmax(0,1fr)] items-start gap-[18px] max-[540px]:gap-3";
+const previewChipEditorClassName = "preview-chip-editor relative grid w-full min-w-0 gap-2";
+const previewEditChipListClassName = "preview-edit-chip-list flex min-h-0 flex-wrap gap-1.5";
+const previewEditChipClassName = "preview-edit-chip inline-flex min-h-[26px] max-w-full items-center gap-1.5 rounded-full border border-[rgba(148,163,184,0.34)] bg-[#f8fafc] py-0 pl-[9px] pr-1.5 text-xs font-[560] text-[#0f172a]";
+const previewChipInputClassName = "preview-chip-input min-h-[34px] w-full min-w-0 rounded-app border border-app-border bg-white px-2.5 text-app-text focus:border-[rgba(37,99,235,0.58)] focus:outline focus:outline-2 focus:outline-[rgba(37,99,235,0.22)]";
+const previewChipSuggestionsClassName = "preview-chip-suggestions absolute left-0 right-0 top-[calc(100%+4px)] z-[8] grid max-h-[184px] overflow-auto rounded-app border border-[rgba(148,163,184,0.28)] bg-white p-1 shadow-[0_16px_36px_rgba(15,23,42,0.16)]";
+const previewChipSuggestionClassName = "preview-chip-suggestion flex min-h-8 cursor-pointer items-center justify-between gap-3 rounded-md border-0 bg-transparent px-2 text-left text-[13px] text-[#0f172a] hover:bg-[#eff6ff] focus-visible:bg-[#eff6ff] focus-visible:outline-none";
 
 export function PreviewDetailsPanel({ detailRows, folders, item, onFolderSuggestions, onSaveMetadata, onTagSuggestions }: PreviewInfoProps) {
   return (
-    <section className="preview-details-section">
+    <section className={previewDetailsSectionClassName}>
       {detailRows.map((row) => (
         <PreviewDetail key={row.label} {...row} />
       ))}
@@ -73,7 +91,7 @@ export function PreviewInfoActions() {
 
 export function PreviewActions({ item }: { item: EagleItem }) {
   return (
-    <a className="direct-file-link preview-info-cta" href={directFileUrl(item)} target="_blank" rel="noopener" onClick={(event) => event.stopPropagation()}>
+    <a className={directFileLinkClassName} href={directFileUrl(item)} target="_blank" rel="noopener" onClick={(event) => event.stopPropagation()}>
       <ExternalLinkIcon />
       Open file
     </a>
@@ -82,9 +100,9 @@ export function PreviewActions({ item }: { item: EagleItem }) {
 
 function PreviewDetail({ chips = false, label, value }: PreviewDetailRow) {
   return (
-    <div className="preview-detail-row">
-      <span className="preview-detail-label">{label}</span>
-      <div className="preview-detail-value">{chips ? <PreviewChipList values={value} /> : value}</div>
+    <div className={previewDetailRowClassName}>
+      <span className={previewLabelClassName}>{label}</span>
+      <div className={previewDetailValueClassName}>{chips ? <PreviewChipList values={value} /> : value}</div>
     </div>
   );
 }
@@ -92,9 +110,9 @@ function PreviewDetail({ chips = false, label, value }: PreviewDetailRow) {
 function PreviewChipList({ values }: { values: string | readonly string[] }) {
   const chipValues = Array.isArray(values) ? values : [values];
   return (
-    <div className="preview-chip-list">
+    <div className={previewChipListClassName}>
       {chipValues.map((value, index) => (
-        <span key={`${value}-${index}`} className="preview-chip">
+        <span key={`${value}-${index}`} className={previewChipClassName}>
           {String(value || "")}
         </span>
       ))}
@@ -135,7 +153,7 @@ function PreviewMetadataEditor({
   };
 
   return (
-    <form className="preview-edit-form" onSubmit={submitMetadata}>
+    <form className={previewEditFormClassName} onSubmit={submitMetadata}>
       <PreviewEditField label="Tags">
         <MetadataChipEditor
           kind="tag"
@@ -162,11 +180,11 @@ function PreviewMetadataEditor({
           normalizeValue={(value) => String(value || "").trim()}
         />
       </PreviewEditField>
-      <div className="preview-edit-actions">
-        <button type="submit" className={`${textActionButtonClassName} preview-edit-save`} disabled={saving}>
+      <div className="preview-edit-actions flex items-center justify-end gap-2.5">
+        <button type="submit" className={`${textActionButtonClassName} preview-edit-save min-h-[34px] px-3`} disabled={saving}>
           Save
         </button>
-        <span className="preview-edit-status" role="status">
+        <span className="preview-edit-status min-w-0 text-xs text-app-muted" role="status">
           {status}
         </span>
       </div>
@@ -250,7 +268,7 @@ function MetadataChipEditor({
 
   return (
     <div
-      className="preview-chip-editor"
+      className={previewChipEditorClassName}
       data-kind={kind}
       onBlur={(event) => {
         if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
@@ -258,19 +276,19 @@ function MetadataChipEditor({
       }}
       onPointerDown={(event) => event.stopPropagation()}
     >
-      <div className="preview-edit-chip-list">
+      <div className={previewEditChipListClassName}>
         {selected.map((value) => (
-          <span key={value} className="preview-edit-chip">
-            <span>{labelForValue(value)}</span>
-            <button type="button" title={`Remove ${labelForValue(value)}`} aria-label={`Remove ${labelForValue(value)}`} onClick={() => removeValue(value)}>
+          <span key={value} className={previewEditChipClassName}>
+            <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{labelForValue(value)}</span>
+            <button className="inline-flex h-[18px] w-[18px] cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-[#64748b] hover:bg-[#e2e8f0] hover:text-[#0f172a] [&_svg]:h-[13px] [&_svg]:w-[13px] [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-linecap:round] [&_svg]:[stroke-linejoin:round] [&_svg]:[stroke-width:2]" type="button" title={`Remove ${labelForValue(value)}`} aria-label={`Remove ${labelForValue(value)}`} onClick={() => removeValue(value)}>
               <XIcon />
             </button>
           </span>
         ))}
       </div>
-      <div className="preview-chip-input-wrap">
+      <div className="preview-chip-input-wrap relative">
         <input
-          className="preview-chip-input"
+          className={previewChipInputClassName}
           type="text"
           placeholder={placeholder}
           aria-label={inputLabel}
@@ -284,20 +302,20 @@ function MetadataChipEditor({
           onKeyDown={handleKeyDown}
           onPointerDown={() => updateSuggestions()}
         />
-        <div className="preview-chip-suggestions" role="listbox" hidden={!suggestionsOpen}>
+        <div className={previewChipSuggestionsClassName} role="listbox" hidden={!suggestionsOpen}>
           {suggestions.map((item) => (
             <button
               key={item.value}
               type="button"
-              className="preview-chip-suggestion"
+              className={previewChipSuggestionClassName}
               role="option"
               onPointerDown={(event) => {
                 event.preventDefault();
                 addValue(item.value);
               }}
             >
-              <span>{item.label}</span>
-              {item.meta ? <span className="preview-chip-suggestion-meta">{item.meta}</span> : null}
+              <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{item.label}</span>
+              {item.meta ? <span className="preview-chip-suggestion-meta flex-none text-[11px] text-app-muted">{item.meta}</span> : null}
             </button>
           ))}
         </div>
@@ -308,8 +326,8 @@ function MetadataChipEditor({
 
 function PreviewEditField({ children, label }: { children: ReactNode; label: string }) {
   return (
-    <div className="preview-edit-row">
-      <span className="preview-detail-label">{label}</span>
+    <div className={previewEditRowClassName}>
+      <span className={previewLabelClassName}>{label}</span>
       {children}
     </div>
   );
