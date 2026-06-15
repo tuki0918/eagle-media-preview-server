@@ -775,9 +775,10 @@ function pruneAuthSessions(authSessions: Map<string, AuthSession>) {
 }
 
 function basicAuthUser(header, auth: AuthContext): AuthUser | null {
-  if (!header.startsWith("Basic ")) return null;
+  if (!/^Basic\s+/i.test(header)) return null;
   try {
-    const decoded = Buffer.from(header.slice(6), "base64").toString("utf8");
+    const encoded = header.replace(/^Basic\s+/i, "");
+    const decoded = Buffer.from(encoded, "base64").toString("utf8");
     const separator = decoded.indexOf(":");
     if (separator === -1) return null;
     const username = decoded.slice(0, separator);

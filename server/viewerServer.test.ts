@@ -572,6 +572,13 @@ test("createViewerServer protects static viewer with BasicAuth when password has
   });
   assert.equal(allowed.status, 200);
 
+  const lowercaseScheme = await fetch(rootUrl, {
+    headers: {
+      Authorization: `basic ${Buffer.from("eagle:secret").toString("base64")}`,
+    },
+  });
+  assert.equal(lowercaseScheme.status, 200);
+
   await viewer.stop();
 });
 
