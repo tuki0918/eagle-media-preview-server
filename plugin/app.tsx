@@ -85,9 +85,9 @@ function App() {
   const statusLabel = restartingStopped ? busyStoppedFrames[busyFrame] : titleCase(serverState);
   const authEnabled = Boolean(settings.authEnabled);
   const authUsers = normalizedAuthUsers(settings);
-  const allowMetadataEditing = authUsersCanEditMetadata(authUsers);
+  const metadataEditingEnabled = authEnabled && authUsersCanEditMetadata(authUsers);
   const authUsersStatusLabel = authEnabled
-    ? allowMetadataEditing ? "Active editors" : "Active viewers"
+    ? metadataEditingEnabled ? "Active editors" : "Active viewers"
     : "Inactive";
   const authUsersStatusClassName = authEnabled
     ? "border-[#b5ebc1] bg-[#e7f8eb] text-[#178c35]"

@@ -54,6 +54,7 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(app, /<option value="editor">Editor<\/option>/);
   assert.match(app, /<option value="admin">Admin<\/option>/);
   assert.match(app, /id="authUsersStatus"/);
+  assert.match(app, /const metadataEditingEnabled = authEnabled && authUsersCanEditMetadata\(authUsers\);/);
   assert.match(app, /Active editors/);
   assert.match(app, /Active viewers/);
   assert.match(app, /Saved users apply when BasicAuth protection is enabled\./);
