@@ -176,7 +176,7 @@ function createViewerServer({
   const server = createServer(async (req, res) => {
     try {
       const url = new URL(req.url || "/", `http://${req.headers.host}`);
-      const auth = { allowMetadataEditing, authSessions, users: resolvedAuthUsers, viewerPassword, passwordHash, basicAuthUsername };
+      const auth = { authSessions, users: resolvedAuthUsers };
       if (!isTrustedUnsafeRequest(req, url)) {
         sendJson(res, 403, { error: "Cross-origin writes are not allowed" });
         return;
@@ -451,12 +451,8 @@ async function handleApi(req, url, res, { auth, getSession, setSession }: ApiCon
 }
 
 interface AuthContext {
-  allowMetadataEditing?: boolean;
   authSessions: Map<string, AuthSession>;
-  basicAuthUsername?: string;
-  passwordHash?: string;
   users: AuthUser[];
-  viewerPassword?: string;
 }
 
 async function handleAuthRoutes(req, url, res, auth: AuthContext) {
@@ -745,8 +741,8 @@ function normalizeStar(value: unknown) {
   return star;
 }
 
-function authRequired({ users = [], viewerPassword, passwordHash }: { passwordHash?: string; users?: AuthUser[]; viewerPassword?: string }) {
-  return Boolean(users.length || viewerPassword || passwordHash);
+function authRequired({ users = [] }: { users?: AuthUser[] }) {
+  return Boolean(users.length);
 }
 
 function isAuthorized(req, auth) {
@@ -841,14 +837,7 @@ function basicAuthUser(header, auth: AuthContext): AuthUser | null {
 
 function findPasswordUser(username, password, auth: AuthContext): AuthUser | null {
   const user = auth.users.find((entry) => entry.username === username);
-  if (user?.passwordHash && passwordMatches(password, { passwordHash: user.passwordHash })) return user;
-  if (!auth.users.length && username === auth.basicAuthUsername && passwordMatches(password, auth)) {
-    return {
-      username,
-      passwordHash: auth.passwordHash || "",
-      role: auth.allowMetadataEditing ? "editor" as const : "viewer" as const,
-    };
-  }
+  if (user?.passwordHash && passwordMatches(password, user.passwordHash)) return user;
   return null;
 }
 
@@ -915,8 +904,7 @@ function authSessionCookie(token: string, maxAge = AUTH_SESSION_MAX_AGE_SECONDS)
   return `viewer_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}`;
 }
 
-function passwordMatches(value, { viewerPassword = "", passwordHash = "" }: { passwordHash?: string; viewerPassword?: string }) {
-  if (!passwordHash) return safeEqual(value, viewerPassword);
+function passwordMatches(value: string, passwordHash: string) {
   if (passwordHash.startsWith("pbkdf2$")) return pbkdf2PasswordMatches(value, passwordHash);
   return safeEqual(sha256(value), passwordHash);
 }
