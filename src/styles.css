@@ -358,10 +358,6 @@ select:hover {
   @apply block object-cover;
 }
 
-.tile-item.thumb-loading {
-  @apply min-h-[120px];
-}
-
 .tile-item.thumb-loading::before {
   content: "";
   @apply absolute inset-0 z-[4];
@@ -378,10 +374,6 @@ select:hover {
 .tile-item.thumb-loading .tile-rating,
 .tile-item.thumb-loading .thumb-overlay {
   @apply opacity-0;
-}
-
-.tile-item.thumb-missing {
-  @apply min-h-[120px];
 }
 
 .media-grid.is-empty,
