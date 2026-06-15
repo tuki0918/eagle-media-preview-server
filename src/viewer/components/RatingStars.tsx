@@ -20,13 +20,14 @@ export function RatingStars({ className, disabled = false, id, interactive = fal
   const current = normalizeRating(item.star);
   const Tag = interactive ? "button" : "span";
   const canSelect = interactive && !disabled;
+  const label = interactive ? "Rating" : "Rating (read only)";
   return (
-    <div id={id} className={className} aria-label="Rating">
+    <div id={id} className={className} aria-label={label}>
       {[1, 2, 3, 4, 5].map((value) => (
         <Tag
           key={value}
           className={interactive ? ratingStarBaseClassName : staticRatingStarClassName}
-          title={`${value}`}
+          title={interactive ? `${value}` : `Rating ${value} (read only)`}
           data-active={value <= current ? "true" : "false"}
           aria-hidden={interactive ? undefined : "true"}
           aria-label={interactive ? `Rating ${value}` : undefined}

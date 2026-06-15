@@ -492,6 +492,9 @@ test("public ratings are static in grid and table but editable in the preview mo
   assert.match(html, /function RatingStars\(\{ className, disabled = false, id, interactive = false, item, onSelect \}/);
   assert.match(html, /const ratingStarBaseClassName =[\s\S]*rating-star[\s\S]*data-\[active=true\]:text-app-warn/);
   assert.match(html, /const canSelect = interactive && !disabled;/);
+  assert.match(html, /const label = interactive \? "Rating" : "Rating \(read only\)";/);
+  assert.match(html, /aria-label=\{label\}/);
+  assert.match(html, /title=\{interactive \? `\$\{value\}` : `Rating \$\{value\} \(read only\)`\}/);
   assert.match(html, /disabled=\{interactive \? disabled : undefined\}/);
   assert.match(html, /const staticRatingStarClassName = `\$\{ratingStarBaseClassName\} rating-star-static cursor-default`/);
   assert.match(html, /const current = normalizeRating\(item\.star\);/);
