@@ -132,6 +132,8 @@ test("public login renders credentials when server auth is required", async () =
   assert.match(button, /Sign in/);
   assert.match(app, /postJson<AuthStatusResponse>\("\/api\/auth\/login", \{ username, password \}\)/);
   assert.match(app, /Enter username and password\./);
+  assert.match(app, /const passwordField = event\.currentTarget\.elements\.namedItem\("password"\);/);
+  assert.match(app, /if \(passwordField instanceof HTMLInputElement\) passwordField\.value = "";/);
 
   setLoginConnectState({
     authenticated: false,

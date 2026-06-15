@@ -57,10 +57,12 @@ export function setViewerShellActions(nextActions: ViewerShellActions) {
 export function submitConnection(event: { currentTarget: HTMLFormElement; preventDefault: () => void }) {
   event.preventDefault();
   const data = new FormData(event.currentTarget);
+  const passwordField = event.currentTarget.elements.namedItem("password");
   actions.connect({
     password: String(data.get("password") || ""),
     username: String(data.get("username") || ""),
   });
+  if (passwordField instanceof HTMLInputElement) passwordField.value = "";
 }
 
 export function submitLogout() {
