@@ -82,6 +82,18 @@ test("generated settings store migrates legacy auth settings into a viewer user"
   ]);
 });
 
+test("generated settings store migrates legacy auth settings with the default username", () => {
+  const passwordHash = hashPassword("secret");
+  const settings = normalizeSettings({
+    authEnabled: true,
+    passwordHash,
+  });
+
+  assert.deepEqual(settings.authUsers, [
+    { username: "eagle", role: "viewer", passwordHash },
+  ]);
+});
+
 test("generated settings store rejects enabled auth without a password", async () => {
   const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-runtime-"));
   const store = createSettingsStore({ filePath: join(dir, "settings.json") });

@@ -119,14 +119,6 @@ function createSettingsStore({ filePath = defaultSettingsPath() }: { filePath?: 
         });
       }
 
-      if (next.authEnabled && !next.authUsers.length && next.passwordHash) {
-        next.authUsers = [{
-          username: next.basicAuthUser,
-          passwordHash: next.passwordHash,
-          role: next.allowMetadataEditing ? "editor" : "viewer",
-        }];
-      }
-
       if (next.authEnabled && authUsersMissingPassword(next.authUsers)) {
         throw new Error("Password is required for every enabled user");
       }
@@ -193,7 +185,7 @@ function normalizeAuthUsers(value: unknown, input: SettingsInput = {}) {
     .filter((user): user is AuthUser => Boolean(user));
   if (users.length) return uniqueAuthUsers(users);
 
-  const username = String(input.basicAuthUser || "").trim();
+  const username = String(input.basicAuthUser || DEFAULT_SETTINGS.basicAuthUser).trim() || DEFAULT_SETTINGS.basicAuthUser;
   const passwordHash = String(input.passwordHash || "");
   if (!username || !passwordHash) return [];
   return [{
