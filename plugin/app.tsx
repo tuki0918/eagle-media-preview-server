@@ -478,19 +478,6 @@ function App() {
               </div>
             </div>
           </SettingRow>
-          <select
-            hidden
-            value={selectedLanAddress}
-            onChange={(event) => {
-              updateSettings({ preferredLanAddress: event.currentTarget.value });
-              saveSettings({ patch: { preferredLanAddress: event.currentTarget.value } });
-            }}
-          >
-            <option value="">Auto</option>
-            {(status.lanAddresses || []).map((entry) => (
-              <option key={entry.address} value={entry.address}>{`${entry.address} (${entry.label})`}</option>
-            ))}
-          </select>
           <button type="submit" hidden disabled={formDisabled}>Save settings</button>
         </div>
       </form>
