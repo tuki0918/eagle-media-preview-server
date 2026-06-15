@@ -102,8 +102,9 @@ export function ConnectMessage({ isError, message }: ConnectMessageProps) {
   return (
     <p
       id="connectMessage"
-      className={`connect-message fixed bottom-[max(24px,env(safe-area-inset-bottom))] left-1/2 z-10 w-[min(320px,calc(100vw-32px))] -translate-x-1/2 px-2 text-center text-app-muted empty:hidden${displayIsError ? " text-app-danger" : ""}`}
+      className={`connect-message m-0 min-h-[18px] rounded-app px-3 py-2 text-center text-xs leading-[1.35] text-app-muted empty:hidden${displayIsError ? " border border-red-200 bg-red-50 text-app-danger" : ""}`}
       aria-live="polite"
+      role={displayIsError ? "alert" : undefined}
     >
       {displayMessage}
     </p>

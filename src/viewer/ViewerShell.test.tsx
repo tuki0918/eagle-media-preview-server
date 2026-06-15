@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { JSDOM } from "jsdom";
 import { describe, expect, test } from "vitest";
 import {
+  AccountSideMenu,
   AdvancedFilters,
   CardTemplate,
   ConnectButton,
@@ -39,6 +40,7 @@ import { resetPreviewDialogState, setPreviewDialogState } from "./previewDialogS
 import { setImageOverlayControlsVisible } from "./imageOverlayState";
 import { setVideoOverlayControlsVisible } from "./videoOverlayState";
 import { MEDIA_TYPE_OPTIONS, PAGE_SIZE_OPTIONS, RATING_OPTIONS } from "./shellConfig";
+import { setLoginConnectState } from "./loginConnectState";
 
 const REQUIRED_ELEMENT_IDS = [
   "loginView",
@@ -131,6 +133,8 @@ describe("ViewerAppShell", () => {
     expect(message).toContain('id="connectMessage"');
     expect(message).toContain("No Eagle");
     expect(message).toContain("text-app-danger");
+    expect(message).toContain('role="alert"');
+    expect(message).not.toContain("fixed bottom-");
   });
 
   test("exports independently renderable shell components", () => {
@@ -274,6 +278,37 @@ describe("ViewerAppShell", () => {
     expect(html).toContain("My Library - Eagle 4.0");
     expect(html).not.toContain("logoutButton");
     expect(html).not.toContain("authFooterMessage");
+  });
+
+  test("renders authenticated account controls in a responsive side menu", () => {
+    setLoginConnectState({
+      authenticated: true,
+      authRequired: true,
+      disabled: false,
+      isError: false,
+      message: "",
+      user: { role: "editor", username: "ed" },
+    });
+    const html = renderToStaticMarkup(<AccountSideMenu />);
+
+    expect(html).toContain('id="accountMenuButton"');
+    expect(html).toContain('id="accountSideMenu"');
+    expect(html).toContain('id="authAccountLabel"');
+    expect(html).toContain('id="authUserLabel"');
+    expect(html).toContain('id="authRoleLabel"');
+    expect(html).toContain('id="logoutButton"');
+    expect(html).toContain("min-[720px]:w-[72px]");
+    expect(html).toContain("min-[1180px]:w-[224px]");
+    expect(html).toContain("min-[720px]:hidden min-[1180px]:inline");
+
+    setLoginConnectState({
+      authenticated: false,
+      authRequired: false,
+      disabled: false,
+      isError: false,
+      message: "",
+      user: null,
+    });
   });
 
   test("renders advanced filters as a reusable component", () => {

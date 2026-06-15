@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { ConnectButton, ConnectMessage, LoginView } from "./LoginView";
 import { storyPanelClassName } from "./storyFixtures";
+import { setLoginConnectState } from "../loginConnectState";
 
 const meta = {
   title: "Viewer/LoginView",
@@ -17,6 +18,21 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
+
+export const AuthError: Story = {
+  render: () => {
+    setLoginConnectState({
+      authenticated: false,
+      authRequired: true,
+      disabled: false,
+      isError: true,
+      message: "Invalid username or password",
+      user: null,
+    });
+
+    return <LoginView />;
+  },
+};
 
 export const Parts: Story = {
   render: () => (

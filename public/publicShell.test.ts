@@ -4,6 +4,7 @@ import { access, readFile } from "node:fs/promises";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
+  AccountSideMenu,
   AdvancedFilters,
   ConnectButton,
   ConnectMessage,
@@ -50,6 +51,7 @@ async function readAppSources() {
   const files = [
     "../src/App.tsx",
     "../src/viewer/ViewerShell.tsx",
+    "../src/viewer/components/AccountSideMenu.tsx",
     "../src/viewer/components/CardTemplate.tsx",
     "../src/viewer/components/FolderOptions.tsx",
     "../src/viewer/components/Icons.tsx",
@@ -160,18 +162,25 @@ test("public viewer exposes sign out when authenticated", async () => {
     message: "",
     user: { role: "editor", username: "ed" },
   });
+  const accountMenu = renderToStaticMarkup(createElement(AccountSideMenu));
   const footer = renderToStaticMarkup(createElement(LibraryFooter, { name: "My Library" }));
 
-  assert.match(footer, /id="authUserLabel"/);
-  assert.match(footer, />ed</);
-  assert.match(footer, /id="authAccountLabel"/);
-  assert.match(footer, /aria-label="ed - Editor\. Can edit ratings, tags, and categories"/);
-  assert.match(footer, /title="Can edit ratings, tags, and categories"/);
-  assert.match(footer, /id="authRoleLabel"/);
-  assert.match(footer, />Editor</);
-  assert.match(footer, /id="logoutButton"/);
-  assert.match(footer, /Sign out/);
-  assert.doesNotMatch(footer, /authFooterMessage/);
+  assert.match(accountMenu, /id="accountMenuButton"/);
+  assert.match(accountMenu, /id="accountSideMenu"/);
+  assert.match(accountMenu, /id="authUserLabel"/);
+  assert.match(accountMenu, />ed</);
+  assert.match(accountMenu, /id="authAccountLabel"/);
+  assert.match(accountMenu, /aria-label="ed - Editor\. Can edit ratings, tags, and categories"/);
+  assert.match(accountMenu, /title="Can edit ratings, tags, and categories"/);
+  assert.match(accountMenu, /id="authRoleLabel"/);
+  assert.match(accountMenu, />Editor</);
+  assert.match(accountMenu, /id="logoutButton"/);
+  assert.match(accountMenu, /Sign out/);
+  assert.match(accountMenu, /min-\[720px\]:w-\[72px\]/);
+  assert.match(accountMenu, /min-\[1180px\]:w-\[224px\]/);
+  assert.doesNotMatch(accountMenu, /authFooterMessage/);
+  assert.match(footer, /id="libraryFooterName"/);
+  assert.doesNotMatch(footer, /logoutButton/);
   assert.match(app, /authUser = login\.user \?\? null/);
   assert.match(app, /authUser = data\.user \?\? null/);
   assert.match(app, /state\.permissions = normalizePermissions\(login\.permissions, authAuthenticated\);/);
@@ -231,11 +240,11 @@ test("public viewer exposes auth errors in the footer", () => {
     message: "Sign out failed",
     user: { role: "viewer", username: "reader" },
   });
-  const footer = renderToStaticMarkup(createElement(LibraryFooter, { name: "My Library" }));
+  const accountMenu = renderToStaticMarkup(createElement(AccountSideMenu));
 
-  assert.match(footer, /id="authFooterMessage"/);
-  assert.match(footer, /role="alert"/);
-  assert.match(footer, /Sign out failed/);
+  assert.match(accountMenu, /id="authFooterMessage"/);
+  assert.match(accountMenu, /role="alert"/);
+  assert.match(accountMenu, /Sign out failed/);
 
   setLoginConnectState({
     authenticated: false,
@@ -283,6 +292,7 @@ test("public UI no longer shows connect lock icon or connection settings button"
   assert.match(html, /useSyncExternalStore\(subscribeShellView, getShellView, getShellView\)/);
   assert.match(html, /<LoginView hidden=\{shellView !== "login"\} \/>/);
   assert.match(html, /<ViewerShellLayout hidden=\{shellView !== "viewer"\} \/>/);
+  assert.match(html, /<AccountSideMenu \/>/);
   assert.doesNotMatch(app, /loginView: document\.querySelector\("#loginView"\),/);
   assert.doesNotMatch(app, /viewerShell: document\.querySelector\("#viewerShell"\),/);
   assert.doesNotMatch(app, /els\.loginView\.hidden/);
@@ -307,7 +317,8 @@ test("public UI no longer shows connect lock icon or connection settings button"
   assert.doesNotMatch(app, /setConnectionStatus/);
   assert.match(login, /w-\[min\(320px,100%\)\]/);
   assert.match(login, /pt-\[42px\]/);
-  assert.match(message, /bottom-\[max\(24px,env\(safe-area-inset-bottom\)\)\]/);
+  assert.match(message, /min-h-\[18px\]/);
+  assert.doesNotMatch(message, /fixed/);
   assert.match(message, /empty:hidden/);
   assert.doesNotMatch(css, /\.login-panel\s*\{/);
   assert.doesNotMatch(css, /\.connect-message\s*\{/);
