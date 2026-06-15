@@ -148,21 +148,24 @@ function App() {
     }
   }
 
-  async function saveSettings({ restartRunning = true, patch = {} }: { restartRunning?: boolean; patch?: Record<string, unknown> } = {}) {
-    if (!validateAuthUsers(authUsers)) return false;
+  async function saveSettings({ restartRunning = true, patch = {}, passwordDrafts = userPasswords }: { passwordDrafts?: Record<string, string>; restartRunning?: boolean; patch?: Record<string, unknown> } = {}) {
+    const effectiveAuthUsers = Array.isArray(patch.authUsers)
+      ? patch.authUsers.map((user) => normalizeAuthUser(user as AuthUser))
+      : authUsers;
+    if (!validateAuthUsers(effectiveAuthUsers)) return false;
     const payload: Record<string, unknown> = {
       autoStart: settings.autoStart,
       host: publicNetwork ? "0.0.0.0" : "127.0.0.1",
       port: settings.port || 41532,
       authEnabled,
-      allowMetadataEditing: authEnabled && allowMetadataEditing,
-      authUsers,
+      allowMetadataEditing: authEnabled && effectiveAuthUsers.some((user) => canRoleEditMetadata(user.role)),
+      authUsers: effectiveAuthUsers,
       basicAuthUser: settings.basicAuthUser || "eagle",
       preferredLanAddress: selectedLanAddress,
       ...patch,
     };
-    const cleanUserPasswords = Object.fromEntries(authUsers
-      .map((user, index) => [String(user.username || "").trim(), userPasswords[String(index)] || ""])
+    const cleanUserPasswords = Object.fromEntries(effectiveAuthUsers
+      .map((user, index) => [String(user.username || "").trim(), passwordDrafts[String(index)] || ""])
       .filter(([username, value]) => username && value.trim()));
     const hasUserPasswords = Object.keys(cleanUserPasswords).length > 0;
     if (hasUserPasswords) {
@@ -241,13 +244,14 @@ function App() {
   function removeAuthUser(index: number) {
     if (authUsers.length <= 1) return;
     const nextUsers = authUsers.filter((_, userIndex) => userIndex !== index);
-    setUserPasswords((current) => removeIndexedValue(current, index));
+    const nextUserPasswords = removeIndexedValue(userPasswords, index);
+    setUserPasswords(nextUserPasswords);
     updateSettings({
       authUsers: nextUsers,
       allowMetadataEditing: nextUsers.some((user) => canRoleEditMetadata(user.role)),
       basicAuthUser: nextUsers[0]?.username || "eagle",
     });
-    saveSettings({ patch: { authUsers: nextUsers } });
+    saveSettings({ patch: { authUsers: nextUsers }, passwordDrafts: nextUserPasswords });
   }
 
   async function startOrStopServer(checked: boolean) {

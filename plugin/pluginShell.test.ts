@@ -61,7 +61,10 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(app, /if \(!saved\) return;/);
   assert.doesNotMatch(app, /map\(normalizeAuthUser\)\.filter/);
   assert.match(app, /userPasswords\[String\(index\)\]/);
-  assert.match(app, /removeIndexedValue\(current, index\)/);
+  assert.match(app, /removeIndexedValue\(userPasswords, index\)/);
+  assert.match(app, /passwordDrafts = userPasswords/);
+  assert.match(app, /const effectiveAuthUsers = Array\.isArray\(patch\.authUsers\)/);
+  assert.match(app, /passwordDrafts: nextUserPasswords/);
   assert.doesNotMatch(app, /userPasswords\[String\(user\.username/);
 });
 
