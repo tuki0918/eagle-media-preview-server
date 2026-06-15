@@ -12,6 +12,7 @@ import {
   isTimedMedia,
   itemTags,
   mediaTypeLabel,
+  normalizeRating,
   originalFileName,
   previewFileName,
 } from "./format";
@@ -42,6 +43,14 @@ describe("viewer format helpers", () => {
       "Folder A",
       "folder-c",
     ]);
+  });
+
+  test("normalizes rating values for display and optimistic updates", () => {
+    expect(normalizeRating(0)).toBe(0);
+    expect(normalizeRating("5")).toBe(5);
+    expect(normalizeRating(6)).toBe(0);
+    expect(normalizeRating(2.5)).toBe(0);
+    expect(normalizeRating("bad")).toBe(0);
   });
 
   test("flattens folder trees with depth metadata", () => {

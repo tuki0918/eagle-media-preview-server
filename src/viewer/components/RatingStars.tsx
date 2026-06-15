@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { normalizeRating } from "../format";
 import { getPreviewRatingState, subscribePreviewRatingState } from "../previewRatingState";
 import type { EagleItem } from "../types";
 
@@ -15,7 +16,7 @@ const ratingStarBaseClassName =
 const staticRatingStarClassName = `${ratingStarBaseClassName} rating-star-static cursor-default`;
 
 export function RatingStars({ className, id, interactive = false, item, onSelect }: RatingStarsProps) {
-  const current = Number(item.star || 0);
+  const current = normalizeRating(item.star);
   const Tag = interactive ? "button" : "span";
   return (
     <div id={id} className={className} aria-label="Rating">

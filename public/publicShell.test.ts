@@ -491,7 +491,10 @@ test("public ratings are static in grid and table but editable in the preview mo
   assert.match(html, /function RatingStars\(\{ className, id, interactive = false, item, onSelect \}/);
   assert.match(html, /const ratingStarBaseClassName =[\s\S]*rating-star[\s\S]*data-\[active=true\]:text-app-warn/);
   assert.match(html, /const staticRatingStarClassName = `\$\{ratingStarBaseClassName\} rating-star-static cursor-default`/);
+  assert.match(html, /const current = normalizeRating\(item\.star\);/);
   assert.match(html, /data-active=\{value <= current \? "true" : "false"\}/);
+  assert.match(app, /const previous = normalizeRating\(item\.star\);/);
+  assert.match(app, /const savedStar = normalizeRating\(data\.star \?\? star\);/);
   assert.doesNotMatch(app, /renderRatingView\(els\.previewRating, \{/);
   assert.doesNotMatch(html, /function renderRatingView\(container[^,]*,\s*props: RatingStarsProps\)/);
   assert.doesNotMatch(app, /previewRating: document\.querySelector\("#previewRating"\),/);

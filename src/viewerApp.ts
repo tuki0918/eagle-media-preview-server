@@ -14,6 +14,7 @@ import {
   flattenFolders,
   isTimedMedia,
   itemMeta,
+  normalizeRating,
   normalizeTag,
   originalFileName,
   previewFileName,
@@ -651,7 +652,7 @@ function clearPreviewContents() {
 
 async function setItemStar(item: EagleItem, star: number) {
   if (!state.permissions.writeRating) return;
-  const previous = Number(item.star || 0);
+  const previous = normalizeRating(item.star);
   item.star = star;
   updateItemInState(String(item.id || ""), { star });
   render();
@@ -659,7 +660,7 @@ async function setItemStar(item: EagleItem, star: number) {
 
   try {
     const data = await postJson<{ star?: unknown }>(`/api/items/${encodeURIComponent(String(item.id || ""))}/star`, { star });
-    const savedStar = Number(data.star ?? star);
+    const savedStar = normalizeRating(data.star ?? star);
     item.star = savedStar;
     updateItemInState(String(item.id || ""), { star: savedStar });
   } catch (error) {
