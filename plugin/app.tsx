@@ -22,13 +22,7 @@ interface PluginSettings {
   port?: number | string;
 }
 
-interface LanAddress {
-  address: string;
-  label: string;
-}
-
 interface PluginStatus {
-  lanAddresses?: LanAddress[];
   lastError?: string;
   settings?: PluginSettings;
   state?: ServerState | string;
@@ -163,7 +157,6 @@ function App() {
       authEnabled,
       allowMetadataEditing: authEnabled && effectiveAuthUsers.some((user) => canRoleEditMetadata(user.role)),
       authUsers: effectiveAuthUsers,
-      basicAuthUser: settings.basicAuthUser || "eagle",
       ...patch,
     };
     const cleanUserPasswords = Object.fromEntries(effectiveAuthUsers
@@ -232,7 +225,6 @@ function App() {
     updateSettings({
       authUsers: nextUsers,
       allowMetadataEditing: nextUsers.some((user) => canRoleEditMetadata(user.role)),
-      basicAuthUser: nextUsers[0]?.username || "eagle",
     });
   }
 
@@ -252,7 +244,6 @@ function App() {
     updateSettings({
       authUsers: nextUsers,
       allowMetadataEditing: nextUsers.some((user) => canRoleEditMetadata(user.role)),
-      basicAuthUser: nextUsers[0]?.username || "eagle",
     });
     saveSettings({ patch: { authUsers: nextUsers }, passwordDrafts: nextUserPasswords });
   }
@@ -570,7 +561,6 @@ function willRestartServer(status: PluginStatus, nextSettings: Record<string, un
   if (Boolean(nextSettings.authEnabled ?? current.authEnabled) !== Boolean(current.authEnabled)) return true;
   if (Boolean(nextSettings.allowMetadataEditing ?? current.allowMetadataEditing) !== Boolean(current.allowMetadataEditing)) return true;
   if (JSON.stringify(nextSettings.authUsers ?? current.authUsers ?? []) !== JSON.stringify(current.authUsers ?? [])) return true;
-  if ((nextSettings.basicAuthUser ?? current.basicAuthUser) !== current.basicAuthUser) return true;
   return Boolean(nextSettings.password);
 }
 

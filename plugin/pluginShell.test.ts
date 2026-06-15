@@ -73,8 +73,11 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(app, /passwordDrafts: nextUserPasswords/);
   assert.doesNotMatch(app, /userPasswords\[String\(user\.username/);
   assert.doesNotMatch(app, /key=\{`\$\{user\.username\}-\$\{index\}`\}/);
+  assert.doesNotMatch(app, /basicAuthUser: settings\.basicAuthUser/);
   assert.doesNotMatch(app, /selectedLanAddress/);
   assert.doesNotMatch(app, /preferredLanAddress/);
+  assert.doesNotMatch(app, /lanAddresses/);
+  assert.doesNotMatch(app, /interface LanAddress/);
 });
 
 test("plugin app keeps Eagle Node API compatibility with a classic script", async () => {
