@@ -18,7 +18,7 @@ export function PreviewDialog() {
   const previewBodyRef = useRef<HTMLDivElement | null>(null);
   const previewDialogState = useSyncExternalStore(subscribePreviewDialogState, getPreviewDialogState, getPreviewDialogState);
   const dialogClassName = [
-    "h-dvh max-h-dvh w-screen max-w-full rounded-none border-0 bg-app-surface p-0 text-app-text",
+    "h-dvh max-h-dvh w-screen max-w-full touch-none overscroll-none rounded-none border-0 bg-app-surface p-0 text-app-text",
     "backdrop:bg-[rgba(15,23,42,0.32)]",
     previewDialogState.mode ? `${previewDialogState.mode}-mode` : "",
     previewDialogState.infoOpen ? "info-open" : "",
@@ -76,13 +76,28 @@ export function PreviewDialog() {
         event.preventDefault();
       }
     };
+    const preventMultiTouchWhileOpen = (event: TouchEvent) => {
+      if (dialog.open && event.touches.length > 1) {
+        event.preventDefault();
+      }
+    };
+    const preventTrackpadPinchWhileOpen = (event: WheelEvent) => {
+      if (dialog.open && event.ctrlKey) {
+        event.preventDefault();
+      }
+    };
+    const options = { passive: false };
     for (const eventName of ["gesturestart", "gesturechange", "gestureend"]) {
-      dialog.addEventListener(eventName, preventGestureWhileOpen);
+      document.addEventListener(eventName, preventGestureWhileOpen, options);
     }
+    document.addEventListener("touchmove", preventMultiTouchWhileOpen, options);
+    document.addEventListener("wheel", preventTrackpadPinchWhileOpen, options);
     return () => {
       for (const eventName of ["gesturestart", "gesturechange", "gestureend"]) {
-        dialog.removeEventListener(eventName, preventGestureWhileOpen);
+        document.removeEventListener(eventName, preventGestureWhileOpen);
       }
+      document.removeEventListener("touchmove", preventMultiTouchWhileOpen);
+      document.removeEventListener("wheel", preventTrackpadPinchWhileOpen);
     };
   }, []);
 
