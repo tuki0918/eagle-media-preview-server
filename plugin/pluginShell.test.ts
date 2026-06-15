@@ -41,6 +41,7 @@ test("plugin window renders the management UI from React", async () => {
   assert.match(app, /<SectionHeading icon=\{<SettingsIcon \/>\}>Settings<\/SectionHeading>/);
   assert.match(app, /src=\{serverState === "running" \? "\.\/assets\/icon_on\.svg" : "\.\/assets\/icon_off\.svg"\}/);
   assert.doesNotMatch(app, /<select\s+hidden/);
+  assert.doesNotMatch(app, /<button type="submit" hidden/);
   assert.doesNotMatch(html, /id="requestLogBody"/);
   assert.doesNotMatch(html, /id="requestLogEnabledInput"/);
   assert.doesNotMatch(html, /id="grid"/);

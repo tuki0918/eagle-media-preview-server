@@ -469,7 +469,6 @@ function App() {
               </div>
             </div>
           </SettingRow>
-          <button type="submit" hidden disabled={formDisabled}>Save settings</button>
         </div>
       </form>
       <p className="mx-[9px] mb-2.5 mt-0 px-0.5 text-center text-[10px] text-[#d92d20]" aria-live="polite" hidden={!message || !messageIsError}>
