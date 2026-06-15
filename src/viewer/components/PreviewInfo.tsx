@@ -23,6 +23,7 @@ export interface PreviewInfoProps {
 }
 
 interface MetadataChipEditorProps {
+  disabled?: boolean;
   inputLabel: string;
   kind: "tag" | "category";
   labelForValue: (value: string) => string;
@@ -184,9 +185,10 @@ function PreviewMetadataEditor({
   };
 
   return (
-    <form className={previewEditFormClassName} onSubmit={submitMetadata}>
+    <form className={previewEditFormClassName} aria-busy={saving} onSubmit={submitMetadata}>
       <PreviewEditField label="Tags">
         <MetadataChipEditor
+          disabled={saving}
           kind="tag"
           selected={tags}
           setSelected={setTags}
@@ -199,6 +201,7 @@ function PreviewMetadataEditor({
       </PreviewEditField>
       <PreviewEditField label="Categories">
         <MetadataChipEditor
+          disabled={saving}
           kind="category"
           selected={categories}
           setSelected={setCategories}
@@ -211,7 +214,7 @@ function PreviewMetadataEditor({
       </PreviewEditField>
       <div className="preview-edit-actions flex items-center justify-end gap-2.5">
         <button type="submit" className={`${textActionButtonClassName} preview-edit-save min-h-[34px] px-3`} disabled={saving || !hasMetadataChanges}>
-          Save
+          {saving ? "Saving" : "Save"}
         </button>
         <span className="preview-edit-status min-w-0 text-xs text-app-muted" role="status">
           {status}
@@ -222,6 +225,7 @@ function PreviewMetadataEditor({
 }
 
 function MetadataChipEditor({
+  disabled = false,
   inputLabel,
   kind,
   labelForValue,
@@ -243,7 +247,16 @@ function MetadataChipEditor({
     setSuggestionsOpen(false);
   };
 
+  useEffect(() => {
+    if (!disabled) return;
+    requestId.current += 1;
+    if (debounceTimer.current) window.clearTimeout(debounceTimer.current);
+    setSuggestions([]);
+    setSuggestionsOpen(false);
+  }, [disabled]);
+
   const updateSuggestions = async (nextQuery = query, nextSelected = selected) => {
+    if (disabled) return;
     const currentRequest = ++requestId.current;
     try {
       const items = await onSuggestions(nextQuery.trim(), nextSelected);
@@ -256,11 +269,13 @@ function MetadataChipEditor({
   };
 
   const queueSuggestions = (nextQuery: string) => {
+    if (disabled) return;
     if (debounceTimer.current) window.clearTimeout(debounceTimer.current);
     debounceTimer.current = window.setTimeout(() => updateSuggestions(nextQuery), 160);
   };
 
   const addValue = (value: unknown) => {
+    if (disabled) return;
     const normalized = normalizeValue(value);
     if (!normalized || selected.includes(normalized)) return;
     const nextSelected = [...selected, normalized];
@@ -270,12 +285,14 @@ function MetadataChipEditor({
   };
 
   const removeValue = (value: string) => {
+    if (disabled) return;
     const nextSelected = selected.filter((entry) => entry !== value);
     setSelected(nextSelected);
     updateSuggestions(query, nextSelected);
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (disabled) return;
     if (event.key === "Escape") {
       hideSuggestions();
       return;
@@ -304,7 +321,7 @@ function MetadataChipEditor({
         {selected.map((value) => (
           <span key={value} className={previewEditChipClassName}>
             <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{labelForValue(value)}</span>
-            <button className="inline-flex h-[18px] w-[18px] cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-[#64748b] hover:bg-[#e2e8f0] hover:text-[#0f172a] [&_svg]:h-[13px] [&_svg]:w-[13px] [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-linecap:round] [&_svg]:[stroke-linejoin:round] [&_svg]:[stroke-width:2]" type="button" title={`Remove ${labelForValue(value)}`} aria-label={`Remove ${labelForValue(value)}`} onClick={() => removeValue(value)}>
+            <button className="inline-flex h-[18px] w-[18px] cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-[#64748b] hover:bg-[#e2e8f0] hover:text-[#0f172a] disabled:cursor-not-allowed disabled:opacity-45 [&_svg]:h-[13px] [&_svg]:w-[13px] [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-linecap:round] [&_svg]:[stroke-linejoin:round] [&_svg]:[stroke-width:2]" type="button" title={`Remove ${labelForValue(value)}`} aria-label={`Remove ${labelForValue(value)}`} disabled={disabled} onClick={() => removeValue(value)}>
               <XIcon />
             </button>
           </span>
@@ -317,6 +334,7 @@ function MetadataChipEditor({
           placeholder={placeholder}
           aria-label={inputLabel}
           autoComplete="off"
+          disabled={disabled}
           value={query}
           onChange={(event) => {
             setQuery(event.currentTarget.value);
@@ -333,6 +351,7 @@ function MetadataChipEditor({
               type="button"
               className={previewChipSuggestionClassName}
               role="option"
+              disabled={disabled}
               onPointerDown={(event) => {
                 event.preventDefault();
                 addValue(item.value);
