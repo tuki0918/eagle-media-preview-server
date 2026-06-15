@@ -16,8 +16,10 @@ async function readViewerSources() {
     "../src/viewer/media.ts",
     "../src/viewer/metadata.ts",
     "../src/viewer/pagination.ts",
+    "../src/viewer/previewBodyState.ts",
     "../src/viewer/previewDialogState.ts",
     "../src/viewer/previewDetails.ts",
+    "../src/viewer/previewInfoState.ts",
     "../src/viewer/previewTransform.ts",
     "../src/viewer/resultsStatusState.ts",
     "../src/viewer/shellActions.ts",
@@ -42,8 +44,10 @@ async function readAppSources() {
     "../src/viewer/loginConnectState.ts",
     "../src/viewer/components/Pager.tsx",
     "../src/viewer/components/PreviewBody.tsx",
+    "../src/viewer/previewBodyState.ts",
     "../src/viewer/components/PreviewDialog.tsx",
     "../src/viewer/components/PreviewInfo.tsx",
+    "../src/viewer/previewInfoState.ts",
     "../src/viewer/components/PreviewText.tsx",
     "../src/viewer/previewTextState.ts",
     "../src/viewer/components/RatingStars.tsx",
@@ -359,14 +363,17 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(html, /<section className="preview-details-section">/);
+  assert.match(html, /function PreviewInfoDetails\(\)/);
+  assert.match(html, /function PreviewInfoActions\(\)/);
   assert.match(html, /function PreviewChipList\(\{ values \}/);
   assert.match(html, /className="preview-chip"/);
   assert.doesNotMatch(app, /preview-chip-empty/);
-  assert.match(app, /previewActions: document\.querySelector\("#previewActions"\),/);
+  assert.doesNotMatch(app, /previewActions: document\.querySelector\("#previewActions"\),/);
   assert.match(html, /className="direct-file-link preview-info-cta"/);
   assert.match(html, /function ExternalLinkIcon\(\)/);
   assert.match(app, /{ label: "Type", value: mediaTypeLabel\(item\) }/);
-  assert.match(app, /renderPreviewInfoView\(els\.previewDetails, els\.previewActions, \{/);
+  assert.doesNotMatch(app, /renderPreviewInfoView\(els\.previewDetails, els\.previewActions, \{/);
+  assert.match(app, /setPreviewInfoState\(\{/);
   assert.match(html, /function PreviewMetadataEditor\(\{/);
   assert.match(html, /<PreviewEditField label="Tags">/);
   assert.match(html, /<PreviewEditField label="Categories">/);
@@ -394,8 +401,10 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.doesNotMatch(app, /Date Created/);
   assert.doesNotMatch(app, /preview-date-section/);
   assert.match(app, /function formatItemDate\(item[^,]*,\s*keys[^)]*\) \{/);
-  assert.match(html, /detailsRoot\.render\(<PreviewDetailsPanel \{\.\.\.props\} \/>/);
-  assert.match(html, /actionsRoot\.render\(<PreviewActions item=\{props\.item\} \/>/);
+  assert.match(html, /<div id="previewDetails" className="preview-details grid gap-2\.5">/);
+  assert.match(html, /\{previewInfoState \? <PreviewDetailsPanel \{\.\.\.previewInfoState\} \/> : null\}/);
+  assert.match(html, /<div id="previewActions" className="preview-info-actions/);
+  assert.match(html, /\{previewInfoState \? <PreviewActions item=\{previewInfoState\.item\} \/> : null\}/);
   assert.match(css, /\.preview-details-section\s*\{/);
   assert.doesNotMatch(css, /\.preview-detail-row-divider\s*\{/);
   assert.match(css, /\.preview-rating-section\s*\{[^}]*min-height:\s*32px;/s);

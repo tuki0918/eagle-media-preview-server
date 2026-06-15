@@ -7,6 +7,8 @@ import {
   togglePreviewInfo,
 } from "../shellActions";
 import { getPreviewDialogState, subscribePreviewDialogState } from "../previewDialogState";
+import { PreviewBodyHost } from "./PreviewBody";
+import { PreviewInfoActions, PreviewInfoDetails } from "./PreviewInfo";
 import { PreviewRating } from "./RatingStars";
 import { PreviewMeta, PreviewOriginalName } from "./PreviewText";
 
@@ -125,7 +127,7 @@ export function PreviewDialog() {
         </div>
       </div>
       <div className="preview-layout relative grid h-full max-h-full grid-cols-[minmax(0,1fr)] overflow-hidden">
-        <div ref={previewBodyRef} id="previewBody" className="preview-body relative grid h-full min-h-0 grid-rows-[minmax(0,1fr)] overflow-hidden bg-[#f8fafc] p-0" />
+        <PreviewBodyHost ref={previewBodyRef} />
         <aside
           className="preview-info absolute inset-y-0 left-0 z-[3] grid max-w-full content-start gap-3.5 overflow-auto border-0 border-r border-app-border bg-[rgba(255,255,255,0.96)] p-3.5 shadow-[18px_0_44px_rgba(15,23,42,0.14)] backdrop-blur-[18px]"
           aria-label="Media info"
@@ -137,8 +139,8 @@ export function PreviewDialog() {
             <span className="info-label text-xs font-normal text-app-muted">Rating</span>
             <PreviewRating />
           </section>
-          <div id="previewDetails" className="preview-details grid gap-2.5" />
-          <div id="previewActions" className="preview-info-actions border-t border-[rgba(148,163,184,0.22)] px-2 pt-3" />
+          <PreviewInfoDetails />
+          <PreviewInfoActions />
         </aside>
       </div>
     </dialog>

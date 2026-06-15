@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent, type ReactNode, type TouchEvent, type WheelEvent } from "react";
-import { createRoot, type Root } from "react-dom/client";
+import { forwardRef, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent, type ReactNode, type TouchEvent, type WheelEvent } from "react";
 import { mediaUrl } from "../api";
 import {
   dragPreviewTransform,
@@ -9,6 +8,7 @@ import {
   pointerDistance,
   setPreviewZoom,
 } from "../previewTransform";
+import { getPreviewBodyState, subscribePreviewBodyState } from "../previewBodyState";
 import type { EagleItem, PreviewDrag, PreviewPinch, PreviewPoint, PreviewTransform } from "../types";
 
 export type PreviewBodyKind = "video" | "audio" | "text" | "image" | "unsupported";
@@ -27,8 +27,6 @@ interface ImageState {
   transform: PreviewTransform;
 }
 
-const roots = new WeakMap<HTMLElement, Root>();
-
 export function PreviewBody({ item, kind, srcKind = "file" }: PreviewBodyProps) {
   if (kind === "video") return <VideoPreview item={item} />;
   if (kind === "audio") return <AudioPreview item={item} />;
@@ -36,6 +34,19 @@ export function PreviewBody({ item, kind, srcKind = "file" }: PreviewBodyProps) 
   if (kind === "unsupported") return <UnsupportedPreview item={item} />;
   return <ImagePreview item={item} srcKind={srcKind} />;
 }
+
+export const PreviewBodyHost = forwardRef<HTMLDivElement>(function PreviewBodyHost(_, ref) {
+  const previewBodyState = useSyncExternalStore(subscribePreviewBodyState, getPreviewBodyState, getPreviewBodyState);
+  return (
+    <div
+      ref={ref}
+      id="previewBody"
+      className="preview-body relative grid h-full min-h-0 grid-rows-[minmax(0,1fr)] overflow-hidden bg-[#f8fafc] p-0"
+    >
+      {previewBodyState ? <PreviewBody {...previewBodyState} /> : null}
+    </div>
+  );
+});
 
 function VideoPreview({ item }: { item: EagleItem }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -383,21 +394,4 @@ function Maximize2Icon() {
       <line x1="3" x2="10" y1="21" y2="14" />
     </svg>
   );
-}
-
-export function renderPreviewBodyView(container: HTMLElement, props: PreviewBodyProps) {
-  let root = roots.get(container);
-  if (!root) {
-    container.replaceChildren();
-    root = createRoot(container);
-    roots.set(container, root);
-  }
-  root.render(<PreviewBody {...props} />);
-}
-
-export function clearPreviewBodyView(container: HTMLElement) {
-  const root = roots.get(container);
-  if (!root) return;
-  root.unmount();
-  roots.delete(container);
 }

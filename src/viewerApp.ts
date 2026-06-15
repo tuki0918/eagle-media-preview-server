@@ -40,16 +40,10 @@ import {
 import { setPagerState } from "./viewer/pagerState";
 import { setSearchControlsState } from "./viewer/searchControlsState";
 import { setResultSurfaceState } from "./viewer/resultSurfaceState";
-import {
-  clearPreviewInfoView,
-  renderPreviewInfoView,
-} from "./viewer/components/PreviewInfo";
+import { setPreviewInfoState, clearPreviewInfoState } from "./viewer/previewInfoState";
 import { setPreviewTextState } from "./viewer/previewTextState";
-import {
-  clearPreviewBodyView,
-  renderPreviewBodyView,
-  type PreviewBodyKind,
-} from "./viewer/components/PreviewBody";
+import { type PreviewBodyKind } from "./viewer/components/PreviewBody";
+import { clearPreviewBodyState, setPreviewBodyState } from "./viewer/previewBodyState";
 import { setTagChipsState } from "./viewer/tagChipsState";
 import {
   clearTagSuggestionsState,
@@ -322,7 +316,7 @@ function openPreview(item: EagleItem, { skipHistory = false }: OpenPreviewOption
     meta: itemMeta(item),
     originalName: originalFileName(item),
   });
-  clearPreviewBodyView(els.previewBody);
+  clearPreviewBodyState();
   setPreviewRatingState({
     item,
     onSelect: (star) => setItemStar(item, star),
@@ -335,7 +329,7 @@ function openPreview(item: EagleItem, { skipHistory = false }: OpenPreviewOption
     mode: kind,
     open: true,
   });
-  renderPreviewBodyView(els.previewBody, { item, kind, srcKind });
+  setPreviewBodyState({ item, kind, srcKind });
 
   if (!skipHistory) syncUrlState();
 }
@@ -540,8 +534,8 @@ function syncPreviewFromState() {
 }
 
 function clearPreviewContents() {
-  clearPreviewInfoView(els.previewDetails, els.previewActions);
-  clearPreviewBodyView(els.previewBody);
+  clearPreviewInfoState();
+  clearPreviewBodyState();
   clearPreviewRatingState();
   setPreviewTextState({
     meta: "",
@@ -662,7 +656,7 @@ function goToPage(page: number) {
 }
 
 function renderPreviewDetails(item: EagleItem) {
-  renderPreviewInfoView(els.previewDetails, els.previewActions, {
+  setPreviewInfoState({
     item,
     detailRows: previewDetailRows(item),
     folders: state.folders,

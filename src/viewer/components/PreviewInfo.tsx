@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
-import { createRoot, type Root } from "react-dom/client";
+import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { directFileUrl } from "../fileLinks";
 import { folderIds, itemTags } from "../format";
 import { uniqueValues, type MetadataSuggestion } from "../metadata";
+import { getPreviewInfoState, subscribePreviewInfoState } from "../previewInfoState";
 import type { EagleFolder, EagleItem } from "../types";
 
 export interface PreviewDetailRow {
@@ -32,9 +32,6 @@ interface MetadataChipEditorProps {
   setSelected: (values: string[]) => void;
 }
 
-const detailsRoots = new WeakMap<HTMLElement, Root>();
-const actionsRoots = new WeakMap<HTMLElement, Root>();
-
 export function PreviewDetailsPanel({ detailRows, folders, item, onFolderSuggestions, onSaveMetadata, onTagSuggestions }: PreviewInfoProps) {
   return (
     <section className="preview-details-section">
@@ -50,6 +47,24 @@ export function PreviewDetailsPanel({ detailRows, folders, item, onFolderSuggest
         onTagSuggestions={onTagSuggestions}
       />
     </section>
+  );
+}
+
+export function PreviewInfoDetails() {
+  const previewInfoState = useSyncExternalStore(subscribePreviewInfoState, getPreviewInfoState, getPreviewInfoState);
+  return (
+    <div id="previewDetails" className="preview-details grid gap-2.5">
+      {previewInfoState ? <PreviewDetailsPanel {...previewInfoState} /> : null}
+    </div>
+  );
+}
+
+export function PreviewInfoActions() {
+  const previewInfoState = useSyncExternalStore(subscribePreviewInfoState, getPreviewInfoState, getPreviewInfoState);
+  return (
+    <div id="previewActions" className="preview-info-actions border-t border-[rgba(148,163,184,0.22)] px-2 pt-3">
+      {previewInfoState ? <PreviewActions item={previewInfoState.item} /> : null}
+    </div>
   );
 }
 
@@ -328,35 +343,4 @@ function tagValues(value: unknown) {
 
 function categoryValues(value: unknown) {
   return folderIds(value);
-}
-
-export function renderPreviewInfoView(detailsContainer: HTMLElement, actionsContainer: HTMLElement, props: PreviewInfoProps) {
-  let detailsRoot = detailsRoots.get(detailsContainer);
-  if (!detailsRoot) {
-    detailsContainer.replaceChildren();
-    detailsRoot = createRoot(detailsContainer);
-    detailsRoots.set(detailsContainer, detailsRoot);
-  }
-  detailsRoot.render(<PreviewDetailsPanel {...props} />);
-
-  let actionsRoot = actionsRoots.get(actionsContainer);
-  if (!actionsRoot) {
-    actionsContainer.replaceChildren();
-    actionsRoot = createRoot(actionsContainer);
-    actionsRoots.set(actionsContainer, actionsRoot);
-  }
-  actionsRoot.render(<PreviewActions item={props.item} />);
-}
-
-export function clearPreviewInfoView(detailsContainer: HTMLElement, actionsContainer: HTMLElement) {
-  const detailsRoot = detailsRoots.get(detailsContainer);
-  if (detailsRoot) {
-    detailsRoot.unmount();
-    detailsRoots.delete(detailsContainer);
-  }
-  const actionsRoot = actionsRoots.get(actionsContainer);
-  if (actionsRoot) {
-    actionsRoot.unmount();
-    actionsRoots.delete(actionsContainer);
-  }
 }
