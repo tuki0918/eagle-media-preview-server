@@ -65,6 +65,8 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(app, /if \(hasUserPasswords\) setUserPasswords\(\{\}\);/);
   assert.match(app, /if \(!hasUserPasswords && !settingsPayloadChanged\(settings, payload\)\)/);
   assert.match(app, /function settingsPayloadChanged\(current: PluginSettings \| undefined, nextSettings: Record<string, unknown>\)/);
+  assert.match(app, /function serverSettingsChanged\(current: PluginSettings, nextSettings: Record<string, unknown>\)/);
+  assert.match(app, /return serverSettingsChanged\(current, nextSettings\);/);
   assert.doesNotMatch(app, /nextSettings\.password/);
   assert.match(app, /Enter a username for every user\./);
   assert.match(app, /is already used\./);

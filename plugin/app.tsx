@@ -559,17 +559,16 @@ function createQrDataUrl(value: string) {
 function willRestartServer(status: PluginStatus, nextSettings: Record<string, unknown>) {
   const current = status.settings;
   if (!current || status.state !== "running") return false;
-  if ((nextSettings.host ?? current.host) !== current.host) return true;
-  if (Number(nextSettings.port ?? current.port) !== Number(current.port)) return true;
-  if (Boolean(nextSettings.authEnabled ?? current.authEnabled) !== Boolean(current.authEnabled)) return true;
-  if (Boolean(nextSettings.allowMetadataEditing ?? current.allowMetadataEditing) !== Boolean(current.allowMetadataEditing)) return true;
-  if (JSON.stringify(nextSettings.authUsers ?? current.authUsers ?? []) !== JSON.stringify(current.authUsers ?? [])) return true;
-  return false;
+  return serverSettingsChanged(current, nextSettings);
 }
 
 function settingsPayloadChanged(current: PluginSettings | undefined, nextSettings: Record<string, unknown>) {
   if (!current) return true;
   if (Boolean(nextSettings.autoStart ?? current.autoStart) !== Boolean(current.autoStart)) return true;
+  return serverSettingsChanged(current, nextSettings);
+}
+
+function serverSettingsChanged(current: PluginSettings, nextSettings: Record<string, unknown>) {
   if ((nextSettings.host ?? current.host) !== current.host) return true;
   if (Number(nextSettings.port ?? current.port) !== Number(current.port)) return true;
   if (Boolean(nextSettings.authEnabled ?? current.authEnabled) !== Boolean(current.authEnabled)) return true;
