@@ -161,7 +161,9 @@ function App() {
       preferredLanAddress: selectedLanAddress,
       ...patch,
     };
-    const cleanUserPasswords = Object.fromEntries(Object.entries(userPasswords).filter(([, value]) => value.trim()));
+    const cleanUserPasswords = Object.fromEntries(authUsers
+      .map((user, index) => [String(user.username || "").trim(), userPasswords[String(index)] || ""])
+      .filter(([username, value]) => username && value.trim()));
     const hasUserPasswords = Object.keys(cleanUserPasswords).length > 0;
     if (hasUserPasswords) {
       payload.userPasswords = cleanUserPasswords;
@@ -239,6 +241,7 @@ function App() {
   function removeAuthUser(index: number) {
     if (authUsers.length <= 1) return;
     const nextUsers = authUsers.filter((_, userIndex) => userIndex !== index);
+    setUserPasswords((current) => removeIndexedValue(current, index));
     updateSettings({
       authUsers: nextUsers,
       allowMetadataEditing: nextUsers.some((user) => canRoleEditMetadata(user.role)),
@@ -352,7 +355,7 @@ function App() {
                 title="BasicAuth protection"
                 description="Require username & password to access."
                 onChange={(checked) => {
-                  if (checked && authUsers.some((user) => !user.passwordHash && !userPasswords[String(user.username || "")]?.trim())) {
+                  if (checked && authUsers.some((user, index) => !user.passwordHash && !userPasswords[String(index)]?.trim())) {
                     setMessage("Enter a password for every user to enable BasicAuth protection.", true);
                     return;
                   }
@@ -442,8 +445,8 @@ function App() {
                     autoComplete="new-password"
                     disabled={formDisabled}
                     placeholder={user.passwordHash ? "••••••••" : "Password"}
-                    value={userPasswords[String(user.username || "")] || ""}
-                    onChange={(event) => setUserPasswords((current) => ({ ...current, [String(user.username || "")]: event.currentTarget.value }))}
+                    value={userPasswords[String(index)] || ""}
+                    onChange={(event) => setUserPasswords((current) => ({ ...current, [String(index)]: event.currentTarget.value }))}
                     onBlur={() => saveSettings()}
                   />
                   <button className="grid h-7 w-7 place-items-center rounded-md border border-[#d7d9de] bg-white text-[#555c66] hover:bg-[#f4f5f7]" type="button" aria-label={`Remove ${user.username || "user"}`} title="Remove user" disabled={formDisabled || authUsers.length <= 1} onClick={() => removeAuthUser(index)}>
@@ -607,6 +610,16 @@ function duplicateUsername(users: AuthUser[]) {
     seen.add(username);
   }
   return "";
+}
+
+function removeIndexedValue(values: Record<string, string>, removedIndex: number) {
+  const next: Record<string, string> = {};
+  for (const [rawIndex, value] of Object.entries(values)) {
+    const index = Number.parseInt(rawIndex, 10);
+    if (!Number.isInteger(index) || index === removedIndex) continue;
+    next[String(index > removedIndex ? index - 1 : index)] = value;
+  }
+  return next;
 }
 
 function nextDefaultUser(users: AuthUser[]): AuthUser {
