@@ -209,11 +209,7 @@ test("public image preview fit mode scales to the viewport and refreshes on resi
 
   assert.match(html, /window\.addEventListener\("resize", refreshLayout\);/);
   assert.match(app, /const IMAGE_FIT_MARGIN = 0\.96;/);
-  assert.match(html, /hidden=\{!imageState\.statusVisible\}/);
   assert.match(html, /width: `\$\{imageState\.naturalSize\.width\}px`/);
-  assert.match(html, /statusVisible: true/);
-  assert.match(html, /onError=\{\(\) => \{/);
-  assert.match(html, /statusVisible: false/);
   assert.match(html, /height: `\$\{imageState\.naturalSize\.height\}px`/);
   assert.match(app, /const fitScale = Math\.min\(widthRatio, heightRatio\) \* IMAGE_FIT_MARGIN;/);
   assert.match(app, /const naturalScale = 1;/);
@@ -228,16 +224,17 @@ test("public image preview fit mode scales to the viewport and refreshes on resi
 test("public video preview reserves top space for floating action buttons", async () => {
   const html = await readAppSources();
 
-  assert.match(html, /previewDialogState\.mode === "video" \? "h-dvh max-h-dvh bg-\[#05070a\] pt-\[calc\(60px\+env\(safe-area-inset-top\)\)\]"/);
+  assert.match(html, /previewDialogState\.mode === "video" \? "h-dvh max-h-dvh bg-\[#05070a\]"/);
+  assert.doesNotMatch(html, /pt-\[calc\(60px\+env\(safe-area-inset-top\)\)\]/);
   assert.match(html, /if \(kind === "video"\) return `\$\{base\} bg-\[#05070a\] max-h-full`;/);
-  assert.match(html, /const previewVideoClassName =[\s\S]*"preview-video h-full w-full max-h-full bg-\[#05070a\] object-contain/);
+  assert.match(html, /const previewVideoClassName =[\s\S]*"preview-video h-full w-full max-h-full cursor-pointer bg-\[#05070a\] object-contain/);
 });
 
 test("public audio preview uses video-style dark action buttons", async () => {
   const html = await readAppSources();
 
   assert.match(html, /previewDialogState\.mode === "video" \|\| previewDialogState\.mode === "audio"/);
-  assert.match(html, /bg-\[rgba\(15,23,42,0\.62\)\][\s\S]*hover:bg-\[rgba\(15,23,42,0\.82\)\]/);
+  assert.match(html, /bg-\[rgba\(15,23,42,0\.48\)\][\s\S]*hover:bg-\[rgba\(15,23,42,0\.64\)\]/);
 });
 
 test("public UI exposes direct original file URLs for each media item", async () => {
@@ -484,15 +481,16 @@ test("public preview info closes when pressing outside the side menu", async () 
   const html = await readAppSources();
   const app = await readViewerSources();
 
-  assert.match(html, /onPointerDown=\{handlePreviewPointerDown\}/);
+  assert.match(html, /onPointerDown=\{handleDialogPointerDown\}/);
+  assert.match(html, /handlePreviewPointerDown\(event\);/);
   assert.match(html, /useSyncExternalStore\(subscribePreviewDialogState, getPreviewDialogState, getPreviewDialogState\)/);
   assert.match(html, /previewDialogState\.mode \? `\$\{previewDialogState\.mode\}-mode` : ""/);
   assert.match(html, /aria-expanded=\{previewDialogState\.infoOpen\}/);
   assert.match(html, /document\.body\.classList\.toggle\("modal-open", previewDialogState\.open\)/);
   assert.match(html, /dialog\.showModal\(\)/);
   assert.match(html, /dialog\.close\(\)/);
-  assert.match(html, /dialog\.addEventListener\(eventName, preventGestureWhileOpen\)/);
-  assert.match(html, /dialog\.removeEventListener\(eventName, preventGestureWhileOpen\)/);
+  assert.match(html, /document\.addEventListener\(eventName, preventGestureWhileOpen, options\)/);
+  assert.match(html, /document\.removeEventListener\(eventName, preventGestureWhileOpen\)/);
   assert.match(html, /const toggleFullscreen = async \(\) => \{/);
   assert.match(html, /previewBodyRef\.current/);
   assert.match(html, /document\.fullscreenElement/);
@@ -669,8 +667,8 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   assert.doesNotMatch(app, /pageButtons: document\.querySelector\("#pageButtons"\),/);
   assert.match(app, /state\.viewMode === "tiles"/);
   assert.match(html, /export function ResultList\(\{ items, viewMode, onOpenPreview \}[^)]*\) \{/);
-  assert.match(html, /style=\{\{ aspectRatio: width > 0 && height > 0 \? `\$\{width\} \/ \$\{height\}` : "1 \/ 1" \}\}/);
-  assert.match(html, /<RatingStars item=\{item\} className=\{tileRatingClassName\} \/>/);
+  assert.match(html, /aspectRatio: width > 0 && height > 0 \? `\$\{width\} \/ \$\{height\}` : "1 \/ 1"/);
+  assert.match(html, /gridRowEnd: `span \$\{tileMasonrySpan\(width, height\)\}`/);
   assert.match(html, /onPointerDown=\{trigger\.onPointerDown\}/);
   assert.match(html, /onClick=\{trigger\.onClick\}/);
   assert.match(app, /setResultSurfaceState\(\{[\s\S]*kind: "list",/);
@@ -690,12 +688,11 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   assert.match(app, /if \(viewMode !== "tiles" \|\| tags\.length\) return limit;/);
   assert.match(app, /return Math\.min\(limit \* TILE_PREFETCH_PAGES, MAX_PAGE_SIZE\);/);
   assert.match(app, /params\.get\("view"\) === "tiles"/);
-  assert.match(html, /media-tiles content-start \[column-width:180px\] \[column-gap:4px\]/);
+  assert.match(html, /media-tiles grid content-start gap-1 \[grid-auto-flow:dense\] \[grid-auto-rows:4px\] \[grid-template-columns:repeat\(auto-fill,minmax\(180px,1fr\)\)\]/);
   assert.match(html, /const tileButtonClassName =[\s\S]*tile-item[\s\S]*\[contain:layout_paint\]/);
   assert.match(html, /animate-pulse bg-\[linear-gradient/);
-  assert.match(html, /const tileRatingClassName =[\s\S]*tile-rating/);
-  assert.match(html, /max-\[540px\]:\[column-count:3\] max-\[540px\]:\[column-width:auto\]/);
-  assert.match(html, /const tileButtonClassName =[\s\S]*tile-item[\s\S]*max-\[540px\]:mb-\[3px\]/);
+  assert.match(html, /gridRowEnd: `span \$\{tileMasonrySpan\(width, height\)\}`/);
+  assert.match(html, /max-\[540px\]:grid-cols-3 max-\[540px\]:gap-\[3px\]/);
   assert.match(html, /className="tiles-sentinel mt-3 grid min-h-\[52px\] place-items-center text-\[13px\] font-\[680\] text-app-muted"/);
 });
 
