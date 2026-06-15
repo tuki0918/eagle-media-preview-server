@@ -72,6 +72,7 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(app, /<span>Add user<\/span>/);
   assert.match(app, /const settingInputClassName = /);
   assert.match(app, /className=\{settingInputClassName\}/);
+  assert.match(app, /className=\{`\$\{settingInputClassName\} px-1\.5`\}/);
   assert.match(app, /const authActionButtonClassName = /);
   assert.match(app, /\$\{authActionButtonClassName\}/);
   assert.match(app, /disabled:cursor-not-allowed disabled:opacity-45/);

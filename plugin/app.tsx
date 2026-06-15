@@ -447,7 +447,7 @@ function App() {
                     onBlur={() => saveSettings()}
                   />
                   <select
-                    className="h-7 rounded-md border border-[#d7d9de] bg-white px-1.5 text-[11px] text-[#111] outline-0 disabled:cursor-not-allowed disabled:bg-[#f4f5f7] disabled:text-[#8a8f99]"
+                    className={`${settingInputClassName} px-1.5`}
                     aria-label={`Role for ${user.username || `user ${index + 1}`}`}
                     disabled={formDisabled}
                     value={user.role}
@@ -476,7 +476,7 @@ function App() {
                 </div>
               ))}
               <div className="flex items-center justify-between gap-2">
-                <button className="inline-flex h-7 items-center gap-1.5 rounded-md border border-[#d7d9de] bg-white px-2 text-[11px] font-medium text-[#111] hover:bg-[#f8f9fb] disabled:cursor-not-allowed disabled:opacity-45" type="button" disabled={formDisabled} onClick={addAuthUser}>
+                <button className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium text-[#111] ${authActionButtonClassName}`} type="button" disabled={formDisabled} onClick={addAuthUser}>
                   <PlusIcon className="h-[12px] w-[12px]" />
                   <span>Add user</span>
                 </button>
