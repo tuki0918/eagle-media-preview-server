@@ -34,6 +34,7 @@ import {
   ViewerShellLayout,
 } from "./ViewerShell";
 import { resetPreviewDialogState, setPreviewDialogState } from "./previewDialogState";
+import { setVideoOverlayControlsVisible } from "./videoOverlayState";
 import { MEDIA_TYPE_OPTIONS, PAGE_SIZE_OPTIONS, RATING_OPTIONS } from "./shellConfig";
 
 const REQUIRED_ELEMENT_IDS = [
@@ -195,6 +196,21 @@ describe("ViewerAppShell", () => {
     expect(html).toContain("h-dvh max-h-dvh bg-[#05070a]");
     expect(html).not.toContain("pt-[calc(60px+env(safe-area-inset-top))]");
     expect(html).toContain("fixed left-2.5 top-[calc(10px+env(safe-area-inset-top))]");
+    expect(html).toContain("rounded-full");
+    expect(html).toContain("bg-[rgba(255,255,255,0.12)]");
+    expect(html).toContain('id="fullscreenPreview"');
+  });
+
+  test("hides video overlay buttons when video controls are toggled off", () => {
+    setPreviewDialogState({ infoOpen: false, mode: "video", open: true });
+    setVideoOverlayControlsVisible(false);
+    const html = renderToStaticMarkup(<PreviewDialog />);
+    resetPreviewDialogState();
+    setVideoOverlayControlsVisible(true);
+
+    expect(html).toContain("pointer-events-none opacity-0");
+    expect(html).toContain('id="closePreview"');
+    expect(html).toContain('id="toggleInfoPreview"');
     expect(html).toContain('id="fullscreenPreview"');
   });
 
@@ -353,8 +369,9 @@ describe("ViewerAppShell", () => {
 
     expect(video).toContain("video-player");
     expect(video).toContain("Playback position");
+    expect(video).toContain("transition-opacity");
     expect(video).toContain("cursor-pointer");
-    expect(video).toContain("Toggle video playback");
+    expect(video).toContain("Toggle video controls");
     expect(audio).toContain("audio-player-shell");
     expect(audio).toContain("audio-artwork");
     expect(audio).toContain("Playback speed");

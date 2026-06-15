@@ -9,6 +9,12 @@ import {
   setPreviewZoom,
 } from "../previewTransform";
 import { getPreviewBodyState, subscribePreviewBodyState } from "../previewBodyState";
+import {
+  getVideoOverlayControlsVisible,
+  setVideoOverlayControlsVisible,
+  subscribeVideoOverlayControls,
+  toggleVideoOverlayControls,
+} from "../videoOverlayState";
 import type { EagleItem, PreviewDrag, PreviewPinch, PreviewPoint, PreviewTransform } from "../types";
 
 export type PreviewBodyKind = "video" | "audio" | "text" | "image" | "unsupported";
@@ -89,18 +95,9 @@ function VideoPreview({ item }: { item: EagleItem }) {
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
+    setVideoOverlayControlsVisible(true);
     videoRef.current?.play().catch(() => {});
   }, [item.id]);
-
-  const toggleVideoPlayback = () => {
-    const video = videoRef.current;
-    if (!video) return;
-    if (video.paused) {
-      video.play().catch(() => {});
-    } else {
-      video.pause();
-    }
-  };
 
   return (
     <>
@@ -108,10 +105,10 @@ function VideoPreview({ item }: { item: EagleItem }) {
         ref={videoRef}
         className={previewVideoClassName}
         src={mediaUrl(String(item.id || ""), "file")}
-        aria-label="Toggle video playback"
+        aria-label="Toggle video controls"
         playsInline
         preload="metadata"
-        onClick={toggleVideoPlayback}
+        onClick={toggleVideoOverlayControls}
         onError={(event) => setNotice(videoErrorMessage(event.currentTarget.error))}
       />
       <MediaControls mediaRef={videoRef} item={item} variant="video" />
@@ -169,10 +166,17 @@ function MediaControls({
   const [paused, setPaused] = useState(true);
   const [muted, setMuted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
+  const firstVideoPlayRef = useRef(true);
+  const videoOverlayControlsVisible = useSyncExternalStore(
+    subscribeVideoOverlayControls,
+    getVideoOverlayControlsVisible,
+    getVideoOverlayControlsVisible,
+  );
 
   useEffect(() => {
     const media = mediaRef.current;
     if (!media) return;
+    firstVideoPlayRef.current = true;
     const sync = () => {
       setDuration(Number.isFinite(media.duration) ? media.duration : 0);
       setCurrentTime(Number.isFinite(media.currentTime) ? media.currentTime : 0);
@@ -180,16 +184,35 @@ function MediaControls({
       setMuted(media.muted);
       setPlaybackRate(media.playbackRate || 1);
     };
+    const syncVideoOverlayVisibility = () => {
+      if (variant !== "video") return;
+      if (!media.paused && firstVideoPlayRef.current) {
+        firstVideoPlayRef.current = false;
+        setVideoOverlayControlsVisible(true);
+        return;
+      }
+      if (media.paused || media.ended) {
+        firstVideoPlayRef.current = true;
+      }
+      setVideoOverlayControlsVisible(media.paused || media.ended);
+    };
     sync();
+    syncVideoOverlayVisibility();
     for (const eventName of ["durationchange", "loadedmetadata", "timeupdate", "play", "pause", "volumechange", "ratechange", "ended"]) {
       media.addEventListener(eventName, sync);
+    }
+    for (const eventName of ["play", "pause", "ended"]) {
+      media.addEventListener(eventName, syncVideoOverlayVisibility);
     }
     return () => {
       for (const eventName of ["durationchange", "loadedmetadata", "timeupdate", "play", "pause", "volumechange", "ratechange", "ended"]) {
         media.removeEventListener(eventName, sync);
       }
+      for (const eventName of ["play", "pause", "ended"]) {
+        media.removeEventListener(eventName, syncVideoOverlayVisibility);
+      }
     };
-  }, [item.id, mediaRef]);
+  }, [item.id, mediaRef, variant]);
 
   const togglePlay = () => {
     const media = mediaRef.current;
@@ -225,9 +248,12 @@ function MediaControls({
 
   const timeLabel = `${formatMediaTime(currentTime)} / ${formatMediaTime(duration)}`;
   const title = item.name || item.id || (variant === "video" ? "Video preview" : "Audio preview");
+  const mediaControlsVisibilityClassName = variant === "video" && !videoOverlayControlsVisible
+    ? "pointer-events-none opacity-0"
+    : "opacity-100";
 
   return (
-    <div className={`${mediaPlayerClassName} ${variant === "video" ? videoPlayerClassName : ""}`} aria-label={`${variant === "video" ? "Video" : "Audio"} controls`}>
+    <div className={`${mediaPlayerClassName} ${variant === "video" ? videoPlayerClassName : ""} ${mediaControlsVisibilityClassName} transition-opacity duration-150`} aria-label={`${variant === "video" ? "Video" : "Audio"} controls`}>
       {variant === "video" ? <strong className={mediaTitleClassName}>{title}</strong> : null}
       <div className="grid gap-1.5">
         <input

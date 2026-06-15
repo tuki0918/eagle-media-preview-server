@@ -7,6 +7,10 @@ import {
   togglePreviewInfo,
 } from "../shellActions";
 import { getPreviewDialogState, subscribePreviewDialogState } from "../previewDialogState";
+import {
+  getVideoOverlayControlsVisible,
+  subscribeVideoOverlayControls,
+} from "../videoOverlayState";
 import { PreviewBodyHost } from "./PreviewBody";
 import {
   ChevronLeftIcon,
@@ -25,6 +29,11 @@ export function PreviewDialog() {
   const previewBodyRef = useRef<HTMLDivElement | null>(null);
   const closeSwipeRef = useRef<{ pointerId: number; startX: number; startY: number } | null>(null);
   const previewDialogState = useSyncExternalStore(subscribePreviewDialogState, getPreviewDialogState, getPreviewDialogState);
+  const videoOverlayControlsVisible = useSyncExternalStore(
+    subscribeVideoOverlayControls,
+    getVideoOverlayControlsVisible,
+    getVideoOverlayControlsVisible,
+  );
   const dialogClassName = [
     "fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none touch-none overscroll-none rounded-none border-0 bg-app-surface p-0 text-app-text",
     "backdrop:bg-[rgba(15,23,42,0.32)]",
@@ -42,10 +51,14 @@ export function PreviewDialog() {
     "max-[540px]:inset-x-0 max-[540px]:bottom-0 max-[540px]:top-auto max-[540px]:w-auto max-[540px]:max-h-[min(72dvh,560px)] max-[540px]:border-l-0 max-[540px]:border-t max-[540px]:border-app-border max-[540px]:shadow-[0_-18px_44px_rgba(15,23,42,0.14)]",
   ].join(" ");
   const previewActionButtonClassName = [
-    "icon-button inline-grid min-h-10 w-10 flex-[0_0_40px] touch-manipulation select-none place-items-center rounded-app border backdrop-blur-[12px]",
+    "icon-button inline-grid touch-manipulation select-none place-items-center border backdrop-blur-[12px]",
     previewDialogState.mode === "video" || previewDialogState.mode === "audio"
-      ? "border-[rgba(255,255,255,0.2)] bg-[rgba(15,23,42,0.62)] text-white hover:border-[rgba(255,255,255,0.38)] hover:bg-[rgba(15,23,42,0.82)] hover:text-white"
-      : "border-[rgba(203,213,225,0.82)] bg-[rgba(255,255,255,0.88)] text-app-text hover:border-[rgba(37,99,235,0.28)] hover:bg-white hover:text-app-accent",
+      ? "h-11 w-11 flex-[0_0_44px] rounded-full border-[rgba(255,255,255,0.16)] bg-[rgba(255,255,255,0.12)] text-white hover:bg-[rgba(255,255,255,0.2)] hover:text-white"
+      : "min-h-10 w-10 flex-[0_0_40px] rounded-app border-[rgba(203,213,225,0.82)] bg-[rgba(255,255,255,0.88)] text-app-text hover:border-[rgba(37,99,235,0.28)] hover:bg-white hover:text-app-accent",
+  ].join(" ");
+  const videoOverlayMenuClassName = [
+    "transition-opacity duration-150",
+    previewDialogState.mode === "video" && !videoOverlayControlsVisible ? "pointer-events-none opacity-0" : "opacity-100",
   ].join(" ");
 
   useEffect(() => {
@@ -177,10 +190,10 @@ export function PreviewDialog() {
       onPointerDown={handleDialogPointerDown}
       onPointerUp={endCloseSwipe}
     >
-      <button id="closePreview" className={`${previewActionButtonClassName} fixed left-2.5 top-[calc(10px+env(safe-area-inset-top))] z-[4]`} aria-label="Close" title="Close" onClick={closePreview}>
+      <button id="closePreview" className={`${previewActionButtonClassName} ${videoOverlayMenuClassName} fixed left-2.5 top-[calc(10px+env(safe-area-inset-top))] z-[4]`} aria-label="Close" title="Close" onClick={closePreview}>
         <ChevronLeftIcon />
       </button>
-      <div className="dialog-header fixed right-2.5 top-[calc(10px+env(safe-area-inset-top))] z-[4] flex items-center justify-end gap-3 border-0 bg-transparent p-0">
+      <div className={`dialog-header ${videoOverlayMenuClassName} fixed right-2.5 top-[calc(10px+env(safe-area-inset-top))] z-[4] flex items-center justify-end gap-3 border-0 bg-transparent p-0`}>
         <button id="backPreview" className="text-icon-button hidden min-h-10 items-center gap-2 border-0 bg-transparent px-2 text-sm font-[680] text-app-text" type="button" aria-label="Back to results" onClick={closePreview}>
           <ChevronLeftIcon />
           <span>Back to Results</span>
