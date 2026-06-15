@@ -32,6 +32,7 @@ export { PreviewActions, PreviewDetailsPanel } from "./components/PreviewInfo";
 export { PreviewMeta, PreviewOriginalName } from "./components/PreviewText";
 export { RatingStars } from "./components/RatingStars";
 export { ResultList } from "./components/ResultList";
+export { ResultSurface } from "./components/ResultSurface";
 export { ResultStateView } from "./components/ResultState";
 export { ResultsStatus } from "./components/ResultsStatus";
 export { AdvancedFilters, SearchControls, SearchInput } from "./components/SearchControls";

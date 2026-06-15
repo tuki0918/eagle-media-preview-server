@@ -1,5 +1,4 @@
 import { useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode } from "react";
-import { createRoot, type Root } from "react-dom/client";
 import { mediaUrl } from "../api";
 import {
   formatBytes,
@@ -31,8 +30,6 @@ interface ThumbnailButtonProps {
   withOverlay?: boolean;
 }
 
-const roots = new WeakMap<HTMLElement, Root>();
-
 const overlayIconPaths = {
   play: <path d="M8 5v14l11-7z" />,
   "move-diagonal": (
@@ -53,11 +50,6 @@ export function ResultList({ items, viewMode, onOpenPreview }: ResultListProps) 
       ))}
     </>
   );
-}
-
-function resultSurfaceClassName(viewMode: ViewerMode, isEmpty: boolean) {
-  const modeClassName = viewMode === "table" ? "media-table" : viewMode === "tiles" ? "media-tiles" : "media-grid";
-  return `${modeClassName}${isEmpty ? " is-empty" : ""}`;
 }
 
 function ResultItem({ item, viewMode, onOpenPreview }: { item: EagleItem; viewMode: ViewerMode; onOpenPreview: (item: EagleItem) => void }) {
@@ -268,25 +260,4 @@ function usePreviewTrigger(item: EagleItem, onOpenPreview: (item: EagleItem) => 
       }
     },
   };
-}
-
-export function renderResultListView(container: HTMLElement, props: ResultListProps) {
-  let root = roots.get(container);
-  if (!root) {
-    container.replaceChildren();
-    root = createRoot(container);
-    roots.set(container, root);
-  }
-  root.render(
-    <section id="grid" className={resultSurfaceClassName(props.viewMode, !props.items.length)} aria-label="Eagle assets">
-      <ResultList {...props} />
-    </section>,
-  );
-}
-
-export function clearResultListView(container: HTMLElement) {
-  const root = roots.get(container);
-  if (!root) return;
-  root.unmount();
-  roots.delete(container);
 }

@@ -48,6 +48,8 @@ async function readAppSources() {
     "../src/viewer/previewTextState.ts",
     "../src/viewer/components/RatingStars.tsx",
     "../src/viewer/components/ResultList.tsx",
+    "../src/viewer/components/ResultSurface.tsx",
+    "../src/viewer/resultSurfaceState.ts",
     "../src/viewer/components/ResultsStatus.tsx",
     "../src/viewer/components/SearchControls.tsx",
     "../src/viewer/searchControlsState.ts",
@@ -601,7 +603,7 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   assert.match(html, /<RatingStars item=\{item\} className="rating-control tile-rating" \/>/);
   assert.match(html, /onPointerDown=\{trigger\.onPointerDown\}/);
   assert.match(html, /onClick=\{trigger\.onClick\}/);
-  assert.match(app, /renderResultListView\(els\.resultGridHost, \{/);
+  assert.match(app, /setResultSurfaceState\(\{[\s\S]*kind: "list",/);
   assert.match(app, /setPagerState\(\{/);
   assert.match(app, /setTilesSentinelState\(\{/);
   assert.match(app, /getTilesSentinelElement\(\)/);
@@ -675,7 +677,7 @@ test("public results status and empty states stay concise and consistent across 
   assert.doesNotMatch(app, /renderResultsStatusView\(els\.resultsStatusHost, \{/);
   assert.doesNotMatch(app, /els\.resultCount\.textContent/);
   assert.doesNotMatch(app, /items · \$\{start\}-\$\{end\}/);
-  assert.match(app, /resultGridHost: document\.querySelector\("#resultGridHost"\),/);
+  assert.doesNotMatch(app, /resultGridHost: document\.querySelector\("#resultGridHost"\),/);
   assert.doesNotMatch(app, /els\.grid\.classList\.toggle/);
   assert.match(html, /function resultSurfaceClassName\(viewMode:[\s\S]*isEmpty/);
   assert.match(css, /\.media-grid,\s*\.media-table\s*\{[\s\S]*align-content:\s*start;/);

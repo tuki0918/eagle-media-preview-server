@@ -39,14 +39,7 @@ import {
 } from "./viewer/pagination";
 import { setPagerState } from "./viewer/pagerState";
 import { setSearchControlsState } from "./viewer/searchControlsState";
-import {
-  clearResultStateView,
-  renderResultStateView,
-} from "./viewer/components/ResultState";
-import {
-  clearResultListView,
-  renderResultListView,
-} from "./viewer/components/ResultList";
+import { setResultSurfaceState } from "./viewer/resultSurfaceState";
 import {
   clearPreviewInfoView,
   renderPreviewInfoView,
@@ -301,10 +294,7 @@ async function loadItems({ append = false }: LoadItemsOptions = {}) {
 }
 
 function render() {
-  clearResultStateView(els.resultGridHost);
-
   if (!state.items.length) {
-    clearResultListView(els.resultGridHost);
     renderEmptyState();
     updateStatus();
     updatePager();
@@ -312,10 +302,11 @@ function render() {
     return;
   }
 
-  renderResultListView(els.resultGridHost, {
+  setResultSurfaceState({
+    kind: "list",
     items: state.items,
-    viewMode: state.viewMode,
     onOpenPreview: openPreview,
+    viewMode: state.viewMode,
   });
   updateStatus();
   updatePager();
@@ -728,12 +719,11 @@ function folderSuggestionItems(query: string, selectedValues: string[]) {
 }
 
 function renderMessage(text: string, className = "empty") {
-  clearResultListView(els.resultGridHost);
-  renderResultStateView(els.resultGridHost, { kind: "message", text, className, viewMode: state.viewMode });
+  setResultSurfaceState({ kind: "message", text, className, viewMode: state.viewMode });
 }
 
 function renderEmptyState() {
-  renderResultStateView(els.resultGridHost, {
+  setResultSurfaceState({
     kind: "empty",
     hasActiveFilters: hasActiveFilters(state),
     onClearFilters: resetFilters,

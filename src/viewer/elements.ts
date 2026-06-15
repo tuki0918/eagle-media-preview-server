@@ -1,5 +1,4 @@
 export interface ViewerElements {
-  resultGridHost: HTMLElement;
   template: HTMLTemplateElement;
   dialog: HTMLDialogElement;
   previewBody: HTMLElement;
@@ -10,7 +9,6 @@ export interface ViewerElements {
 
 export function getViewerElements(): ViewerElements {
   const elements = {
-    resultGridHost: document.querySelector("#resultGridHost"),
     template: document.querySelector("#cardTemplate"),
     dialog: document.querySelector("#previewDialog"),
     previewBody: document.querySelector("#previewBody"),

@@ -2,6 +2,7 @@ import { CardTemplate } from "./CardTemplate";
 import { LibraryFooter } from "./LibraryFooter";
 import { Pager } from "./Pager";
 import { PreviewDialog } from "./PreviewDialog";
+import { ResultSurface } from "./ResultSurface";
 import { ResultsStatus } from "./ResultsStatus";
 import { SearchControls } from "./SearchControls";
 import { TilesSentinel } from "./TilesSentinel";
@@ -16,9 +17,7 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
       <main className="mx-auto w-[min(1180px,100%)] px-3 py-[30px]">
         <SearchControls />
         <ResultsStatus />
-        <div id="resultGridHost">
-          <section id="grid" className="media-grid" aria-label="Eagle assets" />
-        </div>
+        <ResultSurface />
         <TilesSentinel />
         <Pager />
         <LibraryFooter />
