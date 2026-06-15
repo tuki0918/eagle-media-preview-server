@@ -158,6 +158,10 @@ function PreviewMetadataEditor({
   const [status, setStatus] = useState("");
   const hasMetadataChanges = !sameStringValues(tags, initialTags) || !sameStringValues(categories, initialCategories);
 
+  useEffect(() => {
+    if (hasMetadataChanges && status === "Saved") setStatus("");
+  }, [hasMetadataChanges, status]);
+
   const submitMetadata = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!hasMetadataChanges) return;

@@ -487,6 +487,7 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(html, /<PreviewEditField label="Categories">/);
   assert.match(html, /await onSaveMetadata\(item, \{ tags, folders: categories \}\);/);
   assert.match(html, /const hasMetadataChanges = !sameStringValues\(tags, initialTags\) \|\| !sameStringValues\(categories, initialCategories\);/);
+  assert.match(html, /if \(hasMetadataChanges && status === "Saved"\) setStatus\(""\);/);
   assert.match(html, /if \(!hasMetadataChanges\) return;/);
   assert.match(html, /disabled=\{saving \|\| !hasMetadataChanges\}/);
   assert.match(html, /function sameStringValues\(left: readonly string\[\], right: readonly string\[\]\) \{/);
