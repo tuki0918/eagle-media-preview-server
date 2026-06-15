@@ -301,4 +301,4 @@ async function resolveLibraryItemFile({ libraryPath, item, kind }) {
 
   return original ? join(itemDir, original) : "";
 }
-module.exports = { ITEM_FIELDS, clampLimit, normalizeOffset, createEagleClient, normalizePaginatedResponse, unwrapData, pathFromFileValue, resolveLibraryItemFile };
+module.exports = { ITEM_FIELDS, clampLimit, normalizeOffset, normalizeStringArray, createEagleClient, normalizePaginatedResponse, unwrapData, pathFromFileValue, resolveLibraryItemFile };

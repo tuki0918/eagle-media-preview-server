@@ -3,7 +3,7 @@ const { stat } = require("fs").promises;
 const { createServer } = require("http");
 const { createHash, pbkdf2Sync, randomUUID, timingSafeEqual } = require("crypto");
 const { extname, join, normalize, resolve } = require("path");
-const { createEagleClient, pathFromFileValue, resolveLibraryItemFile } = require("./eagleClient.cjs");
+const { createEagleClient, normalizeStringArray, pathFromFileValue, resolveLibraryItemFile } = require("./eagleClient.cjs");
 const { buildConnectionCandidates, createConnectionContext } = require("./connection.cjs");
 
 interface ViewerServerOptions {
@@ -731,14 +731,9 @@ function sendMethodNotAllowed(res, methods) {
 
 function normalizeMetadataPatch(body) {
   return {
-    tags: body.tags === undefined ? undefined : normalizeMetadataValues(body.tags, "tags"),
-    folders: body.folders === undefined ? undefined : normalizeMetadataValues(body.folders, "folders"),
+    tags: body.tags === undefined ? undefined : normalizeStringArray(body.tags, "tags"),
+    folders: body.folders === undefined ? undefined : normalizeStringArray(body.folders, "folders"),
   };
-}
-
-function normalizeMetadataValues(value, fieldName) {
-  if (!Array.isArray(value)) throw new Error(`${fieldName} must be an array`);
-  return [...new Set(value.map((item) => String(item).trim()).filter(Boolean))];
 }
 
 function authRequired({ users = [], viewerPassword, passwordHash }: { passwordHash?: string; users?: AuthUser[]; viewerPassword?: string }) {
