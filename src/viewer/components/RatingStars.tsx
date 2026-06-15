@@ -1,20 +1,20 @@
-import { createRoot, type Root } from "react-dom/client";
+import { useSyncExternalStore } from "react";
+import { getPreviewRatingState, subscribePreviewRatingState } from "../previewRatingState";
 import type { EagleItem } from "../types";
 
 export interface RatingStarsProps {
   className: string;
+  id?: string;
   interactive?: boolean;
   item: EagleItem;
   onSelect?: (value: number) => void;
 }
 
-const roots = new WeakMap<HTMLElement, Root>();
-
-export function RatingStars({ className, interactive = false, item, onSelect }: RatingStarsProps) {
+export function RatingStars({ className, id, interactive = false, item, onSelect }: RatingStarsProps) {
   const current = Number(item.star || 0);
   const Tag = interactive ? "button" : "span";
   return (
-    <div className={className} aria-label="Rating">
+    <div id={id} className={className} aria-label="Rating">
       {[1, 2, 3, 4, 5].map((value) => (
         <Tag
           key={value}
@@ -41,19 +41,18 @@ export function nextStarValue(current: number, selected: number) {
   return selected === current ? 0 : selected;
 }
 
-export function renderRatingView(container: HTMLElement, props: RatingStarsProps) {
-  let root = roots.get(container);
-  if (!root) {
-    container.replaceChildren();
-    root = createRoot(container);
-    roots.set(container, root);
+export function PreviewRating() {
+  const state = useSyncExternalStore(subscribePreviewRatingState, getPreviewRatingState, getPreviewRatingState);
+  if (!state.item) {
+    return <div id="previewRating" className="rating-control inline-flex items-center gap-px" aria-label="Rating" />;
   }
-  root.render(<RatingStars {...props} />);
-}
-
-export function clearRatingView(container: HTMLElement) {
-  const root = roots.get(container);
-  if (!root) return;
-  root.unmount();
-  roots.delete(container);
+  return (
+    <RatingStars
+      id="previewRating"
+      className="rating-control inline-flex items-center gap-px"
+      interactive
+      item={state.item}
+      onSelect={state.onSelect}
+    />
+  );
 }

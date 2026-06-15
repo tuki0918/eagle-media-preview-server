@@ -16,6 +16,7 @@ import {
   PreviewDetailsPanel,
   PreviewMeta,
   PreviewOriginalName,
+  PreviewRating,
   RatingStars,
   ResultList,
   ResultSurface,
@@ -123,6 +124,7 @@ describe("ViewerAppShell", () => {
       { Component: ResultSurface, expectedId: "grid" },
       { Component: Pager, expectedId: "pageButtons" },
       { Component: PreviewDialog, expectedId: "previewDialog" },
+      { Component: PreviewRating, expectedId: "previewRating" },
       { Component: CardTemplate, expectedId: "cardTemplate" },
       { Component: ViewerShellLayout, expectedId: "viewerShell" },
     ] as const;

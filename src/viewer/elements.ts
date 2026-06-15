@@ -2,7 +2,6 @@ export interface ViewerElements {
   template: HTMLTemplateElement;
   dialog: HTMLDialogElement;
   previewBody: HTMLElement;
-  previewRating: HTMLElement;
   previewDetails: HTMLElement;
   previewActions: HTMLElement;
 }
@@ -12,7 +11,6 @@ export function getViewerElements(): ViewerElements {
     template: document.querySelector("#cardTemplate"),
     dialog: document.querySelector("#previewDialog"),
     previewBody: document.querySelector("#previewBody"),
-    previewRating: document.querySelector("#previewRating"),
     previewDetails: document.querySelector("#previewDetails"),
     previewActions: document.querySelector("#previewActions"),
   };

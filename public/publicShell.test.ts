@@ -47,6 +47,7 @@ async function readAppSources() {
     "../src/viewer/components/PreviewText.tsx",
     "../src/viewer/previewTextState.ts",
     "../src/viewer/components/RatingStars.tsx",
+    "../src/viewer/previewRatingState.ts",
     "../src/viewer/components/ResultList.tsx",
     "../src/viewer/components/ResultSurface.tsx",
     "../src/viewer/resultSurfaceState.ts",
@@ -318,11 +319,13 @@ test("public ratings are static in grid and table but editable in the preview mo
   const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
-  assert.match(html, /function RatingStars\(\{ className, interactive = false, item, onSelect \}/);
+  assert.match(html, /function RatingStars\(\{ className, id, interactive = false, item, onSelect \}/);
   assert.match(html, /className=\{interactive \? "rating-star" : "rating-star rating-star-static"\}/);
   assert.match(html, /data-active=\{value <= current \? "true" : "false"\}/);
-  assert.match(app, /renderRatingView\(els\.previewRating, \{/);
-  assert.match(html, /function renderRatingView\(container[^,]*,\s*props: RatingStarsProps\)/);
+  assert.doesNotMatch(app, /renderRatingView\(els\.previewRating, \{/);
+  assert.doesNotMatch(html, /function renderRatingView\(container[^,]*,\s*props: RatingStarsProps\)/);
+  assert.doesNotMatch(app, /previewRating: document\.querySelector\("#previewRating"\),/);
+  assert.match(app, /setPreviewRatingState\(\{/);
   assert.match(html, /const Tag = interactive \? "button" : "span";/);
   assert.match(css, /\.rating-star-static\s*\{/);
   assert.match(css, /cursor:\s*default;/);

@@ -7,6 +7,7 @@ import {
   togglePreviewInfo,
 } from "../shellActions";
 import { getPreviewDialogState, subscribePreviewDialogState } from "../previewDialogState";
+import { PreviewRating } from "./RatingStars";
 import { PreviewMeta, PreviewOriginalName } from "./PreviewText";
 
 export function PreviewDialog() {
@@ -134,7 +135,7 @@ export function PreviewDialog() {
           </section>
           <section className="preview-rating-section grid min-h-8 grid-cols-[minmax(96px,112px)_minmax(0,1fr)] items-center gap-[18px] px-2">
             <span className="info-label text-xs font-normal text-app-muted">Rating</span>
-            <div id="previewRating" className="rating-control inline-flex items-center gap-px" aria-label="Rating" />
+            <PreviewRating />
           </section>
           <div id="previewDetails" className="preview-details grid gap-2.5" />
           <div id="previewActions" className="preview-info-actions border-t border-[rgba(148,163,184,0.22)] px-2 pt-3" />

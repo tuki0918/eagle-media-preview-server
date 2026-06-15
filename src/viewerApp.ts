@@ -66,7 +66,10 @@ import {
   getTilesSentinelElement,
   setTilesSentinelState,
 } from "./viewer/tilesSentinelState";
-import { clearRatingView, renderRatingView } from "./viewer/components/RatingStars";
+import {
+  clearPreviewRatingState,
+  setPreviewRatingState,
+} from "./viewer/previewRatingState";
 import { setViewerShellActions } from "./viewer/shellActions";
 import { getShellView, setShellView } from "./viewer/shellVisibility";
 import { state } from "./viewer/state";
@@ -320,9 +323,7 @@ function openPreview(item: EagleItem, { skipHistory = false }: OpenPreviewOption
     originalName: originalFileName(item),
   });
   clearPreviewBodyView(els.previewBody);
-  renderRatingView(els.previewRating, {
-    className: "rating-control inline-flex items-center gap-px",
-    interactive: true,
+  setPreviewRatingState({
     item,
     onSelect: (star) => setItemStar(item, star),
   });
@@ -541,7 +542,7 @@ function syncPreviewFromState() {
 function clearPreviewContents() {
   clearPreviewInfoView(els.previewDetails, els.previewActions);
   clearPreviewBodyView(els.previewBody);
-  clearRatingView(els.previewRating);
+  clearPreviewRatingState();
   setPreviewTextState({
     meta: "",
     originalName: "",
@@ -554,9 +555,7 @@ async function setItemStar(item: EagleItem, star: number) {
   updateItemInState(String(item.id || ""), { star });
   render();
   if (els.dialog.open) {
-    renderRatingView(els.previewRating, {
-      className: "rating-control inline-flex items-center gap-px",
-      interactive: true,
+    setPreviewRatingState({
       item,
       onSelect: (nextStar) => setItemStar(item, nextStar),
     });
@@ -574,9 +573,7 @@ async function setItemStar(item: EagleItem, star: number) {
   } finally {
     render();
     if (els.dialog.open) {
-      renderRatingView(els.previewRating, {
-        className: "rating-control inline-flex items-center gap-px",
-        interactive: true,
+      setPreviewRatingState({
         item,
         onSelect: (nextStar) => setItemStar(item, nextStar),
       });
