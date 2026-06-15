@@ -46,6 +46,25 @@ export function PreviewDialog() {
     dialog.setAttribute("open", "");
   }, [previewDialogState.open]);
 
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    const preventGestureWhileOpen = (event: Event) => {
+      if (dialog.open) {
+        event.preventDefault();
+      }
+    };
+    for (const eventName of ["gesturestart", "gesturechange", "gestureend"]) {
+      dialog.addEventListener(eventName, preventGestureWhileOpen);
+    }
+    return () => {
+      for (const eventName of ["gesturestart", "gesturechange", "gestureend"]) {
+        dialog.removeEventListener(eventName, preventGestureWhileOpen);
+      }
+    };
+  }, []);
+
   return (
     <dialog
       ref={dialogRef}

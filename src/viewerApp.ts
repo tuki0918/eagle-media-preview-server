@@ -126,6 +126,10 @@ async function init() {
         hideTagSuggestions();
       }
     },
+    searchOutsidePointerDown: (target) => {
+      if ((target as Element | null)?.closest(".search-box")) return;
+      hideTagSuggestions();
+    },
     folderChanged: (folderId: string) => {
       applyFilterChange({ folderId });
     },
@@ -176,17 +180,6 @@ async function init() {
     if (getShellView() !== "viewer") return;
     loadItems();
   });
-  document.addEventListener("pointerdown", (event) => {
-    if ((event.target as Element | null)?.closest(".search-box")) return;
-    hideTagSuggestions();
-  });
-  for (const eventName of ["gesturestart", "gesturechange", "gestureend"]) {
-    els.dialog.addEventListener(eventName, (event) => {
-      if (els.dialog.open) {
-        event.preventDefault();
-      }
-    });
-  }
   showLogin();
 }
 

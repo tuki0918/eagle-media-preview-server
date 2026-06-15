@@ -5,6 +5,7 @@ export interface ViewerShellActions {
   searchChanged: (query: string) => void;
   searchFocused: (query: string) => void;
   searchKeyDown: (key: string) => void;
+  searchOutsidePointerDown: (target: EventTarget | null) => void;
   folderChanged: (folderId: string) => void;
   mediaTypeChanged: (mediaType: string) => void;
   ratingChanged: (rating: string) => void;
@@ -29,6 +30,7 @@ let actions: ViewerShellActions = {
   searchChanged: noop,
   searchFocused: noop,
   searchKeyDown: noop,
+  searchOutsidePointerDown: noop,
   folderChanged: noop,
   mediaTypeChanged: noop,
   ratingChanged: noop,
@@ -65,6 +67,10 @@ export function focusSearch(event: { currentTarget: { value: string } }) {
 
 export function handleSearchKeyDown(event: { key: string }) {
   actions.searchKeyDown(event.key);
+}
+
+export function handleSearchOutsidePointerDown(target: EventTarget | null) {
+  actions.searchOutsidePointerDown(target);
 }
 
 export function changeFolder(event: { currentTarget: { value: string } }) {

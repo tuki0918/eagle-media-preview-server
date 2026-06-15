@@ -9,6 +9,7 @@ import {
   changeSearchQuery,
   focusSearch,
   handleSearchKeyDown,
+  handleSearchOutsidePointerDown,
   resetFilters,
   toggleFilters,
 } from "../shellActions";
@@ -43,6 +44,14 @@ export function SearchControls({
   selectedLimit = 30,
   selectedRating = "",
 }: SearchControlsProps) {
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      handleSearchOutsidePointerDown(event.target);
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, []);
+
   return (
     <section className="controls grid gap-4 pb-2" aria-label="Search and filters">
       <div className="search-row grid grid-cols-[minmax(0,1fr)_auto_auto] items-stretch gap-3">
