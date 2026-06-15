@@ -166,6 +166,10 @@ function App() {
     if (hasUserPasswords) {
       payload.userPasswords = cleanUserPasswords;
     }
+    if (!hasUserPasswords && !settingsPayloadChanged(settings, payload)) {
+      setMessage("");
+      return true;
+    }
 
     if (restartRunning) {
       if (willRestartServer(status, payload)) {
@@ -556,6 +560,17 @@ function createQrDataUrl(value: string) {
 function willRestartServer(status: PluginStatus, nextSettings: Record<string, unknown>) {
   const current = status.settings;
   if (!current || status.state !== "running") return false;
+  if ((nextSettings.host ?? current.host) !== current.host) return true;
+  if (Number(nextSettings.port ?? current.port) !== Number(current.port)) return true;
+  if (Boolean(nextSettings.authEnabled ?? current.authEnabled) !== Boolean(current.authEnabled)) return true;
+  if (Boolean(nextSettings.allowMetadataEditing ?? current.allowMetadataEditing) !== Boolean(current.allowMetadataEditing)) return true;
+  if (JSON.stringify(nextSettings.authUsers ?? current.authUsers ?? []) !== JSON.stringify(current.authUsers ?? [])) return true;
+  return Boolean(nextSettings.password);
+}
+
+function settingsPayloadChanged(current: PluginSettings | undefined, nextSettings: Record<string, unknown>) {
+  if (!current) return true;
+  if (Boolean(nextSettings.autoStart ?? current.autoStart) !== Boolean(current.autoStart)) return true;
   if ((nextSettings.host ?? current.host) !== current.host) return true;
   if (Number(nextSettings.port ?? current.port) !== Number(current.port)) return true;
   if (Boolean(nextSettings.authEnabled ?? current.authEnabled) !== Boolean(current.authEnabled)) return true;
