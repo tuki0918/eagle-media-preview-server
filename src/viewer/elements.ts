@@ -1,6 +1,5 @@
 export interface ViewerElements {
   searchInputHost: HTMLElement;
-  tagChips: HTMLElement;
   tagSuggestionsHost: HTMLElement;
   resetFiltersButtonHost: HTMLElement;
   toggleFiltersButtonHost: HTMLElement;
@@ -17,7 +16,6 @@ export interface ViewerElements {
 export function getViewerElements(): ViewerElements {
   const elements = {
     searchInputHost: document.querySelector("#searchInputHost"),
-    tagChips: document.querySelector("#tagChips"),
     tagSuggestionsHost: document.querySelector("#tagSuggestionsHost"),
     resetFiltersButtonHost: document.querySelector("#resetFiltersButtonHost"),
     toggleFiltersButtonHost: document.querySelector("#toggleFiltersButtonHost"),

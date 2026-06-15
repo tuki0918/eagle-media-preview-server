@@ -1,11 +1,10 @@
-import { createRoot, type Root } from "react-dom/client";
+import { useSyncExternalStore } from "react";
+import { getTagChipsState, subscribeTagChipsState } from "../tagChipsState";
 
 interface TagChipsProps {
   tags: readonly string[];
   onRemove: (tag: string) => void;
 }
-
-const roots = new WeakMap<HTMLElement, Root>();
 
 function RemoveIcon() {
   return (
@@ -16,26 +15,21 @@ function RemoveIcon() {
   );
 }
 
-export function TagChips({ tags, onRemove }: TagChipsProps) {
+export function TagChips({ tags, onRemove }: Partial<TagChipsProps>) {
+  const state = useSyncExternalStore(subscribeTagChipsState, getTagChipsState, getTagChipsState);
+  const displayTags = tags ?? state.tags;
+  const handleRemove = onRemove ?? state.onRemove;
+
   return (
-    <>
-      {tags.map((tag) => (
+    <div id="tagChips" className="tag-chips flex min-h-6 flex-wrap gap-1.5" aria-label="Selected tag filters">
+      {displayTags.map((tag) => (
         <span key={tag} className="tag-chip">
           <span>{tag}</span>
-          <button type="button" aria-label={`Remove tag ${tag}`} title={`Remove tag ${tag}`} onClick={() => onRemove(tag)}>
+          <button type="button" aria-label={`Remove tag ${tag}`} title={`Remove tag ${tag}`} onClick={() => handleRemove(tag)}>
             <RemoveIcon />
           </button>
         </span>
       ))}
-    </>
+    </div>
   );
-}
-
-export function renderTagChipsView(container: HTMLElement, props: TagChipsProps) {
-  let root = roots.get(container);
-  if (!root) {
-    root = createRoot(container);
-    roots.set(container, root);
-  }
-  root.render(<TagChips {...props} />);
 }

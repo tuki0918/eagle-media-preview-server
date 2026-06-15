@@ -51,6 +51,7 @@ async function readAppSources() {
     "../src/viewer/components/ResultsStatus.tsx",
     "../src/viewer/components/SearchControls.tsx",
     "../src/viewer/components/TagChips.tsx",
+    "../src/viewer/tagChipsState.ts",
     "../src/viewer/components/TagSuggestions.tsx",
     "../src/viewer/components/TilesSentinel.tsx",
     "../src/viewer/components/ViewerShellLayout.tsx",
@@ -490,18 +491,19 @@ test("public UI supports tag filter chips", async () => {
   const html = await readAppSources();
   const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
+  const advancedFiltersSource = html.match(/export function AdvancedFilters\([\s\S]*?\nfunction ResetFiltersButton/)?.[0] || "";
 
   assert.match(html, /id="tagChips"/);
   assert.match(html, /id="tagSuggestionsHost"/);
   assert.match(html, /id="tagSuggestions"/);
-  assert.match(html, /<div className="[^"]*\bsearch-box\b[^"]*"[\s\S]*id="tagChips"[\s\S]*id="searchInputHost"[\s\S]*id="tagSuggestionsHost"[\s\S]*<\/div>[\s\S]*id="resetFiltersButtonHost"[\s\S]*id="toggleFiltersButtonHost"/);
+  assert.match(html, /<div className="[^"]*\bsearch-box\b[^"]*"[\s\S]*<TagChips \/>[\s\S]*id="searchInputHost"[\s\S]*id="tagSuggestionsHost"[\s\S]*<\/div>[\s\S]*id="resetFiltersButtonHost"[\s\S]*id="toggleFiltersButtonHost"/);
   assert.match(html, /id="resetFiltersButton"[\s\S]*aria-label="Reset filters"[\s\S]*disabled=\{!hasActiveFilters\}/);
   assert.match(html, /id="resetFiltersButton"[\s\S]*<FunnelXIcon \/>/);
   assert.doesNotMatch(html, /id="tagInput"/);
-  assert.doesNotMatch(html, /id="advancedFilters"[\s\S]*id="tagChips"/);
+  assert.doesNotMatch(advancedFiltersSource, /id="tagChips"/);
   assert.match(html, /id="advancedFiltersHost"[\s\S]*<AdvancedFilters[\s\S]*filtersOpen=\{filtersOpen\}/);
   assert.match(app, /tags:\s*\[\]/);
-  assert.match(app, /tagChips: document\.querySelector\("#tagChips"\),/);
+  assert.doesNotMatch(app, /tagChips: document\.querySelector\("#tagChips"\),/);
   assert.match(app, /searchInputHost: document\.querySelector\("#searchInputHost"\),/);
   assert.doesNotMatch(app, /searchInput: document\.querySelector\("#searchInput"\),/);
   assert.match(app, /tagSuggestionsHost: document\.querySelector\("#tagSuggestionsHost"\),/);
@@ -515,6 +517,7 @@ test("public UI supports tag filter chips", async () => {
   assert.match(html, /export function FolderOptions\(\{ folders \}/);
   assert.match(html, /<option value=\{UNCATEGORIZED_FOLDER_ID\}>Uncategorized<\/option>/);
   assert.doesNotMatch(app, /renderFolderOptionsView/);
+  assert.match(app, /setTagChipsState\(\{/);
   assert.doesNotMatch(app, /folderSelect: document\.querySelector\("#folderSelect"\),/);
   assert.doesNotMatch(app, /extSelect: document\.querySelector\("#extSelect"\),/);
   assert.doesNotMatch(app, /ratingSelect: document\.querySelector\("#ratingSelect"\),/);

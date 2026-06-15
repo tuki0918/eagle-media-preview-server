@@ -57,7 +57,7 @@ import {
   type PreviewBodyKind,
 } from "./viewer/components/PreviewBody";
 import { renderSearchControlButtonsView } from "./viewer/components/SearchControls";
-import { renderTagChipsView } from "./viewer/components/TagChips";
+import { setTagChipsState } from "./viewer/tagChipsState";
 import {
   clearTagSuggestionsView,
   renderTagSuggestionsView,
@@ -460,7 +460,7 @@ function removeTagFilter(tag: string) {
 }
 
 function renderTagChips() {
-  renderTagChipsView(els.tagChips, {
+  setTagChipsState({
     tags: state.tags,
     onRemove: removeTagFilter,
   });

@@ -15,6 +15,7 @@ import {
 } from "../shellActions";
 import type { EagleFolder } from "../types";
 import { FolderOptions } from "./FolderOptions";
+import { TagChips } from "./TagChips";
 import { TagSuggestions } from "./TagSuggestions";
 
 interface SearchControlsProps {
@@ -58,7 +59,7 @@ export function SearchControls({
         <div className="search-box relative flex min-h-[50px] items-center gap-2.5 rounded-app border border-app-border bg-app-surface px-4 py-[7px] shadow-app-soft">
           <span data-lucide="search" />
           <div className="search-composer flex min-w-0 flex-auto flex-wrap items-center gap-x-2 gap-y-1.5">
-            <div id="tagChips" className="tag-chips flex min-h-6 flex-wrap gap-1.5" aria-label="Selected tag filters" />
+            <TagChips />
             <div id="searchInputHost" className="contents">
               <SearchInput value={searchQuery} />
             </div>
