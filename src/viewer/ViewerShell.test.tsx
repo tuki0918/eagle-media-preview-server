@@ -383,7 +383,7 @@ describe("ViewerAppShell", () => {
         detailRows={[{ label: "Type", value: "Image" }]}
         onTagSuggestions={() => []}
         onFolderSuggestions={() => []}
-        onSaveMetadata={async () => {}}
+        onSaveMetadata={async (_item, patch) => patch}
       />,
     );
     const actions = renderToStaticMarkup(<PreviewActions item={{ id: "item-1" }} />);
@@ -431,6 +431,7 @@ describe("ViewerAppShell", () => {
             onFolderSuggestions={() => []}
             onSaveMetadata={async (_item, patch) => {
               savedPatches.push(patch);
+              return { tags: ["alpha", "beta-saved"], folders: patch.folders };
             }}
           />,
         );
@@ -459,6 +460,7 @@ describe("ViewerAppShell", () => {
       expect(savedPatches).toEqual([{ tags: ["alpha", "beta"], folders: ["folder-1"] }]);
       expect(saveButton.disabled).toBe(true);
       expect(container.querySelector(".preview-edit-status")?.textContent).toBe("Saved");
+      expect(container.textContent).toContain("beta-saved");
     } finally {
       if (root) {
         await act(async () => {
@@ -481,7 +483,7 @@ describe("ViewerAppShell", () => {
         detailRows={[{ label: "Type", value: "Image" }]}
         onTagSuggestions={() => []}
         onFolderSuggestions={() => []}
-        onSaveMetadata={async () => {}}
+        onSaveMetadata={async (_item, patch) => patch}
       />,
     );
 
@@ -500,7 +502,7 @@ describe("ViewerAppShell", () => {
         detailRows={[{ label: "Type", value: "Image" }]}
         onTagSuggestions={() => []}
         onFolderSuggestions={() => []}
-        onSaveMetadata={async () => {}}
+        onSaveMetadata={async (_item, patch) => patch}
       />,
     );
     const editable = renderToStaticMarkup(
@@ -511,7 +513,7 @@ describe("ViewerAppShell", () => {
         detailRows={[{ label: "Type", value: "Image" }]}
         onTagSuggestions={() => []}
         onFolderSuggestions={() => []}
-        onSaveMetadata={async () => {}}
+        onSaveMetadata={async (_item, patch) => patch}
       />,
     );
 

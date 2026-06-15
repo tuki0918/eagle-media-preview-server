@@ -798,6 +798,8 @@ async function savePreviewMetadata(item: EagleItem, { tags, folders }: { tags: s
     Object.assign(item, patch);
     updateItemInState(String(item.id || ""), patch);
     render();
+    if (isPreviewDialogOpen()) renderPreviewDetails(item);
+    return patch;
   } catch (error) {
     handleAuthError(error);
     throw error instanceof Error ? error : new Error(errorMessage(error));

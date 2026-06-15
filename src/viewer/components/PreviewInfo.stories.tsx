@@ -18,7 +18,7 @@ const meta = {
     folders: sampleFolders,
     item: sampleItems[0],
     onFolderSuggestions: suggestions,
-    onSaveMetadata: async () => {},
+    onSaveMetadata: async (_item, patch) => patch,
     onTagSuggestions: suggestions,
   },
 } satisfies Meta<typeof PreviewDetailsPanel>;

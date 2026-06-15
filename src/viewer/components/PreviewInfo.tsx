@@ -18,7 +18,7 @@ export interface PreviewInfoProps {
   folders: readonly EagleFolder[];
   item: EagleItem;
   onFolderSuggestions: (query: string, selectedValues: string[]) => Promise<MetadataSuggestion[]> | MetadataSuggestion[];
-  onSaveMetadata: (item: EagleItem, patch: { tags: string[]; folders: string[] }) => Promise<void>;
+  onSaveMetadata: (item: EagleItem, patch: { tags: string[]; folders: string[] }) => Promise<{ tags: string[]; folders: string[] }>;
   onTagSuggestions: (query: string, selectedValues: string[]) => Promise<MetadataSuggestion[]> | MetadataSuggestion[];
 }
 
@@ -170,9 +170,11 @@ function PreviewMetadataEditor({
     setSaving(true);
     setStatus("Saving");
     try {
-      await onSaveMetadata(item, { tags, folders: categories });
-      setSavedTags(tags);
-      setSavedCategories(categories);
+      const saved = await onSaveMetadata(item, { tags, folders: categories });
+      setTags(saved.tags);
+      setCategories(saved.folders);
+      setSavedTags(saved.tags);
+      setSavedCategories(saved.folders);
       setStatus("Saved");
     } catch (error) {
       setStatus(errorMessage(error));

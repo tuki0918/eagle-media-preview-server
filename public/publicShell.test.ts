@@ -550,12 +550,14 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(html, /function PreviewMetadataEditor\(\{/);
   assert.match(html, /<PreviewEditField label="Tags">/);
   assert.match(html, /<PreviewEditField label="Categories">/);
-  assert.match(html, /await onSaveMetadata\(item, \{ tags, folders: categories \}\);/);
+  assert.match(html, /const saved = await onSaveMetadata\(item, \{ tags, folders: categories \}\);/);
   assert.match(html, /const \[savedTags, setSavedTags\] = useState\(\(\) => initialTags\);/);
   assert.match(html, /const \[savedCategories, setSavedCategories\] = useState\(\(\) => initialCategories\);/);
   assert.match(html, /const hasMetadataChanges = !sameStringValues\(tags, savedTags\) \|\| !sameStringValues\(categories, savedCategories\);/);
-  assert.match(html, /setSavedTags\(tags\);/);
-  assert.match(html, /setSavedCategories\(categories\);/);
+  assert.match(html, /setTags\(saved\.tags\);/);
+  assert.match(html, /setCategories\(saved\.folders\);/);
+  assert.match(html, /setSavedTags\(saved\.tags\);/);
+  assert.match(html, /setSavedCategories\(saved\.folders\);/);
   assert.match(html, /if \(hasMetadataChanges && status === "Saved"\) setStatus\(""\);/);
   assert.match(html, /if \(!hasMetadataChanges\) return;/);
   assert.match(html, /disabled=\{saving \|\| !hasMetadataChanges\}/);
@@ -564,6 +566,8 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(app, /postJson<\{[\s\S]*folders\?: unknown;[\s\S]*\}>\(`\/api\/items\/\$\{encodeURIComponent\(String\(item\.id \|\| ""\)\)\}\/metadata`, \{ tags, folders \}\)/);
   assert.match(app, /rememberRecentValues\(RECENT_TAGS_STORAGE_KEY, patch\.tags\);/);
   assert.match(app, /rememberRecentValues\(RECENT_FOLDERS_STORAGE_KEY, patch\.folders\);/);
+  assert.match(app, /if \(isPreviewDialogOpen\(\)\) renderPreviewDetails\(item\);/);
+  assert.match(app, /return patch;/);
   assert.match(html, /setStatus\("Saved"\);/);
   assert.match(app, /const RECENT_TAGS_STORAGE_KEY = "eagleRecentTags";/);
   assert.match(app, /const RECENT_FOLDERS_STORAGE_KEY = "eagleRecentFolders";/);
