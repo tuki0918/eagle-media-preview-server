@@ -57,6 +57,7 @@ test("createViewerServer starts and stops without the CLI entrypoint", async () 
   });
   assert.equal(login.status, 200);
   assert.deepEqual(await login.json(), {
+    required: false,
     authenticated: true,
     user: null,
     permissions: {
@@ -440,6 +441,20 @@ test("createViewerServer logs out cookie sessions", async () => {
     assert.equal(login.status, 200);
     const cookie = login.headers.get("set-cookie") || "";
     assert.match(cookie, /viewer_session=/);
+    assert.deepEqual(await login.json(), {
+      required: true,
+      authenticated: true,
+      user: {
+        role: "viewer",
+        username: "eagle",
+      },
+      permissions: {
+        manageLibrary: false,
+        read: true,
+        writeMetadata: false,
+        writeRating: false,
+      },
+    });
 
     const authenticated = await fetch(`${origin}/api/auth/status`, {
       headers: { Cookie: cookie },

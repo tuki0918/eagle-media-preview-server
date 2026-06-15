@@ -480,6 +480,7 @@ async function handleAuthRoutes(req, url, res, auth: AuthContext) {
     }
     if (!authRequired(auth)) {
       sendJson(res, 200, {
+        required: false,
         authenticated: true,
         permissions: permissionsForUser(null, { authenticated: true }),
         user: null,
@@ -504,6 +505,7 @@ async function handleAuthRoutes(req, url, res, auth: AuthContext) {
       "Set-Cookie": authSessionCookie(token),
     });
     res.end(JSON.stringify({
+      required: true,
       authenticated: true,
       user: { role: user.role, username: user.username },
       permissions: permissionsForUser(user),
