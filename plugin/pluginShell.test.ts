@@ -70,6 +70,10 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(app, /aria-label=\{`Password for \$\{user\.username \|\| `user \$\{index \+ 1\}`\}`\}/);
   assert.match(app, /<PlusIcon className="h-\[12px\] w-\[12px\]" \/>/);
   assert.match(app, /<span>Add user<\/span>/);
+  assert.match(app, /const settingInputClassName = /);
+  assert.match(app, /className=\{settingInputClassName\}/);
+  assert.match(app, /const authActionButtonClassName = /);
+  assert.match(app, /\$\{authActionButtonClassName\}/);
   assert.match(app, /disabled:cursor-not-allowed disabled:opacity-45/);
   assert.match(app, /disabled:cursor-not-allowed disabled:bg-\[#f4f5f7\] disabled:text-\[#8a8f99\]/);
   assert.match(app, /has-\[:disabled\]:cursor-not-allowed has-\[:disabled\]:opacity-60/);

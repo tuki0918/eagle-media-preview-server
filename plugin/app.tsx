@@ -55,6 +55,8 @@ declare global {
 
 const busyStoppedFrames = Object.freeze([".", "..", "...", "....", "....."]);
 const AUTH_PASSWORD_REQUIRED_MESSAGE = "Enter a password for every user to enable BasicAuth protection.";
+const settingInputClassName = "h-7 min-w-0 rounded-md border border-[#d7d9de] bg-white px-2 text-[11px] text-[#111] outline-0 focus:border-[rgba(31,116,255,0.58)] focus:shadow-[0_0_0_3px_rgba(31,116,255,0.12)] disabled:cursor-not-allowed disabled:bg-[#f4f5f7] disabled:text-[#8a8f99]";
+const authActionButtonClassName = "border border-[#d7d9de] bg-white text-[#555c66] hover:bg-[#f4f5f7] disabled:cursor-not-allowed disabled:opacity-45";
 
 function App() {
   const managerRef = useRef<ServerManager | null>(null);
@@ -409,7 +411,7 @@ function App() {
         <div className="mt-2.5 grid">
           <SettingRow label="Port" help="The port the server listens on.">
             <input
-              className="h-7 w-full rounded-md border border-[#d7d9de] bg-white px-2 text-[11px] text-[#111] outline-0 focus:border-[rgba(31,116,255,0.58)] focus:shadow-[0_0_0_3px_rgba(31,116,255,0.12)] disabled:cursor-not-allowed disabled:bg-[#f4f5f7] disabled:text-[#8a8f99]"
+              className={`${settingInputClassName} w-full`}
               type="number"
               min="1"
               max="65535"
@@ -435,7 +437,7 @@ function App() {
               {authUsers.map((user, index) => (
                 <div key={index} className="grid grid-cols-[minmax(80px,1fr)_86px_minmax(76px,0.8fr)_28px] items-center gap-1.5">
                   <input
-                    className="h-7 min-w-0 rounded-md border border-[#d7d9de] bg-white px-2 text-[11px] text-[#111] outline-0 focus:border-[rgba(31,116,255,0.58)] focus:shadow-[0_0_0_3px_rgba(31,116,255,0.12)] disabled:cursor-not-allowed disabled:bg-[#f4f5f7] disabled:text-[#8a8f99]"
+                    className={settingInputClassName}
                     type="text"
                     aria-label={`Username for user ${index + 1}`}
                     autoComplete="username"
@@ -458,7 +460,7 @@ function App() {
                     <option value="admin">Admin</option>
                   </select>
                   <input
-                    className="h-7 min-w-0 rounded-md border border-[#d7d9de] bg-white px-2 text-[11px] text-[#111] outline-0 focus:border-[rgba(31,116,255,0.58)] focus:shadow-[0_0_0_3px_rgba(31,116,255,0.12)] disabled:cursor-not-allowed disabled:bg-[#f4f5f7] disabled:text-[#8a8f99]"
+                    className={settingInputClassName}
                     type={passwordVisible ? "text" : "password"}
                     aria-label={`Password for ${user.username || `user ${index + 1}`}`}
                     autoComplete="new-password"
@@ -468,7 +470,7 @@ function App() {
                     onChange={(event) => setUserPasswords((current) => ({ ...current, [String(index)]: event.currentTarget.value }))}
                     onBlur={() => saveSettings()}
                   />
-                  <button className="grid h-7 w-7 place-items-center rounded-md border border-[#d7d9de] bg-white text-[#555c66] hover:bg-[#f4f5f7] disabled:cursor-not-allowed disabled:opacity-45" type="button" aria-label={`Remove ${user.username || "user"}`} title="Remove user" disabled={formDisabled || authUsers.length <= 1} onClick={() => removeAuthUser(index)}>
+                  <button className={`grid h-7 w-7 place-items-center rounded-md ${authActionButtonClassName}`} type="button" aria-label={`Remove ${user.username || "user"}`} title="Remove user" disabled={formDisabled || authUsers.length <= 1} onClick={() => removeAuthUser(index)}>
                     <CloseIcon className="h-[11px] w-[11px]" />
                   </button>
                 </div>
@@ -478,7 +480,7 @@ function App() {
                   <PlusIcon className="h-[12px] w-[12px]" />
                   <span>Add user</span>
                 </button>
-                <button className="grid h-7 w-7 place-items-center rounded-md border border-[#d7d9de] bg-white p-1 text-[#555c66] hover:bg-[#f4f5f7] disabled:cursor-not-allowed disabled:opacity-45" type="button" aria-label={passwordVisible ? "Hide passwords" : "Show passwords"} title={passwordVisible ? "Hide passwords" : "Show passwords"} disabled={formDisabled} onClick={() => setPasswordVisible((current) => !current)}>
+                <button className={`grid h-7 w-7 place-items-center rounded-md p-1 ${authActionButtonClassName}`} type="button" aria-label={passwordVisible ? "Hide passwords" : "Show passwords"} title={passwordVisible ? "Hide passwords" : "Show passwords"} disabled={formDisabled} onClick={() => setPasswordVisible((current) => !current)}>
                   {passwordVisible ? <EyeIcon className="h-[13px] w-[13px]" /> : <EyeOffIcon className="h-[13px] w-[13px]" />}
                 </button>
               </div>
