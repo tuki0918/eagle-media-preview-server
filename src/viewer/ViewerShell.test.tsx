@@ -33,6 +33,7 @@ import {
   ViewerAppShell,
   ViewerShellLayout,
 } from "./ViewerShell";
+import { resetPreviewDialogState, setPreviewDialogState } from "./previewDialogState";
 import { MEDIA_TYPE_OPTIONS, PAGE_SIZE_OPTIONS, RATING_OPTIONS } from "./shellConfig";
 
 const REQUIRED_ELEMENT_IDS = [
@@ -152,6 +153,10 @@ describe("ViewerAppShell", () => {
   test("renders preview close as a top-left back action without a visible swipe handle", () => {
     const html = renderToStaticMarkup(<PreviewDialog />);
 
+    expect(html).toContain("fixed inset-0");
+    expect(html).toContain("m-0");
+    expect(html).toContain("max-h-none");
+    expect(html).toContain("max-w-none");
     expect(html).not.toContain("preview-close-swipe-handle");
     expect(html).not.toContain("Swipe down to close preview");
     expect(html).toContain('id="closePreview"');
@@ -180,6 +185,17 @@ describe("ViewerAppShell", () => {
     expect(html).toContain("border-l");
     expect(html).toContain("translate-x-full");
     expect(html).toContain("shadow-[-18px_0_44px_rgba");
+  });
+
+  test("renders video preview layout edge to edge under overlay controls", () => {
+    setPreviewDialogState({ infoOpen: false, mode: "video", open: true });
+    const html = renderToStaticMarkup(<PreviewDialog />);
+    resetPreviewDialogState();
+
+    expect(html).toContain("h-dvh max-h-dvh bg-[#05070a]");
+    expect(html).not.toContain("pt-[calc(60px+env(safe-area-inset-top))]");
+    expect(html).toContain("fixed left-2.5 top-[calc(10px+env(safe-area-inset-top))]");
+    expect(html).toContain('id="fullscreenPreview"');
   });
 
   test("renders page buttons as a reusable component", () => {

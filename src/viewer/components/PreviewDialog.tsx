@@ -26,7 +26,7 @@ export function PreviewDialog() {
   const closeSwipeRef = useRef<{ pointerId: number; startX: number; startY: number } | null>(null);
   const previewDialogState = useSyncExternalStore(subscribePreviewDialogState, getPreviewDialogState, getPreviewDialogState);
   const dialogClassName = [
-    "h-dvh max-h-dvh w-screen max-w-full touch-none overscroll-none rounded-none border-0 bg-app-surface p-0 text-app-text",
+    "fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none touch-none overscroll-none rounded-none border-0 bg-app-surface p-0 text-app-text",
     "backdrop:bg-[rgba(15,23,42,0.32)]",
     previewDialogState.mode ? `${previewDialogState.mode}-mode` : "",
     previewDialogState.infoOpen ? "info-open" : "",
@@ -34,7 +34,7 @@ export function PreviewDialog() {
   ].filter(Boolean).join(" ");
   const previewLayoutClassName = [
     "preview-layout relative grid h-full max-h-full grid-cols-[minmax(0,1fr)] overflow-hidden p-0",
-    previewDialogState.mode === "video" ? "h-dvh max-h-dvh bg-[#05070a] pt-[calc(60px+env(safe-area-inset-top))]" : "",
+    previewDialogState.mode === "video" ? "h-dvh max-h-dvh bg-[#05070a]" : "",
   ].filter(Boolean).join(" ");
   const previewInfoClassName = [
     "preview-info absolute inset-y-0 right-0 z-[6] grid w-[min(360px,calc(100vw-56px))] max-w-full content-start gap-3.5 overflow-auto border-0 border-l border-app-border bg-[rgba(255,255,255,0.96)] p-3.5 shadow-[-18px_0_44px_rgba(15,23,42,0.14)] backdrop-blur-[18px] transition-transform duration-200",
