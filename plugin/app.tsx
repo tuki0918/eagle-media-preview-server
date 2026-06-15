@@ -426,6 +426,12 @@ function App() {
                   {authUsersStatusLabel}
                 </span>
               </div>
+              <div className="grid grid-cols-[minmax(80px,1fr)_86px_minmax(76px,0.8fr)_28px] gap-1.5 px-0.5 text-[9px] font-medium uppercase leading-none text-[#8a8f99]">
+                <span>Username</span>
+                <span>Role</span>
+                <span>Password</span>
+                <span aria-hidden="true" />
+              </div>
               {authUsers.map((user, index) => (
                 <div key={index} className="grid grid-cols-[minmax(80px,1fr)_86px_minmax(76px,0.8fr)_28px] items-center gap-1.5">
                   <input

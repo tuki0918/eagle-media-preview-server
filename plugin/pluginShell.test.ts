@@ -62,6 +62,9 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(app, /id="authUsersStatus"[^>]+role="status"/);
   assert.match(app, /Saved users apply when BasicAuth protection is enabled\./);
   assert.match(app, /Admin can also switch libraries\./);
+  assert.match(app, /<span>Username<\/span>/);
+  assert.match(app, /<span>Role<\/span>/);
+  assert.match(app, /<span>Password<\/span>/);
   assert.match(app, /aria-label=\{`Username for user \$\{index \+ 1\}`\}/);
   assert.match(app, /aria-label=\{`Role for \$\{user\.username \|\| `user \$\{index \+ 1\}`\}`\}/);
   assert.match(app, /aria-label=\{`Password for \$\{user\.username \|\| `user \$\{index \+ 1\}`\}`\}/);
