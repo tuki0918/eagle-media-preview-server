@@ -195,6 +195,12 @@ test("plugin server caches authenticated users per request", async () => {
   assert.match(source, /hasOwnProperty\.call\(req, AUTH_USER_CACHE\)/);
   assert.match(source, /req\[AUTH_USER_CACHE\] = user/);
   assert.match(source, /function resolveAuthenticatedUser\(req, auth\)/);
+  assert.match(source, /function rolePermissions\(role\)/);
+  assert.match(source, /return rolePermissions\(user\?\.role\)\.writeMetadata;/);
+  assert.match(source, /return rolePermissions\(user\?\.role\)\.manageLibrary;/);
+  assert.match(source, /const roleAccess = rolePermissions\(user\?\.role\);/);
+  assert.doesNotMatch(source, /const writeMetadata = Boolean\(user && canRoleEditMetadata\(user\.role\)\)/);
+  assert.doesNotMatch(source, /const manageLibrary = user\?\.role === "admin"/);
 });
 
 test("plugin server serves text and markdown media as inline raw text", async () => {

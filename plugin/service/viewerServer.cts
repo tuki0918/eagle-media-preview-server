@@ -729,12 +729,12 @@ function headerValue(value) {
 
 function hasMetadataWriteAccess(req, auth: AuthContext) {
   const user = authenticatedUser(req, auth);
-  return Boolean(user && canRoleEditMetadata(user.role));
+  return rolePermissions(user?.role).writeMetadata;
 }
 
 function hasAdminAccess(req, auth: AuthContext) {
   const user = authenticatedUser(req, auth);
-  return user?.role === "admin";
+  return rolePermissions(user?.role).manageLibrary;
 }
 
 function authenticatedUser(req, auth: AuthContext): AuthSession | null {
@@ -803,18 +803,26 @@ function findPasswordUser(username, password, auth: AuthContext): AuthUser | nul
 
 function permissionsForUser(user: AuthSession | AuthUser | null, { authenticated = Boolean(user) } = {}) {
   const read = authenticated;
-  const writeMetadata = Boolean(user && canRoleEditMetadata(user.role));
-  const manageLibrary = user?.role === "admin";
+  const roleAccess = rolePermissions(user?.role);
   return {
-    manageLibrary,
+    manageLibrary: roleAccess.manageLibrary,
     read,
-    writeMetadata,
-    writeRating: writeMetadata,
+    writeMetadata: roleAccess.writeMetadata,
+    writeRating: roleAccess.writeMetadata,
   };
 }
 
 function canRoleEditMetadata(role: UserRole) {
   return role === "admin" || role === "editor";
+}
+
+function rolePermissions(role: UserRole | undefined) {
+  const manageLibrary = role === "admin";
+  const writeMetadata = Boolean(role && canRoleEditMetadata(role));
+  return {
+    manageLibrary,
+    writeMetadata,
+  };
 }
 
 function resolveAuthUsers({ allowMetadataEditing, authUsers, basicAuthUsername, passwordHash, viewerPassword }: {
