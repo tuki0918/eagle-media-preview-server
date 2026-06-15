@@ -270,6 +270,7 @@ describe("ViewerAppShell", () => {
 
     expect(html).toContain('id="libraryFooterName"');
     expect(html).toContain("My Library - Eagle 4.0");
+    expect(html).not.toContain("logoutButton");
   });
 
   test("renders advanced filters as a reusable component", () => {

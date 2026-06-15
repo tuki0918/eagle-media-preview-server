@@ -7,6 +7,7 @@ import {
   AdvancedFilters,
   ConnectButton,
   ConnectMessage,
+  LibraryFooter,
   LoginView,
   PreviewActions,
   PreviewDetailsPanel,
@@ -130,6 +131,31 @@ test("public login renders credentials when server auth is required", async () =
   assert.match(button, /Sign in/);
   assert.match(app, /postJson<AuthStatusResponse>\("\/api\/auth\/login", \{ username, password \}\)/);
   assert.match(app, /Enter username and password\./);
+
+  setLoginConnectState({
+    authenticated: false,
+    authRequired: false,
+    disabled: false,
+    isError: false,
+    message: "",
+  });
+});
+
+test("public viewer exposes sign out when authenticated", async () => {
+  const app = await readViewerSources();
+  setLoginConnectState({
+    authenticated: true,
+    authRequired: true,
+    disabled: false,
+    isError: false,
+    message: "",
+  });
+  const footer = renderToStaticMarkup(createElement(LibraryFooter, { name: "My Library" }));
+
+  assert.match(footer, /id="logoutButton"/);
+  assert.match(footer, /Sign out/);
+  assert.match(app, /postJson<AuthStatusResponse>\("\/api\/auth\/logout", \{\}\)/);
+  assert.match(app, /showLogin\(\);/);
 
   setLoginConnectState({
     authenticated: false,

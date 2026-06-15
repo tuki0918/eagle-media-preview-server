@@ -106,6 +106,7 @@ async function init() {
   await loadAuthStatus();
   setViewerShellActions({
     connect,
+    logout,
     urlPopped: () => {
       restoreUrlState();
       applyControlsFromState();
@@ -197,6 +198,22 @@ async function connect(credentials?: { password: string; username: string }) {
     await Promise.all([loadFolders(), loadItems()]);
   } catch (error) {
     showLogin();
+    setConnectMessage(error.message, true);
+  } finally {
+    setConnectBusy(false);
+  }
+}
+
+async function logout() {
+  setConnectMessage("", false);
+  setConnectBusy(true);
+  try {
+    await postJson<AuthStatusResponse>("/api/auth/logout", {});
+    authAuthenticated = false;
+    state.permissions = defaultPermissions();
+    renderLoginConnect();
+    showLogin();
+  } catch (error) {
     setConnectMessage(error.message, true);
   } finally {
     setConnectBusy(false);
