@@ -288,6 +288,7 @@ function showViewer(data: ConnectResponse) {
 
 function clearViewerSessionState() {
   state.requestId += 1;
+  pendingRatingItemIds.clear();
   resetViewerResults({ resetOffset: true });
   Object.assign(state, resetFilterState());
   hideTagSuggestions();
