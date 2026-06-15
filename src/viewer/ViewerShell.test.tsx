@@ -445,6 +445,8 @@ describe("ViewerAppShell", () => {
       }
 
       expect(saveButton.disabled).toBe(true);
+      expect(saveButton.getAttribute("aria-label")).toBe("No metadata changes");
+      expect(saveButton.title).toBe("No metadata changes");
       await act(async () => {
         const valueSetter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")?.set;
         valueSetter?.call(tagInput, "beta");
@@ -453,6 +455,7 @@ describe("ViewerAppShell", () => {
       });
 
       expect(saveButton.disabled).toBe(false);
+      expect(saveButton.getAttribute("aria-label")).toBe("Save metadata");
       await act(async () => {
         form.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }));
       });
@@ -541,6 +544,8 @@ describe("ViewerAppShell", () => {
       expect(form.getAttribute("aria-busy")).toBe("true");
       expect(saveButton.disabled).toBe(true);
       expect(saveButton.textContent).toBe("Saving");
+      expect(saveButton.getAttribute("aria-label")).toBe("Saving metadata");
+      expect(saveButton.title).toBe("Saving metadata");
       expect(tagInput.disabled).toBe(true);
       expect(removeButton.disabled).toBe(true);
 

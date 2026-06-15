@@ -184,6 +184,8 @@ function PreviewMetadataEditor({
     }
   };
 
+  const saveButtonLabel = saving ? "Saving metadata" : hasMetadataChanges ? "Save metadata" : "No metadata changes";
+
   return (
     <form className={previewEditFormClassName} aria-busy={saving} onSubmit={submitMetadata}>
       <PreviewEditField label="Tags">
@@ -213,7 +215,7 @@ function PreviewMetadataEditor({
         />
       </PreviewEditField>
       <div className="preview-edit-actions flex items-center justify-end gap-2.5">
-        <button type="submit" className={`${textActionButtonClassName} preview-edit-save min-h-[34px] px-3`} disabled={saving || !hasMetadataChanges}>
+        <button type="submit" className={`${textActionButtonClassName} preview-edit-save min-h-[34px] px-3`} aria-label={saveButtonLabel} title={saveButtonLabel} disabled={saving || !hasMetadataChanges}>
           {saving ? "Saving" : "Save"}
         </button>
         <span className="preview-edit-status min-w-0 text-xs text-app-muted" role="status">

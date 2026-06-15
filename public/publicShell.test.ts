@@ -576,6 +576,7 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(html, /const \[savedTags, setSavedTags\] = useState\(\(\) => initialTags\);/);
   assert.match(html, /const \[savedCategories, setSavedCategories\] = useState\(\(\) => initialCategories\);/);
   assert.match(html, /const hasMetadataChanges = !sameStringValues\(tags, savedTags\) \|\| !sameStringValues\(categories, savedCategories\);/);
+  assert.match(html, /const saveButtonLabel = saving \? "Saving metadata" : hasMetadataChanges \? "Save metadata" : "No metadata changes";/);
   assert.match(html, /setTags\(saved\.tags\);/);
   assert.match(html, /setCategories\(saved\.folders\);/);
   assert.match(html, /setSavedTags\(saved\.tags\);/);
@@ -583,6 +584,8 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(html, /if \(hasMetadataChanges && status === "Saved"\) setStatus\(""\);/);
   assert.match(html, /if \(!hasMetadataChanges\) return;/);
   assert.match(html, /disabled=\{saving \|\| !hasMetadataChanges\}/);
+  assert.match(html, /aria-label=\{saveButtonLabel\}/);
+  assert.match(html, /title=\{saveButtonLabel\}/);
   assert.match(html, /function sameStringValues\(left: readonly string\[\], right: readonly string\[\]\) \{/);
   assert.match(html, /onSubmit=\{submitMetadata\}/);
   assert.match(app, /postJson<\{[\s\S]*folders\?: unknown;[\s\S]*\}>\(`\/api\/items\/\$\{encodeURIComponent\(String\(item\.id \|\| ""\)\)\}\/metadata`, \{ tags, folders \}\)/);
