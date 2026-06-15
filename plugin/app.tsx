@@ -64,7 +64,7 @@ function App() {
   const [busyFrame, setBusyFrame] = useState(0);
   const [message, setMessageState] = useState("");
   const [messageIsError, setMessageIsError] = useState(false);
-  const [passwordVisible, setPasswordVisible] = useState(false);
+  const [passwordVisibleByIndex, setPasswordVisibleByIndex] = useState<Record<string, boolean>>({});
   const [settingsExpanded, setSettingsExpanded] = useState(false);
   const [passwordDraftRevision, setPasswordDraftRevision] = useState(0);
   const userPasswordsRef = useRef<Record<string, string>>({});
@@ -90,9 +90,7 @@ function App() {
   const authEnabled = Boolean(settings.authEnabled);
   const authUsers = normalizedAuthUsers(settings);
   const metadataEditingEnabled = authEnabled && authUsersCanEditMetadata(authUsers);
-  const authUsersStatusLabel = authEnabled
-    ? metadataEditingEnabled ? "Active editors" : "Active viewers"
-    : "Inactive";
+  const authUsersStatusLabel = authEnabled ? "Active" : "Inactive";
   const authUsersStatusClassName = !authEnabled
     ? "border-[#d5d9df] bg-[#f3f4f6] text-[#626975]"
     : metadataEditingEnabled
@@ -273,9 +271,17 @@ function App() {
     if (authUsers.length <= 1) return;
     const nextUsers = authUsers.filter((_, userIndex) => userIndex !== index);
     const nextUserPasswords = removeIndexedValue(userPasswordsRef.current, index);
+    setPasswordVisibleByIndex((current) => removeIndexedValue(current, index));
     replaceUserPasswordDrafts(nextUserPasswords);
     updateAuthUsers(nextUsers);
     saveSettings({ patch: { authUsers: nextUsers }, passwordDrafts: nextUserPasswords });
+  }
+
+  function togglePasswordVisible(index: number) {
+    setPasswordVisibleByIndex((current) => ({
+      ...current,
+      [String(index)]: !current[String(index)],
+    }));
   }
 
   async function startOrStopServer(checked: boolean) {
@@ -458,14 +464,15 @@ function App() {
                   {authUsersStatusLabel}
                 </span>
               </div>
-              <div className="grid grid-cols-[minmax(80px,1fr)_86px_minmax(76px,0.8fr)_28px] gap-1.5 px-0.5 text-[9px] font-medium uppercase leading-none text-[#8a8f99]">
+              <div className="grid grid-cols-[minmax(80px,1fr)_86px_minmax(76px,0.8fr)_28px_28px] gap-1.5 px-0.5 text-[9px] font-medium uppercase leading-none text-[#8a8f99]">
                 <span>Username</span>
                 <span>Role</span>
                 <span>Password</span>
                 <span aria-hidden="true" />
+                <span aria-hidden="true" />
               </div>
               {authUsers.map((user, index) => (
-                <div key={index} className="grid grid-cols-[minmax(80px,1fr)_86px_minmax(76px,0.8fr)_28px] items-center gap-1.5">
+                <div key={index} className="grid grid-cols-[minmax(80px,1fr)_86px_minmax(76px,0.8fr)_28px_28px] items-center gap-1.5">
                   <input
                     className={settingInputClassName}
                     type="text"
@@ -492,7 +499,7 @@ function App() {
                   <input
                     key={`${passwordDraftRevision}-${index}`}
                     className={settingInputClassName}
-                    type={passwordVisible ? "text" : "password"}
+                    type={passwordVisibleByIndex[String(index)] ? "text" : "password"}
                     aria-label={`Password for ${user.username || `user ${index + 1}`}`}
                     autoComplete="new-password"
                     disabled={formDisabled}
@@ -500,18 +507,25 @@ function App() {
                     defaultValue={userPasswordsRef.current[String(index)] || ""}
                     onChange={(event) => setUserPasswordDraft(index, event.currentTarget.value)}
                   />
+                  <button
+                    className={`grid h-7 w-7 place-items-center rounded-md p-1 ${authActionButtonClassName}`}
+                    type="button"
+                    aria-label={passwordVisibleByIndex[String(index)] ? `Hide password for ${user.username || `user ${index + 1}`}` : `Show password for ${user.username || `user ${index + 1}`}`}
+                    title={passwordVisibleByIndex[String(index)] ? "Hide password" : "Show password"}
+                    disabled={formDisabled}
+                    onClick={() => togglePasswordVisible(index)}
+                  >
+                    {passwordVisibleByIndex[String(index)] ? <EyeIcon className="h-[13px] w-[13px]" /> : <EyeOffIcon className="h-[13px] w-[13px]" />}
+                  </button>
                   <button className={`grid h-7 w-7 place-items-center rounded-md ${authActionButtonClassName}`} type="button" aria-label={`Remove ${user.username || "user"}`} title="Remove user" disabled={formDisabled || authUsers.length <= 1} onClick={() => removeAuthUser(index)}>
                     <CloseIcon className="h-[11px] w-[11px]" />
                   </button>
                 </div>
               ))}
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center justify-start gap-2">
                 <button className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium text-[#111] ${authActionButtonClassName}`} type="button" disabled={formDisabled} onClick={addAuthUser}>
                   <PlusIcon className="h-[12px] w-[12px]" />
                   <span>Add user</span>
-                </button>
-                <button className={`grid h-7 w-7 place-items-center rounded-md p-1 ${authActionButtonClassName}`} type="button" aria-label={passwordVisible ? "Hide passwords" : "Show passwords"} title={passwordVisible ? "Hide passwords" : "Show passwords"} disabled={formDisabled} onClick={() => setPasswordVisible((current) => !current)}>
-                  {passwordVisible ? <EyeIcon className="h-[13px] w-[13px]" /> : <EyeOffIcon className="h-[13px] w-[13px]" />}
                 </button>
               </div>
               <div className="flex justify-end">
@@ -693,8 +707,8 @@ function duplicateUsername(users: AuthUser[]) {
   return "";
 }
 
-function removeIndexedValue(values: Record<string, string>, removedIndex: number) {
-  const next: Record<string, string> = {};
+function removeIndexedValue<T>(values: Record<string, T>, removedIndex: number) {
+  const next: Record<string, T> = {};
   for (const [rawIndex, value] of Object.entries(values)) {
     const index = Number.parseInt(rawIndex, 10);
     if (!Number.isInteger(index) || index === removedIndex) continue;
