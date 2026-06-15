@@ -1,6 +1,12 @@
 import { forwardRef, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent, type ReactNode, type TouchEvent, type WheelEvent } from "react";
 import { mediaUrl } from "../api";
 import {
+  getImageOverlayControlsVisible,
+  setImageOverlayControlsVisible,
+  subscribeImageOverlayControls,
+  toggleImageOverlayControls,
+} from "../imageOverlayState";
+import {
   dragPreviewTransform,
   initialPreviewScales,
   nextPreviewScales,
@@ -335,8 +341,14 @@ function ImagePreview({ item, srcKind }: { item: EagleItem; srcKind: "file" | "t
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const dragRef = useRef<PreviewDrag | null>(null);
+  const tapRef = useRef<{ pointerId: number; startX: number; startY: number; moved: boolean } | null>(null);
   const pointersRef = useRef<Map<number, PreviewPoint>>(new Map());
   const pinchRef = useRef<PreviewPinch | null>(null);
+  const imageOverlayControlsVisible = useSyncExternalStore(
+    subscribeImageOverlayControls,
+    getImageOverlayControlsVisible,
+    getImageOverlayControlsVisible,
+  );
   const [imageState, setImageState] = useState<ImageState>(() => ({
     ...initialPreviewScales(),
     naturalSize: null,
@@ -344,8 +356,10 @@ function ImagePreview({ item, srcKind }: { item: EagleItem; srcKind: "file" | "t
 
   useEffect(() => {
     dragRef.current = null;
+    tapRef.current = null;
     pointersRef.current = new Map();
     pinchRef.current = null;
+    setImageOverlayControlsVisible(true);
     setImageState({
       ...initialPreviewScales(),
       naturalSize: null,
@@ -407,6 +421,7 @@ function ImagePreview({ item, srcKind }: { item: EagleItem; srcKind: "file" | "t
     if (event.pointerType === "touch") {
       pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
       if (pointersRef.current.size === 2) {
+        tapRef.current = null;
         pinchRef.current = {
           distance: pointerDistanceFromState(),
           scale: imageState.transform.scale,
@@ -416,6 +431,12 @@ function ImagePreview({ item, srcKind }: { item: EagleItem; srcKind: "file" | "t
       }
       if (pointersRef.current.size > 1) return;
     }
+    tapRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      moved: false,
+    };
     viewport.setPointerCapture(event.pointerId);
     dragRef.current = {
       pointerId: event.pointerId,
@@ -444,6 +465,14 @@ function ImagePreview({ item, srcKind }: { item: EagleItem; srcKind: "file" | "t
       }
     }
 
+    if (tapRef.current?.pointerId === event.pointerId) {
+      const deltaX = Math.abs(event.clientX - tapRef.current.startX);
+      const deltaY = Math.abs(event.clientY - tapRef.current.startY);
+      if (deltaX > 8 || deltaY > 8) {
+        tapRef.current.moved = true;
+      }
+    }
+
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     setImageState((current) => ({
@@ -453,9 +482,16 @@ function ImagePreview({ item, srcKind }: { item: EagleItem; srcKind: "file" | "t
   };
 
   const endImageDrag = (event?: PointerEvent<HTMLDivElement>) => {
+    const tap = tapRef.current;
     if (event?.pointerType === "touch") {
       pointersRef.current.delete(event.pointerId);
       if (pointersRef.current.size < 2) pinchRef.current = null;
+    }
+    if (event && tap?.pointerId === event.pointerId) {
+      if (!tap.moved && pointersRef.current.size <= 1) {
+        toggleImageOverlayControls();
+      }
+      tapRef.current = null;
     }
     if (!event || !dragRef.current || dragRef.current.pointerId === event.pointerId) {
       dragRef.current = null;
@@ -508,6 +544,7 @@ function ImagePreview({ item, srcKind }: { item: EagleItem; srcKind: "file" | "t
         />
       </div>
       <ImageToolbar
+        visible={imageOverlayControlsVisible}
         onActualSize={() => setImageZoom(imageState.naturalScale, { x: 0, y: 0 })}
         onFit={() => setImageZoom(imageState.fitScale, { x: 0, y: 0 })}
         onZoomIn={() => zoomImage(1.18)}
@@ -522,14 +559,16 @@ function ImageToolbar({
   onFit,
   onZoomIn,
   onZoomOut,
+  visible,
 }: {
   onActualSize: () => void;
   onFit: () => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
+  visible: boolean;
 }) {
   return (
-    <div className={imageToolbarClassName}>
+    <div className={`${imageToolbarClassName} ${visible ? "opacity-100" : "pointer-events-none opacity-0"} transition-opacity duration-150`}>
       <ToolbarButton label="Zoom out" icon={<MinusIcon />} onClick={onZoomOut} />
       <ToolbarButton label="Fit" icon={<MaximizeIcon />} onClick={onFit} />
       <ToolbarButton label="Actual size" icon={<Maximize2Icon />} onClick={onActualSize} />

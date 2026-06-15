@@ -34,6 +34,7 @@ import {
   ViewerShellLayout,
 } from "./ViewerShell";
 import { resetPreviewDialogState, setPreviewDialogState } from "./previewDialogState";
+import { setImageOverlayControlsVisible } from "./imageOverlayState";
 import { setVideoOverlayControlsVisible } from "./videoOverlayState";
 import { MEDIA_TYPE_OPTIONS, PAGE_SIZE_OPTIONS, RATING_OPTIONS } from "./shellConfig";
 
@@ -212,6 +213,21 @@ describe("ViewerAppShell", () => {
     expect(body).toContain("image-toolbar");
     expect(body).toContain("bg-[rgba(255,255,255,0.92)]");
     expect(body).toContain("text-app-text-soft");
+  });
+
+  test("hides image overlay buttons and toolbar when image controls are toggled off", () => {
+    setPreviewDialogState({ infoOpen: false, mode: "image", open: true });
+    setImageOverlayControlsVisible(false);
+    const dialog = renderToStaticMarkup(<PreviewDialog />);
+    const body = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", name: "Sample.jpg" }} kind="image" />);
+    resetPreviewDialogState();
+    setImageOverlayControlsVisible(true);
+
+    expect(dialog).toContain("pointer-events-none opacity-0");
+    expect(dialog).toContain('id="closePreview"');
+    expect(dialog).toContain('id="toggleInfoPreview"');
+    expect(body).toContain("image-toolbar");
+    expect(body).toContain("pointer-events-none opacity-0");
   });
 
   test("hides video overlay buttons when video controls are toggled off", () => {

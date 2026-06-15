@@ -8,6 +8,10 @@ import {
 } from "../shellActions";
 import { getPreviewDialogState, subscribePreviewDialogState } from "../previewDialogState";
 import {
+  getImageOverlayControlsVisible,
+  subscribeImageOverlayControls,
+} from "../imageOverlayState";
+import {
   getVideoOverlayControlsVisible,
   subscribeVideoOverlayControls,
 } from "../videoOverlayState";
@@ -29,6 +33,11 @@ export function PreviewDialog() {
   const previewBodyRef = useRef<HTMLDivElement | null>(null);
   const closeSwipeRef = useRef<{ pointerId: number; startX: number; startY: number } | null>(null);
   const previewDialogState = useSyncExternalStore(subscribePreviewDialogState, getPreviewDialogState, getPreviewDialogState);
+  const imageOverlayControlsVisible = useSyncExternalStore(
+    subscribeImageOverlayControls,
+    getImageOverlayControlsVisible,
+    getImageOverlayControlsVisible,
+  );
   const videoOverlayControlsVisible = useSyncExternalStore(
     subscribeVideoOverlayControls,
     getVideoOverlayControlsVisible,
@@ -60,7 +69,9 @@ export function PreviewDialog() {
   ].join(" ");
   const videoOverlayMenuClassName = [
     "transition-opacity duration-150",
-    previewDialogState.mode === "video" && !videoOverlayControlsVisible ? "pointer-events-none opacity-0" : "opacity-100",
+    (previewDialogState.mode === "video" && !videoOverlayControlsVisible) || (previewDialogState.mode === "image" && !imageOverlayControlsVisible)
+      ? "pointer-events-none opacity-0"
+      : "opacity-100",
   ].join(" ");
 
   useEffect(() => {
