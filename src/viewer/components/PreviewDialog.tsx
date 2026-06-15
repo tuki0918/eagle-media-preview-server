@@ -1,4 +1,4 @@
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useEffect, useRef, useSyncExternalStore, type PointerEvent } from "react";
 import {
   closePreview,
   handlePreviewClose,
@@ -8,7 +8,14 @@ import {
 } from "../shellActions";
 import { getPreviewDialogState, subscribePreviewDialogState } from "../previewDialogState";
 import { PreviewBodyHost } from "./PreviewBody";
-import { ChevronLeftIcon, MaximizeIcon, PanelLeftIcon, XIcon } from "./Icons";
+import {
+  ChevronLeftIcon,
+  MaximizeIcon,
+  PanelLeftOpenIcon,
+  PanelRightOpenIcon,
+  PanelTopCloseIcon,
+  PanelTopOpenIcon,
+} from "./Icons";
 import { PreviewInfoActions, PreviewInfoDetails } from "./PreviewInfo";
 import { PreviewRating } from "./RatingStars";
 import { PreviewMeta, PreviewOriginalName } from "./PreviewText";
@@ -16,6 +23,7 @@ import { PreviewMeta, PreviewOriginalName } from "./PreviewText";
 export function PreviewDialog() {
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const previewBodyRef = useRef<HTMLDivElement | null>(null);
+  const closeSwipeRef = useRef<{ pointerId: number; startX: number; startY: number } | null>(null);
   const previewDialogState = useSyncExternalStore(subscribePreviewDialogState, getPreviewDialogState, getPreviewDialogState);
   const dialogClassName = [
     "h-dvh max-h-dvh w-screen max-w-full touch-none overscroll-none rounded-none border-0 bg-app-surface p-0 text-app-text",
@@ -29,9 +37,9 @@ export function PreviewDialog() {
     previewDialogState.mode === "video" ? "h-dvh max-h-dvh bg-[#05070a] pt-[calc(60px+env(safe-area-inset-top))]" : "",
   ].filter(Boolean).join(" ");
   const previewInfoClassName = [
-    "preview-info absolute inset-y-0 left-0 z-[3] grid w-[min(360px,calc(100vw-56px))] max-w-full content-start gap-3.5 overflow-auto border-0 border-r border-app-border bg-[rgba(255,255,255,0.96)] p-3.5 shadow-[18px_0_44px_rgba(15,23,42,0.14)] backdrop-blur-[18px] transition-transform duration-200",
-    previewDialogState.infoOpen ? "translate-x-0 max-[540px]:translate-y-0" : "-translate-x-full max-[540px]:translate-x-0 max-[540px]:translate-y-full",
-    "max-[540px]:inset-x-0 max-[540px]:bottom-0 max-[540px]:top-auto max-[540px]:w-auto max-[540px]:max-h-[min(72dvh,560px)] max-[540px]:border-r-0 max-[540px]:border-t max-[540px]:border-app-border max-[540px]:shadow-[0_-18px_44px_rgba(15,23,42,0.14)]",
+    "preview-info absolute inset-y-0 right-0 z-[6] grid w-[min(360px,calc(100vw-56px))] max-w-full content-start gap-3.5 overflow-auto border-0 border-l border-app-border bg-[rgba(255,255,255,0.96)] p-3.5 shadow-[-18px_0_44px_rgba(15,23,42,0.14)] backdrop-blur-[18px] transition-transform duration-200",
+    previewDialogState.infoOpen ? "translate-x-0 max-[540px]:translate-y-0" : "translate-x-full max-[540px]:translate-x-0 max-[540px]:translate-y-full",
+    "max-[540px]:inset-x-0 max-[540px]:bottom-0 max-[540px]:top-auto max-[540px]:w-auto max-[540px]:max-h-[min(72dvh,560px)] max-[540px]:border-l-0 max-[540px]:border-t max-[540px]:border-app-border max-[540px]:shadow-[0_-18px_44px_rgba(15,23,42,0.14)]",
   ].join(" ");
   const previewActionButtonClassName = [
     "icon-button inline-grid min-h-10 w-10 flex-[0_0_40px] touch-manipulation select-none place-items-center rounded-app border backdrop-blur-[12px]",
@@ -129,6 +137,33 @@ export function PreviewDialog() {
     }
   };
 
+  const startCloseSwipe = (event: PointerEvent<HTMLDialogElement>) => {
+    if (event.pointerType !== "touch") return;
+    const target = event.target;
+    if (target instanceof Element && shouldIgnorePreviewSwipe(target)) return;
+    closeSwipeRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+    };
+  };
+
+  const endCloseSwipe = (event: PointerEvent<HTMLDialogElement>) => {
+    const session = closeSwipeRef.current;
+    closeSwipeRef.current = null;
+    if (!session || session.pointerId !== event.pointerId) return;
+    const deltaX = Math.abs(event.clientX - session.startX);
+    const deltaY = event.clientY - session.startY;
+    if (deltaY > 72 && deltaY > deltaX * 1.35) {
+      closePreview();
+    }
+  };
+
+  const handleDialogPointerDown = (event: PointerEvent<HTMLDialogElement>) => {
+    handlePreviewPointerDown(event);
+    startCloseSwipe(event);
+  };
+
   return (
     <dialog
       ref={dialogRef}
@@ -136,8 +171,15 @@ export function PreviewDialog() {
       className={dialogClassName}
       onClose={handlePreviewClose}
       onDoubleClick={handlePreviewDoubleClick}
-      onPointerDown={handlePreviewPointerDown}
+      onPointerCancel={() => {
+        closeSwipeRef.current = null;
+      }}
+      onPointerDown={handleDialogPointerDown}
+      onPointerUp={endCloseSwipe}
     >
+      <button id="closePreview" className={`${previewActionButtonClassName} fixed left-2.5 top-[calc(10px+env(safe-area-inset-top))] z-[4]`} aria-label="Close" title="Close" onClick={closePreview}>
+        <ChevronLeftIcon />
+      </button>
       <div className="dialog-header fixed right-2.5 top-[calc(10px+env(safe-area-inset-top))] z-[4] flex items-center justify-end gap-3 border-0 bg-transparent p-0">
         <button id="backPreview" className="text-icon-button hidden min-h-10 items-center gap-2 border-0 bg-transparent px-2 text-sm font-[680] text-app-text" type="button" aria-label="Back to results" onClick={closePreview}>
           <ChevronLeftIcon />
@@ -149,13 +191,10 @@ export function PreviewDialog() {
         </div>
         <div className="dialog-actions flex items-center justify-end gap-2">
           <button id="toggleInfoPreview" className={previewActionButtonClassName} aria-label="Media information" aria-expanded={previewDialogState.infoOpen} title="Media information" onClick={togglePreviewInfo}>
-            <PanelLeftIcon />
+            <PreviewInfoToggleIcon open={previewDialogState.infoOpen} />
           </button>
           <button id="fullscreenPreview" className={`${previewActionButtonClassName} ${previewDialogState.mode === "video" ? "" : "hidden"}`} aria-label="Fullscreen" title="Fullscreen" onClick={toggleFullscreen}>
             <MaximizeIcon />
-          </button>
-          <button id="closePreview" className={previewActionButtonClassName} aria-label="Close" title="Close" onClick={closePreview}>
-            <XIcon />
           </button>
         </div>
       </div>
@@ -178,4 +217,21 @@ export function PreviewDialog() {
       </div>
     </dialog>
   );
+}
+
+function PreviewInfoToggleIcon({ open }: { open: boolean }) {
+  return (
+    <>
+      <span className="hidden max-[540px]:block" aria-hidden="true">
+        {open ? <PanelTopOpenIcon /> : <PanelTopCloseIcon />}
+      </span>
+      <span className="block max-[540px]:hidden" aria-hidden="true">
+        {open ? <PanelLeftOpenIcon /> : <PanelRightOpenIcon />}
+      </span>
+    </>
+  );
+}
+
+function shouldIgnorePreviewSwipe(target: Element) {
+  return Boolean(target.closest("button,input,select,textarea,a,.preview-info"));
 }

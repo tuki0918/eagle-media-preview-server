@@ -16,6 +16,50 @@ export function ChevronLeftIcon() {
   );
 }
 
+export function PanelLeftOpenIcon() {
+  return (
+    <Icon>
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M9 3v18" />
+      <path d="m14 9 3 3-3 3" />
+      <path d="M11 12h6" />
+    </Icon>
+  );
+}
+
+export function PanelRightOpenIcon() {
+  return (
+    <Icon>
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M15 3v18" />
+      <path d="m10 15-3-3 3-3" />
+      <path d="M7 12h6" />
+    </Icon>
+  );
+}
+
+export function PanelTopCloseIcon() {
+  return (
+    <Icon>
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M3 9h18" />
+      <path d="m9 14 3-3 3 3" />
+      <path d="M12 11v6" />
+    </Icon>
+  );
+}
+
+export function PanelTopOpenIcon() {
+  return (
+    <Icon>
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M3 9h18" />
+      <path d="m15 14-3 3-3-3" />
+      <path d="M12 11v6" />
+    </Icon>
+  );
+}
+
 export function MaximizeIcon() {
   return (
     <Icon>

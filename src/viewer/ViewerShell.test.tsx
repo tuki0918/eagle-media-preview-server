@@ -149,6 +149,39 @@ describe("ViewerAppShell", () => {
     }
   });
 
+  test("renders preview close as a top-left back action without a visible swipe handle", () => {
+    const html = renderToStaticMarkup(<PreviewDialog />);
+
+    expect(html).not.toContain("preview-close-swipe-handle");
+    expect(html).not.toContain("Swipe down to close preview");
+    expect(html).toContain('id="closePreview"');
+    expect(html).toContain("left-2.5");
+    expect(html).toContain("m15 18-6-6 6-6");
+  });
+
+  test("renders preview drawer button with responsive panel icons", () => {
+    const html = renderToStaticMarkup(<PreviewDialog />);
+
+    expect(html).toContain('id="toggleInfoPreview"');
+    expect(html).toContain("hidden max-[540px]:block");
+    expect(html).toContain("block max-[540px]:hidden");
+    expect(html).toContain('d="M15 3v18"');
+    expect(html).toContain('d="m10 15-3-3 3-3"');
+    expect(html).toContain('d="M3 9h18"');
+    expect(html).toContain('d="m9 14 3-3 3 3"');
+  });
+
+  test("renders desktop preview info drawer from the right edge", () => {
+    const html = renderToStaticMarkup(<PreviewDialog />);
+
+    expect(html).toContain("preview-info");
+    expect(html).toContain("right-0");
+    expect(html).toContain("z-[6]");
+    expect(html).toContain("border-l");
+    expect(html).toContain("translate-x-full");
+    expect(html).toContain("shadow-[-18px_0_44px_rgba");
+  });
+
   test("renders page buttons as a reusable component", () => {
     const html = renderToStaticMarkup(<PageButtons current={2} pages={[1, 2, "...", 8]} onSelect={() => {}} />);
 
