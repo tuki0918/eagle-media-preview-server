@@ -897,9 +897,19 @@ function parseCookies(header: string): Record<string, string> {
   for (const part of header.split(";")) {
     const index = part.indexOf("=");
     if (index === -1) continue;
-    output[part.slice(0, index).trim()] = decodeURIComponent(part.slice(index + 1).trim());
+    const name = part.slice(0, index).trim();
+    const value = safeDecodeCookieValue(part.slice(index + 1).trim());
+    if (name && value !== null) output[name] = value;
   }
   return output;
+}
+
+function safeDecodeCookieValue(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return null;
+  }
 }
 
 function attachRequestCounter(res, onFinish) {

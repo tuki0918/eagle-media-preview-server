@@ -412,6 +412,22 @@ test("createViewerServer logs out cookie sessions", async () => {
         writeRating: false,
       },
     });
+
+    const malformedCookie = await fetch(`${origin}/api/auth/status`, {
+      headers: { Cookie: "viewer_session=%E0%A4%A" },
+    });
+    assert.equal(malformedCookie.status, 200);
+    assert.deepEqual(await malformedCookie.json(), {
+      required: true,
+      authenticated: false,
+      user: null,
+      permissions: {
+        manageLibrary: false,
+        read: false,
+        writeMetadata: false,
+        writeRating: false,
+      },
+    });
   } finally {
     await viewer.stop();
   }
