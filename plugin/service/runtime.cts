@@ -156,7 +156,7 @@ function createSettingsStore({ filePath = defaultSettingsPath() }: { filePath?: 
       }
       if (next.authUsers.length) {
         next.basicAuthUser = next.authUsers[0].username;
-        next.passwordHash = next.authUsers[0].passwordHash;
+        next.passwordHash = next.authEnabled ? next.authUsers[0].passwordHash : "";
         next.allowMetadataEditing = next.authEnabled && next.authUsers.some((user) => canRoleEditMetadata(user.role));
       }
 

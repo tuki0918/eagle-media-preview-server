@@ -133,7 +133,9 @@ test("generated settings store clears metadata editing when BasicAuth is disable
 
   assert.equal(saved.authEnabled, false);
   assert.equal(saved.allowMetadataEditing, false);
+  assert.equal(saved.passwordHash, "");
   assert.equal(saved.authUsers.length, 1);
+  assert.match(saved.authUsers[0].passwordHash, PASSWORD_HASH_PATTERN);
 });
 
 test("generated server manager restarts after metadata editing setting changes while running", async () => {
