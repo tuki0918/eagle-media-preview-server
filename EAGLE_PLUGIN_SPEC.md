@@ -277,7 +277,8 @@ Roles:
 Password handling:
 
 - Plain text passwords are never persisted
-- The settings file stores a SHA-256 hash
+- New passwords are stored as salted PBKDF2-SHA-256 hashes
+- Existing legacy SHA-256 hashes are still accepted for migration compatibility
 
 Authorization:
 

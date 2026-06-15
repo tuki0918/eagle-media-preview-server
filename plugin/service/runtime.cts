@@ -1,5 +1,5 @@
 const { mkdir, readFile, writeFile } = require("fs").promises;
-const { createHash } = require("crypto");
+const { pbkdf2Sync, randomBytes } = require("crypto");
 const { dirname, join } = require("path");
 const { homedir, networkInterfaces } = require("os");
 const { createViewerServer } = require("./viewerServer.cjs");
@@ -88,6 +88,9 @@ const DEFAULT_SETTINGS: PluginSettings = {
   preferredLanAddress: "",
   lastServerStatus: "stopped",
 };
+const PASSWORD_HASH_ALGORITHM = "sha256";
+const PASSWORD_HASH_ITERATIONS = 210000;
+const PASSWORD_HASH_KEY_LENGTH = 32;
 
 function defaultSettingsPath() {
   return join(homedir(), ".eagle-media-preview-server", "settings.json");
@@ -189,7 +192,15 @@ function isServerStatus(value: unknown): value is ServerStatus {
 }
 
 function hashPassword(value: unknown) {
-  return createHash("sha256").update(String(value)).digest("hex");
+  const salt = randomBytes(16).toString("base64url");
+  const digest = pbkdf2Sync(
+    String(value),
+    salt,
+    PASSWORD_HASH_ITERATIONS,
+    PASSWORD_HASH_KEY_LENGTH,
+    PASSWORD_HASH_ALGORITHM,
+  ).toString("base64url");
+  return `pbkdf2$${PASSWORD_HASH_ALGORITHM}$${PASSWORD_HASH_ITERATIONS}$${salt}$${digest}`;
 }
 
 function normalizeAuthUsers(value: unknown, input: SettingsInput = {}) {

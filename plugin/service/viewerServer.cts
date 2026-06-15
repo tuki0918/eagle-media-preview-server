@@ -1,7 +1,7 @@
 const { createReadStream, existsSync } = require("fs");
 const { stat } = require("fs").promises;
 const { createServer } = require("http");
-const { createHash, randomUUID, timingSafeEqual } = require("crypto");
+const { createHash, pbkdf2Sync, randomUUID, timingSafeEqual } = require("crypto");
 const { extname, join, normalize, resolve } = require("path");
 const { createEagleClient, pathFromFileValue, resolveLibraryItemFile } = require("./eagleClient.cjs");
 const { buildConnectionCandidates, createConnectionContext } = require("./connection.cjs");
@@ -30,6 +30,11 @@ interface AuthSession {
   role: UserRole;
   username: string;
 }
+
+const PASSWORD_HASH_ALGORITHM = "sha256";
+const PASSWORD_HASH_KEY_LENGTH = 32;
+const MIN_PASSWORD_HASH_ITERATIONS = 100000;
+const MAX_PASSWORD_HASH_ITERATIONS = 1000000;
 
 interface EagleLibraryInfo {
   path?: string;
@@ -809,10 +814,25 @@ function sendAuthRequired(res) {
 }
 
 function passwordMatches(value, { viewerPassword = "", passwordHash = "" }: { passwordHash?: string; viewerPassword?: string }) {
-  const expectedValue = passwordHash || viewerPassword;
-  const actualValue = passwordHash ? sha256(value) : value;
-  const expected = Buffer.from(expectedValue);
-  const actual = Buffer.from(actualValue);
+  if (!passwordHash) return safeEqual(value, viewerPassword);
+  if (passwordHash.startsWith("pbkdf2$")) return pbkdf2PasswordMatches(value, passwordHash);
+  return safeEqual(sha256(value), passwordHash);
+}
+
+function pbkdf2PasswordMatches(value, passwordHash: string) {
+  const [scheme, algorithm, rawIterations, salt, expectedDigest] = passwordHash.split("$");
+  if (scheme !== "pbkdf2" || algorithm !== PASSWORD_HASH_ALGORITHM || !salt || !expectedDigest) return false;
+  const iterations = Number.parseInt(rawIterations, 10);
+  if (!Number.isInteger(iterations) || iterations < MIN_PASSWORD_HASH_ITERATIONS || iterations > MAX_PASSWORD_HASH_ITERATIONS) {
+    return false;
+  }
+  const actualDigest = pbkdf2Sync(String(value), salt, iterations, PASSWORD_HASH_KEY_LENGTH, algorithm).toString("base64url");
+  return safeEqual(actualDigest, expectedDigest);
+}
+
+function safeEqual(actualValue, expectedValue) {
+  const expected = Buffer.from(String(expectedValue));
+  const actual = Buffer.from(String(actualValue));
   return expected.length === actual.length && timingSafeEqual(expected, actual);
 }
 

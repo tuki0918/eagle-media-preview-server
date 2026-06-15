@@ -13,6 +13,7 @@ const {
   hashPassword,
   normalizeSettings,
 } = require("../../dist/.generated/plugin-service/runtime.cjs");
+const PASSWORD_HASH_PATTERN = /^pbkdf2\$sha256\$210000\$[^$]+\$[^$]+$/;
 
 test("generated CommonJS runtime loads with require for Eagle plugin windows", () => {
   assert.equal(normalizeSettings({}).port, DEFAULT_SETTINGS.port);
@@ -35,7 +36,8 @@ test("generated settings store hashes password", async () => {
     confirmPassword: "secret",
   });
 
-  assert.equal(saved.passwordHash, hashPassword("secret"));
+  assert.match(saved.passwordHash, PASSWORD_HASH_PATTERN);
+  assert.notEqual(saved.passwordHash, hashPassword("secret"));
 });
 
 test("generated settings store saves multiple auth users with roles", async () => {
@@ -54,23 +56,27 @@ test("generated settings store saves multiple auth users with roles", async () =
     },
   });
 
-  assert.deepEqual(saved.authUsers, [
-    { username: "reader", role: "viewer", passwordHash: hashPassword("read-secret") },
-    { username: "editor", role: "editor", passwordHash: hashPassword("edit-secret") },
-  ]);
+  assert.equal(saved.authUsers.length, 2);
+  assert.equal(saved.authUsers[0].username, "reader");
+  assert.equal(saved.authUsers[0].role, "viewer");
+  assert.match(saved.authUsers[0].passwordHash, PASSWORD_HASH_PATTERN);
+  assert.equal(saved.authUsers[1].username, "editor");
+  assert.equal(saved.authUsers[1].role, "editor");
+  assert.match(saved.authUsers[1].passwordHash, PASSWORD_HASH_PATTERN);
   assert.equal(saved.allowMetadataEditing, true);
   assert.equal(saved.basicAuthUser, "reader");
 });
 
 test("generated settings store migrates legacy auth settings into a viewer user", () => {
+  const passwordHash = hashPassword("secret");
   const settings = normalizeSettings({
     authEnabled: true,
     basicAuthUser: "legacy",
-    passwordHash: hashPassword("secret"),
+    passwordHash,
   });
 
   assert.deepEqual(settings.authUsers, [
-    { username: "legacy", role: "viewer", passwordHash: hashPassword("secret") },
+    { username: "legacy", role: "viewer", passwordHash },
   ]);
 });
 
@@ -192,6 +198,46 @@ test("generated server manager can start and stop a viewer server", async () => 
 
   const stopped = await manager.stop();
   assert.equal(stopped.state, "stopped");
+});
+
+test("generated server manager accepts PBKDF2 password hashes for BasicAuth", async () => {
+  let settings = {
+    ...DEFAULT_SETTINGS,
+    authEnabled: true,
+    authUsers: [
+      { username: "editor", role: "editor", passwordHash: hashPassword("secret") },
+    ],
+    host: "127.0.0.1",
+    port: 0,
+  };
+  const manager = createServerManager({
+    settingsStore: {
+      async load() {
+        return settings;
+      },
+      async save(input: Record<string, unknown>) {
+        Object.assign(settings, input);
+        return settings;
+      },
+    },
+    lanAddressProvider() {
+      return [{ label: "lo0", address: "127.0.0.1" }];
+    },
+  });
+
+  const started = await manager.start();
+  const token = Buffer.from("editor:secret").toString("base64");
+  const response = await fetch(`http://127.0.0.1:${started.port}/api/auth/status`, {
+    headers: { Authorization: `Basic ${token}` },
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.authenticated, true);
+  assert.equal(body.user.username, "editor");
+  assert.equal(body.permissions.writeMetadata, true);
+
+  await manager.stop();
 });
 
 test("generated server manager reports localhost URL when public network is disabled", async () => {
