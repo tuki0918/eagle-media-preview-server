@@ -179,6 +179,10 @@ test("public viewer exposes sign out when authenticated", async () => {
   assert.match(app, /error instanceof ApiError/);
   assert.match(app, /error\.status !== 401/);
   assert.match(app, /authRequired = true;/);
+  assert.match(app, /async function loadFolders\(\) \{[\s\S]*if \(handleAuthError\(error\)\) return;/);
+  assert.match(app, /async function loadTagSuggestions\(\) \{[\s\S]*handleAuthError\(error\)/);
+  assert.match(app, /async function setItemStar\([\s\S]*if \(handleAuthError\(error\)\) return;/);
+  assert.match(app, /async function savePreviewMetadata\([\s\S]*handleAuthError\(error\);/);
   assert.match(app, /postJson<AuthStatusResponse>\("\/api\/auth\/logout", \{\}\)/);
   assert.match(app, /showLogin\(\);/);
   assert.doesNotMatch(app, /manageLibrary/);

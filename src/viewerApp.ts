@@ -337,7 +337,8 @@ async function loadFolders() {
     const data = await getJson<LoadFoldersResponse>("/api/folders");
     state.folders = flattenFolders(data.items);
     renderSearchControlButtons();
-  } catch {
+  } catch (error) {
+    if (handleAuthError(error)) return;
     state.folders = [];
     // Folder loading is optional; item browsing still works without it.
   }
@@ -568,7 +569,8 @@ async function loadTagSuggestions() {
     if (requestId !== state.tagSuggestionsRequestId) return;
     const items = Array.isArray(data.items) ? data.items : [];
     renderTagSuggestions(items.filter((item) => item?.name && !state.tags.includes(item.name)));
-  } catch {
+  } catch (error) {
+    if (requestId === state.tagSuggestionsRequestId && handleAuthError(error)) return;
     if (requestId === state.tagSuggestionsRequestId) hideTagSuggestions();
   }
 }
@@ -658,6 +660,7 @@ async function setItemStar(item: EagleItem, star: number) {
     item.star = savedStar;
     updateItemInState(String(item.id || ""), { star: savedStar });
   } catch (error) {
+    if (handleAuthError(error)) return;
     item.star = previous;
     updateItemInState(String(item.id || ""), { star: previous });
     alert(error.message);
@@ -790,6 +793,7 @@ async function savePreviewMetadata(item: EagleItem, { tags, folders }: { tags: s
     updateItemInState(String(item.id || ""), patch);
     render();
   } catch (error) {
+    handleAuthError(error);
     throw error instanceof Error ? error : new Error(String(error));
   }
 }
@@ -805,7 +809,10 @@ function tagSuggestionItems(query: string, selectedValues: string[]): Promise<Me
       const remote = Array.isArray(data.items) ? data.items : [];
       return buildTagSuggestionItems({ query, selectedValues, recentTags, remoteTags: remote });
     })
-    .catch(() => buildTagSuggestionItems({ query, selectedValues, recentTags }));
+    .catch((error) => {
+      handleAuthError(error);
+      return buildTagSuggestionItems({ query, selectedValues, recentTags });
+    });
 }
 
 function folderSuggestionItems(query: string, selectedValues: string[]) {
