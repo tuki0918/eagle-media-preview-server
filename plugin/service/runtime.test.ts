@@ -27,18 +27,19 @@ test("generated settings store uses the product settings directory by default", 
   assert.equal(store.filePath.includes(".eagle-api-viewer-plugin"), false);
 });
 
-test("generated settings store hashes password", async () => {
+test("generated settings store hashes per-user passwords", async () => {
   const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-runtime-"));
   const store = createSettingsStore({ filePath: join(dir, "settings.json") });
 
   const saved = await store.save({
     authEnabled: true,
-    password: "secret",
-    confirmPassword: "secret",
+    authUsers: [{ username: "reader", role: "viewer", passwordHash: "" }],
+    userPasswords: { reader: "secret" },
   });
 
-  assert.match(saved.passwordHash, PASSWORD_HASH_PATTERN);
-  assert.notEqual(saved.passwordHash, hashPassword("secret"));
+  assert.match(saved.authUsers[0].passwordHash, PASSWORD_HASH_PATTERN);
+  assert.notEqual(saved.authUsers[0].passwordHash, hashPassword("secret"));
+  assert.equal(saved.passwordHash, saved.authUsers[0].passwordHash);
 });
 
 test("generated settings store saves multiple auth users with roles", async () => {
@@ -127,8 +128,8 @@ test("generated settings store clears metadata editing when BasicAuth is disable
   await store.save({
     authEnabled: true,
     allowMetadataEditing: true,
-    password: "secret",
-    confirmPassword: "secret",
+    authUsers: [{ username: "editor", role: "editor", passwordHash: "" }],
+    userPasswords: { editor: "secret" },
   });
   const saved = await store.save({ authEnabled: false });
 

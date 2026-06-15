@@ -26,8 +26,6 @@ interface PluginSettings {
 }
 
 type SettingsInput = Partial<Omit<PluginSettings, "port">> & {
-  confirmPassword?: unknown;
-  password?: unknown;
   port?: unknown;
   userPasswords?: unknown;
 };
@@ -113,19 +111,6 @@ function createSettingsStore({ filePath = defaultSettingsPath() }: { filePath?: 
       validateAuthUsersInput(input.authUsers);
       const next = normalizeSettings({ ...current, ...input });
       const userPasswords = normalizeUserPasswords(input.userPasswords);
-
-      if (input.password || input.confirmPassword) {
-        if (String(input.password || "") !== String(input.confirmPassword || "")) {
-          throw new Error("Password confirmation does not match");
-        }
-        if (!String(input.password || "").trim()) throw new Error("Password is required");
-        next.passwordHash = hashPassword(input.password);
-        next.authUsers = upsertAuthUser(next.authUsers, {
-          username: next.basicAuthUser,
-          passwordHash: next.passwordHash,
-          role: next.allowMetadataEditing ? "editor" : "viewer",
-        });
-      }
 
       if (userPasswords.size) {
         next.authUsers = next.authUsers.map((user) => {
@@ -257,12 +242,6 @@ function validateAuthUsersInput(value: unknown) {
     if (seen.has(key)) throw new Error(`Duplicate username: ${username}`);
     seen.add(key);
   }
-}
-
-function upsertAuthUser(users: AuthUser[], nextUser: AuthUser) {
-  const matched = users.some((user) => user.username.toLowerCase() === nextUser.username.toLowerCase());
-  if (!matched) return uniqueAuthUsers([...users, nextUser]);
-  return users.map((user) => user.username.toLowerCase() === nextUser.username.toLowerCase() ? nextUser : user);
 }
 
 function normalizeUserPasswords(value: unknown) {

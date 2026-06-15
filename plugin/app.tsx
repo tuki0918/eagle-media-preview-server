@@ -564,7 +564,7 @@ function willRestartServer(status: PluginStatus, nextSettings: Record<string, un
   if (Boolean(nextSettings.authEnabled ?? current.authEnabled) !== Boolean(current.authEnabled)) return true;
   if (Boolean(nextSettings.allowMetadataEditing ?? current.allowMetadataEditing) !== Boolean(current.allowMetadataEditing)) return true;
   if (JSON.stringify(nextSettings.authUsers ?? current.authUsers ?? []) !== JSON.stringify(current.authUsers ?? [])) return true;
-  return Boolean(nextSettings.password);
+  return false;
 }
 
 function settingsPayloadChanged(current: PluginSettings | undefined, nextSettings: Record<string, unknown>) {
@@ -575,7 +575,7 @@ function settingsPayloadChanged(current: PluginSettings | undefined, nextSetting
   if (Boolean(nextSettings.authEnabled ?? current.authEnabled) !== Boolean(current.authEnabled)) return true;
   if (Boolean(nextSettings.allowMetadataEditing ?? current.allowMetadataEditing) !== Boolean(current.allowMetadataEditing)) return true;
   if (JSON.stringify(nextSettings.authUsers ?? current.authUsers ?? []) !== JSON.stringify(current.authUsers ?? [])) return true;
-  return Boolean(nextSettings.password);
+  return false;
 }
 
 function normalizedAuthUsers(settings: PluginSettings): AuthUser[] {

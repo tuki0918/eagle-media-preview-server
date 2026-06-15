@@ -65,6 +65,7 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(app, /if \(hasUserPasswords\) setUserPasswords\(\{\}\);/);
   assert.match(app, /if \(!hasUserPasswords && !settingsPayloadChanged\(settings, payload\)\)/);
   assert.match(app, /function settingsPayloadChanged\(current: PluginSettings \| undefined, nextSettings: Record<string, unknown>\)/);
+  assert.doesNotMatch(app, /nextSettings\.password/);
   assert.match(app, /Enter a username for every user\./);
   assert.match(app, /is already used\./);
   assert.match(app, /if \(!saved\) return;/);
@@ -156,6 +157,14 @@ test("plugin CommonJS runtime avoids node protocol requires for older Eagle runt
     const source = await readFile(new URL(file, generatedServiceUrl), "utf8");
     assert.doesNotMatch(source, /require\("node:/, file);
   }
+});
+
+test("plugin settings runtime no longer accepts the removed single-password save input", async () => {
+  const runtimeSource = await readFile(new URL("./service/runtime.cts", import.meta.url), "utf8");
+
+  assert.doesNotMatch(runtimeSource, /confirmPassword/);
+  assert.doesNotMatch(runtimeSource, /input\.password\b/);
+  assert.doesNotMatch(runtimeSource, /function upsertAuthUser/);
 });
 
 test("plugin server caches authenticated users per request", async () => {
