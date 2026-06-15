@@ -2,12 +2,23 @@ import { test } from "vitest";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { build as esbuild } from "esbuild";
+import { JSDOM } from "jsdom";
 
 type PluginRequirePath = (relativePath: string) => string;
 const generatedServiceUrl = new URL("../dist/.generated/plugin-service/", import.meta.url);
 
 async function readPluginAppSource() {
   return readFile(new URL("./app.tsx", import.meta.url), "utf8");
+}
+
+async function waitFor(predicate: () => boolean, { timeoutMs = 1000 } = {}) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error("Timed out waiting for condition");
 }
 
 test("manifest declares an Eagle background service management window", async () => {
@@ -38,7 +49,7 @@ test("plugin window renders the management UI from React", async () => {
   assert.match(app, /Start or stop server/);
   assert.match(app, /Endpoint URL/);
   assert.match(app, /Quick Access \(QR\)/);
-  assert.match(app, /<SectionHeading icon=\{<SettingsIcon \/>\}>Settings<\/SectionHeading>/);
+  assert.match(app, /<span className="m-0 text-base font-\[420\] leading-none text-\[#111\]">Settings<\/span>/);
   assert.match(app, /src=\{serverState === "running" \? "\.\/assets\/icon_on\.svg" : "\.\/assets\/icon_off\.svg"\}/);
   assert.doesNotMatch(app, /<select\s+hidden/);
   assert.doesNotMatch(app, /<button type="submit" hidden/);
@@ -85,9 +96,11 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.doesNotMatch(app, /title="Editor roles"/);
   assert.doesNotMatch(app, /function EditIcon\(/);
   assert.doesNotMatch(app, /const \[password, setPassword\]/);
-  assert.match(app, /if \(saved && hasUserPasswords\) setUserPasswords\(\{\}\);/);
+  assert.match(app, /const \[passwordDraftRevision, setPasswordDraftRevision\] = useState\(0\);/);
+  assert.match(app, /const userPasswordsRef = useRef<Record<string, string>>\(\{\}\);/);
+  assert.match(app, /if \(saved && hasUserPasswords\) clearUserPasswordDrafts\(\);/);
   assert.match(app, /if \(saved\) setMessage\(""\);/);
-  assert.match(app, /if \(hasUserPasswords\) setUserPasswords\(\{\}\);/);
+  assert.match(app, /if \(hasUserPasswords\) clearUserPasswordDrafts\(\);/);
   assert.match(app, /if \(!hasUserPasswords && !settingsPayloadChanged\(settings, payload\)\)/);
   assert.match(app, /const AUTH_PASSWORD_REQUIRED_MESSAGE = "Enter a password for every user before enabling password protection\.";/);
   assert.match(app, /const nextAuthEnabled = Boolean\(patch\.authEnabled \?\? authEnabled\);/);
@@ -121,15 +134,23 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(app, /is already used\./);
   assert.match(app, /if \(!saved\) return;/);
   assert.doesNotMatch(app, /map\(normalizeAuthUser\)\.filter/);
-  assert.match(app, /userPasswords\[String\(index\)\]/);
-  assert.match(app, /removeIndexedValue\(userPasswords, index\)/);
-  assert.match(app, /passwordDrafts = userPasswords/);
+  assert.match(app, /function setUserPasswordDraft\(index: number, value: string\)/);
+  assert.match(app, /function replaceUserPasswordDrafts\(nextDrafts: Record<string, string>\)/);
+  assert.match(app, /function clearUserPasswordDrafts\(\)/);
+  assert.match(app, /userPasswordsRef\.current\[String\(index\)\]/);
+  assert.match(app, /removeIndexedValue\(userPasswordsRef\.current, index\)/);
+  assert.match(app, /passwordDrafts = userPasswordsRef\.current/);
+  assert.match(app, /defaultValue=\{userPasswordsRef\.current\[String\(index\)\] \|\| ""\}/);
+  assert.match(app, /onChange=\{\(event\) => setUserPasswordDraft\(index, event\.currentTarget\.value\)\}/);
+  assert.match(app, /key=\{`\$\{passwordDraftRevision\}-\$\{index\}`\}/);
+  assert.doesNotMatch(app, /const \[userPasswords, setUserPasswords\]/);
+  assert.doesNotMatch(app, /value=\{userPasswords/);
   assert.match(app, /<button className=\{`inline-flex h-7 items-center rounded-md px-2 text-\[11px\] font-medium text-\[#111\] \$\{authActionButtonClassName\}`\} type="submit" disabled=\{formDisabled\}>/);
   assert.match(app, /Save settings/);
   assert.doesNotMatch(app, /onBlur=\{\(\) => saveSettings\(\)\}\s*\/>\s*<button className=\{`grid h-7 w-7 place-items-center rounded-md \$\{authActionButtonClassName\}`\}/);
   assert.match(app, /const effectiveAuthUsers = Array\.isArray\(patch\.authUsers\)/);
   assert.match(app, /passwordDrafts: nextUserPasswords/);
-  assert.doesNotMatch(app, /userPasswords\[String\(user\.username/);
+  assert.doesNotMatch(app, /userPasswordsRef\.current\[String\(user\.username/);
   assert.doesNotMatch(app, /key=\{`\$\{user\.username\}-\$\{index\}`\}/);
   assert.doesNotMatch(app, /basicAuthUser: settings\.basicAuthUser/);
   assert.doesNotMatch(app, /selectedLanAddress/);
@@ -157,15 +178,107 @@ test("settings can collapse and endpoint opens externally", async () => {
   assert.match(app, /<form/);
   assert.match(app, /const \[settingsExpanded, setSettingsExpanded\] = useState\(false\);/);
   assert.match(app, /id="settingsToggleButton"/);
+  assert.match(app, /aria-label=\{settingsExpanded \? "Hide settings" : "Show settings"\}/);
+  assert.match(app, /className=\{`\$\{settingsExpanded \? "mb-2\.5 border-b border-\[#e1e3e7\] pb-2\.5" : ""\} flex w-full items-center justify-between gap-3 border-0 bg-transparent p-0 text-left`\}/);
   assert.match(app, /aria-controls="settingsPanel"/);
   assert.match(app, /aria-expanded=\{settingsExpanded\}/);
   assert.match(app, /hidden=\{!settingsExpanded\}/);
   assert.match(app, /setSettingsExpanded\(\(current\) => !current\)/);
-  assert.match(app, /<ChevronIcon className=\{`h-\[12px\] w-\[12px\] transition-transform \$\{settingsExpanded \? "rotate-180" : ""\}`\} \/>/);
+  assert.match(app, /<ChevronIcon className=\{`h-\[12px\] w-\[12px\] text-\[#555c66\] transition-transform \$\{settingsExpanded \? "rotate-180" : ""\}`\} \/>/);
+  assert.doesNotMatch(app, /<span>\{settingsExpanded \? "Hide" : "Show"\}<\/span>/);
   assert.match(app, /function ChevronIcon/);
   assert.match(app, /openEndpointUrl/);
   assert.match(app, /eagle\?\.shell\?\.openExternal/);
   assert.doesNotMatch(app, /setMessage\("Updated"\)/);
+});
+
+test("plugin password drafts do not blank the management UI", async () => {
+  const bundle = await esbuild({
+    bundle: true,
+    define: {
+      "process.env.NODE_ENV": JSON.stringify("test"),
+    },
+    entryPoints: [new URL("./app.tsx", import.meta.url).pathname],
+    format: "iife",
+    platform: "browser",
+    write: false,
+  });
+  const appScript = bundle.outputFiles[0].text;
+  const domOptions = {
+    runScripts: "outside-only",
+    url: "file:///tmp/eagle-plugin/plugin/index.html",
+  } as unknown as ConstructorParameters<typeof JSDOM>[1];
+  const dom = new JSDOM("<!doctype html><html><body><div id=\"root\"></div></body></html>", domOptions);
+  const pluginWindow = dom.window as unknown as Window & {
+    eval: (source: string) => unknown;
+    require: (id: string) => unknown;
+  };
+  const saveCalls: Record<string, unknown>[] = [];
+  const status = {
+    settings: {
+      authEnabled: false,
+      authUsers: [{ username: "eagle", role: "viewer", passwordHash: "" }],
+      autoStart: false,
+      host: "0.0.0.0",
+      port: 41532,
+    },
+    state: "stopped",
+    url: "http://127.0.0.1:41532",
+  };
+  pluginWindow.require = (id: string) => {
+    if (id === "path") return path;
+    return {
+      createServerManager() {
+        return {
+          async init() {
+            return status;
+          },
+          async saveSettings(payload: Record<string, unknown>) {
+            saveCalls.push(payload);
+            return status;
+          },
+          async start() {
+            return status;
+          },
+          async status() {
+            return status;
+          },
+          async stop() {
+            return status;
+          },
+        };
+      },
+    };
+  };
+
+  pluginWindow.eval(appScript);
+  await waitFor(() => {
+    const toggle = dom.window.document.querySelector("#settingsToggleButton");
+    return toggle instanceof dom.window.HTMLButtonElement;
+  });
+
+  const toggle = dom.window.document.querySelector("#settingsToggleButton");
+  assert.ok(toggle instanceof dom.window.HTMLButtonElement);
+  toggle.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+  await waitFor(() => !dom.window.document.querySelector("#settingsPanel")?.hasAttribute("hidden"));
+
+  const passwordInput = dom.window.document.querySelector("input[autocomplete=\"new-password\"]");
+  assert.ok(passwordInput instanceof dom.window.HTMLInputElement);
+  assert.equal(passwordInput.disabled, false);
+  const valueSetter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")?.set;
+  valueSetter?.call(passwordInput, "secret123");
+  passwordInput.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+
+  assert.match(dom.window.document.body.textContent || "", /Media Preview Server/);
+  assert.equal(dom.window.document.querySelector("#settingsPanel")?.hasAttribute("hidden"), false);
+
+  const form = dom.window.document.querySelector("form");
+  assert.ok(form instanceof dom.window.HTMLFormElement);
+  form.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }));
+  await waitFor(() => saveCalls.length > 0);
+
+  assert.match(dom.window.document.body.textContent || "", /Media Preview Server/);
+  assert.deepEqual(JSON.parse(JSON.stringify(saveCalls[0].userPasswords)), { eagle: "secret123" });
 });
 
 test("plugin copy URL uses Eagle clipboard API directly", async () => {

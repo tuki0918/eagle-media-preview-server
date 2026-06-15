@@ -66,7 +66,8 @@ function App() {
   const [messageIsError, setMessageIsError] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [settingsExpanded, setSettingsExpanded] = useState(false);
-  const [userPasswords, setUserPasswords] = useState<Record<string, string>>({});
+  const [passwordDraftRevision, setPasswordDraftRevision] = useState(0);
+  const userPasswordsRef = useRef<Record<string, string>>({});
   const [status, setStatus] = useState<PluginStatus>(() => ({
     settings: {
       autoStart: false,
@@ -151,7 +152,7 @@ function App() {
     }
   }
 
-  async function saveSettings({ restartRunning = true, patch = {}, passwordDrafts = userPasswords }: { passwordDrafts?: Record<string, string>; restartRunning?: boolean; patch?: Record<string, unknown> } = {}) {
+  async function saveSettings({ restartRunning = true, patch = {}, passwordDrafts = userPasswordsRef.current }: { passwordDrafts?: Record<string, string>; restartRunning?: boolean; patch?: Record<string, unknown> } = {}) {
     const effectiveAuthUsers = Array.isArray(patch.authUsers)
       ? patch.authUsers.map((user) => normalizeAuthUser(user as AuthUser))
       : authUsers;
@@ -184,14 +185,14 @@ function App() {
         setStatus((current) => ({ ...current, state: "stopped" }));
       }
       const saved = await runCommand(() => managerRef.current?.saveSettings(payload), { quiet: true });
-      if (saved && hasUserPasswords) setUserPasswords({});
+      if (saved && hasUserPasswords) clearUserPasswordDrafts();
       if (saved) setMessage("");
       return saved;
     }
     try {
       const nextStatus = await managerRef.current?.saveSettings(payload);
       if (nextStatus) setStatus(nextStatus);
-      if (hasUserPasswords) setUserPasswords({});
+      if (hasUserPasswords) clearUserPasswordDrafts();
       setMessage("");
       return true;
     } catch (error) {
@@ -207,6 +208,22 @@ function App() {
 
   function setErrorMessage(error: unknown) {
     setMessage(errorMessage(error), true);
+  }
+
+  function setUserPasswordDraft(index: number, value: string) {
+    userPasswordsRef.current = {
+      ...userPasswordsRef.current,
+      [String(index)]: value,
+    };
+  }
+
+  function replaceUserPasswordDrafts(nextDrafts: Record<string, string>) {
+    userPasswordsRef.current = nextDrafts;
+    setPasswordDraftRevision((current) => current + 1);
+  }
+
+  function clearUserPasswordDrafts() {
+    replaceUserPasswordDrafts({});
   }
 
   function updateSettings(patch: PluginSettings) {
@@ -255,8 +272,8 @@ function App() {
   function removeAuthUser(index: number) {
     if (authUsers.length <= 1) return;
     const nextUsers = authUsers.filter((_, userIndex) => userIndex !== index);
-    const nextUserPasswords = removeIndexedValue(userPasswords, index);
-    setUserPasswords(nextUserPasswords);
+    const nextUserPasswords = removeIndexedValue(userPasswordsRef.current, index);
+    replaceUserPasswordDrafts(nextUserPasswords);
     updateAuthUsers(nextUsers);
     saveSettings({ patch: { authUsers: nextUsers }, passwordDrafts: nextUserPasswords });
   }
@@ -366,7 +383,7 @@ function App() {
                 title="Password protection"
                 description="Require username & password to access."
                 onChange={(checked) => {
-                  if (checked && authUsersMissingPassword(authUsers, userPasswords)) {
+                  if (checked && authUsersMissingPassword(authUsers, userPasswordsRef.current)) {
                     setMessage(AUTH_PASSWORD_REQUIRED_MESSAGE, true);
                     return;
                   }
@@ -406,13 +423,21 @@ function App() {
           if (!busy) saveSettings();
         }}
       >
-        <div className={`${settingsExpanded ? "mb-2.5 border-b border-[#e1e3e7] pb-2.5" : ""} flex items-center justify-between gap-3`}>
-          <SectionHeading icon={<SettingsIcon />}>Settings</SectionHeading>
-          <button className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium ${authActionButtonClassName}`} type="button" aria-controls="settingsPanel" aria-expanded={settingsExpanded} id="settingsToggleButton" onClick={() => setSettingsExpanded((current) => !current)}>
-            <ChevronIcon className={`h-[12px] w-[12px] transition-transform ${settingsExpanded ? "rotate-180" : ""}`} />
-            <span>{settingsExpanded ? "Hide" : "Show"}</span>
-          </button>
-        </div>
+        <button
+          className={`${settingsExpanded ? "mb-2.5 border-b border-[#e1e3e7] pb-2.5" : ""} flex w-full items-center justify-between gap-3 border-0 bg-transparent p-0 text-left`}
+          type="button"
+          aria-controls="settingsPanel"
+          aria-expanded={settingsExpanded}
+          aria-label={settingsExpanded ? "Hide settings" : "Show settings"}
+          id="settingsToggleButton"
+          onClick={() => setSettingsExpanded((current) => !current)}
+        >
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-flex items-center text-[#5f6670] [&_svg]:h-4 [&_svg]:w-4" aria-hidden="true"><SettingsIcon /></span>
+            <span className="m-0 text-base font-[420] leading-none text-[#111]">Settings</span>
+          </span>
+          <ChevronIcon className={`h-[12px] w-[12px] text-[#555c66] transition-transform ${settingsExpanded ? "rotate-180" : ""}`} />
+        </button>
         <div id="settingsPanel" className="mt-2.5 grid" hidden={!settingsExpanded}>
           <SettingRow label="Port" help="The port the server listens on.">
             <input
@@ -465,14 +490,15 @@ function App() {
                     <option value="admin">Admin</option>
                   </select>
                   <input
+                    key={`${passwordDraftRevision}-${index}`}
                     className={settingInputClassName}
                     type={passwordVisible ? "text" : "password"}
                     aria-label={`Password for ${user.username || `user ${index + 1}`}`}
                     autoComplete="new-password"
                     disabled={formDisabled}
                     placeholder={user.passwordHash ? "••••••••" : "Password"}
-                    value={userPasswords[String(index)] || ""}
-                    onChange={(event) => setUserPasswords((current) => ({ ...current, [String(index)]: event.currentTarget.value }))}
+                    defaultValue={userPasswordsRef.current[String(index)] || ""}
+                    onChange={(event) => setUserPasswordDraft(index, event.currentTarget.value)}
                   />
                   <button className={`grid h-7 w-7 place-items-center rounded-md ${authActionButtonClassName}`} type="button" aria-label={`Remove ${user.username || "user"}`} title="Remove user" disabled={formDisabled || authUsers.length <= 1} onClick={() => removeAuthUser(index)}>
                     <CloseIcon className="h-[11px] w-[11px]" />
