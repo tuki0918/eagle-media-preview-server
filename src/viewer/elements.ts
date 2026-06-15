@@ -7,7 +7,6 @@ export interface ViewerElements {
   resetFiltersButtonHost: HTMLElement;
   toggleFiltersButtonHost: HTMLElement;
   advancedFiltersHost: HTMLElement;
-  resultsStatusHost: HTMLElement;
   resultGridHost: HTMLElement;
   tilesSentinelHost: HTMLElement;
   pagerHost: HTMLElement;
@@ -31,7 +30,6 @@ export function getViewerElements(): ViewerElements {
     resetFiltersButtonHost: document.querySelector("#resetFiltersButtonHost"),
     toggleFiltersButtonHost: document.querySelector("#toggleFiltersButtonHost"),
     advancedFiltersHost: document.querySelector("#advancedFiltersHost"),
-    resultsStatusHost: document.querySelector("#resultsStatusHost"),
     resultGridHost: document.querySelector("#resultGridHost"),
     tilesSentinelHost: document.querySelector("#tilesSentinelHost"),
     pagerHost: document.querySelector("#pagerHost"),

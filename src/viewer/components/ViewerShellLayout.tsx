@@ -15,9 +15,7 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
     <div id="viewerShell" hidden={hidden}>
       <main className="mx-auto w-[min(1180px,100%)] px-3 py-[30px]">
         <SearchControls />
-        <div id="resultsStatusHost">
-          <ResultsStatus />
-        </div>
+        <ResultsStatus />
         <div id="resultGridHost">
           <section id="grid" className="media-grid" aria-label="Eagle assets" />
         </div>

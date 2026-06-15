@@ -59,7 +59,6 @@ import {
   type PreviewBodyKind,
 } from "./viewer/components/PreviewBody";
 import { renderLoginConnectView } from "./viewer/components/LoginView";
-import { renderResultsStatusView } from "./viewer/components/ResultsStatus";
 import { renderSearchControlButtonsView } from "./viewer/components/SearchControls";
 import { renderTagChipsView } from "./viewer/components/TagChips";
 import { renderTilesSentinelView } from "./viewer/components/TilesSentinel";
@@ -73,6 +72,7 @@ import {
   setPreviewDialogInfoOpen,
   setPreviewDialogState,
 } from "./viewer/previewDialogState";
+import { setResultsStatusState } from "./viewer/resultsStatusState";
 import { clearRatingView, renderRatingView } from "./viewer/components/RatingStars";
 import { setViewerShellActions } from "./viewer/shellActions";
 import { getShellView, setShellView } from "./viewer/shellVisibility";
@@ -595,7 +595,7 @@ function updateItemInState(id: string, patch: ItemPatch) {
 }
 
 function updateStatus() {
-  renderResultsStatusView(els.resultsStatusHost, {
+  setResultsStatusState({
     total: state.total,
     viewMode: state.viewMode,
   });

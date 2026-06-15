@@ -19,6 +19,7 @@ async function readViewerSources() {
     "../src/viewer/previewDialogState.ts",
     "../src/viewer/previewDetails.ts",
     "../src/viewer/previewTransform.ts",
+    "../src/viewer/resultsStatusState.ts",
     "../src/viewer/shellActions.ts",
     "../src/viewer/shellVisibility.ts",
     "../src/viewer/state.ts",
@@ -130,9 +131,10 @@ test("public UI no longer shows connect lock icon or connection settings button"
   assert.match(css, /\.connect-message\s*\{[^}]*display:\s*none;[^}]*position:\s*fixed;[^}]*left:\s*50%;[^}]*bottom:\s*max\(24px,\s*env\(safe-area-inset-bottom\)\);[^}]*transform:\s*translateX\(-50%\);/s);
   assert.match(css, /\.login-panel \.connect-message\s*\{[^}]*text-align:\s*center;[^}]*white-space:\s*normal;/s);
   assert.match(css, /\.connect-message:not\(:empty\)\s*\{[^}]*display:\s*block;/s);
-  assert.match(css, /\.status-line\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) auto;/s);
-  assert.match(css, /\.status-actions\s*\{[^}]*margin-left:\s*auto;[^}]*justify-self:\s*end;/s);
-  assert.match(css, /@media \(max-width: 540px\)[\s\S]*\.status-line\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) auto;/s);
+  assert.match(html, /className="status-line grid grid-cols-\[minmax\(0,1fr\)_auto\]/);
+  assert.match(html, /max-\[540px\]:gap-2 max-\[540px\]:text-xs/);
+  assert.doesNotMatch(css, /\.status-line\s*\{/);
+  assert.doesNotMatch(css, /\.status-actions\s*\{/);
   assert.match(html, /<select id="pageSizeSelect" aria-label="Page size" value=\{selectedLimit\} onChange=\{changePageSize\}>[\s\S]*PAGE_SIZE_OPTIONS\.map/);
   assert.match(html, /export const PAGE_SIZE_OPTIONS = \[30, 60, 120, 240\] as const;/);
   assert.match(app, /limit:\s*30,/);
@@ -566,12 +568,14 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(html, /id="tilesViewButton"/);
-  assert.match(html, /aria-pressed=\{viewMode === "tiles"\} onClick=\{\(\) => selectViewMode\("tiles"\)\}/);
-  assert.match(html, /aria-pressed=\{viewMode === "grid"\} onClick=\{\(\) => selectViewMode\("grid"\)\}/);
+  assert.match(html, /<ViewModeButton id="tilesViewButton" mode="tiles" selectedMode=\{displayViewMode\} label="Tiles" \/>/);
+  assert.match(html, /<ViewModeButton id="gridViewButton" mode="grid" selectedMode=\{displayViewMode\} label="Grid" \/>/);
+  assert.match(html, /aria-pressed=\{pressed\} onClick=\{\(\) => selectViewMode\(mode\)\}/);
   assert.match(html, /id="tilesSentinel"/);
   assert.match(app, /const DEFAULT_VIEW_MODE = "tiles";/);
   assert.match(app, /const TILE_PREFETCH_PAGES = 3;/);
-  assert.match(app, /resultsStatusHost: document\.querySelector\("#resultsStatusHost"\),/);
+  assert.match(app, /setResultsStatusState\(\{/);
+  assert.doesNotMatch(app, /resultsStatusHost: document\.querySelector\("#resultsStatusHost"\),/);
   assert.doesNotMatch(app, /tilesViewButton: document\.querySelector\("#tilesViewButton"\),/);
   assert.match(app, /tilesSentinelHost: document\.querySelector\("#tilesSentinelHost"\),/);
   assert.doesNotMatch(app, /tilesSentinel: document\.querySelector\("#tilesSentinel"\),/);
@@ -652,8 +656,9 @@ test("public results status and empty states stay concise and consistent across 
   const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
-  assert.match(html, /<span id="resultCount">\{total\.toLocaleString\(\)\} items<\/span>/);
-  assert.match(app, /renderResultsStatusView\(els\.resultsStatusHost, \{/);
+  assert.match(html, /useSyncExternalStore\(subscribeResultsStatusState, getResultsStatusState, getResultsStatusState\)/);
+  assert.match(html, /<span id="resultCount" className="justify-self-start whitespace-nowrap">\{displayTotal\.toLocaleString\(\)\} items<\/span>/);
+  assert.doesNotMatch(app, /renderResultsStatusView\(els\.resultsStatusHost, \{/);
   assert.doesNotMatch(app, /els\.resultCount\.textContent/);
   assert.doesNotMatch(app, /items · \$\{start\}-\$\{end\}/);
   assert.match(app, /resultGridHost: document\.querySelector\("#resultGridHost"\),/);
