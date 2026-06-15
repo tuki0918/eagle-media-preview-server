@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent, type ReactNode, type TouchEvent, type WheelEvent } from "react";
 import { mediaUrl } from "../api";
+import { closePreview } from "../shellActions";
 import {
   getImageOverlayControlsVisible,
   setImageOverlayControlsVisible,
@@ -488,7 +489,16 @@ function ImagePreview({ item, srcKind }: { item: EagleItem; srcKind: "file" | "t
       if (pointersRef.current.size < 2) pinchRef.current = null;
     }
     if (event && tap?.pointerId === event.pointerId) {
-      if (!tap.moved && pointersRef.current.size <= 1) {
+      const deltaX = Math.abs(event.clientX - tap.startX);
+      const deltaY = event.clientY - tap.startY;
+      const canCloseFromSwipe = event.pointerType === "touch"
+        && pointersRef.current.size <= 1
+        && imageState.transform.scale <= imageState.fitScale * 1.05
+        && deltaY > 80
+        && deltaY > deltaX * 1.6;
+      if (canCloseFromSwipe) {
+        closePreview();
+      } else if (!tap.moved && pointersRef.current.size <= 1) {
         toggleImageOverlayControls();
       }
       tapRef.current = null;

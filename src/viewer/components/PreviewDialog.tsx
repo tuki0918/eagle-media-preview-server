@@ -264,5 +264,5 @@ function PreviewInfoToggleIcon({ open }: { open: boolean }) {
 }
 
 function shouldIgnorePreviewSwipe(target: Element) {
-  return Boolean(target.closest("button,input,select,textarea,a,.preview-info"));
+  return Boolean(target.closest("button,input,select,textarea,a,.preview-info,.image-viewport"));
 }
