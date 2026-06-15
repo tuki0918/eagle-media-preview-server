@@ -209,6 +209,10 @@ test("plugin settings runtime no longer accepts the removed single-password save
   assert.doesNotMatch(runtimeSource, /prev\.allowMetadataEditing !== next\.allowMetadataEditing/);
   assert.doesNotMatch(runtimeSource, /prev\.basicAuthUser !== next\.basicAuthUser/);
   assert.doesNotMatch(runtimeSource, /prev\.passwordHash !== next\.passwordHash/);
+  assert.doesNotMatch(runtimeSource, /basicAuthUsername: settings\.basicAuthUser/);
+  assert.doesNotMatch(runtimeSource, /allowMetadataEditing: settings\.allowMetadataEditing/);
+  assert.doesNotMatch(runtimeSource, /passwordHash: settings\.authEnabled \? settings\.passwordHash : ""/);
+  assert.match(runtimeSource, /authUsers: settings\.authEnabled \? settings\.authUsers : \[\]/);
 });
 
 test("plugin server caches authenticated users per request", async () => {

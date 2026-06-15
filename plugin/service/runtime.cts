@@ -58,11 +58,8 @@ interface ServerManagerOptions {
   lanAddressProvider?: () => LanAddress[];
   settingsStore?: SettingsStore;
   viewerServerFactory?: (settings: {
-    allowMetadataEditing: boolean;
     authUsers: AuthUser[];
-    basicAuthUsername: string;
     host: string;
-    passwordHash: string;
     port: number;
   }) => ManagedViewer;
 }
@@ -323,10 +320,7 @@ function createServerManager({
     return viewerServerFactory({
       host: settings.host,
       port: settings.port,
-      basicAuthUsername: settings.basicAuthUser,
-      allowMetadataEditing: settings.allowMetadataEditing,
       authUsers: settings.authEnabled ? settings.authUsers : [],
-      passwordHash: settings.authEnabled ? settings.passwordHash : "",
     });
   }
 

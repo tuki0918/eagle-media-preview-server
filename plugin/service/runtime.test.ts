@@ -174,14 +174,15 @@ test("generated server manager restarts after auth user roles change while runni
         return settings;
       },
     },
-    viewerServerFactory(options: { allowMetadataEditing: boolean }) {
-      calls.push(["create", options.allowMetadataEditing]);
+    viewerServerFactory(options: { authUsers: Array<{ role: string }> }) {
+      const canEdit = options.authUsers.some((user) => user.role === "admin" || user.role === "editor");
+      calls.push(["create", canEdit]);
       return {
         async start() {
-          calls.push(["start", options.allowMetadataEditing]);
+          calls.push(["start", canEdit]);
         },
         async stop() {
-          calls.push(["stop", options.allowMetadataEditing]);
+          calls.push(["stop", canEdit]);
         },
         status() {
           return { state: "running", host: "127.0.0.1", port: 41532 };
