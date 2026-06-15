@@ -247,6 +247,7 @@ test("plugin server caches authenticated users per request", async () => {
   assert.match(source, /function authSessionCookie\(token, maxAge = AUTH_SESSION_MAX_AGE_SECONDS\)/);
   assert.match(source, /"Set-Cookie": authSessionCookie\(token\)/);
   assert.match(source, /"Set-Cookie": authSessionCookie\("", 0\)/);
+  assert.match(source, /permissions: permissionsForUser\(null, \{ authenticated: false \}\)/);
   assert.match(source, /const auth = \{ authSessions, users: resolvedAuthUsers \};/);
   assert.match(source, /function authRequired\(\{ users = \[\] \}/);
   assert.doesNotMatch(source, /username === auth\.basicAuthUsername/);

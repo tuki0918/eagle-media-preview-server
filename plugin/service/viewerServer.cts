@@ -522,7 +522,12 @@ async function handleAuthRoutes(req, url, res, auth: AuthContext) {
       "Content-Type": "application/json; charset=utf-8",
       "Set-Cookie": authSessionCookie("", 0),
     });
-    res.end(JSON.stringify({ authenticated: false }));
+    res.end(JSON.stringify({
+      required: authRequired(auth),
+      authenticated: false,
+      user: null,
+      permissions: permissionsForUser(null, { authenticated: false }),
+    }));
     return true;
   }
 

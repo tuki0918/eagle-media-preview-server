@@ -467,7 +467,17 @@ test("createViewerServer logs out cookie sessions", async () => {
       },
     });
     assert.equal(logout.status, 200);
-    assert.deepEqual(await logout.json(), { authenticated: false });
+    assert.deepEqual(await logout.json(), {
+      required: true,
+      authenticated: false,
+      user: null,
+      permissions: {
+        manageLibrary: false,
+        read: false,
+        writeMetadata: false,
+        writeRating: false,
+      },
+    });
     assert.match(logout.headers.get("set-cookie") || "", /Max-Age=0/);
 
     const afterLogout = await fetch(`${origin}/api/auth/status`, {
