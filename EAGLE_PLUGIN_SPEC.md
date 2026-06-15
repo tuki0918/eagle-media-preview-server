@@ -140,7 +140,6 @@ type Settings = {
   authEnabled: boolean;
   basicAuthUser: string;
   passwordHash: string;
-  preferredLanAddress: string;
   lastServerStatus: "running" | "stopped" | "error";
 };
 ```

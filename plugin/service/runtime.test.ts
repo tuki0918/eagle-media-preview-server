@@ -18,6 +18,7 @@ const PASSWORD_HASH_PATTERN = /^pbkdf2\$sha256\$210000\$[^$]+\$[^$]+$/;
 test("generated CommonJS runtime loads with require for Eagle plugin windows", () => {
   assert.equal(normalizeSettings({}).port, DEFAULT_SETTINGS.port);
   assert.equal("requestLogEnabled" in normalizeSettings({ requestLogEnabled: false }), false);
+  assert.equal("preferredLanAddress" in normalizeSettings({ preferredLanAddress: "192.168.1.50" }), false);
 });
 
 test("generated settings store uses the product settings directory by default", () => {

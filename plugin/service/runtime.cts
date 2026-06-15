@@ -23,7 +23,6 @@ interface PluginSettings {
   lastServerStatus: ServerStatus;
   passwordHash: string;
   port: number;
-  preferredLanAddress: string;
 }
 
 type SettingsInput = Partial<Omit<PluginSettings, "port">> & {
@@ -85,7 +84,6 @@ const DEFAULT_SETTINGS: PluginSettings = {
   authEnabled: false,
   basicAuthUser: "eagle",
   passwordHash: "",
-  preferredLanAddress: "",
   lastServerStatus: "stopped",
 };
 const PASSWORD_HASH_ALGORITHM = "sha256";
@@ -181,7 +179,6 @@ function normalizeSettings(input: SettingsInput = {}): PluginSettings {
     authEnabled: Boolean(input.authEnabled ?? DEFAULT_SETTINGS.authEnabled),
     basicAuthUser: String(input.basicAuthUser || DEFAULT_SETTINGS.basicAuthUser).trim() || DEFAULT_SETTINGS.basicAuthUser,
     passwordHash: String(input.passwordHash || ""),
-    preferredLanAddress: String(input.preferredLanAddress || ""),
     lastServerStatus: isServerStatus(input.lastServerStatus)
       ? input.lastServerStatus
       : DEFAULT_SETTINGS.lastServerStatus,
@@ -293,22 +290,19 @@ function getLanAddresses() {
   return output;
 }
 
-function buildAccessUrl({ host = "0.0.0.0", port = 41532, preferredLanAddress = "", lanAddresses = [] }: {
+function buildAccessUrl({ host = "0.0.0.0", port = 41532, lanAddresses = [] }: {
   host?: string;
   lanAddresses?: LanAddress[];
   port?: number;
-  preferredLanAddress?: string;
 } = {}) {
-  const address = selectLanAddress({ preferredLanAddress, lanAddresses, host });
+  const address = selectLanAddress({ lanAddresses, host });
   return `http://${address}:${port}`;
 }
 
-function selectLanAddress({ preferredLanAddress = "", lanAddresses = [], host = "0.0.0.0" }: {
+function selectLanAddress({ lanAddresses = [], host = "0.0.0.0" }: {
   host?: string;
   lanAddresses?: LanAddress[];
-  preferredLanAddress?: string;
 } = {}) {
-  if (preferredLanAddress && lanAddresses.some((entry) => entry.address === preferredLanAddress)) return preferredLanAddress;
   if (host === "127.0.0.1" || host === "localhost") return "localhost";
   if (host && host !== "0.0.0.0") return host;
   if (lanAddresses[0]?.address) return lanAddresses[0].address;
@@ -340,7 +334,6 @@ function createServerManager({
       url: buildAccessUrl({
         host: loadedSettings.host,
         port: status.port || loadedSettings.port,
-        preferredLanAddress: loadedSettings.preferredLanAddress,
         lanAddresses,
       }),
       lastError: status.lastError || lastError,

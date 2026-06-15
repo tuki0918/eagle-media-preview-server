@@ -20,7 +20,6 @@ interface PluginSettings {
   host?: string;
   passwordHash?: string;
   port?: number | string;
-  preferredLanAddress?: string;
 }
 
 interface LanAddress {
@@ -79,7 +78,6 @@ function App() {
       basicAuthUser: "eagle",
       host: "0.0.0.0",
       port: 41532,
-      preferredLanAddress: "",
     },
     state: "stopped",
     url: "",
@@ -166,7 +164,6 @@ function App() {
       allowMetadataEditing: authEnabled && effectiveAuthUsers.some((user) => canRoleEditMetadata(user.role)),
       authUsers: effectiveAuthUsers,
       basicAuthUser: settings.basicAuthUser || "eagle",
-      preferredLanAddress: "",
       ...patch,
     };
     const cleanUserPasswords = Object.fromEntries(effectiveAuthUsers
