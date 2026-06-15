@@ -22,8 +22,8 @@ test("manifest declares an Eagle background service management window", async ()
   assert.equal(manifest.main.height, 600);
   assert.equal(manifest.main.minWidth, 600);
   assert.equal(manifest.main.minHeight, 600);
-  assert.equal(manifest.main.resizable, false);
-  assert.equal(manifest.main.maximizable, false);
+  assert.equal(manifest.main.resizable, true);
+  assert.equal(manifest.main.maximizable, true);
 });
 
 test("plugin window renders the management UI from React", async () => {
@@ -60,7 +60,7 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(app, /metadataEditingEnabled\s*\?\s*"border-\[#b5ebc1\] bg-\[#e7f8eb\] text-\[#178c35\]"/);
   assert.match(app, /"border-\[#c5d4f3\] bg-\[#edf3ff\] text-\[#2f5fbd\]"/);
   assert.match(app, /id="authUsersStatus"[^>]+role="status"/);
-  assert.match(app, /Saved users apply when BasicAuth protection is enabled\./);
+  assert.match(app, /Saved users apply when password protection is enabled\./);
   assert.match(app, /Admin can also switch libraries\./);
   assert.match(app, /<span>Username<\/span>/);
   assert.match(app, /<span>Role<\/span>/);
@@ -89,7 +89,7 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(app, /if \(saved\) setMessage\(""\);/);
   assert.match(app, /if \(hasUserPasswords\) setUserPasswords\(\{\}\);/);
   assert.match(app, /if \(!hasUserPasswords && !settingsPayloadChanged\(settings, payload\)\)/);
-  assert.match(app, /const AUTH_PASSWORD_REQUIRED_MESSAGE = "Enter a password for every user to enable BasicAuth protection\.";/);
+  assert.match(app, /const AUTH_PASSWORD_REQUIRED_MESSAGE = "Enter a password for every user before enabling password protection\.";/);
   assert.match(app, /const nextAuthEnabled = Boolean\(patch\.authEnabled \?\? authEnabled\);/);
   assert.match(app, /if \(nextAuthEnabled && authUsersMissingPassword\(effectiveAuthUsers, passwordDrafts\)\)/);
   assert.match(app, /setMessage\(AUTH_PASSWORD_REQUIRED_MESSAGE, true\);/);
@@ -124,6 +124,9 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(app, /userPasswords\[String\(index\)\]/);
   assert.match(app, /removeIndexedValue\(userPasswords, index\)/);
   assert.match(app, /passwordDrafts = userPasswords/);
+  assert.match(app, /<button className=\{`inline-flex h-7 items-center rounded-md px-2 text-\[11px\] font-medium text-\[#111\] \$\{authActionButtonClassName\}`\} type="submit" disabled=\{formDisabled\}>/);
+  assert.match(app, /Save settings/);
+  assert.doesNotMatch(app, /onBlur=\{\(\) => saveSettings\(\)\}\s*\/>\s*<button className=\{`grid h-7 w-7 place-items-center rounded-md \$\{authActionButtonClassName\}`\}/);
   assert.match(app, /const effectiveAuthUsers = Array\.isArray\(patch\.authUsers\)/);
   assert.match(app, /passwordDrafts: nextUserPasswords/);
   assert.doesNotMatch(app, /userPasswords\[String\(user\.username/);
@@ -147,15 +150,21 @@ test("plugin app keeps Eagle Node API compatibility with a classic script", asyn
   assert.match(app, /import qrcodeFactory from "qrcode-generator"/);
 });
 
-test("settings stay expanded and endpoint opens externally", async () => {
+test("settings can collapse and endpoint opens externally", async () => {
   const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
   const app = await readPluginAppSource();
 
   assert.match(app, /<form/);
+  assert.match(app, /const \[settingsExpanded, setSettingsExpanded\] = useState\(false\);/);
+  assert.match(app, /id="settingsToggleButton"/);
+  assert.match(app, /aria-controls="settingsPanel"/);
+  assert.match(app, /aria-expanded=\{settingsExpanded\}/);
+  assert.match(app, /hidden=\{!settingsExpanded\}/);
+  assert.match(app, /setSettingsExpanded\(\(current\) => !current\)/);
+  assert.match(app, /<ChevronIcon className=\{`h-\[12px\] w-\[12px\] transition-transform \$\{settingsExpanded \? "rotate-180" : ""\}`\} \/>/);
+  assert.match(app, /function ChevronIcon/);
   assert.match(app, /openEndpointUrl/);
   assert.match(app, /eagle\?\.shell\?\.openExternal/);
-  assert.doesNotMatch(html, /settingsToggleButton/);
-  assert.doesNotMatch(app, /toggleSettings/);
   assert.doesNotMatch(app, /setMessage\("Updated"\)/);
 });
 

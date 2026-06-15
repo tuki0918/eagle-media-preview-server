@@ -123,17 +123,17 @@ test("generated settings store rejects invalid auth users", async () => {
   );
 });
 
-test("generated settings store requires BasicAuth before metadata editing can be enabled", async () => {
+test("generated settings store requires password protection before metadata editing can be enabled", async () => {
   const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-runtime-"));
   const store = createSettingsStore({ filePath: join(dir, "settings.json") });
 
   await assert.rejects(
     () => store.save({ allowMetadataEditing: true }),
-    /BasicAuth/i,
+    /Password protection/i,
   );
 });
 
-test("generated settings store clears metadata editing when BasicAuth is disabled", async () => {
+test("generated settings store clears metadata editing when password protection is disabled", async () => {
   const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-runtime-"));
   const store = createSettingsStore({ filePath: join(dir, "settings.json") });
 

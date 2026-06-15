@@ -121,7 +121,7 @@ function createSettingsStore({ filePath = defaultSettingsPath() }: { filePath?: 
       }
       if (!next.authEnabled) {
         if (input.allowMetadataEditing === true) {
-          throw new Error("BasicAuth protection is required when metadata editing is enabled");
+          throw new Error("Password protection is required when metadata editing is enabled");
         }
         next.passwordHash = "";
         next.allowMetadataEditing = false;

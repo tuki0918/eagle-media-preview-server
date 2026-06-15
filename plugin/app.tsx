@@ -54,7 +54,7 @@ declare global {
 }
 
 const busyStoppedFrames = Object.freeze([".", "..", "...", "....", "....."]);
-const AUTH_PASSWORD_REQUIRED_MESSAGE = "Enter a password for every user to enable BasicAuth protection.";
+const AUTH_PASSWORD_REQUIRED_MESSAGE = "Enter a password for every user before enabling password protection.";
 const settingInputClassName = "h-7 min-w-0 rounded-md border border-[#d7d9de] bg-white px-2 text-[11px] text-[#111] outline-0 focus:border-[rgba(31,116,255,0.58)] focus:shadow-[0_0_0_3px_rgba(31,116,255,0.12)] disabled:cursor-not-allowed disabled:bg-[#f4f5f7] disabled:text-[#8a8f99]";
 const authActionButtonClassName = "border border-[#d7d9de] bg-white text-[#555c66] hover:bg-[#f4f5f7] disabled:cursor-not-allowed disabled:opacity-45";
 
@@ -65,6 +65,7 @@ function App() {
   const [message, setMessageState] = useState("");
   const [messageIsError, setMessageIsError] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
+  const [settingsExpanded, setSettingsExpanded] = useState(false);
   const [userPasswords, setUserPasswords] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<PluginStatus>(() => ({
     settings: {
@@ -362,7 +363,7 @@ function App() {
                 checked={authEnabled}
                 disabled={formDisabled}
                 icon={<ShieldIcon />}
-                title="BasicAuth protection"
+                title="Password protection"
                 description="Require username & password to access."
                 onChange={(checked) => {
                   if (checked && authUsersMissingPassword(authUsers, userPasswords)) {
@@ -405,10 +406,14 @@ function App() {
           if (!busy) saveSettings();
         }}
       >
-        <div className="mb-2.5 border-b border-[#e1e3e7] pb-2.5">
+        <div className={`${settingsExpanded ? "mb-2.5 border-b border-[#e1e3e7] pb-2.5" : ""} flex items-center justify-between gap-3`}>
           <SectionHeading icon={<SettingsIcon />}>Settings</SectionHeading>
+          <button className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium ${authActionButtonClassName}`} type="button" aria-controls="settingsPanel" aria-expanded={settingsExpanded} id="settingsToggleButton" onClick={() => setSettingsExpanded((current) => !current)}>
+            <ChevronIcon className={`h-[12px] w-[12px] transition-transform ${settingsExpanded ? "rotate-180" : ""}`} />
+            <span>{settingsExpanded ? "Hide" : "Show"}</span>
+          </button>
         </div>
-        <div className="mt-2.5 grid">
+        <div id="settingsPanel" className="mt-2.5 grid" hidden={!settingsExpanded}>
           <SettingRow label="Port" help="The port the server listens on.">
             <input
               className={`${settingInputClassName} w-full`}
@@ -421,7 +426,7 @@ function App() {
               onBlur={(event) => saveSettings({ patch: { port: event.currentTarget.value } })}
             />
           </SettingRow>
-          <SettingRow label="Users" help={authEnabled ? "Viewer can browse. Editor can edit metadata. Admin can also switch libraries." : "Saved users apply when BasicAuth protection is enabled."}>
+          <SettingRow label="Users" help={authEnabled ? "Viewer can browse. Editor can edit metadata. Admin can also switch libraries." : "Saved users apply when password protection is enabled."}>
             <div className="grid gap-2">
               <div className="flex justify-end">
                 <span id="authUsersStatus" className={`inline-flex min-h-5 items-center rounded-md border px-2 text-[10px] font-medium ${authUsersStatusClassName}`} role="status">
@@ -468,7 +473,6 @@ function App() {
                     placeholder={user.passwordHash ? "••••••••" : "Password"}
                     value={userPasswords[String(index)] || ""}
                     onChange={(event) => setUserPasswords((current) => ({ ...current, [String(index)]: event.currentTarget.value }))}
-                    onBlur={() => saveSettings()}
                   />
                   <button className={`grid h-7 w-7 place-items-center rounded-md ${authActionButtonClassName}`} type="button" aria-label={`Remove ${user.username || "user"}`} title="Remove user" disabled={formDisabled || authUsers.length <= 1} onClick={() => removeAuthUser(index)}>
                     <CloseIcon className="h-[11px] w-[11px]" />
@@ -482,6 +486,11 @@ function App() {
                 </button>
                 <button className={`grid h-7 w-7 place-items-center rounded-md p-1 ${authActionButtonClassName}`} type="button" aria-label={passwordVisible ? "Hide passwords" : "Show passwords"} title={passwordVisible ? "Hide passwords" : "Show passwords"} disabled={formDisabled} onClick={() => setPasswordVisible((current) => !current)}>
                   {passwordVisible ? <EyeIcon className="h-[13px] w-[13px]" /> : <EyeOffIcon className="h-[13px] w-[13px]" />}
+                </button>
+              </div>
+              <div className="flex justify-end">
+                <button className={`inline-flex h-7 items-center rounded-md px-2 text-[11px] font-medium text-[#111] ${authActionButtonClassName}`} type="submit" disabled={formDisabled}>
+                  Save settings
                 </button>
               </div>
             </div>
@@ -728,6 +737,10 @@ function Svg({ children, className = "h-6 w-6" }: { children: React.ReactNode; c
 
 function CloseIcon({ className }: { className?: string }) {
   return <Svg className={className}><path d="M6 6l12 12M18 6 6 18" /></Svg>;
+}
+
+function ChevronIcon({ className }: { className?: string }) {
+  return <Svg className={className}><path d="m6 9 6 6 6-6" /></Svg>;
 }
 
 function CopyIcon({ className }: { className?: string }) {

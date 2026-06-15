@@ -99,10 +99,11 @@ Build output is created under `dist`:
 - Toggle auto-start
 - Toggle Public Network access
 - Configure the port
-- Configure BasicAuth enablement
+- Configure Password protection
 - Configure multiple users with Viewer, Editor, and Admin roles
 - Display and copy the Endpoint URL
 - Display the Endpoint URL as a QR code
+- Keep settings usable in the fixed-size Eagle window through a collapsible panel and resizable window
 
 ### UI Elements
 
@@ -118,9 +119,10 @@ Build output is created under `dist`:
   - Shows an empty-state icon while the server is stopped
 - `Options`
   - Auto start
-  - BasicAuth protection
+  - Password protection
   - Public Network
 - `Settings`
+  - Collapsible settings panel
   - Port
   - Users
   - Per-user role and password
@@ -321,7 +323,7 @@ Main status fields:
 
 1. Open the server management window in Eagle
 2. Enable `Public Network`
-3. If needed, add Viewer, Editor, or Admin users and enable `BasicAuth protection`
+3. If needed, add Viewer, Editor, or Admin users and enable `Password protection`
 4. Confirm the Port setting
 5. Start the server with the power toggle
 6. Open the Endpoint URL or scan the QR code from a phone
@@ -338,7 +340,7 @@ Main status fields:
 
 1. Add at least one user with a password
 2. Assign Viewer, Editor, or Admin roles
-3. Enable BasicAuth protection
+3. Enable Password protection
 4. If the server is already running, settings changes that affect binding or auth restart it automatically
 5. External browser access requires authentication
 
