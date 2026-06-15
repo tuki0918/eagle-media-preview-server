@@ -3,12 +3,14 @@ export type PreviewDialogMode = "" | "audio" | "image" | "text" | "unsupported" 
 interface PreviewDialogState {
   infoOpen: boolean;
   mode: PreviewDialogMode;
+  open: boolean;
 }
 
 const listeners = new Set<() => void>();
 let currentPreviewDialogState: PreviewDialogState = {
   infoOpen: false,
   mode: "",
+  open: false,
 };
 
 export function getPreviewDialogState() {
@@ -16,7 +18,11 @@ export function getPreviewDialogState() {
 }
 
 export function setPreviewDialogState(nextState: PreviewDialogState) {
-  if (currentPreviewDialogState.infoOpen === nextState.infoOpen && currentPreviewDialogState.mode === nextState.mode) return;
+  if (
+    currentPreviewDialogState.infoOpen === nextState.infoOpen
+    && currentPreviewDialogState.mode === nextState.mode
+    && currentPreviewDialogState.open === nextState.open
+  ) return;
   currentPreviewDialogState = nextState;
   emitPreviewDialogState();
 }
@@ -32,6 +38,7 @@ export function resetPreviewDialogState() {
   setPreviewDialogState({
     infoOpen: false,
     mode: "",
+    open: false,
   });
 }
 

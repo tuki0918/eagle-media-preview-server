@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import {
   closePreview,
   handlePreviewClose,
@@ -11,6 +11,7 @@ import { getPreviewDialogState, subscribePreviewDialogState } from "../previewDi
 import { PreviewMeta, PreviewOriginalName } from "./PreviewText";
 
 export function PreviewDialog() {
+  const dialogRef = useRef<HTMLDialogElement | null>(null);
   const previewDialogState = useSyncExternalStore(subscribePreviewDialogState, getPreviewDialogState, getPreviewDialogState);
   const dialogClassName = [
     "h-dvh max-h-dvh w-screen max-w-full rounded-none border-0 bg-app-surface p-0 text-app-text",
@@ -18,8 +19,36 @@ export function PreviewDialog() {
     previewDialogState.infoOpen ? "info-open" : "",
   ].filter(Boolean).join(" ");
 
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    document.body.classList.toggle("modal-open", previewDialogState.open);
+    if (!previewDialogState.open) {
+      if (typeof dialog.close === "function" && dialog.open) {
+        dialog.close();
+      } else {
+        dialog.removeAttribute("open");
+      }
+      return;
+    }
+
+    if (typeof dialog.showModal === "function") {
+      try {
+        if (!dialog.open) {
+          dialog.showModal();
+        }
+        return;
+      } catch {
+        // Safari fallback below.
+      }
+    }
+    dialog.setAttribute("open", "");
+  }, [previewDialogState.open]);
+
   return (
     <dialog
+      ref={dialogRef}
       id="previewDialog"
       className={dialogClassName}
       onClose={handlePreviewClose}

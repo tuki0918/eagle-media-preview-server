@@ -163,7 +163,6 @@ async function init() {
     previewPointerDown: closePreviewInfoFromOutside,
     previewClosed: () => {
       clearPreviewContents();
-      document.body.classList.remove("modal-open");
     },
     previewDoubleClicked: (target, preventDefault) => {
       if ((target as Element | null)?.closest("button")) {
@@ -348,10 +347,10 @@ function openPreview(item: EagleItem, { skipHistory = false }: OpenPreviewOption
   setPreviewDialogState({
     infoOpen: state.previewInfoOpen,
     mode: kind,
+    open: true,
   });
   renderPreviewBodyView(els.previewBody, { item, kind, srcKind });
 
-  showPreviewDialog();
   if (!skipHistory) syncUrlState();
 }
 
@@ -396,13 +395,6 @@ function closePreview({ skipHistory = false }: OpenPreviewOptions = {}) {
   resetPreviewDialogState();
   state.previewItemId = "";
   state.previewInfoOpen = false;
-  document.body.classList.remove("modal-open");
-  if (typeof els.dialog.close === "function" && els.dialog.open) {
-    els.dialog.close();
-    if (!skipHistory) syncUrlState();
-    return;
-  }
-  els.dialog.removeAttribute("open");
   clearPreviewContents();
   if (!skipHistory) syncUrlState();
 }
@@ -447,21 +439,6 @@ async function toggleFullscreen() {
   } catch (error) {
     console.warn("Fullscreen is unavailable in this browser.", error);
   }
-}
-
-function showPreviewDialog() {
-  document.body.classList.add("modal-open");
-  if (typeof els.dialog.showModal === "function") {
-    try {
-      if (!els.dialog.open) {
-        els.dialog.showModal();
-      }
-      return;
-    } catch {
-      // Safari fallback below.
-    }
-  }
-  els.dialog.setAttribute("open", "");
 }
 
 function restoreUrlState() {
