@@ -226,6 +226,71 @@ test("createViewerServer accepts same-origin metadata writes", async () => {
   }
 });
 
+test("createViewerServer logs out cookie sessions", async () => {
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    passwordHash: sha256("secret"),
+    basicAuthUsername: "eagle",
+  });
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const origin = `http://127.0.0.1:${status.port}`;
+    const login = await fetch(`${origin}/api/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: origin,
+      },
+      body: JSON.stringify({ username: "eagle", password: "secret" }),
+    });
+    assert.equal(login.status, 200);
+    const cookie = login.headers.get("set-cookie") || "";
+    assert.match(cookie, /viewer_session=/);
+
+    const authenticated = await fetch(`${origin}/api/auth/status`, {
+      headers: { Cookie: cookie },
+    });
+    assert.deepEqual(await authenticated.json(), {
+      required: true,
+      authenticated: true,
+      permissions: {
+        read: true,
+        writeMetadata: false,
+        writeRating: false,
+      },
+    });
+
+    const logout = await fetch(`${origin}/api/auth/logout`, {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        Origin: origin,
+      },
+    });
+    assert.equal(logout.status, 200);
+    assert.deepEqual(await logout.json(), { authenticated: false });
+    assert.match(logout.headers.get("set-cookie") || "", /Max-Age=0/);
+
+    const afterLogout = await fetch(`${origin}/api/auth/status`, {
+      headers: { Cookie: cookie },
+    });
+    assert.deepEqual(await afterLogout.json(), {
+      required: true,
+      authenticated: false,
+      permissions: {
+        read: false,
+        writeMetadata: false,
+        writeRating: false,
+      },
+    });
+  } finally {
+    await viewer.stop();
+  }
+});
+
 test("createViewerServer returns 400 for invalid JSON request bodies", async () => {
   const viewer = createViewerServer({
     host: "127.0.0.1",

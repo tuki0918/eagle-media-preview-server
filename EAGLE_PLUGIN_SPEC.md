@@ -218,6 +218,8 @@ Settings path:
   - Returns whether authentication is required, whether the current request is authenticated, and viewer permissions
 - `POST /api/auth/login`
   - Issues a BasicAuth session cookie
+- `POST /api/auth/logout`
+  - Clears the `viewer_session` cookie and removes the server-side session token
 - `POST /api/connect`
   - Connects to Eagle API and returns app/library information
 - `GET /api/health`

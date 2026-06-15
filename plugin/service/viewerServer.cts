@@ -455,6 +455,21 @@ async function handleAuthRoutes(req, url, res, { allowMetadataEditing, authSessi
     return true;
   }
 
+  if (url.pathname === "/api/auth/logout") {
+    if (req.method !== "POST") {
+      sendJson(res, 405, { error: "Method not allowed" });
+      return true;
+    }
+    const token = parseCookies(req.headers.cookie || "").viewer_session;
+    if (token) authSessions.delete(token);
+    res.writeHead(200, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Set-Cookie": "viewer_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0",
+    });
+    res.end(JSON.stringify({ authenticated: false }));
+    return true;
+  }
+
   return false;
 }
 
