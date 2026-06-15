@@ -1,6 +1,19 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import {
+  AdvancedFilters,
+  ConnectButton,
+  ConnectMessage,
+  LoginView,
+  PreviewActions,
+  PreviewDetailsPanel,
+  ResultList,
+  SearchControls,
+} from "../src/viewer/ViewerShell";
+import { PAGE_SIZE_OPTIONS } from "../src/viewer/shellConfig";
 
 async function readViewerSources() {
   const files = [
@@ -72,22 +85,22 @@ async function readAppSources() {
 }
 
 test("public login no longer renders advanced Eagle connection settings", async () => {
-  const html = await readAppSources();
   const app = await readViewerSources();
+  const login = renderToStaticMarkup(createElement(LoginView, { hidden: false }));
 
-  assert.match(html, /import iconOnUrl from "\.\.\/\.\.\/assets\/icon_on\.svg";/);
-  assert.match(html, /className="[^"]*\bapp-logo\b[^"]*"[\s\S]*src=\{iconOnUrl\}/);
-  assert.match(html, /<h1>Media Preview Server<\/h1>/);
-  assert.match(html, /A local media server for your Eagle library\./);
-  assert.doesNotMatch(html, /id="viewerPasswordField"/);
-  assert.doesNotMatch(html, /id="viewerPasswordInput"/);
-  assert.doesNotMatch(html, /id="togglePasswordButton"/);
-  assert.doesNotMatch(html, /Advanced Settings/);
-  assert.doesNotMatch(html, /id="advancedButton"/);
-  assert.doesNotMatch(html, /id="advancedFields"/);
-  assert.doesNotMatch(html, /id="hostInput"/);
-  assert.doesNotMatch(html, /id="portInput"/);
-  assert.doesNotMatch(html, /id="tokenInput"/);
+  assert.match(login, /class="[^"]*\bapp-logo\b/);
+  assert.match(login, /src="[^"]*icon_on\.svg/);
+  assert.match(login, /<h1>Media Preview Server<\/h1>/);
+  assert.match(login, /A local media server for your Eagle library\./);
+  assert.doesNotMatch(login, /id="viewerPasswordField"/);
+  assert.doesNotMatch(login, /id="viewerPasswordInput"/);
+  assert.doesNotMatch(login, /id="togglePasswordButton"/);
+  assert.doesNotMatch(login, /Advanced Settings/);
+  assert.doesNotMatch(login, /id="advancedButton"/);
+  assert.doesNotMatch(login, /id="advancedFields"/);
+  assert.doesNotMatch(login, /id="hostInput"/);
+  assert.doesNotMatch(login, /id="portInput"/);
+  assert.doesNotMatch(login, /id="tokenInput"/);
   assert.doesNotMatch(app, /viewerPasswordField/);
   assert.doesNotMatch(app, /viewerPasswordInput/);
   assert.doesNotMatch(app, /togglePasswordButton/);
@@ -100,12 +113,25 @@ test("public UI no longer shows connect lock icon or connection settings button"
   const html = await readAppSources();
   const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
+  const button = renderToStaticMarkup(createElement(ConnectButton, { disabled: false }));
+  const message = renderToStaticMarkup(createElement(ConnectMessage, { message: "Connecting", isError: false }));
+  const controls = renderToStaticMarkup(createElement(SearchControls, {
+    filtersOpen: true,
+    folders: [{ id: "folder-1", name: "Folder 1", imageCount: 2 }],
+    hasActiveFilters: true,
+    searchQuery: "alpha",
+    selectedExt: "jpg",
+    selectedFolderId: "folder-1",
+    selectedLimit: 60,
+    selectedRating: "3",
+  }));
 
-  assert.doesNotMatch(html, /id="connectButtonIcon"/);
-  assert.match(html, /<ConnectButton \/>/);
-  assert.match(html, /<ConnectMessage \/>/);
-  assert.doesNotMatch(html, /aria-label="Connection settings"/);
-  assert.doesNotMatch(html, /id="changeConnectionButton"/);
+  assert.match(button, /id="connectButton"/);
+  assert.doesNotMatch(button, /id="connectButtonIcon"/);
+  assert.match(message, /id="connectMessage"/);
+  assert.match(message, /Connecting/);
+  assert.doesNotMatch(controls, /aria-label="Connection settings"/);
+  assert.doesNotMatch(controls, /id="changeConnectionButton"/);
   assert.doesNotMatch(app, /changeConnectionButton/);
   assert.doesNotMatch(app, /connectButtonIcon/);
   assert.doesNotMatch(app, /connectButtonHost: document\.querySelector\("#connectButtonHost"\),/);
@@ -148,8 +174,10 @@ test("public UI no longer shows connect lock icon or connection settings button"
   assert.match(html, /max-\[540px\]:gap-2 max-\[540px\]:text-xs/);
   assert.doesNotMatch(css, /\.status-line\s*\{/);
   assert.doesNotMatch(css, /\.status-actions\s*\{/);
-  assert.match(html, /<select id="pageSizeSelect" aria-label="Page size" value=\{selectedLimit\} onChange=\{changePageSize\}>[\s\S]*PAGE_SIZE_OPTIONS\.map/);
-  assert.match(html, /export const PAGE_SIZE_OPTIONS = \[30, 60, 120, 240\] as const;/);
+  assert.match(controls, /id="pageSizeSelect"[^>]*aria-label="Page size"/);
+  for (const pageSize of PAGE_SIZE_OPTIONS) {
+    assert.match(controls, new RegExp(`value="${pageSize}"[\\s\\S]*${pageSize} items`));
+  }
   assert.match(app, /limit:\s*30,/);
   assert.match(app, /if \(state\.limit !== DEFAULT_PAGE_SIZE\) params\.set\("limit", String\(state\.limit\)\);/);
   assert.match(app, /const parsed = Number\.parseInt\(value \|\| String\(DEFAULT_PAGE_SIZE\), 10\);/);
@@ -211,13 +239,15 @@ test("public UI exposes direct original file URLs for each media item", async ()
   const html = await readAppSources();
   const app = await readViewerSources();
   const directFileUrlSource = app.match(/function directFileUrl\(item[^)]*\) \{[\s\S]*?\n\}/)?.[0] || "";
+  const actions = renderToStaticMarkup(createElement(PreviewActions, { item: { id: "item 1" } }));
 
   assert.doesNotMatch(html, /class="direct-file-link"/);
   assert.match(app, /function directFileUrl\(item[^)]*\)/);
   assert.match(app, /function previewFileName\(item[^)]*\)/);
   assert.match(directFileUrlSource, /return new URL\(`\/file\/\$\{encodeURIComponent\(String\(item\.id \|\| ""\)\)\}`,\s*baseUrl\)\.href;/);
-  assert.match(html, /className="direct-file-link preview-info-cta"/);
-  assert.match(html, /Open file/);
+  assert.match(actions, /class="direct-file-link preview-info-cta"/);
+  assert.match(actions, /href="http:\/\/localhost\/file\/item%201"/);
+  assert.match(actions, /Open file/);
   assert.doesNotMatch(directFileUrlSource, /connectionId/);
   assert.doesNotMatch(app, /state\.connectionId/);
   assert.doesNotMatch(app, /function withConnection\(/);
@@ -278,12 +308,23 @@ test("public preview renders text-like files and PDFs from their thumbnails", as
 
 test("public grid thumbnail hover icon uses play for video and audio", async () => {
   const app = await readViewerSources();
-  const html = await readAppSources();
+  const resultList = renderToStaticMarkup(createElement(ResultList, {
+    items: [
+      { id: "video-1", name: "Video.mp4", ext: "mp4" },
+      { id: "audio-1", name: "Audio.mp3", ext: "mp3" },
+      { id: "image-1", name: "Image.jpg", ext: "jpg" },
+    ],
+    onOpenPreview: () => {},
+    viewMode: "grid",
+  }));
 
-  assert.match(html, /"move-diagonal":/);
+  assert.match(resultList, /data-media-type="video"/);
+  assert.match(resultList, /data-media-type="audio"/);
+  assert.match(resultList, /data-media-type="image"/);
+  assert.match(resultList, /M8 5v14l11-7z/);
+  assert.match(resultList, /13 5 19 5 19 11/);
   assert.match(app, /function thumbnailOverlayIcon\(mediaType[^)]*\)/);
   assert.match(app, /return mediaType === "video" \|\| mediaType === "audio" \? "play" : "move-diagonal";/);
-  assert.match(html, /overlayIconPaths\[thumbnailOverlayIcon\(mediaType\)\]/);
   assert.doesNotMatch(app, /mediaType === "document" \? "file-text"/);
   assert.doesNotMatch(app, /mediaType === "image" \? "maximize-2"/);
 });
@@ -487,20 +528,31 @@ test("public preview info closes when pressing outside the side menu", async () 
 });
 
 test("public UI labels media extensions as type", async () => {
-  const html = await readAppSources();
   const app = await readViewerSources();
+  const filters = renderToStaticMarkup(createElement(AdvancedFilters, {
+    filtersOpen: true,
+    folders: [{ id: "folder-1", name: "Folder 1", imageCount: 2 }],
+    selectedExt: "jpg",
+    selectedFolderId: "folder-1",
+    selectedLimit: 60,
+    selectedRating: "3",
+  }));
 
-  assert.match(html, /<select id="folderSelect" aria-label="Folder" value=\{selectedFolderId\} onChange=\{changeFolder\}>[\s\S]*?<FolderOptions folders=\{folders\} \/>/);
-  assert.match(html, /<select id="extSelect" aria-label="Type" value=\{selectedExt\} onChange=\{changeMediaType\}>[\s\S]*?<option value="">All types<\/option>/);
-  assert.match(html, /<select id="ratingSelect" aria-label="Rating" value=\{selectedRating\} onChange=\{changeRating\}>[\s\S]*?<option value="">All ratings<\/option>/);
-  assert.match(html, /<select id="pageSizeSelect" aria-label="Page size" value=\{selectedLimit\} onChange=\{changePageSize\}>[\s\S]*?PAGE_SIZE_OPTIONS\.map/);
-  assert.match(html, /export const PAGE_SIZE_OPTIONS = \[30, 60, 120, 240\] as const;/);
-  assert.doesNotMatch(html, /<span>Folder<\/span>/);
-  assert.doesNotMatch(html, /<span>Type<\/span>\s*<select id="extSelect"/);
-  assert.doesNotMatch(html, /<span>Rating<\/span>/);
-  assert.doesNotMatch(html, /<span>Page Size<\/span>/);
+  assert.match(filters, /id="folderSelect"[^>]*aria-label="Folder"/);
+  assert.match(filters, /id="extSelect"[^>]*aria-label="Type"/);
+  assert.match(filters, /<option value="">All types<\/option>/);
+  assert.match(filters, /id="ratingSelect"[^>]*aria-label="Rating"/);
+  assert.match(filters, /<option value="">All ratings<\/option>/);
+  assert.match(filters, /id="pageSizeSelect"[^>]*aria-label="Page size"/);
+  for (const pageSize of PAGE_SIZE_OPTIONS) {
+    assert.match(filters, new RegExp(`value="${pageSize}"[\\s\\S]*${pageSize} items`));
+  }
+  assert.doesNotMatch(filters, /<span>Folder<\/span>/);
+  assert.doesNotMatch(filters, /<span>Type<\/span>\s*<select id="extSelect"/);
+  assert.doesNotMatch(filters, /<span>Rating<\/span>/);
+  assert.doesNotMatch(filters, /<span>Page Size<\/span>/);
   assert.match(app, /{ label: "Type", value: mediaTypeLabel\(item\) }/);
-  assert.doesNotMatch(html, />Extension</);
+  assert.doesNotMatch(filters, />Extension</);
   assert.doesNotMatch(app, /label: "Extension"/);
 });
 
@@ -509,16 +561,29 @@ test("public UI supports tag filter chips", async () => {
   const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
   const advancedFiltersSource = html.match(/export function AdvancedFilters\([\s\S]*?\nfunction ResetFiltersButton/)?.[0] || "";
+  const controls = renderToStaticMarkup(createElement(SearchControls, {
+    filtersOpen: true,
+    folders: [{ id: "folder-1", name: "Folder 1", imageCount: 2 }],
+    hasActiveFilters: true,
+    searchQuery: "alpha",
+    selectedExt: "jpg",
+    selectedFolderId: "folder-1",
+    selectedLimit: 60,
+    selectedRating: "3",
+  }));
 
-  assert.match(html, /id="tagChips"/);
-  assert.match(html, /id="tagSuggestions"/);
-  assert.match(html, /<div className="[^"]*\bsearch-box\b[^"]*"[\s\S]*<TagChips \/>[\s\S]*<SearchInput value=\{displaySearchQuery\} \/>[\s\S]*<TagSuggestions \/>[\s\S]*<\/div>[\s\S]*<ResetFiltersButton hasActiveFilters=\{displayHasActiveFilters\} \/>[\s\S]*<ToggleFiltersButton filtersOpen=\{displayFiltersOpen\} \/>/);
-  assert.match(html, /id="resetFiltersButton"[\s\S]*aria-label="Reset filters"[\s\S]*disabled=\{!hasActiveFilters\}/);
-  assert.match(html, /id="resetFiltersButton"[\s\S]*<FunnelXIcon \/>/);
-  assert.doesNotMatch(html, /id="tagInput"/);
+  assert.match(controls, /id="tagChips"/);
+  assert.match(controls, /id="searchInput"/);
+  assert.match(controls, /value="alpha"/);
+  assert.match(controls, /id="tagSuggestions"/);
+  assert.match(controls, /id="resetFiltersButton"/);
+  assert.match(controls, /aria-label="Reset filters"/);
+  assert.doesNotMatch(controls, /disabled=""/);
+  assert.match(controls, /id="toggleFiltersButton"/);
+  assert.match(controls, /aria-expanded="true"/);
+  assert.doesNotMatch(controls, /id="tagInput"/);
   assert.doesNotMatch(advancedFiltersSource, /id="tagChips"/);
-  assert.doesNotMatch(html, /id="advancedFiltersHost"/);
-  assert.match(html, /<AdvancedFilters[\s\S]*filtersOpen=\{displayFiltersOpen\}/);
+  assert.doesNotMatch(controls, /id="advancedFiltersHost"/);
   assert.match(app, /tags:\s*\[\]/);
   assert.doesNotMatch(app, /tagChips: document\.querySelector\("#tagChips"\),/);
   assert.doesNotMatch(app, /searchInputHost: document\.querySelector\("#searchInputHost"\),/);
@@ -532,8 +597,7 @@ test("public UI supports tag filter chips", async () => {
   assert.doesNotMatch(app, /resetFiltersButton: document\.querySelector\("#resetFiltersButton"\),/);
   assert.doesNotMatch(app, /advancedFilters: document\.querySelector\("#advancedFilters"\),/);
   assert.doesNotMatch(app, /els\.advancedFilters\.hidden/);
-  assert.match(html, /export function FolderOptions\(\{ folders \}/);
-  assert.match(html, /<option value=\{UNCATEGORIZED_FOLDER_ID\}>Uncategorized<\/option>/);
+  assert.match(controls, /Uncategorized/);
   assert.doesNotMatch(app, /renderFolderOptionsView/);
   assert.match(app, /setTagChipsState\(\{/);
   assert.match(app, /setSearchControlsState\(\{/);
@@ -548,8 +612,7 @@ test("public UI supports tag filter chips", async () => {
   assert.doesNotMatch(app, /els\.pageSizeSelect\.value/);
   assert.doesNotMatch(app, /function optionNode\(/);
   assert.doesNotMatch(app, /document\.createElement\("option"\)/);
-  assert.match(html, /function FunnelXIcon\(\) \{[\s\S]*<path d="M12\.531 3H3/);
-  assert.match(html, /onClick=\{resetFilters\}/);
+  assert.match(controls, /M12\.531 3H3/);
   assert.match(app, /setViewerShellActions\(\{/);
   assert.match(app, /resetFilters,/);
   assert.match(app, /function syncResetFiltersButton\(\) \{/);
@@ -559,8 +622,7 @@ test("public UI supports tag filter chips", async () => {
   assert.match(app, /selectedLimit:\s*state\.limit,/);
   assert.doesNotMatch(app, /els\.resetFiltersButton\.disabled/);
   assert.doesNotMatch(app, /tagInput:/);
-  assert.match(html, /export function SearchInput\(\{ value = "" \}/);
-  assert.match(html, /id="searchInput"[\s\S]*value=\{inputValue\}[\s\S]*changeSearchQuery\(event\)[\s\S]*onFocus=\{focusSearch\}[\s\S]*onKeyDown=\{handleSearchKeyDown\}/);
+  assert.match(controls, /id="searchInput"[^>]*type="search"/);
   assert.doesNotMatch(app, /els\.searchInput\.value/);
   assert.match(app, /searchChanged:\s*debounce\(\(query: string\) => \{[\s\S]*applyFilterChange\(\{ query: query\.trim\(\) \}\);[\s\S]*loadTagSuggestions\(\);/);
   assert.match(app, /params\.getAll\("tag"\)/);
