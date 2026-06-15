@@ -93,6 +93,12 @@ function App() {
   const authEnabled = Boolean(settings.authEnabled);
   const authUsers = normalizedAuthUsers(settings);
   const allowMetadataEditing = authUsers.some((user) => canRoleEditMetadata(user.role));
+  const authUsersStatusLabel = authEnabled
+    ? allowMetadataEditing ? "Active editors" : "Active viewers"
+    : "Inactive";
+  const authUsersStatusClassName = authEnabled
+    ? "border-[#b5ebc1] bg-[#e7f8eb] text-[#178c35]"
+    : "border-[#d5d9df] bg-[#f3f4f6] text-[#626975]";
   const publicNetwork = (settings.host || "0.0.0.0") === "0.0.0.0";
   const selectedLanAddress = settings.preferredLanAddress || "";
   const qrSrc = useMemo(() => {
@@ -417,8 +423,13 @@ function App() {
               onBlur={(event) => saveSettings({ patch: { port: event.currentTarget.value } })}
             />
           </SettingRow>
-          <SettingRow label="Users" help="Viewer can browse. Editor can edit metadata. Admin is reserved for full management permissions.">
+          <SettingRow label="Users" help={authEnabled ? "Viewer can browse. Editor can edit metadata. Admin is reserved for full management permissions." : "Saved users apply when BasicAuth protection is enabled."}>
             <div className="grid gap-2">
+              <div className="flex justify-end">
+                <span id="authUsersStatus" className={`inline-flex min-h-5 items-center rounded-md border px-2 text-[10px] font-medium ${authUsersStatusClassName}`}>
+                  {authUsersStatusLabel}
+                </span>
+              </div>
               {authUsers.map((user, index) => (
                 <div key={`${user.username}-${index}`} className="grid grid-cols-[minmax(80px,1fr)_86px_minmax(76px,0.8fr)_28px] items-center gap-1.5">
                   <input
