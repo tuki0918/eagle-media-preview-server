@@ -2,4 +2,3 @@ logs
 node_modules
 dist
 *.eagleplugin
-plugin/service/*.cjs
