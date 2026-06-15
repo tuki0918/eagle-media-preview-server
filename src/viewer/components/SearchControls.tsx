@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { MEDIA_TYPE_OPTIONS, PAGE_SIZE_OPTIONS, RATING_OPTIONS } from "../shellConfig";
 import {
   getSearchControlsState,
@@ -32,6 +32,16 @@ interface SearchControlsProps {
   selectedLimit?: number;
   selectedRating?: string;
 }
+
+const selectClassName =
+  "min-h-[50px] w-full appearance-none rounded-app border border-app-border bg-app-surface py-0 pl-4 pr-[46px] text-[15px] text-app-text hover:border-app-border-strong hover:bg-[#fcfdff]";
+
+const selectArrowStyle: CSSProperties = {
+  backgroundImage:
+    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%230f172a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\")",
+  backgroundPosition: "right 18px center",
+  backgroundRepeat: "no-repeat",
+};
 
 export function SearchControls({
   filtersOpen,
@@ -125,12 +135,12 @@ export function AdvancedFilters({
   return (
     <div id="advancedFilters" className="filter-row grid grid-cols-4 gap-6 max-[540px]:grid-cols-1 max-[540px]:gap-3" hidden={!filtersOpen}>
       <label className="grid gap-2">
-        <select id="folderSelect" aria-label="Folder" value={selectedFolderId} onChange={changeFolder}>
+        <select id="folderSelect" className={selectClassName} style={selectArrowStyle} aria-label="Folder" value={selectedFolderId} onChange={changeFolder}>
           <FolderOptions folders={folders} />
         </select>
       </label>
       <label className="grid gap-2">
-        <select id="extSelect" aria-label="Type" value={selectedExt} onChange={changeMediaType}>
+        <select id="extSelect" className={selectClassName} style={selectArrowStyle} aria-label="Type" value={selectedExt} onChange={changeMediaType}>
           <option value="">All types</option>
           {MEDIA_TYPE_OPTIONS.map((type) => (
             <option key={type} value={type}>
@@ -140,7 +150,7 @@ export function AdvancedFilters({
         </select>
       </label>
       <label className="grid gap-2">
-        <select id="ratingSelect" aria-label="Rating" value={selectedRating} onChange={changeRating}>
+        <select id="ratingSelect" className={selectClassName} style={selectArrowStyle} aria-label="Rating" value={selectedRating} onChange={changeRating}>
           <option value="">All ratings</option>
           <option value="0">No rating</option>
           {RATING_OPTIONS.map((rating) => (
@@ -151,7 +161,7 @@ export function AdvancedFilters({
         </select>
       </label>
       <label className="grid gap-2">
-        <select id="pageSizeSelect" aria-label="Page size" value={selectedLimit} onChange={changePageSize}>
+        <select id="pageSizeSelect" className={selectClassName} style={selectArrowStyle} aria-label="Page size" value={selectedLimit} onChange={changePageSize}>
           {PAGE_SIZE_OPTIONS.map((pageSize) => (
             <option key={pageSize} value={pageSize}>
               {pageSize} items

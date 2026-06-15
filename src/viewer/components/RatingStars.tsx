@@ -10,6 +10,10 @@ export interface RatingStarsProps {
   onSelect?: (value: number) => void;
 }
 
+const ratingStarBaseClassName =
+  "rating-star inline-grid h-6 w-[22px] cursor-pointer place-items-center border-0 bg-transparent p-0 text-[17px] leading-none text-[#b7bec8] shadow-none data-[active=true]:text-app-warn";
+const staticRatingStarClassName = `${ratingStarBaseClassName} rating-star-static cursor-default`;
+
 export function RatingStars({ className, id, interactive = false, item, onSelect }: RatingStarsProps) {
   const current = Number(item.star || 0);
   const Tag = interactive ? "button" : "span";
@@ -18,7 +22,7 @@ export function RatingStars({ className, id, interactive = false, item, onSelect
       {[1, 2, 3, 4, 5].map((value) => (
         <Tag
           key={value}
-          className={interactive ? "rating-star" : "rating-star rating-star-static"}
+          className={interactive ? ratingStarBaseClassName : staticRatingStarClassName}
           title={`${value}`}
           data-active={value <= current ? "true" : "false"}
           aria-hidden={interactive ? undefined : "true"}

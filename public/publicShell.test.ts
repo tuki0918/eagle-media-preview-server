@@ -66,6 +66,7 @@ async function readAppSources() {
     "../src/viewer/previewRatingState.ts",
     "../src/viewer/components/ResultList.tsx",
     "../src/viewer/components/ResultSurface.tsx",
+    "../src/viewer/components/ResultState.tsx",
     "../src/viewer/resultSurfaceState.ts",
     "../src/viewer/components/ResultsStatus.tsx",
     "../src/viewer/components/SearchControls.tsx",
@@ -232,10 +233,10 @@ test("public video preview reserves top space for floating action buttons", asyn
 });
 
 test("public audio preview uses video-style dark action buttons", async () => {
-  const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
+  const html = await readAppSources();
 
-  assert.match(css, /\.video-mode \.dialog-actions \.icon-button,\s*\.audio-mode \.dialog-actions \.icon-button\s*\{[^}]*background:\s*rgba\(15,\s*23,\s*42,\s*0\.62\);[^}]*color:\s*#fff;/s);
-  assert.match(css, /\.video-mode \.dialog-actions \.icon-button:hover,\s*\.audio-mode \.dialog-actions \.icon-button:hover\s*\{[^}]*background:\s*rgba\(15,\s*23,\s*42,\s*0\.82\);[^}]*color:\s*#fff;/s);
+  assert.match(html, /previewDialogState\.mode === "video" \|\| previewDialogState\.mode === "audio"/);
+  assert.match(html, /bg-\[rgba\(15,23,42,0\.62\)\][\s\S]*hover:bg-\[rgba\(15,23,42,0\.82\)\]/);
 });
 
 test("public UI exposes direct original file URLs for each media item", async () => {
@@ -367,15 +368,14 @@ test("public ratings are static in grid and table but editable in the preview mo
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(html, /function RatingStars\(\{ className, id, interactive = false, item, onSelect \}/);
-  assert.match(html, /className=\{interactive \? "rating-star" : "rating-star rating-star-static"\}/);
+  assert.match(html, /const ratingStarBaseClassName =[\s\S]*rating-star[\s\S]*data-\[active=true\]:text-app-warn/);
+  assert.match(html, /const staticRatingStarClassName = `\$\{ratingStarBaseClassName\} rating-star-static cursor-default`/);
   assert.match(html, /data-active=\{value <= current \? "true" : "false"\}/);
   assert.doesNotMatch(app, /renderRatingView\(els\.previewRating, \{/);
   assert.doesNotMatch(html, /function renderRatingView\(container[^,]*,\s*props: RatingStarsProps\)/);
   assert.doesNotMatch(app, /previewRating: document\.querySelector\("#previewRating"\),/);
   assert.match(app, /setPreviewRatingState\(\{/);
   assert.match(html, /const Tag = interactive \? "button" : "span";/);
-  assert.match(css, /\.rating-star-static\s*\{/);
-  assert.match(css, /cursor:\s*default;/);
 });
 
 test("public file names expose original names in truncated views and preview info", async () => {
@@ -705,7 +705,7 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   assert.match(css, /\.tile-item \.tile-rating\s*\{/);
   assert.match(css, /\.media-tiles \.tile-item\s*\{[^}]*border-radius:\s*0;/s);
   assert.match(css, /@media \(max-width: 540px\)[\s\S]*\.media-tiles\s*\{[^}]*column-count:\s*3;[^}]*column-width:\s*auto;/);
-  assert.match(css, /\.tiles-sentinel\s*\{/);
+  assert.match(html, /className="tiles-sentinel mt-3 grid min-h-\[52px\] place-items-center text-\[13px\] font-\[680\] text-app-muted"/);
 });
 
 test("public extension pills use varied colors for common text formats", async () => {
@@ -758,7 +758,7 @@ test("public results status and empty states stay concise and consistent across 
   assert.doesNotMatch(css, /\.media-grid\s*\{[^}]*min-height:\s*320px;/s);
   assert.doesNotMatch(css, /\.media-table\s*\{[^}]*min-height:\s*320px;/s);
   assert.match(css, /\.media-grid\.is-empty,\s*\.media-table\.is-empty,\s*\.media-tiles\.is-empty\s*\{[\s\S]*display:\s*block;[\s\S]*column-width:\s*auto;[\s\S]*border:\s*0;[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/);
-  assert.match(css, /\.empty-state\s*\{[\s\S]*min-height:\s*320px;/);
+  assert.match(html, /min-h-\[320px\]/);
 });
 
 test("public UI exposes collapsible advanced filters without sort controls", async () => {

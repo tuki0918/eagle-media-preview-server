@@ -32,6 +32,9 @@ interface MetadataChipEditorProps {
   setSelected: (values: string[]) => void;
 }
 
+const textActionButtonClassName =
+  "rounded-app border border-app-border bg-app-surface px-3 text-[13px] font-[680] text-app-accent hover:border-[rgba(37,99,235,0.22)] hover:bg-app-accent-soft hover:text-app-accent-strong";
+
 export function PreviewDetailsPanel({ detailRows, folders, item, onFolderSuggestions, onSaveMetadata, onTagSuggestions }: PreviewInfoProps) {
   return (
     <section className="preview-details-section">
@@ -160,7 +163,7 @@ function PreviewMetadataEditor({
         />
       </PreviewEditField>
       <div className="preview-edit-actions">
-        <button type="submit" className="text-button preview-edit-save" disabled={saving}>
+        <button type="submit" className={`${textActionButtonClassName} preview-edit-save`} disabled={saving}>
           Save
         </button>
         <span className="preview-edit-status" role="status">

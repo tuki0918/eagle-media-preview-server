@@ -22,6 +22,12 @@ export function PreviewDialog() {
     previewDialogState.mode ? `${previewDialogState.mode}-mode` : "",
     previewDialogState.infoOpen ? "info-open" : "",
   ].filter(Boolean).join(" ");
+  const previewActionButtonClassName = [
+    "icon-button inline-grid min-h-10 w-10 flex-[0_0_40px] place-items-center rounded-app border backdrop-blur-[12px]",
+    previewDialogState.mode === "video" || previewDialogState.mode === "audio"
+      ? "border-[rgba(255,255,255,0.2)] bg-[rgba(15,23,42,0.62)] text-white hover:border-[rgba(255,255,255,0.38)] hover:bg-[rgba(15,23,42,0.82)] hover:text-white"
+      : "border-[rgba(203,213,225,0.82)] bg-[rgba(255,255,255,0.88)] text-app-text hover:border-[rgba(37,99,235,0.28)] hover:bg-white hover:text-app-accent",
+  ].join(" ");
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -116,13 +122,13 @@ export function PreviewDialog() {
           <PreviewMeta />
         </div>
         <div className="dialog-actions flex items-center justify-end gap-2">
-          <button id="toggleInfoPreview" className="icon-button inline-grid min-h-10 w-10 flex-[0_0_40px] place-items-center rounded-app border border-app-border bg-app-surface text-app-text" aria-label="Media information" aria-expanded={previewDialogState.infoOpen} title="Media information" onClick={togglePreviewInfo}>
+          <button id="toggleInfoPreview" className={previewActionButtonClassName} aria-label="Media information" aria-expanded={previewDialogState.infoOpen} title="Media information" onClick={togglePreviewInfo}>
             <PanelLeftIcon />
           </button>
-          <button id="fullscreenPreview" className="icon-button inline-grid min-h-10 w-10 flex-[0_0_40px] place-items-center rounded-app border border-app-border bg-app-surface text-app-text" aria-label="Fullscreen" title="Fullscreen" onClick={toggleFullscreen}>
+          <button id="fullscreenPreview" className={previewActionButtonClassName} aria-label="Fullscreen" title="Fullscreen" onClick={toggleFullscreen}>
             <MaximizeIcon />
           </button>
-          <button id="closePreview" className="icon-button inline-grid min-h-10 w-10 flex-[0_0_40px] place-items-center rounded-app border border-app-border bg-app-surface text-app-text" aria-label="Close" title="Close" onClick={closePreview}>
+          <button id="closePreview" className={previewActionButtonClassName} aria-label="Close" title="Close" onClick={closePreview}>
             <XIcon />
           </button>
         </div>

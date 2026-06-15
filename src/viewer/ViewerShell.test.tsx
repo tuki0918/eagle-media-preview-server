@@ -153,7 +153,7 @@ describe("ViewerAppShell", () => {
     const html = renderToStaticMarkup(<PageButtons current={2} pages={[1, 2, "...", 8]} onSelect={() => {}} />);
 
     expect(html).toContain('data-active="true"');
-    expect(html).toContain('class="page-ellipsis"');
+    expect(html).toContain("page-ellipsis");
   });
 
   test("renders tag chips as a reusable component", () => {
@@ -285,7 +285,8 @@ describe("ViewerAppShell", () => {
     const statik = renderToStaticMarkup(<RatingStars className="rating-control" item={{ star: 3 }} />);
     const interactive = renderToStaticMarkup(<RatingStars className="rating-control" item={{ star: 2 }} interactive onSelect={() => {}} />);
 
-    expect(statik).toContain('class="rating-star rating-star-static"');
+    expect(statik).toContain("rating-star");
+    expect(statik).toContain("rating-star-static");
     expect(statik).toContain('data-active="true"');
     expect(interactive).toContain('aria-pressed="true"');
     expect(interactive).toContain("Rating 2");
