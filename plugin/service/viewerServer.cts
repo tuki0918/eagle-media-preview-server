@@ -442,6 +442,10 @@ interface AuthContext {
 
 async function handleAuthRoutes(req, url, res, auth: AuthContext) {
   if (url.pathname === "/api/auth/status") {
+    if (req.method !== "GET") {
+      sendJson(res, 405, { error: "Method not allowed" });
+      return true;
+    }
     pruneAuthSessions(auth.authSessions);
     const user = authenticatedUser(req, auth);
     const authenticated = !authRequired(auth) || Boolean(user);

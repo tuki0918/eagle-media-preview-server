@@ -223,6 +223,7 @@ Settings path:
 - `POST /api/auth/login`
   - Requires username and password
   - Issues a `viewer_session` cookie
+  - When authentication is disabled, returns an authenticated response with anonymous read permissions and does not issue a cookie
 - `POST /api/auth/logout`
   - Clears the `viewer_session` cookie and removes the server-side session token
 - `POST /api/connect`
