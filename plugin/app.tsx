@@ -151,6 +151,10 @@ function App() {
       : authUsers;
     if (!validateAuthUsers(effectiveAuthUsers)) return false;
     const nextAuthEnabled = Boolean(patch.authEnabled ?? authEnabled);
+    if (nextAuthEnabled && authUsersMissingPassword(effectiveAuthUsers, passwordDrafts)) {
+      setMessage("Enter a password for every user to enable BasicAuth protection.", true);
+      return false;
+    }
     const nextAllowMetadataEditing = nextAuthEnabled && authUsersCanEditMetadata(effectiveAuthUsers);
     const payload: Record<string, unknown> = {
       autoStart: settings.autoStart,
@@ -359,7 +363,7 @@ function App() {
                 title="BasicAuth protection"
                 description="Require username & password to access."
                 onChange={(checked) => {
-                  if (checked && authUsers.some((user, index) => !user.passwordHash && !userPasswords[String(index)]?.trim())) {
+                  if (checked && authUsersMissingPassword(authUsers, userPasswords)) {
                     setMessage("Enter a password for every user to enable BasicAuth protection.", true);
                     return;
                   }
@@ -606,6 +610,10 @@ function canRoleEditMetadata(role: unknown) {
 
 function authUsersCanEditMetadata(users: AuthUser[]) {
   return users.some((user) => canRoleEditMetadata(user.role));
+}
+
+function authUsersMissingPassword(users: AuthUser[], values: Record<string, string>) {
+  return users.some((user, index) => !user.passwordHash && !values[String(index)]?.trim());
 }
 
 function replaceAuthUser(users: AuthUser[], index: number, patch: AuthUser) {

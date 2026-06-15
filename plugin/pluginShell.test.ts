@@ -65,6 +65,7 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(app, /if \(hasUserPasswords\) setUserPasswords\(\{\}\);/);
   assert.match(app, /if \(!hasUserPasswords && !settingsPayloadChanged\(settings, payload\)\)/);
   assert.match(app, /const nextAuthEnabled = Boolean\(patch\.authEnabled \?\? authEnabled\);/);
+  assert.match(app, /if \(nextAuthEnabled && authUsersMissingPassword\(effectiveAuthUsers, passwordDrafts\)\)/);
   assert.match(app, /const nextAllowMetadataEditing = nextAuthEnabled && authUsersCanEditMetadata\(effectiveAuthUsers\);/);
   assert.match(app, /function updateAuthUsers\(nextUsers: AuthUser\[\]\)/);
   assert.match(app, /allowMetadataEditing: authUsersCanEditMetadata\(nextUsers\)/);
@@ -73,7 +74,9 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.doesNotMatch(app, /saveSettings\(\{ patch: \{ authUsers: authUsers\.map/);
   assert.match(app, /const cleanUserPasswords = collectUserPasswords\(effectiveAuthUsers, passwordDrafts\);/);
   assert.match(app, /function collectUserPasswords\(users: AuthUser\[\], values: Record<string, string>\)/);
+  assert.match(app, /function authUsersMissingPassword\(users: AuthUser\[\], values: Record<string, string>\)/);
   assert.doesNotMatch(app, /Object\.fromEntries\(effectiveAuthUsers\s*\n\s*\.map/);
+  assert.doesNotMatch(app, /authUsers\.some\(\(user, index\) => !user\.passwordHash && !userPasswords/);
   assert.match(app, /function settingsPayloadChanged\(current: PluginSettings \| undefined, nextSettings: Record<string, unknown>\)/);
   assert.match(app, /function serverSettingsChanged\(current: PluginSettings, nextSettings: Record<string, unknown>\)/);
   assert.match(app, /return serverSettingsChanged\(current, nextSettings\);/);
