@@ -336,9 +336,7 @@ function createServerManager({
     if (prev.authEnabled !== next.authEnabled) return true;
     if (!prev.authEnabled && !next.authEnabled) return false;
     return prev.allowMetadataEditing !== next.allowMetadataEditing
-      || JSON.stringify(prev.authUsers) !== JSON.stringify(next.authUsers)
-      || prev.basicAuthUser !== next.basicAuthUser
-      || prev.passwordHash !== next.passwordHash;
+      || JSON.stringify(prev.authUsers) !== JSON.stringify(next.authUsers);
   }
 
   return {

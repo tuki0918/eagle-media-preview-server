@@ -205,6 +205,8 @@ test("plugin settings runtime no longer accepts the removed single-password save
   assert.doesNotMatch(runtimeSource, /next\.authUsers\.some\(\(user\) => !user\.passwordHash\)/);
   assert.doesNotMatch(runtimeSource, /next\.authUsers\.some\(\(user\) => canRoleEditMetadata\(user\.role\)\)/);
   assert.doesNotMatch(runtimeSource, /next\.authEnabled && !next\.authUsers\.length && next\.passwordHash/);
+  assert.doesNotMatch(runtimeSource, /prev\.basicAuthUser !== next\.basicAuthUser/);
+  assert.doesNotMatch(runtimeSource, /prev\.passwordHash !== next\.passwordHash/);
 });
 
 test("plugin server caches authenticated users per request", async () => {
