@@ -247,7 +247,8 @@ describe("ViewerAppShell", () => {
       />,
     );
 
-    expect(html).toContain('class="tile-item thumb-loading"');
+    expect(html).toContain("tile-item");
+    expect(html).toContain("thumb-loading");
     expect(html).toContain('data-ext="jpg"');
     expect(html).toContain('data-active="true"');
   });

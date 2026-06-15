@@ -157,7 +157,7 @@ function ThumbnailButton({ children, item, onOpenPreview, style, variant, withBa
 
   return (
     <button
-      className={`${variant === "tile" ? "tile-item" : variant === "row" ? "row-thumb" : "thumb-button"}${loading ? " thumb-loading" : ""}${missing ? " thumb-missing" : ""}`}
+      className={`${variant === "tile" ? "tile-item max-[540px]:mb-[3px]" : variant === "row" ? "row-thumb" : "thumb-button"}${loading ? " thumb-loading" : ""}${missing ? " thumb-missing" : ""}`}
       data-media-type={mediaType}
       type="button"
       aria-label={thumbnailAriaLabel(item, mediaType)}

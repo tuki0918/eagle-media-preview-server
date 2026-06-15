@@ -23,7 +23,7 @@ export function PreviewDialog() {
     previewDialogState.infoOpen ? "info-open" : "",
   ].filter(Boolean).join(" ");
   const previewActionButtonClassName = [
-    "icon-button inline-grid min-h-10 w-10 flex-[0_0_40px] place-items-center rounded-app border backdrop-blur-[12px]",
+    "icon-button inline-grid min-h-10 w-10 flex-[0_0_40px] touch-manipulation select-none place-items-center rounded-app border backdrop-blur-[12px]",
     previewDialogState.mode === "video" || previewDialogState.mode === "audio"
       ? "border-[rgba(255,255,255,0.2)] bg-[rgba(15,23,42,0.62)] text-white hover:border-[rgba(255,255,255,0.38)] hover:bg-[rgba(15,23,42,0.82)] hover:text-white"
       : "border-[rgba(203,213,225,0.82)] bg-[rgba(255,255,255,0.88)] text-app-text hover:border-[rgba(37,99,235,0.28)] hover:bg-white hover:text-app-accent",
@@ -113,19 +113,19 @@ export function PreviewDialog() {
       onPointerDown={handlePreviewPointerDown}
     >
       <div className="dialog-header fixed right-2.5 top-[calc(10px+env(safe-area-inset-top))] z-[4] flex items-center justify-end gap-3 border-0 bg-transparent p-0">
-        <button id="backPreview" className="text-icon-button inline-flex min-h-10 items-center gap-2 border-0 bg-transparent px-2 text-sm font-[680] text-app-text" type="button" aria-label="Back to results" onClick={closePreview}>
+        <button id="backPreview" className="text-icon-button hidden min-h-10 items-center gap-2 border-0 bg-transparent px-2 text-sm font-[680] text-app-text" type="button" aria-label="Back to results" onClick={closePreview}>
           <ChevronLeftIcon />
           <span>Back to Results</span>
         </button>
-        <div>
-          <strong>Media Preview Server</strong>
+        <div className="hidden">
+          <strong className="block text-sm font-[720]">Media Preview Server</strong>
           <PreviewMeta />
         </div>
         <div className="dialog-actions flex items-center justify-end gap-2">
           <button id="toggleInfoPreview" className={previewActionButtonClassName} aria-label="Media information" aria-expanded={previewDialogState.infoOpen} title="Media information" onClick={togglePreviewInfo}>
             <PanelLeftIcon />
           </button>
-          <button id="fullscreenPreview" className={previewActionButtonClassName} aria-label="Fullscreen" title="Fullscreen" onClick={toggleFullscreen}>
+          <button id="fullscreenPreview" className={`${previewActionButtonClassName} hidden`} aria-label="Fullscreen" title="Fullscreen" onClick={toggleFullscreen}>
             <MaximizeIcon />
           </button>
           <button id="closePreview" className={previewActionButtonClassName} aria-label="Close" title="Close" onClick={closePreview}>

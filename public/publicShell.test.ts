@@ -350,7 +350,7 @@ test("public shell uses Media Preview Server branding and serves a favicon", asy
   await access(new URL("./favicon.ico", import.meta.url));
 
   assert.match(html, /<title>Media Preview Server - Eagle<\/title>/);
-  assert.match(appComponent, /<strong>Media Preview Server<\/strong>/);
+  assert.match(appComponent, /<strong className="[^"]*">Media Preview Server<\/strong>/);
   assert.match(html, /<link rel="icon" href="\/favicon\.ico"/);
   assert.doesNotMatch(html, /Eagle Web UI/);
 });
@@ -694,7 +694,7 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   assert.match(app, /if \(viewMode !== "tiles" \|\| tags\.length\) return limit;/);
   assert.match(app, /return Math\.min\(limit \* TILE_PREFETCH_PAGES, MAX_PAGE_SIZE\);/);
   assert.match(app, /params\.get\("view"\) === "tiles"/);
-  assert.match(css, /\.media-tiles\s*\{/);
+  assert.match(html, /media-tiles content-start \[column-width:180px\] \[column-gap:4px\]/);
   assert.match(css, /\.tile-item\s*\{/);
   assert.match(css, /\.tile-item\s*\{[^}]*position:\s*relative;/s);
   assert.match(css, /\.tile-item\s*\{[^}]*contain:\s*layout paint;/s);
@@ -703,8 +703,8 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   assert.match(css, /animation:\s*tile-skeleton 1\.1s ease-in-out infinite;/);
   assert.match(css, /@keyframes tile-skeleton/);
   assert.match(css, /\.tile-item \.tile-rating\s*\{/);
-  assert.match(css, /\.media-tiles \.tile-item\s*\{[^}]*border-radius:\s*0;/s);
-  assert.match(css, /@media \(max-width: 540px\)[\s\S]*\.media-tiles\s*\{[^}]*column-count:\s*3;[^}]*column-width:\s*auto;/);
+  assert.match(html, /max-\[540px\]:\[column-count:3\] max-\[540px\]:\[column-width:auto\]/);
+  assert.match(html, /tile-item max-\[540px\]:mb-\[3px\]/);
   assert.match(html, /className="tiles-sentinel mt-3 grid min-h-\[52px\] place-items-center text-\[13px\] font-\[680\] text-app-muted"/);
 });
 
@@ -754,10 +754,11 @@ test("public results status and empty states stay concise and consistent across 
   assert.doesNotMatch(app, /resultGridHost: document\.querySelector\("#resultGridHost"\),/);
   assert.doesNotMatch(app, /els\.grid\.classList\.toggle/);
   assert.match(html, /function resultSurfaceClassName\(viewMode:[\s\S]*isEmpty/);
-  assert.match(css, /\.media-grid,\s*\.media-table\s*\{[\s\S]*align-content:\s*start;/);
+  assert.match(html, /media-grid grid content-start gap-3/);
+  assert.match(html, /media-table grid content-start gap-0/);
   assert.doesNotMatch(css, /\.media-grid\s*\{[^}]*min-height:\s*320px;/s);
   assert.doesNotMatch(css, /\.media-table\s*\{[^}]*min-height:\s*320px;/s);
-  assert.match(css, /\.media-grid\.is-empty,\s*\.media-table\.is-empty,\s*\.media-tiles\.is-empty\s*\{[\s\S]*display:\s*block;[\s\S]*column-width:\s*auto;[\s\S]*border:\s*0;[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/);
+  assert.match(html, /is-empty block overflow-visible !rounded-none !border-0 !bg-transparent !shadow-none/);
   assert.match(html, /min-h-\[320px\]/);
 });
 
