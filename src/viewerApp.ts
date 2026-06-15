@@ -277,9 +277,8 @@ function showLogin() {
 function showViewer(data: ConnectResponse) {
   setShellView("viewer");
   setLibraryFooterName(libraryLabel(data));
+  resetViewerResults();
   renderSearchControlButtons();
-  state.total = 0;
-  state.items = [];
   applyControlsFromState();
   updateStatus();
   updatePager();
@@ -287,11 +286,7 @@ function showViewer(data: ConnectResponse) {
 
 function clearViewerSessionState() {
   state.requestId += 1;
-  state.tilesLoadingMore = false;
-  state.items = [];
-  state.folders = [];
-  state.total = 0;
-  state.offset = 0;
+  resetViewerResults();
   Object.assign(state, resetFilterState());
   hideTagSuggestions();
   resetTileAutoLoading();
@@ -301,6 +296,14 @@ function clearViewerSessionState() {
   renderSearchControlButtons();
   updateStatus();
   updatePager();
+}
+
+function resetViewerResults() {
+  state.tilesLoadingMore = false;
+  state.items = [];
+  state.folders = [];
+  state.total = 0;
+  state.offset = 0;
 }
 
 function setConnectMessage(message: string, isError: boolean) {

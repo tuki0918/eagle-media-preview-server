@@ -176,6 +176,9 @@ test("public viewer exposes sign out when authenticated", async () => {
   assert.match(app, /clearAuthState\(true\);/);
   assert.match(app, /clearViewerSessionState\(\);/);
   assert.match(app, /function clearViewerSessionState\(\) \{/);
+  assert.match(app, /function resetViewerResults\(\) \{/);
+  assert.match(app, /state\.folders = \[\];/);
+  assert.match(app, /function showViewer\(data: ConnectResponse\) \{[\s\S]*resetViewerResults\(\);/);
   assert.match(app, /state\.requestId \+= 1;/);
   assert.match(app, /Object\.assign\(state, resetFilterState\(\)\);/);
   assert.match(app, /if \(handleAuthError\(error\)\) return;/);
