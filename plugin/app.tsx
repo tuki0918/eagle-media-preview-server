@@ -300,10 +300,10 @@ function App() {
               />
               <OptionRow
                 checked={allowMetadataEditing}
-                disabled={formDisabled}
+                disabled={formDisabled || !authEnabled}
                 icon={<EditIcon />}
                 title="Allow metadata editing"
-                description="Let authenticated viewers update rating, tags, and categories."
+                description="Requires BasicAuth. Allows rating, tag, and category updates."
                 onChange={(checked) => {
                   if (checked && !authEnabled) {
                     setMessage("Enable BasicAuth protection before allowing metadata editing.", true);

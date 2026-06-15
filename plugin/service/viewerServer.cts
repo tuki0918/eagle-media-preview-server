@@ -143,6 +143,10 @@ function createViewerServer({
     try {
       const url = new URL(req.url || "/", `http://${req.headers.host}`);
       const auth = { allowMetadataEditing, authSessions, viewerPassword, passwordHash, basicAuthUsername };
+      if (!isTrustedUnsafeRequest(req, url)) {
+        sendJson(res, 403, { error: "Cross-origin writes are not allowed" });
+        return;
+      }
       if (authRequired(auth) && !url.pathname.startsWith("/api/auth/") && !isAuthorized(req, auth)) {
         sendAuthRequired(res);
         return;
@@ -641,6 +645,29 @@ function isAuthorized(req, auth) {
   if (basicAuthMatches(req.headers.authorization || "", auth)) return true;
   const token = parseCookies(req.headers.cookie || "").viewer_session;
   return Boolean(token && auth.authSessions.has(token));
+}
+
+function isTrustedUnsafeRequest(req, requestUrl) {
+  if (!isUnsafeMethod(req.method)) return true;
+  const expectedOrigin = `${requestUrl.protocol}//${requestUrl.host}`;
+  const origin = headerValue(req.headers.origin);
+  if (origin) return origin === expectedOrigin;
+  const referer = headerValue(req.headers.referer);
+  if (!referer) return true;
+  try {
+    const refererUrl = new URL(referer);
+    return `${refererUrl.protocol}//${refererUrl.host}` === expectedOrigin;
+  } catch {
+    return false;
+  }
+}
+
+function isUnsafeMethod(method) {
+  return !["GET", "HEAD", "OPTIONS"].includes(String(method || "GET").toUpperCase());
+}
+
+function headerValue(value) {
+  return Array.isArray(value) ? value[0] : String(value || "");
 }
 
 function hasMetadataWriteAccess(req, auth: AuthContext) {

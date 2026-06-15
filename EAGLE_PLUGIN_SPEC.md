@@ -272,6 +272,7 @@ Authorization:
 - Browsing is read-only by default
 - `allowMetadataEditing` requires BasicAuth protection
 - `POST /api/items/:id/star` and `POST /api/items/:id/metadata` require authenticated metadata editing permission
+- Unsafe methods reject mismatched `Origin` or `Referer` headers before API handlers run
 
 ## Runtime State
 
