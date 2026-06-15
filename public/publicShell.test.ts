@@ -12,6 +12,7 @@ async function readViewerSources() {
     "../src/viewer/format.ts",
     "../src/viewer/icons.ts",
     "../src/viewer/itemQuery.ts",
+    "../src/viewer/libraryFooterState.ts",
     "../src/viewer/media.ts",
     "../src/viewer/metadata.ts",
     "../src/viewer/pagination.ts",
@@ -109,8 +110,12 @@ test("public UI no longer shows connect lock icon or connection settings button"
   assert.doesNotMatch(app, /els\.viewerShell\.hidden/);
   assert.match(app, /setShellView\("login"\);/);
   assert.match(app, /setShellView\("viewer"\);/);
-  assert.match(html, /id="libraryFooterNameHost"[\s\S]*<LibraryFooter \/>/);
-  assert.match(app, /libraryFooterNameHost: document\.querySelector\("#libraryFooterNameHost"\),/);
+  assert.match(html, /<LibraryFooter \/>/);
+  assert.doesNotMatch(html, /id="libraryFooterNameHost"/);
+  assert.match(app, /setLibraryFooterName\(libraryLabel\(data\)\);/);
+  assert.match(html, /useSyncExternalStore\(subscribeLibraryFooterName, getLibraryFooterName, getLibraryFooterName\)/);
+  assert.doesNotMatch(app, /libraryFooterNameHost: document\.querySelector\("#libraryFooterNameHost"\),/);
+  assert.doesNotMatch(html, /renderLibraryFooterView/);
   assert.doesNotMatch(app, /libraryFooterName: document\.querySelector\("#libraryFooterName"\),/);
   assert.doesNotMatch(app, /els\.libraryFooterName\.textContent/);
   assert.doesNotMatch(app, /syncAuthUi/);

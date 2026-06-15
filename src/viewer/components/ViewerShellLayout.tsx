@@ -27,9 +27,7 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
         <div id="pagerHost">
           <Pager />
         </div>
-        <div id="libraryFooterNameHost">
-          <LibraryFooter />
-        </div>
+        <LibraryFooter />
       </main>
       <PreviewDialog />
       <CardTemplate />

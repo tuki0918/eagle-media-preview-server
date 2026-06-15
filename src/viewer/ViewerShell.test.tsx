@@ -66,7 +66,6 @@ const REQUIRED_ELEMENT_IDS = [
   "nextButton",
   "pagerHost",
   "pageButtons",
-  "libraryFooterNameHost",
   "libraryFooterName",
   "previewDialog",
   "previewMetaHost",

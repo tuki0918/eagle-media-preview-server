@@ -30,6 +30,7 @@ import {
   rememberRecentValues,
   tagSuggestionItems as buildTagSuggestionItems,
 } from "./viewer/metadata";
+import { setLibraryFooterName } from "./viewer/libraryFooterState";
 import {
   currentFetchLimit as getCurrentFetchLimit,
   pageButtonList,
@@ -58,7 +59,6 @@ import {
   type PreviewBodyKind,
 } from "./viewer/components/PreviewBody";
 import { renderLoginConnectView } from "./viewer/components/LoginView";
-import { renderLibraryFooterView } from "./viewer/components/LibraryFooter";
 import { renderResultsStatusView } from "./viewer/components/ResultsStatus";
 import { renderSearchControlButtonsView } from "./viewer/components/SearchControls";
 import { renderTagChipsView } from "./viewer/components/TagChips";
@@ -205,7 +205,7 @@ function showLogin() {
 
 function showViewer(data: ConnectResponse) {
   setShellView("viewer");
-  renderLibraryFooterView(els.libraryFooterNameHost, { name: libraryLabel(data) });
+  setLibraryFooterName(libraryLabel(data));
   renderSearchControlButtons();
   state.total = 0;
   state.items = [];
