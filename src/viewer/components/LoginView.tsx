@@ -60,6 +60,7 @@ function LoginCredentials({ disabled }: { disabled: boolean }) {
         autoComplete="username"
         disabled={disabled}
         placeholder="Username"
+        required
         type="text"
       />
       <input
@@ -69,6 +70,7 @@ function LoginCredentials({ disabled }: { disabled: boolean }) {
         autoComplete="current-password"
         disabled={disabled}
         placeholder="Password"
+        required
         type="password"
       />
     </div>
