@@ -1,4 +1,3 @@
-import { createRoot, type Root } from "react-dom/client";
 import type { PageButton } from "../pagination";
 
 interface PageButtonsProps {
@@ -6,8 +5,6 @@ interface PageButtonsProps {
   pages: readonly PageButton[];
   onSelect: (page: number) => void;
 }
-
-const roots = new WeakMap<HTMLElement, Root>();
 
 export function PageButtons({ current, pages, onSelect }: PageButtonsProps) {
   return (
@@ -28,13 +25,4 @@ export function PageButtons({ current, pages, onSelect }: PageButtonsProps) {
       })}
     </>
   );
-}
-
-export function renderPageButtonsView(container: HTMLElement, props: PageButtonsProps) {
-  let root = roots.get(container);
-  if (!root) {
-    root = createRoot(container);
-    roots.set(container, root);
-  }
-  root.render(<PageButtons {...props} />);
 }
