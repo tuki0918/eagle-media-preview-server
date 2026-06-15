@@ -241,6 +241,7 @@ test("plugin server caches authenticated users per request", async () => {
   assert.match(source, /function resolveAuthenticatedUser\(req, auth\)/);
   assert.match(source, /function rolePermissions\(role\)/);
   assert.match(source, /return rolePermissions\(user\?\.role\)\.writeMetadata;/);
+  assert.match(source, /return rolePermissions\(user\?\.role\)\.writeRating;/);
   assert.match(source, /return rolePermissions\(user\?\.role\)\.manageLibrary;/);
   assert.match(source, /const roleAccess = rolePermissions\(user\?\.role\);/);
   assert.match(source, /\^Basic\\s\+\/i/);
@@ -255,7 +256,11 @@ test("plugin server caches authenticated users per request", async () => {
   assert.match(source, /authStatusResponse\(auth, user, \{ authenticated: true \}\)/);
   assert.match(source, /authStatusResponse\(auth, null, \{ authenticated: !authRequired\(auth\) \}\)/);
   assert.match(source, /const INVALID_LOGIN_MESSAGE = "Invalid username or password";/);
+  assert.match(source, /const RATING_WRITE_FORBIDDEN_MESSAGE = "Rating editing is not allowed for this viewer";/);
+  assert.match(source, /const METADATA_WRITE_FORBIDDEN_MESSAGE = "Metadata editing is not allowed for this viewer";/);
   assert.match(source, /\{ error: INVALID_LOGIN_MESSAGE \}/);
+  assert.match(source, /\{ error: RATING_WRITE_FORBIDDEN_MESSAGE \}/);
+  assert.match(source, /\{ error: METADATA_WRITE_FORBIDDEN_MESSAGE \}/);
   assert.doesNotMatch(source, /Invalid password/);
   assert.match(source, /const auth = \{ authSessions, users: resolvedAuthUsers \};/);
   assert.match(source, /function authRequired\(\{ users = \[\] \}/);
@@ -273,6 +278,7 @@ test("plugin server caches authenticated users per request", async () => {
   assert.match(source, /normalizeStringArray\(body\.tags, "tags"\)/);
   assert.doesNotMatch(source, /function normalizeMetadataValues/);
   assert.doesNotMatch(source, /const writeMetadata = Boolean\(user && canRoleEditMetadata\(user\.role\)\)/);
+  assert.doesNotMatch(source, /writeRating: roleAccess\.writeMetadata/);
   assert.doesNotMatch(source, /const manageLibrary = user\?\.role === "admin"/);
 });
 

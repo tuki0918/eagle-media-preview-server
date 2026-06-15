@@ -122,6 +122,7 @@ test("createViewerServer blocks metadata writes unless editing is enabled for an
     });
 
     assert.equal(response.status, 403);
+    assert.deepEqual(await response.json(), { error: "Rating editing is not allowed for this viewer" });
     assert.deepEqual(calls, []);
   } finally {
     await viewer.stop();

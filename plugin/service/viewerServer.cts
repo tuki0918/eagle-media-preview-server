@@ -37,6 +37,8 @@ const PASSWORD_HASH_KEY_LENGTH = 32;
 const AUTH_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 const AUTH_USER_CACHE = Symbol("authUser");
 const INVALID_LOGIN_MESSAGE = "Invalid username or password";
+const RATING_WRITE_FORBIDDEN_MESSAGE = "Rating editing is not allowed for this viewer";
+const METADATA_WRITE_FORBIDDEN_MESSAGE = "Metadata editing is not allowed for this viewer";
 const MIN_PASSWORD_HASH_ITERATIONS = 100000;
 const MAX_PASSWORD_HASH_ITERATIONS = 1000000;
 
@@ -408,8 +410,8 @@ async function handleApi(req, url, res, { auth, getSession, setSession }: ApiCon
       sendMethodNotAllowed(res, ["POST"]);
       return;
     }
-    if (!hasMetadataWriteAccess(req, auth)) {
-      sendJson(res, 403, { error: "Metadata editing is not allowed for this viewer" });
+    if (!hasRatingWriteAccess(req, auth)) {
+      sendJson(res, 403, { error: RATING_WRITE_FORBIDDEN_MESSAGE });
       return;
     }
     const itemId = decodeURIComponent(starMatch[1]);
@@ -427,7 +429,7 @@ async function handleApi(req, url, res, { auth, getSession, setSession }: ApiCon
       return;
     }
     if (!hasMetadataWriteAccess(req, auth)) {
-      sendJson(res, 403, { error: "Metadata editing is not allowed for this viewer" });
+      sendJson(res, 403, { error: METADATA_WRITE_FORBIDDEN_MESSAGE });
       return;
     }
     const itemId = decodeURIComponent(metadataMatch[1]);
@@ -766,6 +768,11 @@ function hasMetadataWriteAccess(req, auth: AuthContext) {
   return rolePermissions(user?.role).writeMetadata;
 }
 
+function hasRatingWriteAccess(req, auth: AuthContext) {
+  const user = authenticatedUser(req, auth);
+  return rolePermissions(user?.role).writeRating;
+}
+
 function hasAdminAccess(req, auth: AuthContext) {
   const user = authenticatedUser(req, auth);
   return rolePermissions(user?.role).manageLibrary;
@@ -845,7 +852,7 @@ function permissionsForUser(user: AuthSession | AuthUser | null, { authenticated
     manageLibrary: roleAccess.manageLibrary,
     read,
     writeMetadata: roleAccess.writeMetadata,
-    writeRating: roleAccess.writeMetadata,
+    writeRating: roleAccess.writeRating,
   };
 }
 
@@ -856,9 +863,11 @@ function canRoleEditMetadata(role: UserRole) {
 function rolePermissions(role: UserRole | undefined) {
   const manageLibrary = role === "admin";
   const writeMetadata = Boolean(role && canRoleEditMetadata(role));
+  const writeRating = writeMetadata;
   return {
     manageLibrary,
     writeMetadata,
+    writeRating,
   };
 }
 
