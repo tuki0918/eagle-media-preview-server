@@ -54,6 +54,7 @@ declare global {
 }
 
 const busyStoppedFrames = Object.freeze([".", "..", "...", "....", "....."]);
+const AUTH_PASSWORD_REQUIRED_MESSAGE = "Enter a password for every user to enable BasicAuth protection.";
 
 function App() {
   const managerRef = useRef<ServerManager | null>(null);
@@ -152,7 +153,7 @@ function App() {
     if (!validateAuthUsers(effectiveAuthUsers)) return false;
     const nextAuthEnabled = Boolean(patch.authEnabled ?? authEnabled);
     if (nextAuthEnabled && authUsersMissingPassword(effectiveAuthUsers, passwordDrafts)) {
-      setMessage("Enter a password for every user to enable BasicAuth protection.", true);
+      setMessage(AUTH_PASSWORD_REQUIRED_MESSAGE, true);
       return false;
     }
     const nextAllowMetadataEditing = nextAuthEnabled && authUsersCanEditMetadata(effectiveAuthUsers);
@@ -364,7 +365,7 @@ function App() {
                 description="Require username & password to access."
                 onChange={(checked) => {
                   if (checked && authUsersMissingPassword(authUsers, userPasswords)) {
-                    setMessage("Enter a password for every user to enable BasicAuth protection.", true);
+                    setMessage(AUTH_PASSWORD_REQUIRED_MESSAGE, true);
                     return;
                   }
                   const patch = checked

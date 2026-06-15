@@ -71,8 +71,10 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(app, /if \(saved\) setMessage\(""\);/);
   assert.match(app, /if \(hasUserPasswords\) setUserPasswords\(\{\}\);/);
   assert.match(app, /if \(!hasUserPasswords && !settingsPayloadChanged\(settings, payload\)\)/);
+  assert.match(app, /const AUTH_PASSWORD_REQUIRED_MESSAGE = "Enter a password for every user to enable BasicAuth protection\.";/);
   assert.match(app, /const nextAuthEnabled = Boolean\(patch\.authEnabled \?\? authEnabled\);/);
   assert.match(app, /if \(nextAuthEnabled && authUsersMissingPassword\(effectiveAuthUsers, passwordDrafts\)\)/);
+  assert.match(app, /setMessage\(AUTH_PASSWORD_REQUIRED_MESSAGE, true\);/);
   assert.match(app, /const nextAllowMetadataEditing = nextAuthEnabled && authUsersCanEditMetadata\(effectiveAuthUsers\);/);
   assert.match(app, /function updateAuthUsers\(nextUsers: AuthUser\[\]\)/);
   assert.match(app, /allowMetadataEditing: authUsersCanEditMetadata\(nextUsers\)/);
