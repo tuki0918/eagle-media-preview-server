@@ -2,7 +2,38 @@ const { fileURLToPath } = require("url");
 const { readdir } = require("fs").promises;
 const { extname, join } = require("path");
 
-type LooseRecord = Record<string, any>;
+type SearchParams = Record<string, unknown>;
+
+interface RequestOptions {
+  body?: unknown;
+  method?: string;
+  searchParams?: SearchParams;
+}
+
+interface EagleClientOptions {
+  baseUrl?: string;
+  fetchImpl?: typeof fetch;
+  token?: string;
+}
+
+interface PageOptions {
+  limit?: unknown;
+  offset?: unknown;
+}
+
+interface ListItemsOptions extends PageOptions {
+  ext?: unknown;
+  folderId?: unknown;
+  isUnfiled?: boolean;
+  keywords?: unknown;
+  rating?: unknown;
+  tags?: unknown;
+}
+
+interface UpdateMetadataInput {
+  folders?: unknown;
+  tags?: unknown;
+}
 
 const ITEM_FIELDS = [
   "id",
@@ -58,10 +89,10 @@ function createEagleClient({
   baseUrl = process.env.EAGLE_BASE_URL || "http://localhost:41595",
   token = process.env.EAGLE_TOKEN || "",
   fetchImpl = globalThis.fetch,
-}: LooseRecord = {}) {
+}: EagleClientOptions = {}) {
   const root = baseUrl.replace(/\/+$/, "");
 
-  async function request(pathname: string, { method = "GET", body, searchParams }: LooseRecord = {}) {
+  async function request(pathname: string, { method = "GET", body, searchParams }: RequestOptions = {}) {
     const url = new URL(`${root}${pathname}`);
     if (token) url.searchParams.set("token", token);
     if (searchParams) {
@@ -109,7 +140,7 @@ function createEagleClient({
       );
     },
 
-    async folders({ offset = 0, limit = 1000 }: LooseRecord = {}) {
+    async folders({ offset = 0, limit = 1000 }: PageOptions = {}) {
       return normalizePaginatedResponse(
         await request("/api/v2/folder/get", {
           searchParams: { offset: normalizeOffset(offset), limit: clampLimit(limit, 1000) },
@@ -117,8 +148,18 @@ function createEagleClient({
       );
     },
 
-    async listItems({ offset = 0, limit = 30, folderId, isUnfiled = false, ext, rating, keywords, tags }: LooseRecord = {}) {
-      const body: LooseRecord = {
+    async listItems({ offset = 0, limit = 30, folderId, isUnfiled = false, ext, rating, keywords, tags }: ListItemsOptions = {}) {
+      const body: {
+        ext?: unknown;
+        fields: readonly string[];
+        folders?: unknown[];
+        isUnfiled?: boolean;
+        keywords?: unknown[];
+        limit: number;
+        offset: number;
+        rating?: number;
+        tags?: string[];
+      } = {
         offset: normalizeOffset(offset),
         limit: clampLimit(limit),
         fields: ITEM_FIELDS,
@@ -186,8 +227,8 @@ function createEagleClient({
       );
     },
 
-    async updateItemMetadata(id, { tags, folders }: LooseRecord = {}) {
-      const body: LooseRecord = { id };
+    async updateItemMetadata(id, { tags, folders }: UpdateMetadataInput = {}) {
+      const body: { folders?: string[]; id: unknown; tags?: string[] } = { id };
       if (tags !== undefined) body.tags = normalizeStringArray(tags, "tags");
       if (folders !== undefined) body.folders = normalizeStringArray(folders, "folders");
       if (!body.id) throw new Error("id is required");

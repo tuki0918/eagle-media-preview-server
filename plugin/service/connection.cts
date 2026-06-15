@@ -1,10 +1,37 @@
 const { createEagleClient } = require("./eagleClient.cjs");
 
-type LooseRecord = Record<string, any>;
+interface ConnectionInput {
+  host?: unknown;
+  port?: unknown;
+  token?: unknown;
+}
 
-function normalizeConnectionInput(input: LooseRecord = {}, { requestHost = "", requireRemoteToken = false }: LooseRecord = {}) {
+interface NormalizeConnectionOptions {
+  requestHost?: string;
+  requireRemoteToken?: boolean;
+}
+
+interface EagleConnection {
+  baseUrl: string;
+  host: string;
+  port: number;
+  token: string;
+}
+
+interface EagleClient {
+  libraryInfo(): Promise<unknown>;
+}
+
+interface ConnectionContextOptions {
+  client?: EagleClient;
+  connection?: EagleConnection;
+  fetchImpl?: typeof fetch;
+  input?: ConnectionInput;
+}
+
+function normalizeConnectionInput(input: ConnectionInput = {}, { requestHost = "", requireRemoteToken = false }: NormalizeConnectionOptions = {}) {
   const host = String(input.host || "127.0.0.1").trim() || "127.0.0.1";
-  const parsedPort = Number.parseInt(input.port || "41595", 10);
+  const parsedPort = Number.parseInt(String(input.port || "41595"), 10);
 
   if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
     throw new Error("Invalid port");
@@ -23,7 +50,7 @@ function normalizeConnectionInput(input: LooseRecord = {}, { requestHost = "", r
   };
 }
 
-function buildConnectionCandidates({ input = {}, requestHost = "" }: LooseRecord = {}) {
+function buildConnectionCandidates({ input = {}, requestHost = "" }: { input?: ConnectionInput; requestHost?: string } = {}) {
   const primary = normalizeConnectionInput(input, { requestHost, requireRemoteToken: true });
   const viewerHost = extractHostname(requestHost);
 
@@ -46,19 +73,19 @@ function buildConnectionCandidates({ input = {}, requestHost = "" }: LooseRecord
   return [primary];
 }
 
-function requiresToken({ host, requestHost = "" }: LooseRecord) {
+function requiresToken({ host, requestHost = "" }: { host: string; requestHost?: string }) {
   const viewerHost = extractHostname(requestHost);
   return !["127.0.0.1", "localhost", "::1", viewerHost].includes(host);
 }
 
-function createConnectionContext({ input, connection, fetchImpl = globalThis.fetch, client }: LooseRecord = {}) {
+function createConnectionContext({ input, connection, fetchImpl = globalThis.fetch, client }: ConnectionContextOptions = {}) {
   const resolvedConnection = connection || normalizeConnectionInput(input);
   const resolvedClient = client || createEagleClient({
     baseUrl: resolvedConnection.baseUrl,
     token: resolvedConnection.token,
     fetchImpl,
   });
-  let libraryInfoCache = null;
+  let libraryInfoCache: unknown = null;
 
   return {
     connection: resolvedConnection,

@@ -6,7 +6,73 @@ const { extname, join, normalize, resolve } = require("path");
 const { createEagleClient, pathFromFileValue, resolveLibraryItemFile } = require("./eagleClient.cjs");
 const { buildConnectionCandidates, createConnectionContext } = require("./connection.cjs");
 
-type LooseRecord = Record<string, any>;
+interface ViewerServerOptions {
+  basicAuthUsername?: string;
+  eagleClient?: EagleClient;
+  host?: string;
+  passwordHash?: string;
+  port?: number;
+  publicDir?: string;
+  viewerPassword?: string;
+}
+
+interface EagleLibraryInfo {
+  path?: string;
+}
+
+interface EagleItem {
+  data?: EagleItem[];
+  ext?: string;
+  filePath?: string;
+  fileURL?: string;
+  folders?: unknown;
+  id?: string;
+  name?: string;
+  star?: number;
+  tags?: unknown;
+  thumbnailPath?: string;
+  thumbnailURL?: string;
+  title?: string;
+}
+
+interface EagleClient {
+  appInfo(): Promise<unknown>;
+  folders(): Promise<unknown>;
+  itemById(id: string): Promise<EagleItem>;
+  legacyThumbnailPath(id: string): Promise<unknown>;
+  libraryHistory(): Promise<unknown[]>;
+  listItems(options: {
+    ext?: string | null;
+    folderId?: string | null;
+    isUnfiled?: boolean;
+    keywords?: string;
+    limit?: string | number;
+    offset?: string | number;
+    rating?: string | null;
+    tags?: string[];
+  }): Promise<unknown>;
+  listTags(options: { limit?: string | number; query?: string }): Promise<unknown>;
+  searchItems(options: { limit?: string | number; offset?: string | number; query: string }): Promise<unknown>;
+  switchLibrary(libraryPath: string): Promise<unknown>;
+  updateItemMetadata(id: string, input: { folders?: unknown; tags?: unknown }): Promise<EagleItem>;
+  updateItemStar(id: string, star: unknown): Promise<EagleItem>;
+}
+
+interface EagleSession {
+  clearLibraryInfo?: () => void;
+  client: EagleClient;
+  connection: {
+    host: string;
+    port: number;
+    token: string;
+  };
+  libraryInfo(): Promise<EagleLibraryInfo>;
+}
+
+interface ApiContext {
+  getSession: () => EagleSession;
+  setSession: (nextSession: EagleSession) => void;
+}
 
 function resolveDefaultPublicDir(baseDir = __dirname, pathExists = existsSync) {
   const packagedPublicDir = resolve(baseDir, "..", "..", "public");
@@ -53,7 +119,7 @@ function createViewerServer({
   passwordHash = "",
   basicAuthUsername = "eagle",
   eagleClient = createEagleClient(),
-}: LooseRecord = {}) {
+}: ViewerServerOptions = {}) {
   let serverInstance = null;
   let state = "stopped";
   let boundAddress = "";
@@ -173,7 +239,7 @@ function createViewerServer({
   };
 }
 
-async function handleApi(req, url, res, { getSession, setSession }: LooseRecord) {
+async function handleApi(req, url, res, { getSession, setSession }: ApiContext) {
   if (url.pathname === "/api/connect") {
     if (req.method !== "POST") {
       sendJson(res, 405, { error: "Method not allowed" });

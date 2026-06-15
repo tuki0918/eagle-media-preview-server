@@ -4,9 +4,67 @@ const { dirname, join } = require("path");
 const { homedir, networkInterfaces } = require("os");
 const { createViewerServer } = require("./viewerServer.cjs");
 
-type LooseRecord = Record<string, any>;
+type ServerStatus = "error" | "running" | "stopped";
 
-const DEFAULT_SETTINGS = {
+interface PluginSettings {
+  autoStart: boolean;
+  authEnabled: boolean;
+  basicAuthUser: string;
+  host: string;
+  lastServerStatus: ServerStatus;
+  passwordHash: string;
+  port: number;
+  preferredLanAddress: string;
+}
+
+type SettingsInput = Partial<Omit<PluginSettings, "port">> & {
+  confirmPassword?: unknown;
+  password?: unknown;
+  port?: unknown;
+};
+
+interface SettingsStore {
+  filePath?: string;
+  load(): Promise<PluginSettings>;
+  save(input?: SettingsInput): Promise<PluginSettings>;
+}
+
+interface LanAddress {
+  address: string;
+  label: string;
+}
+
+interface ViewerStatus {
+  host: string;
+  lastError?: string;
+  port: number;
+  state: string;
+}
+
+interface ManagedViewer {
+  start(): Promise<unknown>;
+  stop(): Promise<unknown>;
+  status(): ViewerStatus;
+}
+
+interface ServerManagerOptions {
+  lanAddressProvider?: () => LanAddress[];
+  settingsStore?: SettingsStore;
+  viewerServerFactory?: (settings: {
+    basicAuthUsername: string;
+    host: string;
+    passwordHash: string;
+    port: number;
+  }) => ManagedViewer;
+}
+
+interface NetworkEntry {
+  address: string;
+  family: string;
+  internal: boolean;
+}
+
+const DEFAULT_SETTINGS: PluginSettings = {
   autoStart: false,
   host: "0.0.0.0",
   port: 41532,
@@ -21,7 +79,7 @@ function defaultSettingsPath() {
   return join(homedir(), ".eagle-media-preview-server", "settings.json");
 }
 
-function createSettingsStore({ filePath = defaultSettingsPath() }: LooseRecord = {}) {
+function createSettingsStore({ filePath = defaultSettingsPath() }: { filePath?: string } = {}) {
   return {
     filePath,
 
@@ -35,7 +93,7 @@ function createSettingsStore({ filePath = defaultSettingsPath() }: LooseRecord =
       }
     },
 
-    async save(input: LooseRecord = {}) {
+    async save(input: SettingsInput = {}) {
       const current = await this.load();
       const next = normalizeSettings({ ...current, ...input });
 
@@ -59,8 +117,8 @@ function createSettingsStore({ filePath = defaultSettingsPath() }: LooseRecord =
   };
 }
 
-function normalizeSettings(input: LooseRecord = {}) {
-  const port = Number.parseInt(input.port ?? DEFAULT_SETTINGS.port, 10);
+function normalizeSettings(input: SettingsInput = {}): PluginSettings {
+  const port = Number.parseInt(String(input.port ?? DEFAULT_SETTINGS.port), 10);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error("port must be an integer from 1-65535");
   }
@@ -72,19 +130,23 @@ function normalizeSettings(input: LooseRecord = {}) {
     basicAuthUser: String(input.basicAuthUser || DEFAULT_SETTINGS.basicAuthUser).trim() || DEFAULT_SETTINGS.basicAuthUser,
     passwordHash: String(input.passwordHash || ""),
     preferredLanAddress: String(input.preferredLanAddress || ""),
-    lastServerStatus: ["running", "stopped", "error"].includes(input.lastServerStatus)
+    lastServerStatus: isServerStatus(input.lastServerStatus)
       ? input.lastServerStatus
       : DEFAULT_SETTINGS.lastServerStatus,
   };
 }
 
-function hashPassword(value) {
+function isServerStatus(value: unknown): value is ServerStatus {
+  return value === "running" || value === "stopped" || value === "error";
+}
+
+function hashPassword(value: unknown) {
   return createHash("sha256").update(String(value)).digest("hex");
 }
 
 function getLanAddresses() {
-  const output: LooseRecord[] = [];
-  for (const [label, entries] of Object.entries(networkInterfaces()) as Array<[string, any[]]>) {
+  const output: LanAddress[] = [];
+  for (const [label, entries] of Object.entries(networkInterfaces()) as Array<[string, NetworkEntry[]]>) {
     for (const entry of entries || []) {
       if (entry.family === "IPv4" && !entry.internal) output.push({ label, address: entry.address });
     }
@@ -92,12 +154,21 @@ function getLanAddresses() {
   return output;
 }
 
-function buildAccessUrl({ host = "0.0.0.0", port = 41532, preferredLanAddress = "", lanAddresses = [] }: LooseRecord = {}) {
+function buildAccessUrl({ host = "0.0.0.0", port = 41532, preferredLanAddress = "", lanAddresses = [] }: {
+  host?: string;
+  lanAddresses?: LanAddress[];
+  port?: number;
+  preferredLanAddress?: string;
+} = {}) {
   const address = selectLanAddress({ preferredLanAddress, lanAddresses, host });
   return `http://${address}:${port}`;
 }
 
-function selectLanAddress({ preferredLanAddress = "", lanAddresses = [], host = "0.0.0.0" }: LooseRecord = {}) {
+function selectLanAddress({ preferredLanAddress = "", lanAddresses = [], host = "0.0.0.0" }: {
+  host?: string;
+  lanAddresses?: LanAddress[];
+  preferredLanAddress?: string;
+} = {}) {
   if (preferredLanAddress && lanAddresses.some((entry) => entry.address === preferredLanAddress)) return preferredLanAddress;
   if (host === "127.0.0.1" || host === "localhost") return "localhost";
   if (host && host !== "0.0.0.0") return host;
@@ -109,12 +180,12 @@ function createServerManager({
   settingsStore = createSettingsStore(),
   viewerServerFactory = createViewerServer,
   lanAddressProvider = getLanAddresses,
-}: LooseRecord = {}) {
-  let viewer = null;
-  let stateOverride = "stopped";
+}: ServerManagerOptions = {}) {
+  let viewer: ManagedViewer | null = null;
+  let stateOverride: ServerStatus = "stopped";
   let lastError = "";
 
-  async function snapshot(settings: LooseRecord | null = null) {
+  async function snapshot(settings: PluginSettings | null = null) {
     const loadedSettings = settings || await settingsStore.load();
     const lanAddresses = lanAddressProvider();
     const status = viewer ? viewer.status() : {
@@ -137,7 +208,7 @@ function createServerManager({
     };
   }
 
-  async function createViewer(settings: LooseRecord) {
+  async function createViewer(settings: PluginSettings) {
     return viewerServerFactory({
       host: settings.host,
       port: settings.port,
@@ -146,7 +217,7 @@ function createServerManager({
     });
   }
 
-  function needsServerRestart(prev: LooseRecord, next: LooseRecord) {
+  function needsServerRestart(prev: PluginSettings, next: PluginSettings) {
     return prev.host !== next.host
       || prev.port !== next.port
       || prev.authEnabled !== next.authEnabled
@@ -189,7 +260,7 @@ function createServerManager({
       return this.start();
     },
 
-    async saveSettings(input: LooseRecord) {
+    async saveSettings(input: SettingsInput) {
       const wasRunning = viewer?.status().state === "running";
       const current = await settingsStore.load();
       const settings = await settingsStore.save(input);
