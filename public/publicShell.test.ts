@@ -170,6 +170,10 @@ test("public viewer exposes sign out when authenticated", async () => {
   assert.match(app, /state\.permissions = normalizePermissions\(data\.permissions, !authRequired \|\| authAuthenticated\);/);
   assert.match(app, /state\.permissions = defaultPermissions\(!authRequired\);/);
   assert.match(app, /function normalizePermissions\(value: AuthStatusResponse\["permissions"\], readFallback = true\)/);
+  assert.match(app, /function clearAuthState\(nextAuthRequired: boolean\) \{/);
+  assert.match(app, /clearAuthState\(authRequired\);/);
+  assert.match(app, /clearAuthState\(false\);/);
+  assert.match(app, /clearAuthState\(true\);/);
   assert.match(app, /clearViewerSessionState\(\);/);
   assert.match(app, /function clearViewerSessionState\(\) \{/);
   assert.match(app, /state\.requestId \+= 1;/);
@@ -178,7 +182,6 @@ test("public viewer exposes sign out when authenticated", async () => {
   assert.match(app, /function handleAuthError\(error: unknown\) \{/);
   assert.match(app, /error instanceof ApiError/);
   assert.match(app, /error\.status !== 401/);
-  assert.match(app, /authRequired = true;/);
   assert.match(app, /async function loadFolders\(\) \{[\s\S]*if \(handleAuthError\(error\)\) return;/);
   assert.match(app, /async function loadTagSuggestions\(\) \{[\s\S]*handleAuthError\(error\)/);
   assert.match(app, /async function setItemStar\([\s\S]*if \(handleAuthError\(error\)\) return;/);

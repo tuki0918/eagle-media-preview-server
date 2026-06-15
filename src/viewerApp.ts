@@ -212,9 +212,7 @@ async function logout() {
   setConnectBusy(true);
   try {
     await postJson<AuthStatusResponse>("/api/auth/logout", {});
-    authAuthenticated = false;
-    authUser = null;
-    state.permissions = defaultPermissions(!authRequired);
+    clearAuthState(authRequired);
     clearViewerSessionState();
     renderLoginConnect();
     showLogin();
@@ -233,10 +231,7 @@ async function loadAuthStatus() {
     authUser = data.user ?? null;
     state.permissions = normalizePermissions(data.permissions, !authRequired || authAuthenticated);
   } catch {
-    authAuthenticated = false;
-    authRequired = false;
-    authUser = null;
-    state.permissions = defaultPermissions();
+    clearAuthState(false);
   }
   renderLoginConnect();
 }
@@ -258,12 +253,16 @@ function normalizePermissions(value: AuthStatusResponse["permissions"], readFall
   };
 }
 
-function handleAuthError(error: unknown) {
-  if (!(error instanceof ApiError) || error.status !== 401) return false;
+function clearAuthState(nextAuthRequired: boolean) {
   authAuthenticated = false;
-  authRequired = true;
+  authRequired = nextAuthRequired;
   authUser = null;
   state.permissions = defaultPermissions(!authRequired);
+}
+
+function handleAuthError(error: unknown) {
+  if (!(error instanceof ApiError) || error.status !== 401) return false;
+  clearAuthState(true);
   clearViewerSessionState();
   renderLoginConnect();
   showLogin();
