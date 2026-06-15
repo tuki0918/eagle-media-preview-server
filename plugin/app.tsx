@@ -184,6 +184,7 @@ function App() {
       }
       const saved = await runCommand(() => managerRef.current?.saveSettings(payload), { quiet: true });
       if (saved && hasUserPasswords) setUserPasswords({});
+      if (saved) setMessage("");
       return saved;
     }
     try {

@@ -59,6 +59,7 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.doesNotMatch(app, /function EditIcon\(/);
   assert.doesNotMatch(app, /const \[password, setPassword\]/);
   assert.match(app, /if \(saved && hasUserPasswords\) setUserPasswords\(\{\}\);/);
+  assert.match(app, /if \(saved\) setMessage\(""\);/);
   assert.match(app, /if \(hasUserPasswords\) setUserPasswords\(\{\}\);/);
   assert.match(app, /Enter a username for every user\./);
   assert.match(app, /is already used\./);
