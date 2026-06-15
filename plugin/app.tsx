@@ -156,14 +156,12 @@ function App() {
       setMessage(AUTH_PASSWORD_REQUIRED_MESSAGE, true);
       return false;
     }
-    const nextAllowMetadataEditing = nextAuthEnabled && authUsersCanEditMetadata(effectiveAuthUsers);
     const payload: Record<string, unknown> = {
       autoStart: settings.autoStart,
       host: publicNetwork ? "0.0.0.0" : "127.0.0.1",
       port: settings.port || 41532,
       ...patch,
       authEnabled: nextAuthEnabled,
-      allowMetadataEditing: nextAllowMetadataEditing,
       authUsers: effectiveAuthUsers,
     };
     const cleanUserPasswords = collectUserPasswords(effectiveAuthUsers, passwordDrafts);
@@ -236,7 +234,6 @@ function App() {
   function updateAuthUsers(nextUsers: AuthUser[]) {
     updateSettings({
       authUsers: nextUsers,
-      allowMetadataEditing: authEnabled && authUsersCanEditMetadata(nextUsers),
     });
   }
 
@@ -368,9 +365,7 @@ function App() {
                     setMessage(AUTH_PASSWORD_REQUIRED_MESSAGE, true);
                     return;
                   }
-                  const patch = checked
-                    ? { authEnabled: true }
-                    : { authEnabled: false, allowMetadataEditing: false };
+                  const patch = { authEnabled: checked };
                   updateSettings(patch);
                   saveSettings({ patch });
                 }}
@@ -581,7 +576,6 @@ function serverSettingsChanged(current: PluginSettings, nextSettings: Record<str
   if ((nextSettings.host ?? current.host) !== current.host) return true;
   if (Number(nextSettings.port ?? current.port) !== Number(current.port)) return true;
   if (Boolean(nextSettings.authEnabled ?? current.authEnabled) !== Boolean(current.authEnabled)) return true;
-  if (Boolean(nextSettings.allowMetadataEditing ?? current.allowMetadataEditing) !== Boolean(current.allowMetadataEditing)) return true;
   if (JSON.stringify(nextSettings.authUsers ?? current.authUsers ?? []) !== JSON.stringify(current.authUsers ?? [])) return true;
   return false;
 }
@@ -594,7 +588,6 @@ function serverRestartSettingsChanged(current: PluginSettings, nextSettings: Rec
   if (nextAuthEnabled !== currentAuthEnabled) return true;
   if (!currentAuthEnabled && !nextAuthEnabled) return false;
   if (hasPasswordUpdates(nextSettings.userPasswords)) return true;
-  if (Boolean(nextSettings.allowMetadataEditing ?? current.allowMetadataEditing) !== Boolean(current.allowMetadataEditing)) return true;
   if (JSON.stringify(nextSettings.authUsers ?? current.authUsers ?? []) !== JSON.stringify(current.authUsers ?? [])) return true;
   return false;
 }

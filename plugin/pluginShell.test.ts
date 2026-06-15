@@ -76,12 +76,12 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(app, /const nextAuthEnabled = Boolean\(patch\.authEnabled \?\? authEnabled\);/);
   assert.match(app, /if \(nextAuthEnabled && authUsersMissingPassword\(effectiveAuthUsers, passwordDrafts\)\)/);
   assert.match(app, /setMessage\(AUTH_PASSWORD_REQUIRED_MESSAGE, true\);/);
-  assert.match(app, /const nextAllowMetadataEditing = nextAuthEnabled && authUsersCanEditMetadata\(effectiveAuthUsers\);/);
+  assert.doesNotMatch(app, /const nextAllowMetadataEditing = nextAuthEnabled && authUsersCanEditMetadata\(effectiveAuthUsers\);/);
   assert.match(app, /function errorMessage\(error: unknown\)/);
   assert.match(app, /setMessage\(errorMessage\(error\), true\);/);
   assert.doesNotMatch(app, /setMessage\(error instanceof Error \? error\.message : String\(error\), true\);/);
   assert.match(app, /function updateAuthUsers\(nextUsers: AuthUser\[\]\)/);
-  assert.match(app, /allowMetadataEditing: authEnabled && authUsersCanEditMetadata\(nextUsers\)/);
+  assert.doesNotMatch(app, /allowMetadataEditing: authEnabled && authUsersCanEditMetadata\(nextUsers\)/);
   assert.match(app, /function saveAuthUser\(index: number, patch: AuthUser\)/);
   assert.match(app, /saveAuthUser\(index, \{ role: event\.currentTarget\.value as UserRole \}\);/);
   assert.doesNotMatch(app, /saveSettings\(\{ patch: \{ authUsers: authUsers\.map/);
@@ -98,6 +98,7 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(app, /if \(hasPasswordUpdates\(nextSettings\.userPasswords\)\) return true;/);
   assert.match(app, /function hasPasswordUpdates\(value: unknown\)/);
   assert.match(app, /role: settings\.authEnabled && settings\.allowMetadataEditing \? "editor" : "viewer"/);
+  assert.doesNotMatch(app, /allowMetadataEditing: nextAllowMetadataEditing/);
   assert.doesNotMatch(app, /nextSettings\.password/);
   assert.match(app, /Enter a username for every user\./);
   assert.match(app, /is already used\./);
