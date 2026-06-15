@@ -161,9 +161,7 @@ function App() {
       allowMetadataEditing: nextAllowMetadataEditing,
       authUsers: effectiveAuthUsers,
     };
-    const cleanUserPasswords = Object.fromEntries(effectiveAuthUsers
-      .map((user, index) => [String(user.username || "").trim(), passwordDrafts[String(index)] || ""])
-      .filter(([username, value]) => username && value.trim()));
+    const cleanUserPasswords = collectUserPasswords(effectiveAuthUsers, passwordDrafts);
     const hasUserPasswords = Object.keys(cleanUserPasswords).length > 0;
     if (hasUserPasswords) {
       payload.userPasswords = cleanUserPasswords;
@@ -624,6 +622,16 @@ function removeIndexedValue(values: Record<string, string>, removedIndex: number
     next[String(index > removedIndex ? index - 1 : index)] = value;
   }
   return next;
+}
+
+function collectUserPasswords(users: AuthUser[], values: Record<string, string>) {
+  const output: Record<string, string> = {};
+  users.forEach((user, index) => {
+    const username = String(user.username || "").trim();
+    const password = values[String(index)] || "";
+    if (username && password.trim()) output[username] = password;
+  });
+  return output;
 }
 
 function nextDefaultUser(users: AuthUser[]): AuthUser {
