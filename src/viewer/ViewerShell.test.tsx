@@ -637,11 +637,13 @@ describe("ViewerAppShell", () => {
   test("renders rating stars as reusable static and interactive controls", () => {
     const statik = renderToStaticMarkup(<RatingStars className="rating-control" item={{ star: 3 }} />);
     const interactive = renderToStaticMarkup(<RatingStars className="rating-control" item={{ star: 2 }} interactive onSelect={() => {}} />);
+    const disabled = renderToStaticMarkup(<RatingStars className="rating-control" item={{ star: 2 }} interactive disabled onSelect={() => {}} />);
 
     expect(statik).toContain("rating-star");
     expect(statik).toContain("rating-star-static");
     expect(statik).toContain('data-active="true"');
     expect(interactive).toContain('aria-pressed="true"');
     expect(interactive).toContain("Rating 2");
+    expect(disabled).toContain("disabled");
   });
 });

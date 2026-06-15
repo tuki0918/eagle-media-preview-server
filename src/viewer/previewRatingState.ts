@@ -4,6 +4,7 @@ interface PreviewRatingState {
   canEdit: boolean;
   item: EagleItem | null;
   onSelect: (value: number) => void;
+  saving: boolean;
 }
 
 const noopSelect = () => {};
@@ -12,6 +13,7 @@ let currentPreviewRating: PreviewRatingState = {
   canEdit: false,
   item: null,
   onSelect: noopSelect,
+  saving: false,
 };
 
 export function getPreviewRatingState() {
@@ -30,6 +32,7 @@ export function clearPreviewRatingState() {
     canEdit: false,
     item: null,
     onSelect: noopSelect,
+    saving: false,
   });
 }
 

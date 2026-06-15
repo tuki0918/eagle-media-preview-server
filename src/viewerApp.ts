@@ -97,6 +97,7 @@ let connectBusy = false;
 let authAuthenticated = false;
 let authRequired = false;
 let authUser: NonNullable<AuthStatusResponse["user"]> | null = null;
+const pendingRatingItemIds = new Set<string>();
 
 export function initViewer() {
   init();
@@ -652,23 +653,27 @@ function clearPreviewContents() {
 
 async function setItemStar(item: EagleItem, star: number) {
   if (!state.permissions.writeRating) return;
+  const itemId = String(item.id || "");
+  if (!itemId || pendingRatingItemIds.has(itemId)) return;
   const previous = normalizeRating(item.star);
+  pendingRatingItemIds.add(itemId);
   item.star = star;
-  updateItemInState(String(item.id || ""), { star });
+  updateItemInState(itemId, { star });
   render();
   if (isPreviewDialogOpen()) renderPreviewRating(item);
 
   try {
-    const data = await postJson<{ star?: unknown }>(`/api/items/${encodeURIComponent(String(item.id || ""))}/star`, { star });
+    const data = await postJson<{ star?: unknown }>(`/api/items/${encodeURIComponent(itemId)}/star`, { star });
     const savedStar = normalizeRating(data.star ?? star);
     item.star = savedStar;
-    updateItemInState(String(item.id || ""), { star: savedStar });
+    updateItemInState(itemId, { star: savedStar });
   } catch (error) {
-    if (handleAuthError(error)) return;
     item.star = previous;
-    updateItemInState(String(item.id || ""), { star: previous });
+    updateItemInState(itemId, { star: previous });
+    if (handleAuthError(error)) return;
     alert(errorMessage(error));
   } finally {
+    pendingRatingItemIds.delete(itemId);
     render();
     if (isPreviewDialogOpen()) renderPreviewRating(item);
   }
@@ -679,6 +684,7 @@ function renderPreviewRating(item: EagleItem) {
     canEdit: state.permissions.writeRating,
     item,
     onSelect: (star) => setItemStar(item, star),
+    saving: pendingRatingItemIds.has(String(item.id || "")),
   });
 }
 

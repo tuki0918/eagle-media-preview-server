@@ -488,17 +488,25 @@ test("public ratings are static in grid and table but editable in the preview mo
   const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
-  assert.match(html, /function RatingStars\(\{ className, id, interactive = false, item, onSelect \}/);
+  assert.match(html, /function RatingStars\(\{ className, disabled = false, id, interactive = false, item, onSelect \}/);
   assert.match(html, /const ratingStarBaseClassName =[\s\S]*rating-star[\s\S]*data-\[active=true\]:text-app-warn/);
+  assert.match(html, /const canSelect = interactive && !disabled;/);
+  assert.match(html, /disabled=\{interactive \? disabled : undefined\}/);
   assert.match(html, /const staticRatingStarClassName = `\$\{ratingStarBaseClassName\} rating-star-static cursor-default`/);
   assert.match(html, /const current = normalizeRating\(item\.star\);/);
   assert.match(html, /data-active=\{value <= current \? "true" : "false"\}/);
+  assert.match(app, /const pendingRatingItemIds = new Set<string>\(\);/);
+  assert.match(app, /if \(!itemId \|\| pendingRatingItemIds\.has\(itemId\)\) return;/);
+  assert.match(app, /pendingRatingItemIds\.add\(itemId\);/);
+  assert.match(app, /pendingRatingItemIds\.delete\(itemId\);/);
   assert.match(app, /const previous = normalizeRating\(item\.star\);/);
+  assert.match(app, /item\.star = previous;[\s\S]*if \(handleAuthError\(error\)\) return;/);
   assert.match(app, /const savedStar = normalizeRating\(data\.star \?\? star\);/);
   assert.doesNotMatch(app, /renderRatingView\(els\.previewRating, \{/);
   assert.doesNotMatch(html, /function renderRatingView\(container[^,]*,\s*props: RatingStarsProps\)/);
   assert.doesNotMatch(app, /previewRating: document\.querySelector\("#previewRating"\),/);
   assert.match(app, /function renderPreviewRating\(item: EagleItem\) \{[\s\S]*setPreviewRatingState\(\{/);
+  assert.match(app, /saving: pendingRatingItemIds\.has\(String\(item\.id \|\| ""\)\)/);
   assert.match(app, /renderPreviewRating\(item\);/);
   assert.match(app, /if \(isPreviewDialogOpen\(\)\) renderPreviewRating\(item\);/);
   assert.doesNotMatch(app, /if \(isPreviewDialogOpen\(\)\) \{\s*setPreviewRatingState/s);
