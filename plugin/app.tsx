@@ -518,7 +518,7 @@ function StatusBadge({ label, state }: { label: string; state: ServerState }) {
 
 function PowerSwitch({ checked, disabled, onChange }: { checked: boolean; disabled: boolean; onChange: (checked: boolean) => void }) {
   return (
-    <label className="[-webkit-app-region:no-drag] relative block h-7 w-12 cursor-pointer" aria-label="Start or stop server">
+    <label className="[-webkit-app-region:no-drag] relative block h-7 w-12 cursor-pointer has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60" aria-label="Start or stop server">
       <input className="absolute opacity-0" type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.currentTarget.checked)} />
       <span className={`absolute inset-0 rounded-full transition-colors after:absolute after:left-[3px] after:top-[3px] after:h-[22px] after:w-[22px] after:rounded-full after:bg-white after:transition-transform ${checked ? "bg-[#1f74ff] after:translate-x-5" : "bg-[#d7dbe1]"}`} />
     </label>
@@ -534,8 +534,8 @@ function OptionRow({ checked, description, disabled, icon, onChange, title }: {
   title: string;
 }) {
   return (
-    <label className="grid cursor-pointer grid-cols-[14px_24px_minmax(0,1fr)] items-center gap-x-[11px] gap-y-2">
-      <input className="h-3.5 w-3.5 cursor-pointer accent-[#1463e8]" type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.currentTarget.checked)} />
+    <label className="grid cursor-pointer grid-cols-[14px_24px_minmax(0,1fr)] items-center gap-x-[11px] gap-y-2 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60">
+      <input className="h-3.5 w-3.5 cursor-pointer accent-[#1463e8] disabled:cursor-not-allowed" type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.currentTarget.checked)} />
       <span className="grid h-6 w-6 place-items-center rounded-md border border-[#e1e3e7] bg-white text-[#565c66] [&_svg]:h-3 [&_svg]:w-3" aria-hidden="true">{icon}</span>
       <span>
         <strong className="block text-[11px] font-[620] text-[#111]">{title}</strong>

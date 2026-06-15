@@ -72,6 +72,8 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(app, /<span>Add user<\/span>/);
   assert.match(app, /disabled:cursor-not-allowed disabled:opacity-45/);
   assert.match(app, /disabled:cursor-not-allowed disabled:bg-\[#f4f5f7\] disabled:text-\[#8a8f99\]/);
+  assert.match(app, /has-\[:disabled\]:cursor-not-allowed has-\[:disabled\]:opacity-60/);
+  assert.match(app, /disabled:cursor-not-allowed" type="checkbox"/);
   assert.match(app, /function SettingRow\(\{ children, help, label \}/);
   assert.doesNotMatch(app, /<label className="grid grid-cols-\[72px_minmax\(0,1fr\)\]/);
   assert.doesNotMatch(app, /Admin is reserved for full management permissions/);
