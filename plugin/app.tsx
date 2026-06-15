@@ -84,7 +84,7 @@ function App() {
   const statusLabel = restartingStopped ? busyStoppedFrames[busyFrame] : titleCase(serverState);
   const authEnabled = Boolean(settings.authEnabled);
   const authUsers = normalizedAuthUsers(settings);
-  const allowMetadataEditing = authUsers.some((user) => canRoleEditMetadata(user.role));
+  const allowMetadataEditing = authUsersCanEditMetadata(authUsers);
   const authUsersStatusLabel = authEnabled
     ? allowMetadataEditing ? "Active editors" : "Active viewers"
     : "Inactive";
@@ -151,7 +151,7 @@ function App() {
       : authUsers;
     if (!validateAuthUsers(effectiveAuthUsers)) return false;
     const nextAuthEnabled = Boolean(patch.authEnabled ?? authEnabled);
-    const nextAllowMetadataEditing = nextAuthEnabled && effectiveAuthUsers.some((user) => canRoleEditMetadata(user.role));
+    const nextAllowMetadataEditing = nextAuthEnabled && authUsersCanEditMetadata(effectiveAuthUsers);
     const payload: Record<string, unknown> = {
       autoStart: settings.autoStart,
       host: publicNetwork ? "0.0.0.0" : "127.0.0.1",
@@ -225,19 +225,24 @@ function App() {
   }
 
   function updateAuthUser(index: number, patch: AuthUser) {
-    const nextUsers = authUsers.map((user, userIndex) => userIndex === index ? normalizeAuthUser({ ...user, ...patch }) : user);
+    updateAuthUsers(replaceAuthUser(authUsers, index, patch));
+  }
+
+  function updateAuthUsers(nextUsers: AuthUser[]) {
     updateSettings({
       authUsers: nextUsers,
-      allowMetadataEditing: nextUsers.some((user) => canRoleEditMetadata(user.role)),
+      allowMetadataEditing: authUsersCanEditMetadata(nextUsers),
     });
   }
 
+  function saveAuthUser(index: number, patch: AuthUser) {
+    const nextUsers = replaceAuthUser(authUsers, index, patch);
+    updateAuthUsers(nextUsers);
+    saveSettings({ patch: { authUsers: nextUsers } });
+  }
+
   function addAuthUser() {
-    const nextUsers = [...authUsers, nextDefaultUser(authUsers)];
-    updateSettings({
-      authUsers: nextUsers,
-      allowMetadataEditing: nextUsers.some((user) => canRoleEditMetadata(user.role)),
-    });
+    updateAuthUsers([...authUsers, nextDefaultUser(authUsers)]);
   }
 
   function removeAuthUser(index: number) {
@@ -245,10 +250,7 @@ function App() {
     const nextUsers = authUsers.filter((_, userIndex) => userIndex !== index);
     const nextUserPasswords = removeIndexedValue(userPasswords, index);
     setUserPasswords(nextUserPasswords);
-    updateSettings({
-      authUsers: nextUsers,
-      allowMetadataEditing: nextUsers.some((user) => canRoleEditMetadata(user.role)),
-    });
+    updateAuthUsers(nextUsers);
     saveSettings({ patch: { authUsers: nextUsers }, passwordDrafts: nextUserPasswords });
   }
 
@@ -438,8 +440,7 @@ function App() {
                     disabled={formDisabled}
                     value={user.role}
                     onChange={(event) => {
-                      updateAuthUser(index, { role: event.currentTarget.value as UserRole });
-                      saveSettings({ patch: { authUsers: authUsers.map((entry, entryIndex) => entryIndex === index ? { ...entry, role: event.currentTarget.value as UserRole } : entry) } });
+                      saveAuthUser(index, { role: event.currentTarget.value as UserRole });
                     }}
                   >
                     <option value="viewer">Viewer</option>
@@ -601,6 +602,14 @@ function normalizeRole(role: unknown): UserRole {
 
 function canRoleEditMetadata(role: unknown) {
   return role === "admin" || role === "editor";
+}
+
+function authUsersCanEditMetadata(users: AuthUser[]) {
+  return users.some((user) => canRoleEditMetadata(user.role));
+}
+
+function replaceAuthUser(users: AuthUser[], index: number, patch: AuthUser) {
+  return users.map((user, userIndex) => userIndex === index ? normalizeAuthUser({ ...user, ...patch }) : user);
 }
 
 function duplicateUsername(users: AuthUser[]) {
