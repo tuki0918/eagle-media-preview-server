@@ -11,7 +11,7 @@
     "allowSyntheticDefaultImports": true,
     "types": ["node"],
     "rootDir": "plugin/service",
-    "outDir": "plugin/service"
+    "outDir": ".generated/plugin-service"
   },
   "include": ["plugin/service/*.cts"],
   "exclude": ["plugin/service/*.test.cts"]

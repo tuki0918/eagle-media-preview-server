@@ -12,7 +12,7 @@ const {
   createSettingsStore,
   hashPassword,
   normalizeSettings,
-} = require("./runtime.cjs");
+} = require("../../.generated/plugin-service/runtime.cjs");
 
 test("generated CommonJS runtime loads with require for Eagle plugin windows", () => {
   assert.equal(normalizeSettings({}).port, DEFAULT_SETTINGS.port);

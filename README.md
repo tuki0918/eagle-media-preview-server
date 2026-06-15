@@ -33,7 +33,7 @@ npm install
 npm run dev
 ```
 
-`npm run dev` starts the Vite development server for the React surfaces. The Eagle plugin runtime itself loads CommonJS service files generated from `plugin/service/*.cts`.
+`npm run dev` starts the Vite development server for the React surfaces. The Eagle plugin runtime itself loads CommonJS service files generated from `plugin/service/*.cts` during build.
 
 ## Build
 
@@ -43,10 +43,10 @@ npm run build
 
 The build performs two steps:
 
-- `tsc -p tsconfig.plugin-service.json` generates Eagle-compatible `plugin/service/*.cjs` files from `.cts` sources.
+- `tsc -p tsconfig.plugin-service.json` generates Eagle-compatible `.generated/plugin-service/*.cjs` files from `.cts` sources.
 - `vite build` emits the browser viewer to `dist/public`, bundles the plugin window to `dist/plugin/app.js`, and copies `manifest.json`, plugin assets, public assets, favicon, and generated service files into `dist`.
 
-Generated `.cjs` service files and `dist` output are build artifacts.
+Generated `.generated/plugin-service/*.cjs` files and `dist` output are build artifacts.
 
 ## Verification
 

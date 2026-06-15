@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 type PluginRequirePath = (relativePath: string) => string;
+const generatedServiceUrl = new URL("../.generated/plugin-service/", import.meta.url);
 
 async function readPluginAppSource() {
   return readFile(new URL("./app.tsx", import.meta.url), "utf8");
@@ -85,7 +86,7 @@ test("plugin copy URL uses Eagle clipboard API directly", async () => {
 test("plugin window does not expose an unused shared URL expiration setting", async () => {
   const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
   const app = await readPluginAppSource();
-  const runtime = await readFile(new URL("./service/runtime.cjs", import.meta.url), "utf8");
+  const runtime = await readFile(new URL("runtime.cjs", generatedServiceUrl), "utf8");
   const settingsStore = await readFile(new URL("./service/settingsStore.ts", import.meta.url), "utf8");
 
   assert.doesNotMatch(html, /共有URL/);
@@ -114,13 +115,13 @@ test("plugin CommonJS runtime avoids node protocol requires for older Eagle runt
   ];
 
   for (const file of files) {
-    const source = await readFile(new URL(`./service/${file}`, import.meta.url), "utf8");
+    const source = await readFile(new URL(file, generatedServiceUrl), "utf8");
     assert.doesNotMatch(source, /require\("node:/, file);
   }
 });
 
 test("plugin server serves text and markdown media as inline raw text", async () => {
-  const source = await readFile(new URL("./service/viewerServer.cjs", import.meta.url), "utf8");
+  const source = await readFile(new URL("viewerServer.cjs", generatedServiceUrl), "utf8");
 
   assert.match(source, /"\.txt": "text\/plain; charset=utf-8"/);
   assert.match(source, /"\.md": "text\/plain; charset=utf-8"/);

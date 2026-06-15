@@ -1,5 +1,6 @@
 logs
 node_modules
 dist
+.generated
 *.eagleplugin
 plugin/service/*.cjs

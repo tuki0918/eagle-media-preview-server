@@ -8,7 +8,7 @@ const {
   createConnectionContext,
   requiresToken,
   normalizeConnectionInput,
-} = require("../plugin/service/connection.cjs");
+} = require("../.generated/plugin-service/connection.cjs");
 
 type ConnectionCandidate = { baseUrl: string };
 

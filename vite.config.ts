@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import { build as esbuild } from "esbuild";
 
 const distDir = resolve("dist");
+const generatedPluginServiceDir = resolve(".generated", "plugin-service");
 
 function copyPluginPackageAssets() {
   const includeRuntimeAsset = (sourcePath: string) => !/\.test\.(?:cjs|js|ts|tsx)$/.test(sourcePath)
@@ -24,6 +25,7 @@ function copyPluginPackageAssets() {
         cp("public/favicon.ico", resolve(distDir, "public/favicon.ico")),
         cp("public/assets", resolve(distDir, "public/assets"), { recursive: true }),
       ]);
+      await cp(generatedPluginServiceDir, resolve(distDir, "plugin", "service"), { recursive: true });
       await esbuild({
         bundle: true,
         define: {

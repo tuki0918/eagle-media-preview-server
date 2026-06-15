@@ -276,7 +276,7 @@ test("public preview renders text-like files and PDFs from their thumbnails", as
   const html = await readAppSources();
   const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
-  const server = await readFile(new URL("../plugin/service/viewerServer.cjs", import.meta.url), "utf8");
+  const server = await readFile(new URL("../.generated/plugin-service/viewerServer.cjs", import.meta.url), "utf8");
 
   assert.match(app, /const textPreviewExts = new Set\(\[/);
   assert.match(app, /"txt", "md", "js", "css", "html", "json"/);
