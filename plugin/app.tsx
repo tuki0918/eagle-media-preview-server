@@ -69,7 +69,6 @@ function App() {
   const [message, setMessageState] = useState("");
   const [messageIsError, setMessageIsError] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
-  const [password, setPassword] = useState("");
   const [userPasswords, setUserPasswords] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<PluginStatus>(() => ({
     settings: {
@@ -159,10 +158,6 @@ function App() {
       preferredLanAddress: selectedLanAddress,
       ...patch,
     };
-    if (password) {
-      payload.password = password;
-      payload.confirmPassword = password;
-    }
     const cleanUserPasswords = Object.fromEntries(Object.entries(userPasswords).filter(([, value]) => value.trim()));
     if (Object.keys(cleanUserPasswords).length) {
       payload.userPasswords = cleanUserPasswords;
@@ -341,14 +336,6 @@ function App() {
                   updateSettings(patch);
                   saveSettings({ patch });
                 }}
-              />
-              <OptionRow
-                checked={allowMetadataEditing}
-                disabled
-                icon={<EditIcon />}
-                title="Editor roles"
-                description="Editor and Admin users can update rating, tags, and categories."
-                onChange={() => {}}
               />
               <OptionRow
                 checked={publicNetwork}
@@ -639,10 +626,6 @@ function CopyIcon({ className }: { className?: string }) {
 
 function EmptyQrIcon({ className }: { className?: string }) {
   return <Svg className={className}><path d="m15 18-.722-3.25" /><path d="M2 8a10.645 10.645 0 0 0 20 0" /><path d="m20 15-1.726-2.05" /><path d="m4 15 1.726-2.05" /><path d="m9 18 .722-3.25" /></Svg>;
-}
-
-function EditIcon() {
-  return <Svg><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></Svg>;
 }
 
 function EyeIcon({ className }: { className?: string }) {

@@ -45,6 +45,17 @@ test("plugin window renders the management UI from React", async () => {
   assert.doesNotMatch(html, /id="grid"/);
 });
 
+test("plugin window uses per-user roles for metadata permissions", async () => {
+  const app = await readPluginAppSource();
+
+  assert.match(app, /<option value="viewer">Viewer<\/option>/);
+  assert.match(app, /<option value="editor">Editor<\/option>/);
+  assert.match(app, /<option value="admin">Admin<\/option>/);
+  assert.doesNotMatch(app, /title="Editor roles"/);
+  assert.doesNotMatch(app, /function EditIcon\(/);
+  assert.doesNotMatch(app, /const \[password, setPassword\]/);
+});
+
 test("plugin app keeps Eagle Node API compatibility with a classic script", async () => {
   const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
   const app = await readPluginAppSource();
