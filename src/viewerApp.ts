@@ -286,7 +286,7 @@ function showViewer(data: ConnectResponse) {
 
 function clearViewerSessionState() {
   state.requestId += 1;
-  resetViewerResults();
+  resetViewerResults({ resetOffset: true });
   Object.assign(state, resetFilterState());
   hideTagSuggestions();
   resetTileAutoLoading();
@@ -298,12 +298,12 @@ function clearViewerSessionState() {
   updatePager();
 }
 
-function resetViewerResults() {
+function resetViewerResults({ resetOffset = false }: { resetOffset?: boolean } = {}) {
   state.tilesLoadingMore = false;
   state.items = [];
   state.folders = [];
   state.total = 0;
-  state.offset = 0;
+  if (resetOffset) state.offset = 0;
 }
 
 function setConnectMessage(message: string, isError: boolean) {
