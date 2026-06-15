@@ -34,7 +34,7 @@ interface SearchControlsProps {
 }
 
 const selectClassName =
-  "min-h-[50px] w-full appearance-none rounded-app border border-app-border bg-app-surface py-0 pl-4 pr-[46px] text-[15px] text-app-text hover:border-app-border-strong hover:bg-[#fcfdff]";
+  "min-h-[50px] w-full appearance-none rounded-app border border-app-border bg-app-surface py-0 pl-4 pr-[46px] text-base text-app-text hover:border-app-border-strong hover:bg-[#fcfdff] min-[720px]:text-[15px]";
 
 const selectArrowStyle: CSSProperties = {
   backgroundImage:
@@ -108,7 +108,7 @@ export function SearchInput({ value = "" }: { value?: string }) {
   return (
     <input
       id="searchInput"
-      className="unified-search-input min-h-[34px] min-w-[180px] flex-[1_1_220px] border-0 bg-transparent text-[15px] text-app-text outline-0 max-[540px]:min-w-0 max-[540px]:basis-[72px]"
+      className="unified-search-input min-h-[34px] min-w-[180px] flex-[1_1_220px] border-0 bg-transparent text-base text-app-text outline-0 min-[720px]:text-[15px] max-[540px]:min-w-0 max-[540px]:basis-[72px]"
       type="search"
       placeholder="Search title or tag"
       autoComplete="off"

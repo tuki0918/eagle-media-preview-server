@@ -238,6 +238,24 @@ describe("ViewerAppShell", () => {
     expect(empty).toContain("Clear filters");
   });
 
+  test("renders tiles empty state without masonry columns", () => {
+    const html = renderToStaticMarkup(
+      <ResultSurface
+        state={{
+          kind: "empty",
+          hasActiveFilters: true,
+          onClearFilters: () => {},
+          viewMode: "tiles",
+        }}
+      />,
+    );
+
+    expect(html).toContain("media-tiles");
+    expect(html).toContain("is-empty");
+    expect(html).toContain("[column-count:auto]");
+    expect(html).toContain("max-[540px]:[column-count:auto]");
+  });
+
   test("renders result list as reusable media items", () => {
     const html = renderToStaticMarkup(
       <ResultList

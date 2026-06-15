@@ -49,7 +49,7 @@ const previewEditRowClassName =
 const previewChipEditorClassName = "preview-chip-editor relative grid w-full min-w-0 gap-2";
 const previewEditChipListClassName = "preview-edit-chip-list flex min-h-0 flex-wrap gap-1.5";
 const previewEditChipClassName = "preview-edit-chip inline-flex min-h-[26px] max-w-full items-center gap-1.5 rounded-full border border-[rgba(148,163,184,0.34)] bg-[#f8fafc] py-0 pl-[9px] pr-1.5 text-xs font-[560] text-[#0f172a]";
-const previewChipInputClassName = "preview-chip-input min-h-[34px] w-full min-w-0 rounded-app border border-app-border bg-white px-2.5 text-app-text focus:border-[rgba(37,99,235,0.58)] focus:outline focus:outline-2 focus:outline-[rgba(37,99,235,0.22)]";
+const previewChipInputClassName = "preview-chip-input min-h-[34px] w-full min-w-0 rounded-app border border-app-border bg-white px-2.5 text-base text-app-text focus:border-[rgba(37,99,235,0.58)] focus:outline focus:outline-2 focus:outline-[rgba(37,99,235,0.22)] min-[720px]:text-sm";
 const previewChipSuggestionsClassName = "preview-chip-suggestions absolute left-0 right-0 top-[calc(100%+4px)] z-[8] grid max-h-[184px] overflow-auto rounded-app border border-[rgba(148,163,184,0.28)] bg-white p-1 shadow-[0_16px_36px_rgba(15,23,42,0.16)]";
 const previewChipSuggestionClassName = "preview-chip-suggestion flex min-h-8 cursor-pointer items-center justify-between gap-3 rounded-md border-0 bg-transparent px-2 text-left text-[13px] text-[#0f172a] hover:bg-[#eff6ff] focus-visible:bg-[#eff6ff] focus-visible:outline-none";
 

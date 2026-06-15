@@ -34,5 +34,5 @@ function resultSurfaceClassName(viewMode: ViewerMode = "grid", isEmpty = true) {
     : viewMode === "tiles"
       ? "media-tiles content-start [column-width:180px] [column-gap:4px] max-[540px]:[column-count:3] max-[540px]:[column-width:auto] max-[540px]:[column-gap:3px]"
       : "media-grid grid content-start gap-3 [grid-template-columns:repeat(auto-fill,minmax(132px,1fr))] min-[720px]:gap-3.5 min-[720px]:[grid-template-columns:repeat(auto-fill,minmax(168px,1fr))]";
-  return `${modeClassName}${isEmpty ? " is-empty block overflow-visible !rounded-none !border-0 !bg-transparent !shadow-none [column-width:auto] [column-gap:normal]" : ""}`;
+  return `${modeClassName}${isEmpty ? " is-empty block overflow-visible !rounded-none !border-0 !bg-transparent !shadow-none [column-count:auto] [column-width:auto] [column-gap:normal] max-[540px]:[column-count:auto] max-[540px]:[column-width:auto] max-[540px]:[column-gap:normal]" : ""}`;
 }
