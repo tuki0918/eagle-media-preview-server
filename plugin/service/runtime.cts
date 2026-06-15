@@ -335,8 +335,7 @@ function createServerManager({
     if (prev.port !== next.port) return true;
     if (prev.authEnabled !== next.authEnabled) return true;
     if (!prev.authEnabled && !next.authEnabled) return false;
-    return prev.allowMetadataEditing !== next.allowMetadataEditing
-      || JSON.stringify(prev.authUsers) !== JSON.stringify(next.authUsers);
+    return JSON.stringify(prev.authUsers) !== JSON.stringify(next.authUsers);
   }
 
   return {

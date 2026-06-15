@@ -152,12 +152,13 @@ test("generated settings store clears metadata editing when BasicAuth is disable
   assert.match(saved.authUsers[0].passwordHash, PASSWORD_HASH_PATTERN);
 });
 
-test("generated server manager restarts after metadata editing setting changes while running", async () => {
+test("generated server manager restarts after auth user roles change while running", async () => {
   const calls: unknown[] = [];
   let settings = {
     ...DEFAULT_SETTINGS,
     authEnabled: true,
-    passwordHash: hashPassword("secret"),
+    allowMetadataEditing: false,
+    authUsers: [{ username: "editor", role: "viewer", passwordHash: hashPassword("secret") }],
     host: "127.0.0.1",
     port: 41532,
   };
@@ -168,7 +169,8 @@ test("generated server manager restarts after metadata editing setting changes w
       },
       async save(input: Record<string, unknown>) {
         settings = { ...settings, ...input };
-        calls.push(["save", settings.allowMetadataEditing]);
+        settings.allowMetadataEditing = settings.authUsers.some((user: { role: string }) => user.role === "admin" || user.role === "editor");
+        calls.push(["save", settings.authUsers]);
         return settings;
       },
     },
@@ -192,12 +194,14 @@ test("generated server manager restarts after metadata editing setting changes w
   });
 
   await manager.start();
-  await manager.saveSettings({ allowMetadataEditing: true });
+  await manager.saveSettings({
+    authUsers: [{ username: "editor", role: "editor", passwordHash: settings.authUsers[0].passwordHash }],
+  });
 
   assert.deepEqual(calls, [
     ["create", false],
     ["start", false],
-    ["save", true],
+    ["save", [{ username: "editor", role: "editor", passwordHash: settings.authUsers[0].passwordHash }]],
     ["stop", false],
     ["create", true],
     ["start", true],
