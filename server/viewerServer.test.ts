@@ -317,6 +317,17 @@ test("createViewerServer logs out cookie sessions", async () => {
   try {
     const status = viewer.status();
     const origin = `http://127.0.0.1:${status.port}`;
+    const missingUsername = await fetch(`${origin}/api/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: origin,
+      },
+      body: JSON.stringify({ password: "secret" }),
+    });
+    assert.equal(missingUsername.status, 401);
+    assert.deepEqual(await missingUsername.json(), { error: "Invalid password" });
+
     const login = await fetch(`${origin}/api/auth/login`, {
       method: "POST",
       headers: {

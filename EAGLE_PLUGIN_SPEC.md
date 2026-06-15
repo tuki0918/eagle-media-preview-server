@@ -220,6 +220,7 @@ Settings path:
 - `GET /api/auth/status`
   - Returns whether authentication is required, whether the current request is authenticated, the current user, and viewer permissions
 - `POST /api/auth/login`
+  - Requires username and password
   - Issues a `viewer_session` cookie
 - `POST /api/auth/logout`
   - Clears the `viewer_session` cookie and removes the server-side session token
