@@ -107,7 +107,8 @@ Build output is created under `dist`:
 ### UI Elements
 
 - `Server Status`
-  - States: `stopped`, `starting`, `running`, `stopping`, `error`
+  - States: `stopped`, `running`, `error`
+  - Shows a busy indicator while start/stop/save actions are in flight
   - Power toggle for start and stop
 - `Endpoint URL`
   - Current access URL
@@ -138,6 +139,7 @@ type Settings = {
   host: string;
   port: number;
   authEnabled: boolean;
+  // Legacy single-user compatibility fields. New UI writes `authUsers`.
   basicAuthUser: string;
   passwordHash: string;
   lastServerStatus: "running" | "stopped" | "error";
