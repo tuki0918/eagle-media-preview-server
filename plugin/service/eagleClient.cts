@@ -215,7 +215,7 @@ function createEagleClient({
     },
 
     async updateItemStar(id, star) {
-      const parsedStar = Number.parseInt(star, 10);
+      const parsedStar = Number(star);
       if (!Number.isInteger(parsedStar) || parsedStar < 0 || parsedStar > 5) {
         throw new Error("star must be an integer from 0-5");
       }
