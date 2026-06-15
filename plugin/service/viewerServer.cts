@@ -295,6 +295,10 @@ async function handleApi(req, url, res, { auth, getSession, setSession }: ApiCon
   const session = getSession();
 
   if (url.pathname === "/api/health") {
+    if (req.method !== "GET") {
+      sendMethodNotAllowed(res, ["GET"]);
+      return;
+    }
     const [app, library] = await Promise.allSettled([
       session.client.appInfo(),
       session.libraryInfo(),
@@ -308,11 +312,19 @@ async function handleApi(req, url, res, { auth, getSession, setSession }: ApiCon
   }
 
   if (url.pathname === "/api/folders") {
+    if (req.method !== "GET") {
+      sendMethodNotAllowed(res, ["GET"]);
+      return;
+    }
     sendJson(res, 200, await session.client.folders());
     return;
   }
 
   if (url.pathname === "/api/libraries") {
+    if (req.method !== "GET") {
+      sendMethodNotAllowed(res, ["GET"]);
+      return;
+    }
     const [library, history] = await Promise.all([
       session.libraryInfo(),
       session.client.libraryHistory(),
@@ -348,6 +360,10 @@ async function handleApi(req, url, res, { auth, getSession, setSession }: ApiCon
   }
 
   if (url.pathname === "/api/items") {
+    if (req.method !== "GET") {
+      sendMethodNotAllowed(res, ["GET"]);
+      return;
+    }
     const query = url.searchParams.get("q")?.trim();
     const offset = url.searchParams.get("offset") || 0;
     const limit = url.searchParams.get("limit") || 30;
@@ -374,6 +390,10 @@ async function handleApi(req, url, res, { auth, getSession, setSession }: ApiCon
   }
 
   if (url.pathname === "/api/tags") {
+    if (req.method !== "GET") {
+      sendMethodNotAllowed(res, ["GET"]);
+      return;
+    }
     const query = url.searchParams.get("q") || "";
     const limit = url.searchParams.get("limit") || 20;
     const result = await session.client.listTags({ query, limit });

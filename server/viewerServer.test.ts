@@ -45,6 +45,13 @@ test("createViewerServer starts and stops without the CLI entrypoint", async () 
   assert.equal(invalidStatusMethod.headers.get("allow"), "GET");
   assert.deepEqual(await invalidStatusMethod.json(), { error: "Method not allowed" });
 
+  const invalidItemsMethod = await fetch(`http://127.0.0.1:${status.port}/api/items`, {
+    method: "POST",
+  });
+  assert.equal(invalidItemsMethod.status, 405);
+  assert.equal(invalidItemsMethod.headers.get("allow"), "GET");
+  assert.deepEqual(await invalidItemsMethod.json(), { error: "Method not allowed" });
+
   const login = await fetch(`http://127.0.0.1:${status.port}/api/auth/login`, {
     method: "POST",
   });

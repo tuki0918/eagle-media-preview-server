@@ -218,6 +218,8 @@ test("plugin server caches authenticated users per request", async () => {
   assert.match(source, /function sendMethodNotAllowed\(res, methods\)/);
   assert.match(source, /"Allow": methods\.join\(", "\)/);
   assert.match(source, /sendMethodNotAllowed\(res, \["GET"\]\)/);
+  assert.match(source, /if \(url\.pathname === "\/api\/items"\) \{\s*if \(req\.method !== "GET"\)/);
+  assert.match(source, /if \(url\.pathname === "\/api\/tags"\) \{\s*if \(req\.method !== "GET"\)/);
   assert.match(source, /permissions: permissionsForUser\(null, \{ authenticated: true \}\)/);
   assert.doesNotMatch(source, /const writeMetadata = Boolean\(user && canRoleEditMetadata\(user\.role\)\)/);
   assert.doesNotMatch(source, /const manageLibrary = user\?\.role === "admin"/);
