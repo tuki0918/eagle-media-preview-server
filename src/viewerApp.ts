@@ -10,7 +10,6 @@ import {
   textPreviewExts,
 } from "./viewer/constants";
 import { debounce, getJson, postJson } from "./viewer/api";
-import { getViewerElements } from "./viewer/elements";
 import {
   flattenFolders,
   isTimedMedia,
@@ -50,6 +49,7 @@ import {
 } from "./viewer/tagSuggestionsState";
 import { previewDetailRows } from "./viewer/previewDetails";
 import {
+  getPreviewDialogState,
   resetPreviewDialogState,
   setPreviewDialogInfoOpen,
   setPreviewDialogState,
@@ -88,7 +88,6 @@ import {
   savedViewerMode,
 } from "./viewer/viewMode";
 
-const els = getViewerElements();
 let connectMessageText = "";
 let connectMessageIsError = false;
 let connectBusy = false;
@@ -513,19 +512,19 @@ function resetPreviewState() {
   if (!state.previewItemId && !state.previewInfoOpen) return;
   state.previewItemId = "";
   state.previewInfoOpen = false;
-  if (els.dialog.open) {
+  if (isPreviewDialogOpen()) {
     closePreview({ skipHistory: true });
   }
 }
 
 function syncPreviewFromState() {
   if (!state.previewItemId) {
-    if (els.dialog.open) closePreview({ skipHistory: true });
+    if (isPreviewDialogOpen()) closePreview({ skipHistory: true });
     return;
   }
   const item = state.items.find((entry) => entry.id === state.previewItemId);
   if (!item) {
-    if (els.dialog.open) closePreview({ skipHistory: true });
+    if (isPreviewDialogOpen()) closePreview({ skipHistory: true });
     return;
   }
   openPreview(item, { skipHistory: true });
@@ -546,7 +545,7 @@ async function setItemStar(item: EagleItem, star: number) {
   item.star = star;
   updateItemInState(String(item.id || ""), { star });
   render();
-  if (els.dialog.open) {
+  if (isPreviewDialogOpen()) {
     setPreviewRatingState({
       item,
       onSelect: (nextStar) => setItemStar(item, nextStar),
@@ -564,13 +563,17 @@ async function setItemStar(item: EagleItem, star: number) {
     alert(error.message);
   } finally {
     render();
-    if (els.dialog.open) {
+    if (isPreviewDialogOpen()) {
       setPreviewRatingState({
         item,
         onSelect: (nextStar) => setItemStar(item, nextStar),
       });
     }
   }
+}
+
+function isPreviewDialogOpen() {
+  return getPreviewDialogState().open;
 }
 
 function updateItemInState(id: string, patch: ItemPatch) {

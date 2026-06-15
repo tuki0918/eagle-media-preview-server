@@ -7,7 +7,6 @@ async function readViewerSources() {
     "../src/viewerApp.ts",
     "../src/viewer/api.ts",
     "../src/viewer/constants.ts",
-    "../src/viewer/elements.ts",
     "../src/viewer/fileLinks.ts",
     "../src/viewer/format.ts",
     "../src/viewer/itemQuery.ts",
@@ -348,6 +347,8 @@ test("public file names expose original names in truncated views and preview inf
   assert.doesNotMatch(app, /previewOriginalNameHost: document\.querySelector\("#previewOriginalNameHost"\),/);
   assert.doesNotMatch(app, /previewMetaHost: document\.querySelector\("#previewMetaHost"\),/);
   assert.doesNotMatch(app, /previewOriginalName: document\.querySelector\("#previewOriginalName"\),/);
+  assert.doesNotMatch(app, /getViewerElements/);
+  assert.doesNotMatch(app, /document\.querySelector/);
   assert.match(app, /setPreviewTextState\(\{[\s\S]*originalName: originalFileName\(item\),[\s\S]*\}\);/);
   assert.doesNotMatch(app, /els\.previewOriginalName\.textContent/);
   assert.match(css, /\.preview-original-name-section\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\);[^}]*padding:\s*8px 8px 14px;[^}]*border-bottom:\s*1px solid rgba\(148,\s*163,\s*184,\s*0\.18\);/s);
