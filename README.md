@@ -20,6 +20,16 @@ You can preview your media from other devices on the same network.
 - Eagle 4.0 Build 23 or later
 - Node.js 20 or later
 
+## Authentication and roles
+
+Authentication is optional. When BasicAuth protection is enabled, browser access requires either a BasicAuth header or a `viewer_session` cookie issued by the login API.
+
+- Viewer users can browse and preview media.
+- Editor users can edit rating, tags, and categories from the preview panel.
+- Admin users can edit metadata and switch the active Eagle library.
+
+Plain text passwords are never persisted. New passwords are saved as salted PBKDF2-SHA-256 hashes, and existing legacy SHA-256 hashes remain accepted for migration compatibility. The viewer session is a server-side cookie session rather than a JWT.
+
 ## Development
 
 This project is managed as a TypeScript / React / Vite / Tailwind CSS / Vitest codebase.
