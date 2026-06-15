@@ -175,7 +175,9 @@ test("public viewer exposes sign out when authenticated", async () => {
   assert.match(app, /state\.permissions = defaultPermissions\(!authRequired\);/);
   assert.match(app, /function normalizePermissions\(value: AuthStatusResponse\["permissions"\], readFallback = true\)/);
   assert.match(app, /function clearAuthState\(nextAuthRequired: boolean\) \{/);
-  assert.match(app, /clearAuthState\(authRequired\);/);
+  assert.match(app, /const logoutStatus = await postJson<AuthStatusResponse>\("\/api\/auth\/logout", \{\}\);/);
+  assert.match(app, /clearAuthState\(Boolean\(logoutStatus\.required\)\);/);
+  assert.match(app, /state\.permissions = normalizePermissions\(logoutStatus\.permissions, !authRequired\);/);
   assert.match(app, /clearAuthState\(false\);/);
   assert.match(app, /clearAuthState\(true\);/);
   assert.match(app, /clearViewerSessionState\(\);/);
@@ -199,7 +201,6 @@ test("public viewer exposes sign out when authenticated", async () => {
   assert.match(app, /async function loadTagSuggestions\(\) \{[\s\S]*handleAuthError\(error\)/);
   assert.match(app, /async function setItemStar\([\s\S]*if \(handleAuthError\(error\)\) return;/);
   assert.match(app, /async function savePreviewMetadata\([\s\S]*handleAuthError\(error\);/);
-  assert.match(app, /postJson<AuthStatusResponse>\("\/api\/auth\/logout", \{\}\)/);
   assert.match(app, /showLogin\(\);/);
   assert.doesNotMatch(app, /manageLibrary/);
 

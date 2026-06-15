@@ -213,8 +213,9 @@ async function logout() {
   setConnectMessage("", false);
   setConnectBusy(true);
   try {
-    await postJson<AuthStatusResponse>("/api/auth/logout", {});
-    clearAuthState(authRequired);
+    const logoutStatus = await postJson<AuthStatusResponse>("/api/auth/logout", {});
+    clearAuthState(Boolean(logoutStatus.required));
+    state.permissions = normalizePermissions(logoutStatus.permissions, !authRequired);
     clearViewerSessionState();
     renderLoginConnect();
     showLogin();
