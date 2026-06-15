@@ -150,13 +150,17 @@ function PreviewMetadataEditor({
   onSaveMetadata: PreviewInfoProps["onSaveMetadata"];
   onTagSuggestions: PreviewInfoProps["onTagSuggestions"];
 }) {
-  const [tags, setTags] = useState(() => tagValues(item.tags));
-  const [categories, setCategories] = useState(() => categoryValues(item.folders));
+  const initialTags = tagValues(item.tags);
+  const initialCategories = categoryValues(item.folders);
+  const [tags, setTags] = useState(() => initialTags);
+  const [categories, setCategories] = useState(() => initialCategories);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
+  const hasMetadataChanges = !sameStringValues(tags, initialTags) || !sameStringValues(categories, initialCategories);
 
   const submitMetadata = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!hasMetadataChanges) return;
     setSaving(true);
     setStatus("Saving");
     try {
@@ -198,7 +202,7 @@ function PreviewMetadataEditor({
         />
       </PreviewEditField>
       <div className="preview-edit-actions flex items-center justify-end gap-2.5">
-        <button type="submit" className={`${textActionButtonClassName} preview-edit-save min-h-[34px] px-3`} disabled={saving}>
+        <button type="submit" className={`${textActionButtonClassName} preview-edit-save min-h-[34px] px-3`} disabled={saving || !hasMetadataChanges}>
           Save
         </button>
         <span className="preview-edit-status min-w-0 text-xs text-app-muted" role="status">
@@ -381,4 +385,8 @@ function tagValues(value: unknown) {
 
 function categoryValues(value: unknown) {
   return folderIds(value);
+}
+
+function sameStringValues(left: readonly string[], right: readonly string[]) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }

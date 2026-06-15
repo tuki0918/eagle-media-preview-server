@@ -387,6 +387,8 @@ describe("ViewerAppShell", () => {
 
     expect(details).toContain("preview-details-section");
     expect(details).toContain("preview-edit-form");
+    expect(details).toContain("preview-edit-save");
+    expect(details).toContain("disabled");
     expect(actions).toContain("direct-file-link");
     expect(actions).toContain("preview-info-cta");
   });

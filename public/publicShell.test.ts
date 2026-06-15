@@ -486,6 +486,10 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(html, /<PreviewEditField label="Tags">/);
   assert.match(html, /<PreviewEditField label="Categories">/);
   assert.match(html, /await onSaveMetadata\(item, \{ tags, folders: categories \}\);/);
+  assert.match(html, /const hasMetadataChanges = !sameStringValues\(tags, initialTags\) \|\| !sameStringValues\(categories, initialCategories\);/);
+  assert.match(html, /if \(!hasMetadataChanges\) return;/);
+  assert.match(html, /disabled=\{saving \|\| !hasMetadataChanges\}/);
+  assert.match(html, /function sameStringValues\(left: readonly string\[\], right: readonly string\[\]\) \{/);
   assert.match(html, /onSubmit=\{submitMetadata\}/);
   assert.match(app, /postJson<\{[\s\S]*folders\?: unknown;[\s\S]*\}>\(`\/api\/items\/\$\{encodeURIComponent\(String\(item\.id \|\| ""\)\)\}\/metadata`, \{ tags, folders \}\)/);
   assert.match(app, /rememberRecentValues\(RECENT_TAGS_STORAGE_KEY, patch\.tags\);/);
