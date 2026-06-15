@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { ApiError, getJson } from "./api";
+import { ApiError, errorMessage, getJson } from "./api";
 
 describe("viewer API helpers", () => {
   afterEach(() => {
@@ -34,5 +34,10 @@ describe("viewer API helpers", () => {
       name: "ApiError",
       status: 502,
     } satisfies Partial<ApiError>);
+  });
+
+  test("normalizes unknown thrown values to display messages", () => {
+    expect(errorMessage(new Error("Boom"))).toBe("Boom");
+    expect(errorMessage("plain failure")).toBe("plain failure");
   });
 });

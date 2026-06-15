@@ -8,6 +8,10 @@ export class ApiError extends Error {
   }
 }
 
+export function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export async function getJson<T = unknown>(url: string): Promise<T> {
   return requestJson<T>(url);
 }

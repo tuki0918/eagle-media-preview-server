@@ -9,7 +9,7 @@ import {
   playableVideoExts,
   textPreviewExts,
 } from "./viewer/constants";
-import { ApiError, debounce, getJson, postJson } from "./viewer/api";
+import { ApiError, debounce, errorMessage, getJson, postJson } from "./viewer/api";
 import {
   flattenFolders,
   isTimedMedia,
@@ -268,10 +268,6 @@ function handleAuthError(error: unknown) {
   showLogin();
   setConnectMessage(errorMessage(error), true);
   return true;
-}
-
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function showLogin() {

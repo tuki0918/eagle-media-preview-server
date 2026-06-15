@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
+import { errorMessage } from "../api";
 import { directFileUrl } from "../fileLinks";
 import { folderIds, itemTags } from "../format";
 import { uniqueValues, type MetadataSuggestion } from "../metadata";
@@ -170,7 +171,7 @@ function PreviewMetadataEditor({
       await onSaveMetadata(item, { tags, folders: categories });
       setStatus("Saved");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : String(error));
+      setStatus(errorMessage(error));
     } finally {
       setSaving(false);
     }

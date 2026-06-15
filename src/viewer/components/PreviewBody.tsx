@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent, type ReactNode, type TouchEvent, type WheelEvent } from "react";
-import { mediaUrl } from "../api";
+import { errorMessage, mediaUrl } from "../api";
 import { closePreview } from "../shellActions";
 import {
   getImageOverlayControlsVisible,
@@ -314,7 +314,7 @@ function TextPreview({ item }: { item: EagleItem }) {
         const nextText = await response.text();
         if (!cancelled) setText(nextText);
       } catch (error) {
-        if (!cancelled) setText(`Unable to load preview: ${error instanceof Error ? error.message : String(error)}`);
+        if (!cancelled) setText(`Unable to load preview: ${errorMessage(error)}`);
       }
     })();
     return () => {
