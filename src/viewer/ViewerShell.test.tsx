@@ -108,6 +108,15 @@ describe("ViewerAppShell", () => {
     }
   });
 
+  test("renders selected view mode with blue active styling", () => {
+    const html = renderToStaticMarkup(<ResultsStatus total={12} viewMode="grid" />);
+
+    expect(html).toContain('id="gridViewButton"');
+    expect(html).toContain('aria-pressed="true"');
+    expect(html).toContain("bg-blue-600");
+    expect(html).toContain("hover:bg-blue-700");
+  });
+
   test("renders login connection controls as reusable components", () => {
     const button = renderToStaticMarkup(<ConnectButton disabled />);
     const message = renderToStaticMarkup(<ConnectMessage isError message="No Eagle" />);

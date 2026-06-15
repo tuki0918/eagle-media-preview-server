@@ -40,8 +40,10 @@ function ViewModeButton({
 }) {
   const pressed = selectedMode === mode;
   const className = [
-    "min-h-[30px] rounded-md border-0 bg-transparent px-[9px] text-xs font-[680] text-app-muted hover:bg-app-surface-soft hover:text-app-text",
-    pressed ? "bg-app-accent text-white hover:bg-app-accent hover:text-white" : "",
+    "min-h-[30px] rounded-md border-0 px-[9px] text-xs font-[680]",
+    pressed
+      ? "bg-blue-600 text-white shadow-[0_1px_3px_rgba(37,99,235,0.28)] hover:bg-blue-700 hover:text-white"
+      : "bg-transparent text-app-muted hover:bg-app-surface-soft hover:text-app-text",
   ].filter(Boolean).join(" ");
   return (
     <button id={id} className={className} type="button" aria-pressed={pressed} onClick={() => selectViewMode(mode)}>
