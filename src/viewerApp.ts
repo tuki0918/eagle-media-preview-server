@@ -291,6 +291,7 @@ function clearViewerSessionState() {
   hideTagSuggestions();
   resetTileAutoLoading();
   closePreview({ skipHistory: true });
+  syncUrlState({ replace: true });
   setLibraryFooterName("");
   renderTagChips();
   renderSearchControlButtons();
