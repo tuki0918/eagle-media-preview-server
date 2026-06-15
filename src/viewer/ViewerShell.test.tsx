@@ -1,4 +1,6 @@
+import { act } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { JSDOM } from "jsdom";
 import { describe, expect, test } from "vitest";
 import {
   AdvancedFilters,
@@ -392,6 +394,83 @@ describe("ViewerAppShell", () => {
     expect(details).toContain("disabled");
     expect(actions).toContain("direct-file-link");
     expect(actions).toContain("preview-info-cta");
+  });
+
+  test("disables preview metadata save after successful save", async () => {
+    const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
+    const testGlobal = globalThis as typeof globalThis & {
+      IS_REACT_ACT_ENVIRONMENT?: boolean;
+    };
+    const previousWindow = globalThis.window;
+    const previousDocument = globalThis.document;
+    const previousNode = globalThis.Node;
+    const previousHTMLElement = globalThis.HTMLElement;
+    const previousIS_REACT_ACT_ENVIRONMENT = testGlobal.IS_REACT_ACT_ENVIRONMENT;
+    globalThis.window = dom.window;
+    globalThis.document = dom.window.document;
+    globalThis.Node = dom.window.Node;
+    globalThis.HTMLElement = dom.window.HTMLElement;
+    testGlobal.IS_REACT_ACT_ENVIRONMENT = true;
+
+    const { createRoot } = await import("react-dom/client");
+    let root: import("react-dom/client").Root | null = null;
+    const savedPatches: Array<{ tags: string[]; folders: string[] }> = [];
+    try {
+      const container = dom.window.document.querySelector("#root");
+      if (!(container instanceof dom.window.HTMLElement)) throw new Error("Missing test root");
+      root = createRoot(container);
+
+      await act(async () => {
+        root?.render(
+          <PreviewDetailsPanel
+            canEditMetadata
+            item={{ id: "item-1", tags: ["alpha"], folders: ["folder-1"] }}
+            folders={[{ id: "folder-1", name: "Folder 1" }]}
+            detailRows={[{ label: "Type", value: "Image" }]}
+            onTagSuggestions={() => []}
+            onFolderSuggestions={() => []}
+            onSaveMetadata={async (_item, patch) => {
+              savedPatches.push(patch);
+            }}
+          />,
+        );
+      });
+
+      const saveButton = container.querySelector(".preview-edit-save");
+      const tagInput = Array.from(container.querySelectorAll("input")).find((input) => input.placeholder === "Add tag");
+      const form = container.querySelector("form");
+      if (!(saveButton instanceof dom.window.HTMLButtonElement) || !(tagInput instanceof dom.window.HTMLInputElement) || !(form instanceof dom.window.HTMLFormElement)) {
+        throw new Error("Missing metadata editor controls");
+      }
+
+      expect(saveButton.disabled).toBe(true);
+      await act(async () => {
+        const valueSetter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")?.set;
+        valueSetter?.call(tagInput, "beta");
+        tagInput.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+        tagInput.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
+      });
+
+      expect(saveButton.disabled).toBe(false);
+      await act(async () => {
+        form.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }));
+      });
+
+      expect(savedPatches).toEqual([{ tags: ["alpha", "beta"], folders: ["folder-1"] }]);
+      expect(saveButton.disabled).toBe(true);
+      expect(container.querySelector(".preview-edit-status")?.textContent).toBe("Saved");
+    } finally {
+      if (root) {
+        await act(async () => {
+          root?.unmount();
+        });
+      }
+      globalThis.window = previousWindow;
+      globalThis.document = previousDocument;
+      globalThis.Node = previousNode;
+      globalThis.HTMLElement = previousHTMLElement;
+      testGlobal.IS_REACT_ACT_ENVIRONMENT = previousIS_REACT_ACT_ENVIRONMENT;
+    }
   });
 
   test("renders preview metadata as read-only chips without edit permission", () => {

@@ -547,7 +547,11 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(html, /<PreviewEditField label="Tags">/);
   assert.match(html, /<PreviewEditField label="Categories">/);
   assert.match(html, /await onSaveMetadata\(item, \{ tags, folders: categories \}\);/);
-  assert.match(html, /const hasMetadataChanges = !sameStringValues\(tags, initialTags\) \|\| !sameStringValues\(categories, initialCategories\);/);
+  assert.match(html, /const \[savedTags, setSavedTags\] = useState\(\(\) => initialTags\);/);
+  assert.match(html, /const \[savedCategories, setSavedCategories\] = useState\(\(\) => initialCategories\);/);
+  assert.match(html, /const hasMetadataChanges = !sameStringValues\(tags, savedTags\) \|\| !sameStringValues\(categories, savedCategories\);/);
+  assert.match(html, /setSavedTags\(tags\);/);
+  assert.match(html, /setSavedCategories\(categories\);/);
   assert.match(html, /if \(hasMetadataChanges && status === "Saved"\) setStatus\(""\);/);
   assert.match(html, /if \(!hasMetadataChanges\) return;/);
   assert.match(html, /disabled=\{saving \|\| !hasMetadataChanges\}/);

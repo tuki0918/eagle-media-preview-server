@@ -154,9 +154,11 @@ function PreviewMetadataEditor({
   const initialCategories = categoryValues(item.folders);
   const [tags, setTags] = useState(() => initialTags);
   const [categories, setCategories] = useState(() => initialCategories);
+  const [savedTags, setSavedTags] = useState(() => initialTags);
+  const [savedCategories, setSavedCategories] = useState(() => initialCategories);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
-  const hasMetadataChanges = !sameStringValues(tags, initialTags) || !sameStringValues(categories, initialCategories);
+  const hasMetadataChanges = !sameStringValues(tags, savedTags) || !sameStringValues(categories, savedCategories);
 
   useEffect(() => {
     if (hasMetadataChanges && status === "Saved") setStatus("");
@@ -169,6 +171,8 @@ function PreviewMetadataEditor({
     setStatus("Saving");
     try {
       await onSaveMetadata(item, { tags, folders: categories });
+      setSavedTags(tags);
+      setSavedCategories(categories);
       setStatus("Saved");
     } catch (error) {
       setStatus(errorMessage(error));
