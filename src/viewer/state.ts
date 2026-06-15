@@ -21,7 +21,6 @@ export const state: ViewerState = {
   previewInfoOpen: false,
   restoringHistory: false,
   permissions: {
-    manageLibrary: false,
     read: true,
     writeMetadata: false,
     writeRating: false,

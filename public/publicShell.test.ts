@@ -168,6 +168,7 @@ test("public viewer exposes sign out when authenticated", async () => {
   assert.match(app, /authUser = data\.user \?\? null/);
   assert.match(app, /postJson<AuthStatusResponse>\("\/api\/auth\/logout", \{\}\)/);
   assert.match(app, /showLogin\(\);/);
+  assert.doesNotMatch(app, /manageLibrary/);
 
   setLoginConnectState({
     authenticated: false,
