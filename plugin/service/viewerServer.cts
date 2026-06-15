@@ -285,7 +285,7 @@ function createViewerServer({
 async function handleApi(req, url, res, { auth, getSession, setSession }: ApiContext & { auth: AuthContext }) {
   if (url.pathname === "/api/connect") {
     if (req.method !== "POST") {
-      sendJson(res, 405, { error: "Method not allowed" });
+      sendMethodNotAllowed(res, ["POST"]);
       return;
     }
     await handleConnect(req, res, setSession);
@@ -327,7 +327,7 @@ async function handleApi(req, url, res, { auth, getSession, setSession }: ApiCon
 
   if (url.pathname === "/api/library/switch") {
     if (req.method !== "POST") {
-      sendJson(res, 405, { error: "Method not allowed" });
+      sendMethodNotAllowed(res, ["POST"]);
       return;
     }
     if (!hasAdminAccess(req, auth)) {
@@ -384,7 +384,7 @@ async function handleApi(req, url, res, { auth, getSession, setSession }: ApiCon
   const starMatch = url.pathname.match(/^\/api\/items\/([^/]+)\/star$/);
   if (starMatch) {
     if (req.method !== "POST") {
-      sendJson(res, 405, { error: "Method not allowed" });
+      sendMethodNotAllowed(res, ["POST"]);
       return;
     }
     if (!hasMetadataWriteAccess(req, auth)) {
@@ -401,7 +401,7 @@ async function handleApi(req, url, res, { auth, getSession, setSession }: ApiCon
   const metadataMatch = url.pathname.match(/^\/api\/items\/([^/]+)\/metadata$/);
   if (metadataMatch) {
     if (req.method !== "POST") {
-      sendJson(res, 405, { error: "Method not allowed" });
+      sendMethodNotAllowed(res, ["POST"]);
       return;
     }
     if (!hasMetadataWriteAccess(req, auth)) {
@@ -443,7 +443,7 @@ interface AuthContext {
 async function handleAuthRoutes(req, url, res, auth: AuthContext) {
   if (url.pathname === "/api/auth/status") {
     if (req.method !== "GET") {
-      sendJson(res, 405, { error: "Method not allowed" });
+      sendMethodNotAllowed(res, ["GET"]);
       return true;
     }
     pruneAuthSessions(auth.authSessions);
@@ -460,7 +460,7 @@ async function handleAuthRoutes(req, url, res, auth: AuthContext) {
 
   if (url.pathname === "/api/auth/login") {
     if (req.method !== "POST") {
-      sendJson(res, 405, { error: "Method not allowed" });
+      sendMethodNotAllowed(res, ["POST"]);
       return true;
     }
     if (!authRequired(auth)) {
@@ -498,7 +498,7 @@ async function handleAuthRoutes(req, url, res, auth: AuthContext) {
 
   if (url.pathname === "/api/auth/logout") {
     if (req.method !== "POST") {
-      sendJson(res, 405, { error: "Method not allowed" });
+      sendMethodNotAllowed(res, ["POST"]);
       return true;
     }
     const token = parseCookies(req.headers.cookie || "").viewer_session;
@@ -558,7 +558,7 @@ async function handleConnect(req, res, setSession) {
 
 async function streamItemMedia(id, kind, req, res, session) {
   if (!["GET", "HEAD"].includes(req.method || "GET")) {
-    sendJson(res, 405, { error: "Method not allowed" });
+    sendMethodNotAllowed(res, ["GET", "HEAD"]);
     return;
   }
 
@@ -701,6 +701,14 @@ async function serveStatic(pathname, res, publicDir) {
 function sendJson(res, status, body) {
   res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
   res.end(JSON.stringify(body));
+}
+
+function sendMethodNotAllowed(res, methods) {
+  res.writeHead(405, {
+    "Allow": methods.join(", "),
+    "Content-Type": "application/json; charset=utf-8",
+  });
+  res.end(JSON.stringify({ error: "Method not allowed" }));
 }
 
 function authRequired({ users = [], viewerPassword, passwordHash }: { passwordHash?: string; users?: AuthUser[]; viewerPassword?: string }) {

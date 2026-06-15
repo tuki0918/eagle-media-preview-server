@@ -218,6 +218,7 @@ Settings path:
 
 ### API Routes
 
+- Routes with a fixed method return `405` with an `Allow` header for unsupported methods
 - `GET /api/auth/status`
   - Returns whether authentication is required, whether the current request is authenticated, the current user, and viewer permissions
 - `POST /api/auth/login`
