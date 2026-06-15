@@ -157,6 +157,15 @@ test("plugin CommonJS runtime avoids node protocol requires for older Eagle runt
   }
 });
 
+test("plugin server caches authenticated users per request", async () => {
+  const source = await readFile(new URL("viewerServer.cjs", generatedServiceUrl), "utf8");
+
+  assert.match(source, /AUTH_USER_CACHE = Symbol\("authUser"\)/);
+  assert.match(source, /hasOwnProperty\.call\(req, AUTH_USER_CACHE\)/);
+  assert.match(source, /req\[AUTH_USER_CACHE\] = user/);
+  assert.match(source, /function resolveAuthenticatedUser\(req, auth\)/);
+});
+
 test("plugin server serves text and markdown media as inline raw text", async () => {
   const source = await readFile(new URL("viewerServer.cjs", generatedServiceUrl), "utf8");
 

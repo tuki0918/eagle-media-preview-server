@@ -35,6 +35,7 @@ interface AuthSession {
 const PASSWORD_HASH_ALGORITHM = "sha256";
 const PASSWORD_HASH_KEY_LENGTH = 32;
 const AUTH_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
+const AUTH_USER_CACHE = Symbol("authUser");
 const MIN_PASSWORD_HASH_ITERATIONS = 100000;
 const MAX_PASSWORD_HASH_ITERATIONS = 1000000;
 
@@ -737,6 +738,15 @@ function hasAdminAccess(req, auth: AuthContext) {
 }
 
 function authenticatedUser(req, auth: AuthContext): AuthSession | null {
+  if (Object.prototype.hasOwnProperty.call(req, AUTH_USER_CACHE)) {
+    return req[AUTH_USER_CACHE];
+  }
+  const user = resolveAuthenticatedUser(req, auth);
+  req[AUTH_USER_CACHE] = user;
+  return user;
+}
+
+function resolveAuthenticatedUser(req, auth: AuthContext): AuthSession | null {
   if (!authRequired(auth)) return null;
   const basicUser = basicAuthUser(req.headers.authorization || "", auth);
   if (basicUser) {
