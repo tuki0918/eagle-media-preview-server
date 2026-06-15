@@ -593,9 +593,14 @@ function serverRestartSettingsChanged(current: PluginSettings, nextSettings: Rec
   if (Number(nextSettings.port ?? current.port) !== Number(current.port)) return true;
   if (nextAuthEnabled !== currentAuthEnabled) return true;
   if (!currentAuthEnabled && !nextAuthEnabled) return false;
+  if (hasPasswordUpdates(nextSettings.userPasswords)) return true;
   if (Boolean(nextSettings.allowMetadataEditing ?? current.allowMetadataEditing) !== Boolean(current.allowMetadataEditing)) return true;
   if (JSON.stringify(nextSettings.authUsers ?? current.authUsers ?? []) !== JSON.stringify(current.authUsers ?? [])) return true;
   return false;
+}
+
+function hasPasswordUpdates(value: unknown) {
+  return Boolean(value && typeof value === "object" && Object.keys(value).length);
 }
 
 function normalizedAuthUsers(settings: PluginSettings): AuthUser[] {
@@ -604,7 +609,7 @@ function normalizedAuthUsers(settings: PluginSettings): AuthUser[] {
   return [{
     username: settings.basicAuthUser || "eagle",
     passwordHash: settings.passwordHash || "",
-    role: settings.allowMetadataEditing ? "editor" : "viewer",
+    role: settings.authEnabled && settings.allowMetadataEditing ? "editor" : "viewer",
   }];
 }
 
