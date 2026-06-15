@@ -80,7 +80,7 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(app, /setMessage\(errorMessage\(error\), true\);/);
   assert.doesNotMatch(app, /setMessage\(error instanceof Error \? error\.message : String\(error\), true\);/);
   assert.match(app, /function updateAuthUsers\(nextUsers: AuthUser\[\]\)/);
-  assert.match(app, /allowMetadataEditing: authUsersCanEditMetadata\(nextUsers\)/);
+  assert.match(app, /allowMetadataEditing: authEnabled && authUsersCanEditMetadata\(nextUsers\)/);
   assert.match(app, /function saveAuthUser\(index: number, patch: AuthUser\)/);
   assert.match(app, /saveAuthUser\(index, \{ role: event\.currentTarget\.value as UserRole \}\);/);
   assert.doesNotMatch(app, /saveSettings\(\{ patch: \{ authUsers: authUsers\.map/);

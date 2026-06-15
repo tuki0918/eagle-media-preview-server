@@ -236,7 +236,7 @@ function App() {
   function updateAuthUsers(nextUsers: AuthUser[]) {
     updateSettings({
       authUsers: nextUsers,
-      allowMetadataEditing: authUsersCanEditMetadata(nextUsers),
+      allowMetadataEditing: authEnabled && authUsersCanEditMetadata(nextUsers),
     });
   }
 
