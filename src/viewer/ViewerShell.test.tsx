@@ -62,7 +62,6 @@ const REQUIRED_ELEMENT_IDS = [
   "tableViewButton",
   "prevButton",
   "nextButton",
-  "pagerHost",
   "pageButtons",
   "libraryFooterName",
   "previewDialog",

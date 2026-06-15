@@ -36,7 +36,7 @@ import {
   pageButtonList,
   totalPages,
 } from "./viewer/pagination";
-import { renderPagerView } from "./viewer/components/Pager";
+import { setPagerState } from "./viewer/pagerState";
 import {
   clearResultStateView,
   renderResultStateView,
@@ -608,7 +608,7 @@ function updatePager() {
   const isTiles = state.viewMode === "tiles";
   renderTilesSentinel(isTiles ? tileSentinelText(tileLoadingState()) : "Loading more");
   const current = currentPage(state);
-  renderPagerView(els.pagerHost, {
+  setPagerState({
     current,
     hidden: isTiles,
     nextDisabled: state.offset + state.limit >= state.total,

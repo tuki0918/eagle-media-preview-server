@@ -8,7 +8,6 @@ export interface ViewerElements {
   toggleFiltersButtonHost: HTMLElement;
   advancedFiltersHost: HTMLElement;
   resultGridHost: HTMLElement;
-  pagerHost: HTMLElement;
   template: HTMLTemplateElement;
   dialog: HTMLDialogElement;
   previewMetaHost: HTMLElement;
@@ -30,7 +29,6 @@ export function getViewerElements(): ViewerElements {
     toggleFiltersButtonHost: document.querySelector("#toggleFiltersButtonHost"),
     advancedFiltersHost: document.querySelector("#advancedFiltersHost"),
     resultGridHost: document.querySelector("#resultGridHost"),
-    pagerHost: document.querySelector("#pagerHost"),
     template: document.querySelector("#cardTemplate"),
     dialog: document.querySelector("#previewDialog"),
     previewMetaHost: document.querySelector("#previewMetaHost"),

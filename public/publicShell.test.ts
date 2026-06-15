@@ -52,6 +52,7 @@ async function readAppSources() {
     "../src/viewer/components/TagSuggestions.tsx",
     "../src/viewer/components/TilesSentinel.tsx",
     "../src/viewer/components/ViewerShellLayout.tsx",
+    "../src/viewer/pagerState.ts",
     "../src/viewer/shellConfig.ts",
     "../src/viewer/tilesSentinelState.ts",
   ];
@@ -580,7 +581,7 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   assert.doesNotMatch(app, /tilesViewButton: document\.querySelector\("#tilesViewButton"\),/);
   assert.doesNotMatch(app, /tilesSentinelHost: document\.querySelector\("#tilesSentinelHost"\),/);
   assert.doesNotMatch(app, /tilesSentinel: document\.querySelector\("#tilesSentinel"\),/);
-  assert.match(app, /pagerHost: document\.querySelector\("#pagerHost"\),/);
+  assert.doesNotMatch(app, /pagerHost: document\.querySelector\("#pagerHost"\),/);
   assert.doesNotMatch(app, /prevButton: document\.querySelector\("#prevButton"\),/);
   assert.doesNotMatch(app, /pageButtons: document\.querySelector\("#pageButtons"\),/);
   assert.match(app, /state\.viewMode === "tiles"/);
@@ -590,7 +591,7 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   assert.match(html, /onPointerDown=\{trigger\.onPointerDown\}/);
   assert.match(html, /onClick=\{trigger\.onClick\}/);
   assert.match(app, /renderResultListView\(els\.resultGridHost, \{/);
-  assert.match(app, /renderPagerView\(els\.pagerHost, \{/);
+  assert.match(app, /setPagerState\(\{/);
   assert.match(app, /setTilesSentinelState\(\{/);
   assert.match(app, /getTilesSentinelElement\(\)/);
   assert.match(app, /function setupTileAutoLoading\(\) \{/);
