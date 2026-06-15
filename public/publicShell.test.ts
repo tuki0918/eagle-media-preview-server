@@ -186,6 +186,10 @@ test("public viewer exposes sign out when authenticated", async () => {
   assert.match(app, /function handleAuthError\(error: unknown\) \{/);
   assert.match(app, /error instanceof ApiError/);
   assert.match(app, /error\.status !== 401/);
+  assert.match(app, /function errorMessage\(error: unknown\) \{/);
+  assert.match(app, /error instanceof Error \? error\.message : String\(error\)/);
+  assert.doesNotMatch(app, /setConnectMessage\(error\.message, true\)/);
+  assert.doesNotMatch(app, /alert\(error\.message\)/);
   assert.match(app, /async function loadFolders\(\) \{[\s\S]*if \(handleAuthError\(error\)\) return;/);
   assert.match(app, /async function loadTagSuggestions\(\) \{[\s\S]*handleAuthError\(error\)/);
   assert.match(app, /async function setItemStar\([\s\S]*if \(handleAuthError\(error\)\) return;/);

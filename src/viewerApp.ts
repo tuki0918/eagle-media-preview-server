@@ -201,7 +201,7 @@ async function connect(credentials?: { password: string; username: string }) {
   } catch (error) {
     if (handleAuthError(error)) return;
     showLogin();
-    setConnectMessage(error.message, true);
+    setConnectMessage(errorMessage(error), true);
   } finally {
     setConnectBusy(false);
   }
@@ -217,7 +217,7 @@ async function logout() {
     renderLoginConnect();
     showLogin();
   } catch (error) {
-    setConnectMessage(error.message, true);
+    setConnectMessage(errorMessage(error), true);
   } finally {
     setConnectBusy(false);
   }
@@ -266,8 +266,12 @@ function handleAuthError(error: unknown) {
   clearViewerSessionState();
   renderLoginConnect();
   showLogin();
-  setConnectMessage(error.message, true);
+  setConnectMessage(errorMessage(error), true);
   return true;
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function showLogin() {
@@ -384,13 +388,13 @@ async function loadItems({ append = false }: LoadItemsOptions = {}) {
     if (handleAuthError(error)) return;
     state.tilesLoadingMore = false;
     if (append) {
-      renderTilesSentinel(error.message);
+      renderTilesSentinel(errorMessage(error));
       updatePager();
       return;
     }
     state.items = [];
     state.total = 0;
-    renderMessage(error.message, "error");
+    renderMessage(errorMessage(error), "error");
     updateStatus();
     updatePager();
     setupTileAutoLoading();
@@ -665,7 +669,7 @@ async function setItemStar(item: EagleItem, star: number) {
     if (handleAuthError(error)) return;
     item.star = previous;
     updateItemInState(String(item.id || ""), { star: previous });
-    alert(error.message);
+    alert(errorMessage(error));
   } finally {
     render();
     if (isPreviewDialogOpen()) renderPreviewRating(item);
@@ -796,7 +800,7 @@ async function savePreviewMetadata(item: EagleItem, { tags, folders }: { tags: s
     render();
   } catch (error) {
     handleAuthError(error);
-    throw error instanceof Error ? error : new Error(String(error));
+    throw error instanceof Error ? error : new Error(errorMessage(error));
   }
 }
 
