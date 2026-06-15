@@ -151,6 +151,7 @@ test("public login renders credentials when server auth is required", async () =
 
 test("public viewer exposes sign out when authenticated", async () => {
   const app = await readViewerSources();
+  const types = await readFile(new URL("../src/viewer/types.ts", import.meta.url), "utf8");
   setLoginConnectState({
     authenticated: true,
     authRequired: true,
@@ -206,6 +207,9 @@ test("public viewer exposes sign out when authenticated", async () => {
   assert.match(app, /async function setItemStar\([\s\S]*if \(handleAuthError\(error\)\) return;/);
   assert.match(app, /async function savePreviewMetadata\([\s\S]*handleAuthError\(error\);/);
   assert.match(app, /showLogin\(\);/);
+  assert.match(types, /export interface AuthStatusPermissions extends Partial<ViewerPermissions>/);
+  assert.match(types, /manageLibrary\?: boolean;/);
+  assert.match(types, /permissions\?: AuthStatusPermissions;/);
   assert.doesNotMatch(app, /manageLibrary/);
 
   setLoginConnectState({

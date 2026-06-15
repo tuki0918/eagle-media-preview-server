@@ -60,9 +60,13 @@ export interface ViewerPermissions {
   writeRating: boolean;
 }
 
+export interface AuthStatusPermissions extends Partial<ViewerPermissions> {
+  manageLibrary?: boolean;
+}
+
 export interface AuthStatusResponse {
   authenticated?: boolean;
-  permissions?: Partial<ViewerPermissions>;
+  permissions?: AuthStatusPermissions;
   required?: boolean;
   user?: {
     role?: string;
