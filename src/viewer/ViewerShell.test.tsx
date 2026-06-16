@@ -80,7 +80,6 @@ const REQUIRED_ELEMENT_IDS = [
   "prevButton",
   "nextButton",
   "pageButtons",
-  "libraryFooterName",
   "previewDialog",
   "previewMeta",
   "previewBody",

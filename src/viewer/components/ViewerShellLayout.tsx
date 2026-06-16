@@ -2,7 +2,6 @@ import type { CSSProperties } from "react";
 import { AccountSideMenu } from "./AccountSideMenu";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { CardTemplate } from "./CardTemplate";
-import { LibraryFooter } from "./LibraryFooter";
 import { Pager } from "./Pager";
 import { PreviewDialog } from "./PreviewDialog";
 import { ResultSurface } from "./ResultSurface";
@@ -32,7 +31,6 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
             <ResultSurface />
             <TilesSentinel />
             <Pager />
-            <LibraryFooter />
           </div>
         </SidebarInset>
       </SidebarProvider>

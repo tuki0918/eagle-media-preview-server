@@ -346,7 +346,7 @@ test("public UI no longer shows connect lock icon or connection settings button"
   assert.doesNotMatch(app, /els\.viewerShell\.hidden/);
   assert.match(app, /setShellView\("login"\);/);
   assert.match(app, /setShellView\("viewer"\);/);
-  assert.match(html, /<LibraryFooter \/>/);
+  assert.doesNotMatch(html, /<LibraryFooter \/>/);
   assert.doesNotMatch(html, /id="libraryFooterNameHost"/);
   assert.match(app, /setLibraryFooterName\(libraryLabel\(data\)\);/);
   assert.match(html, /useSyncExternalStore\(subscribeLibraryFooterName, getLibraryFooterName, getLibraryFooterName\)/);
