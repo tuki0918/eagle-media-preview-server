@@ -21,7 +21,7 @@ export function PreviewOriginalName({ value }: PreviewOriginalNameProps) {
   return (
     <div
       id="previewOriginalName"
-      className="preview-original-name-value w-full min-w-0 whitespace-normal text-sm leading-[1.4] text-app-text [overflow-wrap:anywhere]"
+      className="preview-original-name-value w-full min-w-0 whitespace-normal text-sm leading-[1.4] text-foreground [overflow-wrap:anywhere]"
       title={displayValue || undefined}
     >
       {displayValue}

@@ -44,8 +44,8 @@ export function PreviewDialog() {
     getVideoOverlayControlsVisible,
   );
   const dialogClassName = [
-    "fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none touch-none overscroll-none rounded-none border-0 bg-app-surface p-0 text-app-text",
-    "backdrop:bg-[rgba(15,23,42,0.32)]",
+    "fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none touch-none overscroll-none rounded-none border-0 bg-background p-0 text-foreground",
+    "backdrop:bg-foreground/30",
     previewDialogState.mode ? `${previewDialogState.mode}-mode` : "",
     previewDialogState.infoOpen ? "info-open" : "",
     previewDialogState.mode === "video" ? "bg-[#05070a]" : "",
@@ -55,17 +55,17 @@ export function PreviewDialog() {
     previewDialogState.mode === "video" ? "h-dvh max-h-dvh bg-[#05070a]" : "",
   ].filter(Boolean).join(" ");
   const previewInfoClassName = [
-    "preview-info absolute inset-y-0 right-0 z-[6] grid w-[min(360px,calc(100vw-56px))] max-w-full content-start gap-3.5 overflow-auto border-0 border-l border-app-border bg-[rgba(255,255,255,0.96)] p-3.5 backdrop-blur-[18px] transition-[box-shadow,transform] duration-200",
+    "preview-info absolute inset-y-0 right-0 z-[6] grid w-[min(360px,calc(100vw-56px))] max-w-full content-start gap-3.5 overflow-auto border-0 border-l border-border bg-card p-3.5 text-card-foreground transition-[box-shadow,transform] duration-200",
     previewDialogState.infoOpen
       ? "translate-x-0 shadow-[-18px_0_44px_rgba(15,23,42,0.14)] max-[540px]:translate-y-0 max-[540px]:shadow-[0_-18px_44px_rgba(15,23,42,0.14)]"
       : "translate-x-full shadow-none max-[540px]:translate-x-0 max-[540px]:translate-y-full",
-    "max-[540px]:inset-x-0 max-[540px]:bottom-0 max-[540px]:top-auto max-[540px]:w-auto max-[540px]:max-h-[min(72dvh,560px)] max-[540px]:border-l-0 max-[540px]:border-t max-[540px]:border-app-border",
+    "max-[540px]:inset-x-0 max-[540px]:bottom-0 max-[540px]:top-auto max-[540px]:w-auto max-[540px]:max-h-[min(72dvh,560px)] max-[540px]:border-l-0 max-[540px]:border-t max-[540px]:border-border",
   ].join(" ");
   const previewActionButtonClassName = [
     "icon-button inline-grid touch-manipulation select-none place-items-center border backdrop-blur-[12px]",
     previewDialogState.mode === "video" || previewDialogState.mode === "audio" || previewDialogState.mode === "image"
       ? "h-11 w-11 flex-[0_0_44px] rounded-full border-[rgba(255,255,255,0.18)] bg-[rgba(15,23,42,0.48)] text-white shadow-[0_10px_28px_rgba(0,0,0,0.22)] hover:bg-[rgba(15,23,42,0.64)] hover:text-white"
-      : "min-h-10 w-10 flex-[0_0_40px] rounded-app border-[rgba(203,213,225,0.82)] bg-[rgba(255,255,255,0.88)] text-app-text hover:border-[rgba(37,99,235,0.28)] hover:bg-white hover:text-app-accent",
+      : "min-h-10 w-10 flex-[0_0_40px] rounded-md border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground",
   ].join(" ");
   const videoOverlayMenuClassName = [
     "transition-opacity duration-150",
@@ -212,7 +212,7 @@ export function PreviewDialog() {
         <ChevronLeftIcon />
       </button>
       <div className={`dialog-header ${videoOverlayMenuClassName} fixed right-2.5 top-[calc(10px+env(safe-area-inset-top))] z-[4] flex items-center justify-end gap-3 border-0 bg-transparent p-0`}>
-        <button id="backPreview" className="text-icon-button hidden min-h-10 items-center gap-2 border-0 bg-transparent px-2 text-sm font-[680] text-app-text" type="button" aria-label="Back to results" onClick={closePreview}>
+        <button id="backPreview" className="text-icon-button hidden min-h-10 items-center gap-2 border-0 bg-transparent px-2 text-sm font-[680] text-foreground" type="button" aria-label="Back to results" onClick={closePreview}>
           <ChevronLeftIcon />
           <span>Back to Results</span>
         </button>
@@ -235,11 +235,11 @@ export function PreviewDialog() {
           className={previewInfoClassName}
           aria-label="Media info"
         >
-          <section className="preview-original-name-section grid min-h-8 grid-cols-[minmax(0,1fr)] items-center border-b border-[rgba(148,163,184,0.18)] px-2 pb-3.5 pt-2 max-[540px]:pb-3.5 max-[540px]:pt-1.5">
+          <section className="preview-original-name-section grid min-h-8 grid-cols-[minmax(0,1fr)] items-center border-b border-border px-2 pb-3.5 pt-2 max-[540px]:pb-3.5 max-[540px]:pt-1.5">
             <PreviewOriginalName />
           </section>
           <section className="preview-rating-section grid min-h-8 grid-cols-[minmax(96px,112px)_minmax(0,1fr)] items-center gap-[18px] px-2 max-[540px]:gap-3">
-            <span className="info-label text-xs font-normal text-app-muted">Rating</span>
+            <span className="info-label text-xs font-normal text-muted-foreground">Rating</span>
             <PreviewRating />
           </section>
           <PreviewInfoDetails />

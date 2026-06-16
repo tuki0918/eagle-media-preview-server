@@ -115,13 +115,13 @@ describe("ViewerAppShell", () => {
     }
   });
 
-  test("renders selected view mode with blue active styling", () => {
+  test("renders selected view mode with shadcn active styling", () => {
     const html = renderToStaticMarkup(<ResultsStatus total={12} viewMode="grid" />);
 
     expect(html).toContain('id="gridViewButton"');
     expect(html).toContain('aria-pressed="true"');
-    expect(html).toContain("bg-blue-600");
-    expect(html).toContain("hover:bg-blue-700");
+    expect(html).toContain("bg-primary");
+    expect(html).toContain("text-primary-foreground");
   });
 
   test("renders login connection controls as reusable components", () => {
@@ -132,7 +132,7 @@ describe("ViewerAppShell", () => {
     expect(button).toContain("disabled");
     expect(message).toContain('id="connectMessage"');
     expect(message).toContain("No Eagle");
-    expect(message).toContain("text-app-danger");
+    expect(message).toContain("text-destructive");
     expect(message).toContain('role="alert"');
     expect(message).not.toContain("fixed bottom-");
   });
@@ -217,8 +217,8 @@ describe("ViewerAppShell", () => {
     expect(dialog).toContain("rounded-full");
     expect(dialog).toContain("bg-[rgba(15,23,42,0.48)]");
     expect(body).toContain("image-toolbar");
-    expect(body).toContain("bg-[rgba(255,255,255,0.92)]");
-    expect(body).toContain("text-app-text-soft");
+    expect(body).toContain("bg-card");
+    expect(body).toContain("text-muted-foreground");
   });
 
   test("hides image overlay buttons and toolbar when image controls are toggled off", () => {

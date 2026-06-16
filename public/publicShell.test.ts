@@ -365,7 +365,7 @@ test("public image preview fit mode scales to the viewport and refreshes on resi
   assert.match(html, /transform: `translate\(-50%, -50%\) translate3d\(\$\{imageState\.transform\.x\}px, \$\{imageState\.transform\.y\}px, 0\) scale\(\$\{imageState\.transform\.scale\}\)`/);
   assert.match(html, /const previewLayoutClassName = \[/);
   assert.match(html, /const previewImageClassName =[\s\S]*"preview-image absolute left-1\/2 top-1\/2/);
-  assert.match(html, /backdrop:bg-\[rgba\(15,23,42,0\.32\)\]/);
+  assert.match(html, /backdrop:bg-foreground\/30/);
   assert.match(html, /\[&:fullscreen\]:h-screen \[&:fullscreen\]:w-screen/);
 });
 
@@ -444,7 +444,7 @@ test("public preview renders text-like files and PDFs from their thumbnails", as
   assert.match(app, /function previewFileName\(item[^)]*\) \{/);
   assert.match(app, /PreviewDialogMode = "" \| "audio" \| "image" \| "text" \| "unsupported" \| "video"/);
   assert.doesNotMatch(app, /pdf-mode/);
-  assert.match(html, /if \(kind === "text"\) return `\$\{base\} overflow-auto bg-\[#f8fafc\] p-\[18px\]`;/);
+  assert.match(html, /if \(kind === "text"\) return `\$\{base\} overflow-auto bg-muted p-\[18px\]`;/);
   assert.match(html, /const textPreviewClassName =/);
   assert.doesNotMatch(css, /\.pdf-mode \.preview-body/);
   assert.doesNotMatch(css, /\.pdf-preview/);
@@ -514,7 +514,7 @@ test("public ratings are static in grid and table but editable in the preview mo
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(html, /function RatingStars\(\{ className, disabled = false, disabledLabel, id, interactive = false, item, onSelect \}/);
-  assert.match(html, /const ratingStarBaseClassName =[\s\S]*rating-star[\s\S]*data-\[active=true\]:text-app-warn/);
+  assert.match(html, /const ratingStarBaseClassName =[\s\S]*rating-star[\s\S]*data-\[active=true\]:text-primary/);
   assert.match(html, /const canSelect = interactive && !disabled;/);
   assert.match(html, /const label = interactive && disabled && disabledLabel \? disabledLabel : interactive \? "Rating" : "Rating \(read only\)";/);
   assert.match(html, /aria-label=\{label\}/);
@@ -639,12 +639,12 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(html, /preview-rating-section grid min-h-8/);
   assert.match(html, /const previewDetailRowClassName =[\s\S]*min-h-7/);
   assert.match(html, /const previewChipListClassName = "preview-chip-list/);
-  assert.match(html, /const previewChipClassName =[\s\S]*min-h-6[\s\S]*bg-\[#e2e8f0\][\s\S]*text-\[11px\][\s\S]*font-medium/);
+  assert.match(html, /const previewChipClassName =[\s\S]*min-h-6[\s\S]*bg-secondary[\s\S]*text-\[11px\][\s\S]*font-medium/);
   assert.match(html, /className="rating-control inline-flex items-center gap-2\.5 \[&_\.rating-star\]:h-6 \[&_\.rating-star\]:w-6 \[&_\.rating-star\]:text-xl"/);
-  assert.match(html, /const previewLabelClassName = "preview-detail-label text-xs font-normal text-app-muted"/);
+  assert.match(html, /const previewLabelClassName = "preview-detail-label text-xs font-normal text-muted-foreground"/);
   assert.match(html, /const previewDetailValueClassName =[\s\S]*text-sm[\s\S]*max-\[540px\]:text-\[13px\]/);
   assert.doesNotMatch(css, /\.preview-chip-empty/);
-  assert.match(html, /className="preview-info-actions border-t border-\[rgba\(148,163,184,0\.22\)\] px-2 pt-3"/);
+  assert.match(html, /className="preview-info-actions border-t border-border px-2 pt-3"/);
   assert.match(html, /const previewEditFormClassName = "preview-edit-form/);
   assert.match(html, /const previewEditRowClassName =[\s\S]*grid-cols-\[minmax\(96px,112px\)_minmax\(0,1fr\)\]/);
   assert.match(html, /const previewChipEditorClassName = "preview-chip-editor/);
@@ -654,7 +654,7 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(html, /const previewChipSuggestionsClassName = "preview-chip-suggestions/);
   assert.match(html, /const previewChipSuggestionClassName = "preview-chip-suggestion/);
   assert.match(html, /className="preview-edit-actions flex items-center justify-end gap-2\.5"/);
-  assert.match(html, /const directFileLinkClassName =[\s\S]*min-h-\[52px\] w-full[\s\S]*bg-app-accent[\s\S]*text-white/);
+  assert.match(html, /const directFileLinkClassName =[\s\S]*min-h-\[52px\] w-full[\s\S]*bg-primary[\s\S]*text-primary-foreground/);
   assert.match(html, /max-\[540px\]:max-h-\[min\(72dvh,560px\)\]/);
   assert.match(html, /max-\[540px\]:gap-3/);
   assert.match(html, /<div id="previewDetails" className="preview-details grid gap-2\.5">/);
@@ -876,27 +876,19 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   assert.match(app, /params\.get\("view"\) === "tiles"/);
   assert.match(html, /media-tiles grid content-start gap-1 \[grid-auto-flow:dense\] \[grid-auto-rows:4px\] \[grid-template-columns:repeat\(auto-fill,minmax\(180px,1fr\)\)\]/);
   assert.match(html, /const tileButtonClassName =[\s\S]*tile-item[\s\S]*\[contain:layout_paint\]/);
-  assert.match(html, /animate-pulse bg-\[linear-gradient/);
+  assert.match(html, /animate-pulse rounded-none bg-muted/);
   assert.match(html, /gridRowEnd: `span \$\{tileMasonrySpan\(width, height\)\}`/);
   assert.match(html, /max-\[540px\]:grid-cols-3 max-\[540px\]:gap-\[3px\]/);
-  assert.match(html, /className="tiles-sentinel mt-3 grid min-h-\[52px\] place-items-center text-\[13px\] font-\[680\] text-app-muted"/);
+  assert.match(html, /className="tiles-sentinel mt-3 grid min-h-\[52px\] place-items-center text-\[13px\] font-\[680\] text-muted-foreground"/);
 });
 
-test("public extension pills use varied colors for common text formats", async () => {
+test("public extension pills use shadcn semantic colors", async () => {
   const html = await readAppSources();
 
-  assert.match(html, /const extensionColorClassNames: Record<string, string> = \{/);
-  assert.match(html, /html: "border-\[#fed7aa\] bg-\[#fff7ed\] text-\[#c2410c\]"/);
-  assert.match(html, /css: "border-\[#bfdbfe\] bg-\[#eff6ff\] text-\[#2563eb\]"/);
-  assert.match(html, /js: "border-\[#fde68a\] bg-\[#fefce8\] text-\[#a16207\]"/);
-  assert.match(html, /md: "border-\[#cbd5e1\] bg-\[#f8fafc\] text-\[#475569\]"/);
-  assert.match(html, /txt: "border-\[#cbd5e1\] bg-\[#f1f5f9\] text-\[#334155\]"/);
-  assert.match(html, /const fileBadgeColorClassNames: Record<string, string> = \{/);
-  assert.match(html, /html: "bg-\[#fff7ed\] text-\[#c2410c\]"/);
-  assert.match(html, /css: "bg-\[#eff6ff\] text-\[#2563eb\]"/);
-  assert.match(html, /js: "bg-\[#fefce8\] text-\[#a16207\]"/);
-  assert.match(html, /md: "bg-\[#f8fafc\] text-\[#475569\]"/);
-  assert.match(html, /txt: "bg-\[#f1f5f9\] text-\[#334155\]"/);
+  assert.match(html, /const extensionPillClassName = "border-border bg-secondary text-secondary-foreground";/);
+  assert.match(html, /const fileBadgeClassName = "bg-secondary text-secondary-foreground";/);
+  assert.doesNotMatch(html, /const extensionColorClassNames/);
+  assert.doesNotMatch(html, /const fileBadgeColorClassNames/);
 });
 
 test("public UI syncs filters, pagination, and preview state into the URL history", async () => {

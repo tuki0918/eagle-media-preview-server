@@ -8,7 +8,7 @@ interface PageButtonsProps {
 }
 
 const pageButtonClassName =
-  "h-11 min-w-11 rounded-lg px-3 text-sm font-[720] data-[active=true]:border-app-accent data-[active=true]:bg-app-accent data-[active=true]:text-white data-[active=true]:shadow-[0_8px_18px_rgba(20,99,243,0.22)]";
+  "h-11 min-w-11 rounded-lg px-3 text-sm font-[720] data-[active=true]:border-primary data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:shadow-sm";
 
 export function PageButtons({ current, pages, onSelect }: PageButtonsProps) {
   return (
@@ -16,7 +16,7 @@ export function PageButtons({ current, pages, onSelect }: PageButtonsProps) {
       {pages.map((page, index) => {
         if (page === "...") {
           return (
-            <span key={`ellipsis-${index}`} className="page-ellipsis inline-grid h-11 min-w-11 place-items-center rounded-app border border-app-border bg-white text-sm font-[720] text-app-muted">
+            <span key={`ellipsis-${index}`} className="page-ellipsis inline-grid h-11 min-w-11 place-items-center rounded-md border border-border bg-background text-sm font-[720] text-muted-foreground">
               ...
             </span>
           );

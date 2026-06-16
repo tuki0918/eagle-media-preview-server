@@ -40,7 +40,7 @@ interface ImageState {
 }
 
 const checkerboardClassName =
-  "bg-[#f8fafc] bg-[linear-gradient(45deg,rgba(148,163,184,0.24)_25%,transparent_25%),linear-gradient(-45deg,rgba(148,163,184,0.24)_25%,transparent_25%),linear-gradient(45deg,transparent_75%,rgba(148,163,184,0.24)_75%),linear-gradient(-45deg,transparent_75%,rgba(148,163,184,0.24)_75%)] [background-position:0_0,0_12px,12px_-12px,-12px_0] [background-size:24px_24px]";
+  "bg-muted bg-[linear-gradient(45deg,color-mix(in_srgb,var(--muted-foreground)_18%,transparent)_25%,transparent_25%),linear-gradient(-45deg,color-mix(in_srgb,var(--muted-foreground)_18%,transparent)_25%,transparent_25%),linear-gradient(45deg,transparent_75%,color-mix(in_srgb,var(--muted-foreground)_18%,transparent)_75%),linear-gradient(-45deg,transparent_75%,color-mix(in_srgb,var(--muted-foreground)_18%,transparent)_75%)] [background-position:0_0,0_12px,12px_-12px,-12px_0] [background-size:24px_24px]";
 const previewVideoClassName =
   "preview-video h-full w-full max-h-full cursor-pointer bg-[#05070a] object-contain [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:max-h-none [&:fullscreen]:max-w-none [&:fullscreen]:bg-[#05070a] [&:fullscreen]:object-contain";
 const mediaPlayerClassName =
@@ -59,22 +59,22 @@ const mediaSubtleTextClassName = "text-xs font-[620] tabular-nums text-[rgba(255
 const mediaControlsClassName = "flex min-w-0 items-center gap-2 max-[540px]:gap-1.5";
 const mediaButtonClassName =
   "inline-grid h-11 w-11 touch-manipulation select-none place-items-center rounded-full border border-[rgba(255,255,255,0.16)] bg-[rgba(255,255,255,0.12)] text-white backdrop-blur-[12px] hover:bg-[rgba(255,255,255,0.2)] disabled:cursor-default disabled:opacity-40 [&_svg]:h-5 [&_svg]:w-5 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-linecap:round] [&_svg]:[stroke-linejoin:round] [&_svg]:[stroke-width:2]";
-const playButtonClassName = `${mediaButtonClassName} h-12 w-12 border-[#60a5fa] bg-[#2563eb] text-white shadow-[0_10px_26px_rgba(37,99,235,0.42)] hover:border-[#93c5fd] hover:bg-[#1d4ed8]`;
+const playButtonClassName = `${mediaButtonClassName} h-12 w-12 border-white/30 bg-white/20 text-white shadow-sm hover:border-white/40 hover:bg-white/25`;
 const mediaRangeClassName =
   "h-10 w-full min-w-0 touch-manipulation appearance-none bg-transparent accent-white [&::-webkit-slider-runnable-track]:h-1.5 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-[rgba(255,255,255,0.28)] [&::-webkit-slider-thumb]:mt-[-7px] [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-[0_4px_12px_rgba(0,0,0,0.32)]";
 const mediaSpeedButtonClassName =
   "inline-flex h-9 min-w-14 touch-manipulation select-none items-center justify-center rounded-full border border-[rgba(255,255,255,0.16)] bg-[rgba(255,255,255,0.1)] px-3 text-xs font-[760] text-white hover:bg-[rgba(255,255,255,0.18)]";
 const textPreviewClassName =
-  "text-preview m-0 min-w-0 overflow-auto rounded-app border border-app-border bg-white p-[18px] font-mono text-[13px] leading-[1.55] text-app-text shadow-app-soft [overflow-wrap:anywhere] [white-space:pre-wrap]";
+  "text-preview m-0 min-w-0 overflow-auto rounded-md border border-border bg-card p-[18px] font-mono text-[13px] leading-[1.55] text-card-foreground shadow-sm [overflow-wrap:anywhere] [white-space:pre-wrap]";
 const unsupportedThumbClassName = "unsupported-thumb max-h-[min(62dvh,640px)] w-[min(640px,calc(100vw_-_48px))] max-w-full object-contain";
-const previewNoticeClassName = "preview-notice m-0 max-w-[560px] text-center text-[13px] leading-normal text-app-muted";
+const previewNoticeClassName = "preview-notice m-0 max-w-[560px] text-center text-[13px] leading-normal text-muted-foreground";
 const imageViewportClassName = "image-viewport relative grid h-full min-h-0 w-full min-w-0 cursor-grab touch-none place-items-center overflow-hidden active:cursor-grabbing";
 const previewImageClassName =
   "preview-image absolute left-1/2 top-1/2 block max-h-none max-w-none select-none object-contain [transform-origin:center] [will-change:transform] [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:bg-[#05070a] [&:fullscreen]:object-contain";
 const imageToolbarClassName =
-  "image-toolbar absolute bottom-[calc(14px+env(safe-area-inset-bottom))] left-1/2 z-[2] inline-flex -translate-x-1/2 items-center gap-1.5 rounded-[10px] border border-[rgba(203,213,225,0.86)] bg-[rgba(255,255,255,0.92)] p-1.5 shadow-[0_10px_30px_rgba(15,23,42,0.16)] backdrop-blur-[16px]";
+  "image-toolbar absolute bottom-[calc(14px+env(safe-area-inset-bottom))] left-1/2 z-[2] inline-flex -translate-x-1/2 items-center gap-1.5 rounded-lg border border-border bg-card p-1.5 shadow-sm";
 const toolbarButtonClassName =
-  "inline-grid min-h-[38px] w-[38px] touch-manipulation select-none place-items-center rounded-app border-0 bg-transparent text-app-text-soft hover:bg-app-accent-soft hover:text-app-accent [&_svg]:h-[18px] [&_svg]:w-[18px] [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-linecap:round] [&_svg]:[stroke-linejoin:round] [&_svg]:[stroke-width:2]";
+  "inline-grid min-h-[38px] w-[38px] touch-manipulation select-none place-items-center rounded-md border-0 bg-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground [&_svg]:h-[18px] [&_svg]:w-[18px] [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-linecap:round] [&_svg]:[stroke-linejoin:round] [&_svg]:[stroke-width:2]";
 
 export function PreviewBody({ item, kind, srcKind = "file" }: PreviewBodyProps) {
   if (kind === "video") return <VideoPreview item={item} />;
@@ -603,7 +603,7 @@ function previewBodyClassName(kind?: PreviewBodyKind) {
   const base = "preview-body relative grid h-full min-h-0 grid-rows-[minmax(0,1fr)] overflow-hidden p-0";
   if (kind === "video") return `${base} bg-[#05070a] max-h-full`;
   if (kind === "audio") return `${base} place-items-center bg-[#05070a]`;
-  if (kind === "text") return `${base} overflow-auto bg-[#f8fafc] p-[18px]`;
+  if (kind === "text") return `${base} overflow-auto bg-muted p-[18px]`;
   if (kind === "unsupported") return `${base} content-center justify-items-center gap-4 bg-[#05070a] p-8 [&_.preview-notice]:text-white`;
   return `${base} ${checkerboardClassName}`;
 }

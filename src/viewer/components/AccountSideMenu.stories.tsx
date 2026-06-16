@@ -24,8 +24,8 @@ const meta = {
       <div className="min-h-dvh pl-0 min-[720px]:pl-[72px] min-[1180px]:pl-[224px]">
         <AccountSideMenu />
         <main className="p-6">
-          <h1 className="m-0 text-xl font-bold text-app-text">Viewer content</h1>
-          <p className="text-app-muted">Account menu layout check</p>
+          <h1 className="m-0 text-xl font-bold text-foreground">Viewer content</h1>
+          <p className="text-muted-foreground">Account menu layout check</p>
         </main>
       </div>
     );

@@ -66,4 +66,4 @@ export const detailRows = [
 export const noop = () => {};
 
 export const storyCanvasClassName = "w-[min(960px,calc(100vw-48px))]";
-export const storyPanelClassName = "w-[min(520px,calc(100vw-48px))] rounded-app border border-app-border bg-app-surface p-4 shadow-app-soft";
+export const storyPanelClassName = "w-[min(520px,calc(100vw-48px))] rounded-lg border border-border bg-card p-4 shadow-sm";

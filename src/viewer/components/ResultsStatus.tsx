@@ -16,7 +16,7 @@ export function ResultsStatus({ total, viewMode }: ResultsStatusProps) {
   const displayViewMode = viewMode ?? storedStatus.viewMode;
 
   return (
-    <section className="status-line grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-4 text-sm font-[720] text-app-muted max-[540px]:gap-2 max-[540px]:text-xs" aria-live="polite">
+    <section className="status-line grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-4 text-sm font-[720] text-muted-foreground max-[540px]:gap-2 max-[540px]:text-xs" aria-live="polite">
       <span id="resultCount" className="justify-self-start whitespace-nowrap">{displayTotal.toLocaleString()} items</span>
       <span className="status-actions ml-auto inline-flex justify-self-end">
         <ToggleGroup
@@ -58,7 +58,7 @@ function ViewModeButton({
       className={cn(
         "min-h-[30px] rounded-md border-0 px-[9px] text-xs font-[680]",
         pressed
-          ? "bg-blue-600 text-white shadow-[0_1px_3px_rgba(37,99,235,0.28)] hover:bg-blue-700 hover:text-white data-[state=on]:bg-blue-600 data-[state=on]:text-white"
+          ? "bg-primary text-primary-foreground shadow-sm hover:bg-primary hover:text-primary-foreground data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
           : "bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
       )}
       type="button"

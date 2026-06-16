@@ -38,24 +38,24 @@ interface MetadataChipEditorProps {
 
 const textActionButtonClassName =
   "rounded-lg px-3 text-[13px] font-[680]";
-const previewLabelClassName = "preview-detail-label text-xs font-normal text-app-muted";
+const previewLabelClassName = "preview-detail-label text-xs font-normal text-muted-foreground";
 const directFileLinkClassName =
-  "direct-file-link preview-info-cta min-h-[52px] w-full cursor-pointer gap-3 whitespace-nowrap rounded-[10px] bg-app-accent px-2 text-[15px] font-[760] leading-none text-white no-underline shadow-none hover:bg-app-accent-strong hover:text-white [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-width:2]";
+  "direct-file-link preview-info-cta min-h-[52px] w-full cursor-pointer gap-3 whitespace-nowrap rounded-lg bg-primary px-2 text-[15px] font-[760] leading-none text-primary-foreground no-underline shadow-none hover:bg-primary hover:text-primary-foreground [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-width:2]";
 const previewDetailsSectionClassName = "preview-details-section grid gap-1.5 px-2 pt-1";
 const previewDetailRowClassName =
   "preview-detail-row grid min-h-7 grid-cols-[minmax(96px,112px)_minmax(0,1fr)] items-start gap-[18px] max-[540px]:gap-3";
-const previewDetailValueClassName = "preview-detail-value min-w-0 text-sm leading-[1.35] text-[#0f172a] [overflow-wrap:anywhere] max-[540px]:text-[13px]";
+const previewDetailValueClassName = "preview-detail-value min-w-0 text-sm leading-[1.35] text-foreground [overflow-wrap:anywhere] max-[540px]:text-[13px]";
 const previewChipListClassName = "preview-chip-list flex flex-wrap gap-x-2.5 gap-y-2";
-const previewChipClassName = "preview-chip inline-flex h-auto min-h-6 items-center rounded-lg bg-[#e2e8f0] px-2 text-[11px] font-medium text-[#1e293b]";
-const previewEditFormClassName = "preview-edit-form grid gap-2.5 border-t border-[rgba(148,163,184,0.18)] pt-1.5";
+const previewChipClassName = "preview-chip inline-flex h-auto min-h-6 items-center rounded-lg bg-secondary px-2 text-[11px] font-medium text-secondary-foreground";
+const previewEditFormClassName = "preview-edit-form grid gap-2.5 border-t border-border pt-1.5";
 const previewEditRowClassName =
   "preview-edit-row grid min-h-8 grid-cols-[minmax(96px,112px)_minmax(0,1fr)] items-start gap-[18px] max-[540px]:gap-3";
 const previewChipEditorClassName = "preview-chip-editor relative grid w-full min-w-0 gap-2";
 const previewEditChipListClassName = "preview-edit-chip-list flex min-h-0 flex-wrap gap-1.5";
-const previewEditChipClassName = "preview-edit-chip inline-flex h-auto min-h-[26px] max-w-full items-center gap-1.5 rounded-full border border-[rgba(148,163,184,0.34)] bg-[#f8fafc] py-0 pl-[9px] pr-1.5 text-xs font-[560] text-[#0f172a]";
-const previewChipInputClassName = "preview-chip-input min-h-[34px] w-full min-w-0 rounded-lg bg-white px-2.5 text-base text-app-text min-[720px]:text-sm";
-const previewChipSuggestionsClassName = "preview-chip-suggestions absolute left-0 right-0 top-[calc(100%+4px)] z-[8] grid max-h-[184px] overflow-auto rounded-app border border-[rgba(148,163,184,0.28)] bg-white p-1 shadow-[0_16px_36px_rgba(15,23,42,0.16)]";
-const previewChipSuggestionClassName = "preview-chip-suggestion flex min-h-8 cursor-pointer items-center justify-between gap-3 rounded-md border-0 bg-transparent px-2 text-left text-[13px] text-[#0f172a] hover:bg-[#eff6ff] focus-visible:bg-[#eff6ff] focus-visible:outline-none";
+const previewEditChipClassName = "preview-edit-chip inline-flex h-auto min-h-[26px] max-w-full items-center gap-1.5 rounded-full border border-border bg-secondary py-0 pl-[9px] pr-1.5 text-xs font-[560] text-secondary-foreground";
+const previewChipInputClassName = "preview-chip-input min-h-[34px] w-full min-w-0 rounded-lg border border-input bg-background px-2.5 text-base text-foreground min-[720px]:text-sm";
+const previewChipSuggestionsClassName = "preview-chip-suggestions absolute left-0 right-0 top-[calc(100%+4px)] z-[8] grid max-h-[184px] overflow-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-sm";
+const previewChipSuggestionClassName = "preview-chip-suggestion flex min-h-8 cursor-pointer items-center justify-between gap-3 rounded-md border-0 bg-transparent px-2 text-left text-[13px] text-popover-foreground hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground focus-visible:outline-none";
 
 export function PreviewDetailsPanel({ canEditMetadata = false, detailRows, folders, item, onFolderSuggestions, onSaveMetadata, onTagSuggestions }: PreviewInfoProps) {
   return (
@@ -91,7 +91,7 @@ export function PreviewInfoDetails() {
 export function PreviewInfoActions() {
   const previewInfoState = useSyncExternalStore(subscribePreviewInfoState, getPreviewInfoState, getPreviewInfoState);
   return (
-    <div id="previewActions" className="preview-info-actions border-t border-[rgba(148,163,184,0.22)] px-2 pt-3">
+    <div id="previewActions" className="preview-info-actions border-t border-border px-2 pt-3">
       {previewInfoState ? <PreviewActions item={previewInfoState.item} /> : null}
     </div>
   );
@@ -222,7 +222,7 @@ function PreviewMetadataEditor({
         <Button type="submit" variant="outline" className={`${textActionButtonClassName} preview-edit-save min-h-[34px] px-3`} aria-label={saveButtonLabel} title={saveButtonLabel} disabled={saving || !hasMetadataChanges}>
           {saving ? "Saving" : "Save"}
         </Button>
-        <span className="preview-edit-status min-w-0 text-xs text-app-muted" role="status">
+        <span className="preview-edit-status min-w-0 text-xs text-muted-foreground" role="status">
           {status}
         </span>
       </div>
@@ -363,7 +363,7 @@ function MetadataChipEditor({
         {selected.map((value) => (
           <Badge key={value} variant="outline" className={previewEditChipClassName}>
             <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{labelForValue(value)}</span>
-            <Button className="size-[18px] cursor-pointer rounded-full text-[#64748b] hover:bg-[#e2e8f0] hover:text-[#0f172a] disabled:cursor-not-allowed disabled:opacity-45 [&_svg]:h-[13px] [&_svg]:w-[13px] [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-linecap:round] [&_svg]:[stroke-linejoin:round] [&_svg]:[stroke-width:2]" variant="ghost" size="icon-xs" type="button" title={`Remove ${labelForValue(value)}`} aria-label={`Remove ${labelForValue(value)}`} disabled={disabled} onClick={() => removeValue(value)}>
+            <Button className="size-[18px] cursor-pointer rounded-full text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45 [&_svg]:h-[13px] [&_svg]:w-[13px] [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-linecap:round] [&_svg]:[stroke-linejoin:round] [&_svg]:[stroke-width:2]" variant="ghost" size="icon-xs" type="button" title={`Remove ${labelForValue(value)}`} aria-label={`Remove ${labelForValue(value)}`} disabled={disabled} onClick={() => removeValue(value)}>
               <XIcon />
             </Button>
           </Badge>
@@ -394,7 +394,7 @@ function MetadataChipEditor({
               }}
             >
               <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{item.label}</span>
-              {item.meta ? <span className="preview-chip-suggestion-meta flex-none text-[11px] text-app-muted">{item.meta}</span> : null}
+              {item.meta ? <span className="preview-chip-suggestion-meta flex-none text-[11px] text-muted-foreground">{item.meta}</span> : null}
             </button>
           ))}
         </div>
