@@ -457,7 +457,7 @@ function App() {
               onBlur={(event) => saveSettings({ patch: { port: event.currentTarget.value } })}
             />
           </SettingRow>
-          <SettingRow label="Users" help={authEnabled ? "Viewer can browse. Editor can edit metadata. Admin can also switch libraries." : "Saved users apply when password protection is enabled."}>
+          <SettingRow label="Users" help={authEnabled ? "Viewer can browse. Editor can edit metadata. Admin has all permissions." : "Saved users apply when password protection is enabled."}>
             <div className="grid gap-2">
               <div className="flex justify-end">
                 <span id="authUsersStatus" className={`inline-flex min-h-5 items-center rounded-md border px-2 text-[10px] font-medium ${authUsersStatusClassName}`} role="status">
@@ -471,57 +471,61 @@ function App() {
                 <span aria-hidden="true" />
                 <span aria-hidden="true" />
               </div>
-              {authUsers.map((user, index) => (
-                <div key={index} className="grid grid-cols-[minmax(80px,1fr)_86px_minmax(76px,0.8fr)_28px_28px] items-center gap-1.5">
-                  <input
-                    className={settingInputClassName}
-                    type="text"
-                    aria-label={`Username for user ${index + 1}`}
-                    autoComplete="username"
-                    disabled={formDisabled}
-                    value={user.username}
-                    onChange={(event) => updateAuthUser(index, { username: event.currentTarget.value })}
-                    onBlur={() => saveSettings()}
-                  />
-                  <select
-                    className={`${settingInputClassName} px-1.5`}
-                    aria-label={`Role for ${user.username || `user ${index + 1}`}`}
-                    disabled={formDisabled}
-                    value={user.role}
-                    onChange={(event) => {
-                      saveAuthUser(index, { role: event.currentTarget.value as UserRole });
-                    }}
-                  >
-                    <option value="viewer">Viewer</option>
-                    <option value="editor">Editor</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                  <input
-                    key={`${passwordDraftRevision}-${index}`}
-                    className={settingInputClassName}
-                    type={passwordVisibleByIndex[String(index)] ? "text" : "password"}
-                    aria-label={`Password for ${user.username || `user ${index + 1}`}`}
-                    autoComplete="new-password"
-                    disabled={formDisabled}
-                    placeholder={user.passwordHash ? "••••••••" : "Password"}
-                    defaultValue={userPasswordsRef.current[String(index)] || ""}
-                    onChange={(event) => setUserPasswordDraft(index, event.currentTarget.value)}
-                  />
-                  <button
-                    className={`grid h-7 w-7 place-items-center rounded-md p-1 ${authActionButtonClassName}`}
-                    type="button"
-                    aria-label={passwordVisibleByIndex[String(index)] ? `Hide password for ${user.username || `user ${index + 1}`}` : `Show password for ${user.username || `user ${index + 1}`}`}
-                    title={passwordVisibleByIndex[String(index)] ? "Hide password" : "Show password"}
-                    disabled={formDisabled}
-                    onClick={() => togglePasswordVisible(index)}
-                  >
-                    {passwordVisibleByIndex[String(index)] ? <EyeIcon className="h-[13px] w-[13px]" /> : <EyeOffIcon className="h-[13px] w-[13px]" />}
-                  </button>
-                  <button className={`grid h-7 w-7 place-items-center rounded-md ${authActionButtonClassName}`} type="button" aria-label={`Remove ${user.username || "user"}`} title="Remove user" disabled={formDisabled || authUsers.length <= 1} onClick={() => removeAuthUser(index)}>
-                    <CloseIcon className="h-[11px] w-[11px]" />
-                  </button>
-                </div>
-              ))}
+              {authUsers.map((user, index) => {
+                const canTogglePasswordVisible = !user.passwordHash;
+                const passwordVisible = canTogglePasswordVisible && passwordVisibleByIndex[String(index)];
+                return (
+                  <div key={index} className="grid grid-cols-[minmax(80px,1fr)_86px_minmax(76px,0.8fr)_28px_28px] items-center gap-1.5">
+                    <input
+                      className={settingInputClassName}
+                      type="text"
+                      aria-label={`Username for user ${index + 1}`}
+                      autoComplete="username"
+                      disabled={formDisabled}
+                      value={user.username}
+                      onChange={(event) => updateAuthUser(index, { username: event.currentTarget.value })}
+                      onBlur={() => saveSettings()}
+                    />
+                    <select
+                      className={`${settingInputClassName} px-1.5`}
+                      aria-label={`Role for ${user.username || `user ${index + 1}`}`}
+                      disabled={formDisabled}
+                      value={user.role}
+                      onChange={(event) => {
+                        saveAuthUser(index, { role: event.currentTarget.value as UserRole });
+                      }}
+                    >
+                      <option value="viewer">Viewer</option>
+                      <option value="editor">Editor</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                    <input
+                      key={`${passwordDraftRevision}-${index}`}
+                      className={settingInputClassName}
+                      type={passwordVisible ? "text" : "password"}
+                      aria-label={`Password for ${user.username || `user ${index + 1}`}`}
+                      autoComplete="new-password"
+                      disabled={formDisabled}
+                      placeholder={user.passwordHash ? "••••••••" : "Password"}
+                      defaultValue={userPasswordsRef.current[String(index)] || ""}
+                      onChange={(event) => setUserPasswordDraft(index, event.currentTarget.value)}
+                    />
+                    <button
+                      className={`grid h-7 w-7 place-items-center rounded-md p-1 ${authActionButtonClassName}`}
+                      type="button"
+                      aria-label={canTogglePasswordVisible ? (passwordVisible ? `Hide password for ${user.username || `user ${index + 1}`}` : `Show password for ${user.username || `user ${index + 1}`}`) : `Saved password for ${user.username || `user ${index + 1}`} is hidden`}
+                      title={canTogglePasswordVisible ? (passwordVisible ? "Hide password" : "Show password") : "Saved password is hidden"}
+                      disabled={formDisabled || !canTogglePasswordVisible}
+                      onClick={canTogglePasswordVisible ? () => togglePasswordVisible(index) : undefined}
+                    >
+                      {passwordVisible ? <EyeIcon className="h-[13px] w-[13px]" /> : <EyeOffIcon className="h-[13px] w-[13px]" />}
+                    </button>
+                    <button className={`grid h-7 w-7 place-items-center rounded-md ${authActionButtonClassName}`} type="button" aria-label={`Remove ${user.username || "user"}`} title="Remove user" disabled={formDisabled || authUsers.length <= 1} onClick={() => removeAuthUser(index)}>
+                      <CloseIcon className="h-[11px] w-[11px]" />
+                    </button>
+                  </div>
+                );
+              })}
               <div className="flex items-center justify-start gap-2">
                 <button className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium text-[#111] ${authActionButtonClassName}`} type="button" disabled={formDisabled} onClick={addAuthUser}>
                   <PlusIcon className="h-[12px] w-[12px]" />
@@ -530,7 +534,7 @@ function App() {
               </div>
               <div className="flex justify-end">
                 <button className={`inline-flex h-7 items-center rounded-md px-2 text-[11px] font-medium text-[#111] ${authActionButtonClassName}`} type="submit" disabled={formDisabled}>
-                  Save settings
+                  Save
                 </button>
               </div>
             </div>
