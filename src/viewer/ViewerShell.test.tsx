@@ -135,8 +135,9 @@ describe("ViewerAppShell", () => {
     expect(html).toContain('data-slot="tabs"');
     expect(html).toContain('data-slot="tabs-list"');
     expect(html).toContain('data-slot="tabs-trigger"');
-    expect(html).toContain("data-active:bg-primary");
-    expect(html).toContain("data-active:text-primary-foreground");
+    expect(html).toContain("data-active:bg-background");
+    expect(html).toContain("data-active:text-foreground");
+    expect(html).toContain("text-muted-foreground");
   });
 
   test("renders login connection controls as reusable components", () => {

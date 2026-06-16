@@ -26,7 +26,7 @@ export function ResultsStatus({ total, viewMode }: ResultsStatusProps) {
             if (mode) selectViewMode(mode as ViewerMode);
           }}
         >
-          <TabsList className="rounded-lg border border-input bg-card shadow-sm">
+          <TabsList className="rounded-lg bg-muted shadow-none">
             <ViewModeButton id="tilesViewButton" mode="tiles" label="Tiles" />
             <ViewModeButton id="gridViewButton" mode="grid" label="Grid" />
             <ViewModeButton id="tableViewButton" mode="table" label="Table" />
@@ -49,7 +49,7 @@ function ViewModeButton({
   return (
     <TabsTrigger
       id={id}
-      className="min-h-[30px] rounded-md px-[9px] text-xs font-[680] data-active:bg-primary data-active:text-primary-foreground data-active:shadow-sm data-active:hover:bg-primary data-active:hover:text-primary-foreground"
+      className="min-h-[30px] rounded-md px-[9px] text-xs font-[680] text-muted-foreground data-active:bg-background data-active:text-foreground data-active:shadow-sm data-active:hover:text-foreground"
       value={mode}
     >
       {label}
