@@ -134,6 +134,7 @@ describe("ViewerAppShell", () => {
     expect(html).toContain('data-slot="tabs"');
     expect(html).toContain('data-slot="tabs-list"');
     expect(html).toContain('data-slot="tabs-trigger"');
+    expect(html).toContain('data-icon="inline-start"');
     expect(html).toContain("data-[state=active]:bg-background");
     expect(html).toContain("data-[state=active]:text-foreground");
     expect(html).toContain("data-active:bg-background");

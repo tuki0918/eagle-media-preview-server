@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { LayoutDashboard, LayoutGrid, List, type LucideIcon } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getResultsStatusState, subscribeResultsStatusState } from "../resultsStatusState";
 import { selectViewMode } from "../shellActions";
@@ -27,9 +28,9 @@ export function ResultsStatus({ total, viewMode }: ResultsStatusProps) {
           }}
         >
           <TabsList className="rounded-lg bg-muted shadow-none">
-            <ViewModeButton id="tilesViewButton" mode="tiles" label="Tiles" />
-            <ViewModeButton id="gridViewButton" mode="grid" label="Grid" />
-            <ViewModeButton id="tableViewButton" mode="table" label="Table" />
+            <ViewModeButton id="tilesViewButton" mode="tiles" label="Tiles" icon={LayoutDashboard} />
+            <ViewModeButton id="gridViewButton" mode="grid" label="Grid" icon={LayoutGrid} />
+            <ViewModeButton id="tableViewButton" mode="table" label="Table" icon={List} />
           </TabsList>
         </Tabs>
       </span>
@@ -38,10 +39,12 @@ export function ResultsStatus({ total, viewMode }: ResultsStatusProps) {
 }
 
 function ViewModeButton({
+  icon: Icon,
   id,
   label,
   mode,
 }: {
+  icon: LucideIcon;
   id: string;
   label: string;
   mode: ViewerMode;
@@ -52,6 +55,7 @@ function ViewModeButton({
       className="min-h-[30px] rounded-md px-[9px] text-xs font-[680] text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:hover:text-foreground data-active:bg-background data-active:text-foreground data-active:shadow-sm data-active:hover:text-foreground"
       value={mode}
     >
+      <Icon data-icon="inline-start" aria-hidden="true" />
       {label}
     </TabsTrigger>
   );

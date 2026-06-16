@@ -887,8 +887,11 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   assert.match(html, /id="tilesViewButton"/);
   assert.match(html, /<Tabs[\s\S]*value=\{displayViewMode\}/);
   assert.match(html, /<TabsList className="rounded-lg bg-muted shadow-none">/);
-  assert.match(html, /<ViewModeButton id="tilesViewButton" mode="tiles" label="Tiles" \/>/);
-  assert.match(html, /<ViewModeButton id="gridViewButton" mode="grid" label="Grid" \/>/);
+  assert.match(html, /import \{ LayoutDashboard, LayoutGrid, List, type LucideIcon \} from "lucide-react";/);
+  assert.match(html, /<ViewModeButton id="tilesViewButton" mode="tiles" label="Tiles" icon=\{LayoutDashboard\} \/>/);
+  assert.match(html, /<ViewModeButton id="gridViewButton" mode="grid" label="Grid" icon=\{LayoutGrid\} \/>/);
+  assert.match(html, /<ViewModeButton id="tableViewButton" mode="table" label="Table" icon=\{List\} \/>/);
+  assert.match(html, /<Icon data-icon="inline-start" aria-hidden="true" \/>/);
   assert.match(html, /data-\[state=active\]:bg-background/);
   assert.match(html, /data-active:bg-background/);
   assert.match(html, /id="tilesSentinel"/);
