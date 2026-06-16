@@ -37,7 +37,7 @@ export { ResultList } from "./components/ResultList";
 export { ResultSurface } from "./components/ResultSurface";
 export { ResultStateView } from "./components/ResultState";
 export { ResultsStatus } from "./components/ResultsStatus";
-export { AdvancedFilters, SearchControls, SearchInput } from "./components/SearchControls";
+export { AdvancedFilters, SearchControls, SearchFiltersButton, SearchInput } from "./components/SearchControls";
 export { TagChips } from "./components/TagChips";
 export { TagSuggestions } from "./components/TagSuggestions";
 export { TilesSentinel } from "./components/TilesSentinel";

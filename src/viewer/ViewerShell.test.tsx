@@ -73,7 +73,6 @@ const REQUIRED_ELEMENT_IDS = [
   "advancedFilters",
   "grid",
   "tilesSentinel",
-  "resultCount",
   "tilesViewButton",
   "gridViewButton",
   "tableViewButton",
@@ -161,7 +160,7 @@ describe("ViewerAppShell", () => {
     const components = [
       { Component: LoginView, expectedId: "loginView" },
       { Component: SearchControls, expectedId: "advancedFilters" },
-      { Component: ResultsStatus, expectedId: "resultCount" },
+      { Component: ResultsStatus, expectedId: "gridViewButton" },
       { Component: ResultSurface, expectedId: "grid" },
       { Component: Pager, expectedId: "pageButtons" },
       { Component: PreviewDialog, expectedId: "previewDialog" },
@@ -174,7 +173,7 @@ describe("ViewerAppShell", () => {
     ] as const;
 
     for (const { Component, expectedId } of components) {
-      expect(renderToStaticMarkup(<Component />)).toContain(`id="${expectedId}"`);
+      expect(renderToStaticMarkup(<TooltipProvider><Component /></TooltipProvider>)).toContain(`id="${expectedId}"`);
     }
   });
 
@@ -311,21 +310,17 @@ describe("ViewerAppShell", () => {
     });
     const html = renderAccountSideMenu();
 
-    expect(html).toContain('id="accountMenuButton"');
     expect(html).toContain('id="accountSideMenu"');
     expect(html).toContain('id="authAccountLabel"');
     expect(html).toContain('id="authUserLabel"');
     expect(html).toContain('id="authRoleLabel"');
-    expect(html).toContain('id="logoutButton"');
+    expect(html).toContain('aria-haspopup="menu"');
+    expect(html).toContain("lucide-user-round");
     expect(html).toContain('data-slot="sidebar"');
-    expect(html).toContain('data-variant="sidebar"');
+    expect(html).toContain('data-variant="inset"');
     expect(html).toContain('data-sidebar="menu-button"');
-    expect(html).toContain("grid-cols-[auto_minmax(0,1fr)_auto_auto]");
-    expect(html).toContain("group-data-[collapsible=icon]:w-[var(--sidebar-width-icon)]");
-    expect(html).toContain("group-data-[collapsible=icon]:border-r-0");
+    expect(html).toContain("group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4)))]");
     expect(html).toContain("group-data-[collapsible=icon]:!size-8");
-    expect(html).toContain("group-data-[side=left]:right-0");
-    expect(html).toContain("group-data-[side=left]:after:right-0");
     expect(html).not.toContain("md:hidden");
     expect(html).not.toContain("fixed left-3");
 

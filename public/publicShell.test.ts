@@ -16,6 +16,7 @@ import {
   PreviewDetailsPanel,
   ResultList,
   SearchControls,
+  SearchFiltersButton,
 } from "../src/viewer/ViewerShell";
 import { setLoginConnectState } from "../src/viewer/loginConnectState";
 import { PAGE_SIZE_OPTIONS } from "../src/viewer/shellConfig";
@@ -174,7 +175,6 @@ test("public viewer exposes sign out when authenticated", async () => {
   const accountMenu = renderToStaticMarkup(accountSideMenuElement());
   const footer = renderToStaticMarkup(createElement(LibraryFooter, { name: "My Library" }));
 
-  assert.match(accountMenu, /id="accountMenuButton"/);
   assert.match(accountMenu, /id="accountSideMenu"/);
   assert.match(accountMenu, /id="authUserLabel"/);
   assert.match(accountMenu, />ed</);
@@ -183,11 +183,11 @@ test("public viewer exposes sign out when authenticated", async () => {
   assert.match(accountMenu, /title="Can edit ratings, tags, and categories"/);
   assert.match(accountMenu, /id="authRoleLabel"/);
   assert.match(accountMenu, />Editor</);
-  assert.match(accountMenu, /id="logoutButton"/);
-  assert.match(accountMenu, /Sign out/);
+  assert.match(accountMenu, /aria-haspopup="menu"/);
+  assert.match(accountMenu, /lucide-user-round/);
   assert.match(accountMenu, /data-slot="sidebar"/);
   assert.match(accountMenu, /data-sidebar="menu-button"/);
-  assert.match(accountMenu, /grid-cols-\[auto_minmax\(0,1fr\)_auto_auto\]/);
+  assert.match(accountMenu, /hidden=""/);
   assert.doesNotMatch(accountMenu, /md:hidden/);
   assert.doesNotMatch(accountMenu, /fixed left-3/);
   assert.doesNotMatch(accountMenu, /authFooterMessage/);
@@ -369,8 +369,8 @@ test("public UI no longer shows connect lock icon or connection settings button"
   assert.match(message, /empty:hidden/);
   assert.doesNotMatch(css, /\.login-panel\s*\{/);
   assert.doesNotMatch(css, /\.connect-message\s*\{/);
-  assert.match(html, /className="status-line grid grid-cols-\[minmax\(0,1fr\)_auto\]/);
-  assert.match(html, /max-\[540px\]:gap-2 max-\[540px\]:text-xs/);
+  assert.match(html, /className="status-line flex justify-end py-1"/);
+  assert.match(html, /className="view-toggle w-fit"/);
   assert.doesNotMatch(css, /\.status-line\s*\{/);
   assert.doesNotMatch(css, /\.status-actions\s*\{/);
   assert.match(controls, /id="pageSizeSelect"[^>]*aria-label="Page size"/);
@@ -792,6 +792,7 @@ test("public UI supports tag filter chips", async () => {
   const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
   const advancedFiltersSource = html.match(/export function AdvancedFilters\([\s\S]*?\nfunction ResetFiltersButton/)?.[0] || "";
+  const searchButton = renderToStaticMarkup(createElement(SearchFiltersButton, { filtersOpen: true }));
   const controls = renderToStaticMarkup(createElement(SearchControls, {
     filtersOpen: true,
     folders: [{ id: "folder-1", name: "Folder 1", imageCount: 2 }],
@@ -810,8 +811,8 @@ test("public UI supports tag filter chips", async () => {
   assert.match(controls, /id="resetFiltersButton"/);
   assert.match(controls, /aria-label="Reset filters"/);
   assert.doesNotMatch(controls, /disabled=""/);
-  assert.match(controls, /id="toggleFiltersButton"/);
-  assert.match(controls, /aria-expanded="true"/);
+  assert.match(searchButton, /id="toggleFiltersButton"/);
+  assert.match(searchButton, /aria-expanded="true"/);
   assert.doesNotMatch(controls, /id="tagInput"/);
   assert.doesNotMatch(advancedFiltersSource, /id="tagChips"/);
   assert.doesNotMatch(controls, /id="advancedFiltersHost"/);
@@ -868,8 +869,8 @@ test("public UI supports tag filter chips", async () => {
   assert.match(app, /function renderTagChips\(\) \{/);
   assert.match(app, /Object\.assign\(state, resetFilterState\(\)\);/);
   assert.match(controls, /search-composer[^"]*max-\[540px\]:flex-nowrap/);
-  assert.match(controls, /search-row[^"]*grid-cols-\[minmax\(0,1fr\)_auto_auto\]/);
-  assert.match(controls, /filter-reset-button[^"]*max-\[540px\]:w-11/);
+  assert.match(controls, /search-row[^"]*grid items-stretch gap-3/);
+  assert.match(controls, /filter-reset-button[^"]*max-\[540px\]:size-11/);
   assert.match(controls, /filter-reset-button[^"]*disabled:opacity-\[0\.42\]/);
   assert.match(controls, /unified-search-input[^"]*max-\[540px\]:basis-\[72px\]/);
   assert.doesNotMatch(css, /\.tag-input\s*\{/);
@@ -886,7 +887,7 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
 
   assert.match(html, /id="tilesViewButton"/);
   assert.match(html, /<Tabs[\s\S]*value=\{displayViewMode\}/);
-  assert.match(html, /<TabsList className="rounded-lg bg-muted shadow-none">/);
+  assert.match(html, /<TabsList className="rounded-lg bg-muted shadow-none" aria-label="View mode">/);
   assert.match(html, /import \{ LayoutDashboard, LayoutGrid, List, type LucideIcon \} from "lucide-react";/);
   assert.match(html, /<ViewModeButton id="tilesViewButton" mode="tiles" label="Tiles" icon=\{LayoutDashboard\} \/>/);
   assert.match(html, /<ViewModeButton id="gridViewButton" mode="grid" label="Grid" icon=\{LayoutGrid\} \/>/);
@@ -987,7 +988,8 @@ test("public results status and empty states stay concise and consistent across 
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(html, /useSyncExternalStore\(subscribeResultsStatusState, getResultsStatusState, getResultsStatusState\)/);
-  assert.match(html, /<span id="resultCount" className="justify-self-start whitespace-nowrap">\{displayTotal\.toLocaleString\(\)\} items<\/span>/);
+  assert.doesNotMatch(html, /id="resultCount"/);
+  assert.doesNotMatch(html, /\{displayTotal\.toLocaleString\(\)\} items/);
   assert.doesNotMatch(app, /renderResultsStatusView\(els\.resultsStatusHost, \{/);
   assert.doesNotMatch(app, /els\.resultCount\.textContent/);
   assert.doesNotMatch(app, /items · \$\{start\}-\$\{end\}/);

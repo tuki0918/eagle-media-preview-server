@@ -1,17 +1,14 @@
-import { LogOutIcon } from "lucide-react";
-import { useSyncExternalStore } from "react";
-import { Badge } from "@/components/ui/badge";
+import { ChevronsUpDownIcon, LogOutIcon, UserRoundIcon } from "lucide-react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Sidebar,
-  SidebarContent,
   SidebarFooter,
-  SidebarGroup,
-  SidebarGroupContent,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarRail,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import iconOnUrl from "../../assets/icon_on.svg";
 import { getLibraryFooterName, subscribeLibraryFooterName } from "../libraryFooterState";
@@ -28,86 +25,179 @@ export function AccountSideMenu() {
   const accountStatusLabel = [accountLabel, roleDescription].filter(Boolean).join(". ");
   const authError = loginState.isError ? loginState.message.trim() : "";
 
-  if (!loginState.authRequired || !loginState.authenticated) return null;
-
   return (
     <>
       <Sidebar
         id="accountSideMenu"
-        collapsible="icon"
+        variant="inset"
+        collapsible="offcanvas"
         className="border-sidebar-border"
         aria-label="Account menu"
       >
         <SidebarHeader className="justify-center p-2 pt-[calc(14px+env(safe-area-inset-top))]">
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton size="lg" className="h-12 px-2" tooltip="Media Preview">
-                <img className="size-8 rounded-lg object-cover shadow-sm" src={iconOnUrl} alt="" aria-hidden="true" />
-                <span className="grid min-w-0 group-data-[collapsible=icon]:hidden">
-                  <span className="truncate text-sm font-[720] leading-tight text-sidebar-foreground">Media Preview</span>
-                  <span className="truncate text-[11px] leading-tight text-muted-foreground">{displayName}</span>
-                </span>
+              <SidebarMenuButton
+                asChild
+                size="lg"
+                className="pointer-events-none h-12 px-2 hover:bg-transparent hover:text-sidebar-foreground active:bg-transparent active:text-sidebar-foreground"
+              >
+                <div>
+                  <img className="size-8 rounded-lg object-cover shadow-sm" src={iconOnUrl} alt="" aria-hidden="true" />
+                  <span className="grid min-w-0 group-data-[collapsible=icon]:hidden">
+                    <span className="truncate text-sm font-[720] leading-tight text-sidebar-foreground">Media Preview</span>
+                    <span className="truncate text-[11px] leading-tight text-muted-foreground">{displayName}</span>
+                  </span>
+                </div>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarHeader>
 
-        <SidebarContent>
-          <SidebarGroup>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    id="authAccountLabel"
-                    size="lg"
-                    className="h-auto min-h-14 items-start py-2"
-                    tooltip={accountStatusLabel || accountLabel || "Account"}
-                    aria-label={accountStatusLabel || accountLabel}
-                    title={roleDescription || undefined}
-                  >
-                    <span className="grid size-8 place-items-center rounded-full bg-secondary text-sm font-[760] text-secondary-foreground" aria-hidden="true">
-                      {accountInitial(username)}
-                    </span>
-                    <span className="grid min-w-0 gap-1 group-data-[collapsible=icon]:hidden">
-                      {username ? <span id="authUserLabel" className="block truncate text-sm font-[650] text-sidebar-foreground">{username}</span> : null}
-                      {roleLabel ? <Badge id="authRoleLabel" variant="outline" className="w-fit rounded-full bg-background text-[11px] font-medium text-muted-foreground">{roleLabel}</Badge> : null}
-                    </span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        </SidebarContent>
+        <div className="min-h-0 flex-1" />
 
-        <SidebarFooter className="p-2">
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                id="logoutButton"
-                type="button"
-                disabled={loginState.disabled}
-                tooltip="Sign out"
-                onClick={submitLogout}
-              >
-                <LogOutIcon />
-                <span>Sign out</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-          {authError ? (
-            <p id="authFooterMessage" className="m-0 rounded-md bg-destructive/10 px-2.5 py-2 text-xs leading-[1.35] text-destructive group-data-[collapsible=icon]:hidden" role="alert">
-              {authError}
-            </p>
-          ) : null}
-        </SidebarFooter>
-        <SidebarRail />
+        {loginState.authRequired && loginState.authenticated ? (
+          <SidebarFooter className="p-2">
+            <AccountDropdown
+              disabled={loginState.disabled}
+              roleDescription={roleDescription}
+              roleLabel={roleLabel}
+              statusLabel={accountStatusLabel || accountLabel || "Account"}
+              username={username}
+            />
+            {authError ? (
+              <p id="authFooterMessage" className="m-0 rounded-md bg-destructive/10 px-2.5 py-2 text-xs leading-[1.35] text-destructive group-data-[collapsible=icon]:hidden" role="alert">
+                {authError}
+              </p>
+            ) : null}
+          </SidebarFooter>
+        ) : null}
       </Sidebar>
     </>
   );
 }
 
-function accountInitial(username: string | undefined) {
-  return (username || "?").slice(0, 1).toUpperCase();
+function AccountDropdown({
+  disabled,
+  roleDescription,
+  roleLabel,
+  statusLabel,
+  username,
+}: {
+  disabled: boolean;
+  roleDescription: string;
+  roleLabel: string;
+  statusLabel: string;
+  username: string | undefined;
+}) {
+  const { isMobile, setOpenMobile } = useSidebar();
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLLIElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const displayUsername = username || "Account";
+  const displayRole = roleLabel || "Signed in";
+
+  useEffect(() => {
+    if (!open) return;
+
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (containerRef.current?.contains(target)) return;
+      if (menuRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+
+    document.addEventListener("click", handleClick);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("click", handleClick);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <SidebarMenu>
+      <SidebarMenuItem ref={containerRef}>
+        <SidebarMenuButton
+          id="authAccountLabel"
+          size="lg"
+          className="h-14 aria-expanded:bg-sidebar-accent aria-expanded:text-sidebar-accent-foreground"
+          tooltip={statusLabel}
+          aria-label={statusLabel}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          aria-controls="authAccountMenu"
+          title={roleDescription || undefined}
+          onClick={(event) => {
+            event.stopPropagation();
+            setOpen((current) => !current);
+          }}
+        >
+          <Avatar className="size-8 rounded-lg">
+            <AvatarFallback id="authAvatarFallback" className="rounded-lg">
+              <UserRoundIcon className="size-4" aria-hidden="true" />
+            </AvatarFallback>
+          </Avatar>
+          <span className="grid min-w-0 flex-1 text-left text-sm leading-tight">
+            <span id="authUserLabel" className="truncate font-medium">
+              {displayUsername}
+            </span>
+            <span id="authRoleLabel" className="truncate text-xs text-muted-foreground">
+              {displayRole}
+            </span>
+          </span>
+          <ChevronsUpDownIcon className="ml-auto" aria-hidden="true" />
+        </SidebarMenuButton>
+
+        {open ? (
+          <div
+            ref={menuRef}
+            id="authAccountMenu"
+            role="menu"
+            aria-labelledby="authAccountLabel"
+            className={
+              isMobile
+                ? "absolute bottom-full left-0 right-0 z-50 mb-2 rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg"
+                : "absolute bottom-0 left-full z-50 ml-2 w-64 rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg"
+            }
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+              <Avatar className="size-8 rounded-lg">
+                <AvatarFallback className="rounded-lg">
+                  <UserRoundIcon className="size-4" aria-hidden="true" />
+                </AvatarFallback>
+              </Avatar>
+              <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
+                <span className="truncate font-medium">{displayUsername}</span>
+                <span className="truncate text-xs text-muted-foreground">{displayRole}</span>
+              </div>
+            </div>
+            <div className="-mx-1 my-1 h-px bg-border" />
+            <button
+              id="logoutButton"
+              type="button"
+              role="menuitem"
+              className="relative flex w-full cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0"
+              disabled={disabled}
+              onClick={() => {
+                if (disabled) return;
+                setOpen(false);
+                if (isMobile) setOpenMobile(false);
+                submitLogout();
+              }}
+            >
+              <LogOutIcon />
+              <span>Sign out</span>
+            </button>
+          </div>
+        ) : null}
+      </SidebarMenuItem>
+    </SidebarMenu>
+  );
 }
 
 function authRoleLabel(role: unknown) {

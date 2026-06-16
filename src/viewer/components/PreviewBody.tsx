@@ -40,7 +40,7 @@ interface ImageState {
 }
 
 const checkerboardClassName =
-  "bg-muted bg-[linear-gradient(45deg,color-mix(in_srgb,var(--muted-foreground)_18%,transparent)_25%,transparent_25%),linear-gradient(-45deg,color-mix(in_srgb,var(--muted-foreground)_18%,transparent)_25%,transparent_25%),linear-gradient(45deg,transparent_75%,color-mix(in_srgb,var(--muted-foreground)_18%,transparent)_75%),linear-gradient(-45deg,transparent_75%,color-mix(in_srgb,var(--muted-foreground)_18%,transparent)_75%)] [background-position:0_0,0_12px,12px_-12px,-12px_0] [background-size:24px_24px]";
+  "bg-muted bg-[linear-gradient(45deg,#7373732e_25%,transparent_25%),linear-gradient(-45deg,#7373732e_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#7373732e_75%),linear-gradient(-45deg,transparent_75%,#7373732e_75%)] [background-position:0_0,0_12px,12px_-12px,-12px_0] [background-size:24px_24px]";
 const previewVideoClassName =
   "preview-video h-full w-full max-h-full cursor-pointer bg-[#05070a] object-contain [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:max-h-none [&:fullscreen]:max-w-none [&:fullscreen]:bg-[#05070a] [&:fullscreen]:object-contain";
 const mediaPlayerClassName =
