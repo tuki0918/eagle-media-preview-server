@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { PreviewBody, PreviewBodyHost } from "./PreviewBody";
 import { sampleItems } from "./storyFixtures";
 
-const previewFrameClassName = "relative h-[520px] w-[min(820px,calc(100vw-48px))] overflow-hidden rounded-app border border-app-border bg-[#05070a]";
+const previewFrameClassName = "relative h-[520px] w-[min(820px,calc(100vw-48px))] overflow-hidden rounded-lg border border-border bg-[#05070a]";
 
 const meta = {
   title: "Viewer/PreviewBody",

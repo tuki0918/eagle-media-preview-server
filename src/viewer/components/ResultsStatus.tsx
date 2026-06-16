@@ -1,4 +1,6 @@
 import { useSyncExternalStore } from "react";
+import { LayoutDashboard, LayoutGrid, List, type LucideIcon } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getResultsStatusState, subscribeResultsStatusState } from "../resultsStatusState";
 import { selectViewMode } from "../shellActions";
 import type { ViewerMode } from "../types";
@@ -10,44 +12,59 @@ interface ResultsStatusProps {
 
 export function ResultsStatus({ total, viewMode }: ResultsStatusProps) {
   const storedStatus = useSyncExternalStore(subscribeResultsStatusState, getResultsStatusState, getResultsStatusState);
-  const displayTotal = total ?? storedStatus.total;
   const displayViewMode = viewMode ?? storedStatus.viewMode;
 
+  void total;
+
   return (
-    <section className="status-line grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-4 text-sm font-[720] text-app-muted max-[540px]:gap-2 max-[540px]:text-xs" aria-live="polite">
-      <span id="resultCount" className="justify-self-start whitespace-nowrap">{displayTotal.toLocaleString()} items</span>
-      <span className="status-actions ml-auto inline-flex justify-self-end">
-        <span className="view-toggle inline-flex justify-self-end rounded-app border border-app-border bg-app-surface p-0.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)]" aria-label="View mode">
-          <ViewModeButton id="tilesViewButton" mode="tiles" selectedMode={displayViewMode} label="Tiles" />
-          <ViewModeButton id="gridViewButton" mode="grid" selectedMode={displayViewMode} label="Grid" />
-          <ViewModeButton id="tableViewButton" mode="table" selectedMode={displayViewMode} label="Table" />
-        </span>
-      </span>
+    <section className="status-line flex justify-end py-1" aria-label="View options">
+      <ViewModeTabs viewMode={displayViewMode} />
     </section>
   );
 }
 
+export function ViewModeTabs({ viewMode }: { viewMode?: ViewerMode }) {
+  const storedStatus = useSyncExternalStore(subscribeResultsStatusState, getResultsStatusState, getResultsStatusState);
+  const displayViewMode = viewMode ?? storedStatus.viewMode;
+
+  return (
+    <Tabs
+      className="view-toggle w-fit"
+      value={displayViewMode}
+      aria-label="View mode"
+      onValueChange={(mode) => {
+        if (mode) selectViewMode(mode as ViewerMode);
+      }}
+    >
+      <TabsList className="rounded-lg bg-muted shadow-none" aria-label="View mode">
+        <ViewModeButton id="tilesViewButton" mode="tiles" label="Tiles" icon={LayoutDashboard} />
+        <ViewModeButton id="gridViewButton" mode="grid" label="Grid" icon={LayoutGrid} />
+        <ViewModeButton id="tableViewButton" mode="table" label="Table" icon={List} />
+      </TabsList>
+    </Tabs>
+  );
+}
+
 function ViewModeButton({
+  icon: Icon,
   id,
   label,
   mode,
-  selectedMode,
 }: {
+  icon: LucideIcon;
   id: string;
   label: string;
   mode: ViewerMode;
-  selectedMode: ViewerMode;
 }) {
-  const pressed = selectedMode === mode;
-  const className = [
-    "min-h-[30px] rounded-md border-0 px-[9px] text-xs font-[680]",
-    pressed
-      ? "bg-blue-600 text-white shadow-[0_1px_3px_rgba(37,99,235,0.28)] hover:bg-blue-700 hover:text-white"
-      : "bg-transparent text-app-muted hover:bg-app-surface-soft hover:text-app-text",
-  ].filter(Boolean).join(" ");
   return (
-    <button id={id} className={className} type="button" aria-pressed={pressed} onClick={() => selectViewMode(mode)}>
-      {label}
-    </button>
+    <TabsTrigger
+      id={id}
+      className="min-h-[30px] rounded-md px-[9px] text-xs font-[680] text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:hover:text-foreground data-active:bg-background data-active:text-foreground data-active:shadow-sm data-active:hover:text-foreground"
+      value={mode}
+      title={label}
+    >
+      <Icon data-icon="inline-start" aria-hidden="true" />
+      <span>{label}</span>
+    </TabsTrigger>
   );
 }

@@ -27,7 +27,6 @@ External devices connect to the plugin server, not directly to Eagle's Web API.
 ## Non-Goals
 
 - Public Internet exposure
-- Multi-user accounts or role management
 - Folder-level or item-level ACLs
 - Full Eagle metadata editing beyond rating, tags, and categories
 - Persistent request logs or a log viewer screen
@@ -100,14 +99,17 @@ Build output is created under `dist`:
 - Toggle auto-start
 - Toggle Public Network access
 - Configure the port
-- Configure BasicAuth enablement, username, and password
+- Configure Password protection
+- Configure multiple users with Viewer, Editor, and Admin roles
 - Display and copy the Endpoint URL
 - Display the Endpoint URL as a QR code
+- Keep settings usable in the fixed-size Eagle window through a collapsible panel and resizable window
 
 ### UI Elements
 
 - `Server Status`
-  - States: `stopped`, `starting`, `running`, `stopping`, `error`
+  - States: `stopped`, `running`, `error`
+  - Shows a busy indicator while start/stop/save actions are in flight
   - Power toggle for start and stop
 - `Endpoint URL`
   - Current access URL
@@ -117,24 +119,31 @@ Build output is created under `dist`:
   - Shows an empty-state icon while the server is stopped
 - `Options`
   - Auto start
-  - BasicAuth protection
+  - Password protection
   - Public Network
 - `Settings`
+  - Collapsible settings panel
   - Port
-  - User
-  - Password
+  - Users
+  - Per-user role and password
 
 ### Persisted Settings
 
 ```ts
 type Settings = {
+  allowMetadataEditing: boolean;
+  authUsers: Array<{
+    username: string;
+    role: "viewer" | "editor" | "admin";
+    passwordHash: string;
+  }>;
   autoStart: boolean;
   host: string;
   port: number;
   authEnabled: boolean;
+  // Legacy single-user compatibility fields. New UI writes `authUsers`.
   basicAuthUser: string;
   passwordHash: string;
-  preferredLanAddress: string;
   lastServerStatus: "running" | "stopped" | "error";
 };
 ```
@@ -155,9 +164,10 @@ Settings path:
 - Filter by folder, uncategorized state, extension/type, rating, keyword, and tag chips
 - Switch between tiles, grid, and table views
 - Preview images, videos, audio, text-like files, PDFs, and unsupported media
-- Change rating, tags, and categories from the preview panel
+- Change rating, tags, and categories from the preview panel when authenticated metadata editing is enabled
 - Open the original file in a new tab
 - Sync search filters, page, view mode, and preview state into the URL
+- Clear viewer state and return to the login screen when an authenticated viewer API request returns `401`
 
 ### Supported Browsing Features
 
@@ -211,10 +221,15 @@ Settings path:
 
 ### API Routes
 
+- Routes with a fixed method return `405` with an `Allow` header for unsupported methods
 - `GET /api/auth/status`
-  - Returns whether authentication is required and whether the current request is authenticated
+  - Returns whether authentication is required, whether the current request is authenticated, the current user, and viewer permissions
 - `POST /api/auth/login`
-  - Issues a BasicAuth session cookie
+  - Requires username and password
+  - Issues a `viewer_session` cookie
+  - When authentication is disabled, returns an authenticated response with anonymous read permissions and does not issue a cookie
+- `POST /api/auth/logout`
+  - Clears the `viewer_session` cookie and removes the server-side session token
 - `POST /api/connect`
   - Connects to Eagle API and returns app/library information
 - `GET /api/health`
@@ -257,12 +272,28 @@ When BasicAuth protection is enabled, static viewer routes, API routes, and medi
 Supported authentication paths:
 
 - BasicAuth header
-- `viewer_session` cookie issued by the login API
+- `viewer_session` cookie issued by the login API; cookie and server-side session tokens expire after 30 days
+- If a cookie session expires or is rejected, viewer API requests return `401`; the browser viewer treats that as an auth reset and prompts for login again
+
+Roles:
+
+- Viewer: can browse and preview media
+- Editor: can browse and update rating, tags, and categories
+- Admin: can browse, edit metadata, and switch the active Eagle library
 
 Password handling:
 
 - Plain text passwords are never persisted
-- The settings file stores a SHA-256 hash
+- New passwords are stored as salted PBKDF2-SHA-256 hashes
+- Existing legacy SHA-256 hashes are still accepted for migration compatibility
+
+Authorization:
+
+- Browsing is read-only by default
+- `POST /api/items/:id/star` and `POST /api/items/:id/metadata` require an Editor or Admin user
+- `POST /api/library/switch` requires an Admin user
+- Unsafe methods reject mismatched `Origin` or `Referer` headers before API handlers run
+- JSON request bodies are capped at 1 MiB; malformed bodies return `400` and oversized bodies return `413`
 
 ## Runtime State
 
@@ -292,7 +323,7 @@ Main status fields:
 
 1. Open the server management window in Eagle
 2. Enable `Public Network`
-3. If needed, enable `BasicAuth protection` and set User and Password
+3. If needed, add Viewer, Editor, or Admin users and enable `Password protection`
 4. Confirm the Port setting
 5. Start the server with the power toggle
 6. Open the Endpoint URL or scan the QR code from a phone
@@ -307,10 +338,11 @@ Main status fields:
 
 ### Protected access
 
-1. Enable BasicAuth protection
-2. Set User and Password
-3. If the server is already running, settings changes that affect binding or auth restart it automatically
-4. External browser access requires authentication
+1. Add at least one user with a password
+2. Assign Viewer, Editor, or Admin roles
+3. Enable Password protection
+4. If the server is already running, settings changes that affect binding or auth restart it automatically
+5. External browser access requires authentication
 
 ## Build and Verification
 

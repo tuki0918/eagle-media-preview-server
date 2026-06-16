@@ -1,4 +1,7 @@
 import { useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { mediaUrl } from "../api";
 import {
   formatBytes,
@@ -42,35 +45,35 @@ const overlayIconPaths = {
   ),
 };
 
-const mediaCardClassName = "media-card min-w-0 overflow-hidden rounded-app border border-app-border bg-app-surface p-0 shadow-app-soft";
-const cardMetaClassName = "card-meta px-2 pb-2 pt-[9px] [&>span]:mt-0.5 [&>span]:block [&>span]:min-w-0 [&>span]:overflow-hidden [&>span]:text-ellipsis [&>span]:whitespace-nowrap [&>span]:text-xs [&>span]:text-app-muted [&>strong]:block [&>strong]:min-w-0 [&>strong]:overflow-hidden [&>strong]:text-ellipsis [&>strong]:whitespace-nowrap [&>strong]:text-[13px] [&>strong]:font-[420] [&>strong]:leading-[1.3]";
+const mediaCardClassName = "media-card min-w-0 overflow-hidden rounded-lg border border-border bg-card p-0 py-0 shadow-sm ring-0 transition-shadow hover:border-border hover:shadow-md";
+const cardMetaClassName = "card-meta px-2 pb-2 pt-[9px] [&>span]:mt-0.5 [&>span]:block [&>span]:min-w-0 [&>span]:overflow-hidden [&>span]:text-ellipsis [&>span]:whitespace-nowrap [&>span]:text-xs [&>span]:text-muted-foreground [&>strong]:block [&>strong]:min-w-0 [&>strong]:overflow-hidden [&>strong]:text-ellipsis [&>strong]:whitespace-nowrap [&>strong]:text-[13px] [&>strong]:font-[420] [&>strong]:leading-[1.3]";
 const tileButtonClassName =
-  "tile-item relative block h-full w-full cursor-zoom-in overflow-hidden border-0 bg-app-surface-strong p-0 shadow-none [border-radius:0] [contain:layout_paint] [&>img]:block [&>img]:h-full [&>img]:w-full [&>img]:object-contain";
+  "tile-item relative block h-full w-full cursor-zoom-in overflow-hidden border-0 bg-muted p-0 shadow-none [border-radius:0] [contain:layout_paint] [&>img]:block [&>img]:h-full [&>img]:w-full [&>img]:object-contain";
 const gridThumbButtonClassName =
-  "thumb-button relative block aspect-[3/2] w-full touch-manipulation overflow-hidden border-0 bg-app-surface-strong p-0 shadow-none [border-radius:0] [transition:border-color_150ms_ease,box-shadow_150ms_ease,background-color_150ms_ease] hover:border-[rgba(37,99,235,0.45)] hover:shadow-[inset_0_0_0_1px_rgba(37,99,235,0.18)] focus-visible:border-[rgba(37,99,235,0.45)] focus-visible:shadow-[inset_0_0_0_1px_rgba(37,99,235,0.18)] [&>img]:block [&>img]:h-full [&>img]:w-full [&>img]:object-cover";
+  "thumb-button relative block aspect-[3/2] w-full touch-manipulation overflow-hidden border-0 bg-muted p-0 shadow-none [border-radius:0] [transition:border-color_150ms_ease,box-shadow_150ms_ease,background-color_150ms_ease] hover:border-border hover:shadow-[inset_0_0_0_1px_var(--border)] focus-visible:border-border focus-visible:shadow-[inset_0_0_0_1px_var(--border)] [&>img]:block [&>img]:h-full [&>img]:w-full [&>img]:object-cover";
 const rowThumbButtonClassName =
-  "row-thumb relative h-[42px] w-[70px] touch-manipulation overflow-hidden rounded-md border border-app-border bg-app-surface-strong p-0 [transition:border-color_150ms_ease,box-shadow_150ms_ease,background-color_150ms_ease] hover:border-[rgba(37,99,235,0.45)] hover:shadow-[inset_0_0_0_1px_rgba(37,99,235,0.18)] focus-visible:border-[rgba(37,99,235,0.45)] focus-visible:shadow-[inset_0_0_0_1px_rgba(37,99,235,0.18)] [&>img]:block [&>img]:h-full [&>img]:w-full [&>img]:object-cover";
-const missingThumbClassName = "grid place-items-center bg-[linear-gradient(135deg,rgba(20,99,243,0.08),rgba(100,116,139,0.08)),var(--surface-strong)]";
+  "row-thumb relative h-[42px] w-[70px] touch-manipulation overflow-hidden rounded-md border border-border bg-muted p-0 [transition:border-color_150ms_ease,box-shadow_150ms_ease,background-color_150ms_ease] hover:border-border hover:shadow-[inset_0_0_0_1px_var(--border)] focus-visible:border-border focus-visible:shadow-[inset_0_0_0_1px_var(--border)] [&>img]:block [&>img]:h-full [&>img]:w-full [&>img]:object-cover";
+const missingThumbClassName = "grid place-items-center bg-muted";
 const overlayClassName =
   "thumb-overlay pointer-events-none absolute inset-0 grid place-items-center opacity-0 transition-[opacity,background-color] duration-150 group-hover:opacity-100 group-focus-visible:opacity-100";
 const overlayIconClassName =
-  "thumb-overlay-icon inline-grid h-[42px] w-[42px] place-items-center rounded-full bg-[rgba(255,255,255,0.94)] text-app-text shadow-[0_10px_24px_rgba(15,23,42,0.16)] [&_svg]:h-[18px] [&_svg]:w-[18px] [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-linecap:round] [&_svg]:[stroke-linejoin:round] [&_svg]:[stroke-width:2]";
+  "thumb-overlay-icon inline-grid h-[42px] w-[42px] place-items-center rounded-full bg-background text-foreground shadow-sm [&_svg]:h-[18px] [&_svg]:w-[18px] [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-linecap:round] [&_svg]:[stroke-linejoin:round] [&_svg]:[stroke-width:2]";
 const durationBadgeClassName =
   "duration-badge absolute bottom-1.5 right-1.5 rounded-md bg-[rgba(15,23,42,0.78)] px-1.5 py-[3px] text-[10px] font-bold leading-[1.2] text-white";
 const tableRowClassName =
-  "media-row grid min-h-[70px] grid-cols-[78px_minmax(160px,1.8fr)_90px_90px_minmax(120px,1fr)_90px_130px] items-center gap-3 border-b border-app-border px-3 py-2 text-[13px] text-app-text-soft last:border-b-0 max-[540px]:grid-cols-[56px_minmax(0,1fr)] [&>.rating-control]:justify-self-center [&>.rating-control]:text-center [&>span]:justify-self-center [&>span]:text-center";
+  "media-row grid min-h-[70px] grid-cols-[78px_minmax(160px,1.8fr)_90px_90px_minmax(120px,1fr)_90px_130px] items-center gap-3 border-b border-border px-3 py-2 text-[13px] text-muted-foreground last:border-b-0 max-[540px]:grid-cols-[56px_minmax(0,1fr)] [&>span:not(.row-name-cell)]:justify-self-center [&>span:not(.row-name-cell)]:text-center";
 const tableHeaderClassName =
-  `${tableRowClassName} media-row-header min-h-[34px] bg-[#f8fafc] text-xs font-[760] text-app-muted [&>span:nth-child(2)]:justify-self-stretch [&>span:nth-child(2)]:text-left max-[540px]:[&>span:nth-child(2)]:pl-3.5 max-[540px]:[&>span:nth-child(n+3)]:hidden`;
+  `${tableRowClassName} media-row-header !min-h-8 !py-1 bg-muted text-xs font-[760] text-muted-foreground [&>span:nth-child(2)]:justify-self-stretch [&>span:nth-child(2)]:text-left max-[540px]:[&>span:nth-child(2)]:pl-3.5 max-[540px]:[&>span:nth-child(n+3)]:hidden`;
 const rowNameCellClassName =
   "row-name-cell grid min-w-0 content-center justify-items-start gap-1.5 overflow-hidden text-left justify-self-stretch max-[540px]:grid-cols-[minmax(0,1fr)_auto] max-[540px]:items-center max-[540px]:pl-3.5 [&_.rating-control]:justify-self-start max-[540px]:[&_.rating-control]:col-span-2 max-[540px]:[&_.rating-control]:row-start-2";
 const rowFileNameClassName =
   "row-file-name block w-full min-w-0 overflow-hidden text-ellipsis whitespace-nowrap justify-self-start text-left max-[540px]:col-start-1 max-[540px]:row-start-1";
 const tableMobileMetaClassName =
-  "table-mobile-meta hidden text-[11px] leading-[1.3] text-app-muted max-[540px]:col-start-2 max-[540px]:row-start-1 max-[540px]:block max-[540px]:justify-self-end max-[540px]:whitespace-nowrap max-[540px]:text-right";
+  "table-mobile-meta hidden text-[11px] leading-[1.3] text-muted-foreground max-[540px]:col-start-2 max-[540px]:row-start-1 max-[540px]:block max-[540px]:justify-self-end max-[540px]:whitespace-nowrap max-[540px]:text-right";
 const tableHiddenOnMobileClassName = "max-[540px]:hidden";
 const cardRatingClassName =
-  "rating-control absolute bottom-1.5 left-1.5 z-[2] inline-flex items-center gap-0 rounded-md bg-[rgba(15,23,42,0.78)] px-1 py-[3px] leading-[1.2] text-white [&_.rating-star]:h-3 [&_.rating-star]:w-3 [&_.rating-star]:text-[10px] [&_.rating-star]:text-[rgba(255,255,255,0.34)] [&_.rating-star[data-active=true]]:text-[#fbbf24]";
-const tableRatingClassName = "rating-control inline-flex items-center gap-px justify-self-start";
+  "rating-control absolute bottom-1.5 left-1.5 z-[2] inline-flex items-center gap-0 rounded-md bg-[rgba(15,23,42,0.78)] px-1 py-[3px] leading-[1.2] text-white [&_.rating-star]:h-3 [&_.rating-star]:w-3 [&_.rating-star]:text-[10px] [&_.rating-star]:text-[rgba(255,255,255,0.34)] [&_.rating-star[data-active=true]]:text-yellow-300";
+const tableRatingClassName = "rating-control inline-flex items-center justify-self-start gap-px text-left";
 const tileMasonryBaseWidth = 168;
 const tileMasonryGap = 4;
 const tileMasonryRowHeight = 4;
@@ -167,7 +170,7 @@ function ResultItem({ item, viewMode, onOpenPreview }: { item: EagleItem; viewMo
 
 function GridCard({ item, onOpenPreview }: { item: EagleItem; onOpenPreview: (item: EagleItem) => void }) {
   return (
-    <article className={mediaCardClassName}>
+    <Card className={mediaCardClassName}>
       <ThumbnailButton variant="grid" item={item} onOpenPreview={onOpenPreview} withBadges withOverlay>
         <RatingStars item={item} className={cardRatingClassName} />
       </ThumbnailButton>
@@ -175,7 +178,7 @@ function GridCard({ item, onOpenPreview }: { item: EagleItem; onOpenPreview: (it
         <strong title={originalFileName(item)}>{item.name || item.id || ""}</strong>
         <span hidden />
       </div>
-    </article>
+    </Card>
   );
 }
 
@@ -258,9 +261,9 @@ function TableCell({ className = "", title = "", value }: { className?: string; 
 function ExtensionPill({ item }: { item: EagleItem }) {
   const ext = normalizeExt(item.ext || "file");
   return (
-    <span className={`ext-pill inline-flex w-fit min-w-11 justify-center rounded-md border px-[7px] py-[3px] text-[11px] font-[760] max-[540px]:hidden ${extensionColorClassNames[ext] || "border-[#bfdbfe] bg-[#eff6ff] text-[#1d4ed8]"}`} data-ext={ext}>
+    <Badge variant="outline" className={`ext-pill inline-flex h-auto w-fit min-w-11 justify-center rounded-md px-[7px] py-[3px] text-[11px] font-[760] max-[540px]:hidden ${extensionColorClassNames[ext] || "border-[#bfdbfe] bg-[#eff6ff] text-[#1d4ed8]"}`} data-ext={ext}>
       {String(ext).toUpperCase()}
-    </span>
+    </Badge>
   );
 }
 
@@ -303,7 +306,7 @@ function ThumbnailButton({ children, item, onOpenPreview, style, variant, withBa
         }}
       />
       {loading ? <LoadingIndicator variant={variant} /> : null}
-      {missing ? <span className="pointer-events-none absolute inset-0 z-[1] grid place-items-center text-[11px] font-[760] tracking-[0] text-app-muted">NO PREVIEW</span> : null}
+      {missing ? <span className="pointer-events-none absolute inset-0 z-[1] grid place-items-center text-[11px] font-[760] tracking-[0] text-muted-foreground">NO PREVIEW</span> : null}
       {withOverlay ? (
         <span className={`${overlayClassName} ${isTimedOverlay ? "bg-[rgba(15,23,42,0.16)]" : "bg-[rgba(15,23,42,0.08)]"}`} aria-hidden="true">
           <span className={overlayIconClassName}>
@@ -316,9 +319,9 @@ function ThumbnailButton({ children, item, onOpenPreview, style, variant, withBa
       {withBadges ? (
         <>
           {withFileBadge ? (
-            <span className={`file-badge absolute left-1.5 top-1.5 max-w-[calc(100%_-_12px)] overflow-hidden text-ellipsis whitespace-nowrap rounded-md px-1.5 py-[3px] text-[10px] font-[720] leading-[1.2] ${fileBadgeColorClassName(item.ext)}`} data-ext={normalizeExt(item.ext || "file")}>
+            <Badge className={`file-badge absolute left-1.5 top-1.5 h-auto max-w-[calc(100%_-_12px)] overflow-hidden text-ellipsis whitespace-nowrap rounded-md border-0 px-1.5 py-[3px] text-[10px] font-[720] leading-[1.2] ${fileBadgeColorClassName(item.ext)}`} data-ext={normalizeExt(item.ext || "file")}>
               {(item.ext || "").toUpperCase()}
-            </span>
+            </Badge>
           ) : null}
           <span className={durationBadgeClassName} hidden={!duration}>
             {duration}
@@ -339,15 +342,15 @@ function thumbnailButtonBaseClassName(variant: ThumbnailButtonProps["variant"]) 
 function LoadingIndicator({ variant }: { variant: ThumbnailButtonProps["variant"] }) {
   if (variant === "tile") {
     return (
-      <span
-        className="pointer-events-none absolute inset-0 z-[4] animate-pulse bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.36),transparent),linear-gradient(135deg,rgba(226,232,240,0.92),rgba(203,213,225,0.72))] [background-size:180%_100%,100%_100%]"
+      <Skeleton
+        className="pointer-events-none absolute inset-0 z-[4] animate-pulse rounded-none bg-muted"
         aria-hidden="true"
       />
     );
   }
   return (
-    <span
-      className="pointer-events-none absolute left-1/2 top-1/2 z-[2] h-[22px] w-[22px] -translate-x-1/2 -translate-y-1/2 animate-spin rounded-full border-2 border-[rgba(148,163,184,0.35)] border-t-[rgba(20,99,243,0.9)]"
+    <Skeleton
+      className="pointer-events-none absolute left-1/2 top-1/2 z-[2] size-[22px] -translate-x-1/2 -translate-y-1/2 animate-spin rounded-full border-2 border-muted border-t-ring"
       aria-hidden="true"
     />
   );

@@ -40,6 +40,11 @@ export function normalizeTag(value: unknown) {
   return String(value || "").trim();
 }
 
+export function normalizeRating(value: unknown) {
+  const rating = Number(value);
+  return Number.isInteger(rating) && rating >= 0 && rating <= 5 ? rating : 0;
+}
+
 export function mediaTypeLabel(item: EagleItem) {
   return (item.ext || "").toUpperCase() || "FILE";
 }

@@ -1,7 +1,8 @@
 import type { ViewerMode } from "./types";
 
 export interface ViewerShellActions {
-  connect: () => void;
+  connect: (credentials?: { password: string; username: string }) => void;
+  logout: () => void;
   urlPopped: () => void;
   searchChanged: (query: string) => void;
   searchFocused: (query: string) => void;
@@ -27,6 +28,7 @@ const noop = () => {};
 
 let actions: ViewerShellActions = {
   connect: noop,
+  logout: noop,
   urlPopped: noop,
   searchChanged: noop,
   searchFocused: noop,
@@ -52,9 +54,19 @@ export function setViewerShellActions(nextActions: ViewerShellActions) {
   actions = nextActions;
 }
 
-export function submitConnection(event: { preventDefault: () => void }) {
+export function submitConnection(event: { currentTarget: HTMLFormElement; preventDefault: () => void }) {
   event.preventDefault();
-  actions.connect();
+  const data = new FormData(event.currentTarget);
+  const passwordField = event.currentTarget.elements.namedItem("password");
+  actions.connect({
+    password: String(data.get("password") || ""),
+    username: String(data.get("username") || ""),
+  });
+  if (passwordField instanceof HTMLInputElement) passwordField.value = "";
+}
+
+export function submitLogout() {
+  actions.logout();
 }
 
 export function handleUrlPop() {

@@ -9,11 +9,12 @@ import {
   playableVideoExts,
   textPreviewExts,
 } from "./viewer/constants";
-import { debounce, getJson, postJson } from "./viewer/api";
+import { ApiError, debounce, errorMessage, getJson, postJson } from "./viewer/api";
 import {
   flattenFolders,
   isTimedMedia,
   itemMeta,
+  normalizeRating,
   normalizeTag,
   originalFileName,
   previewFileName,
@@ -73,6 +74,7 @@ import {
 } from "./viewer/tileLoading";
 import type {
   ConnectResponse,
+  AuthStatusResponse,
   EagleItem,
   ItemPatch,
   LoadFoldersResponse,
@@ -80,6 +82,7 @@ import type {
   LoadItemsResponse,
   OpenPreviewOptions,
   TagSuggestionApiItem,
+  ViewerPermissions,
 } from "./viewer/types";
 import { buildViewerUrl, currentPage, parseViewerUrlState } from "./viewer/urlState";
 import {
@@ -91,6 +94,10 @@ import {
 let connectMessageText = "";
 let connectMessageIsError = false;
 let connectBusy = false;
+let authAuthenticated = false;
+let authRequired = false;
+let authUser: NonNullable<AuthStatusResponse["user"]> | null = null;
+const pendingRatingItemIds = new Set<string>();
 
 export function initViewer() {
   init();
@@ -99,8 +106,10 @@ export function initViewer() {
 async function init() {
   restoreUrlState();
   restoreViewMode();
+  await loadAuthStatus();
   setViewerShellActions({
     connect,
+    logout,
     urlPopped: () => {
       restoreUrlState();
       applyControlsFromState();
@@ -169,21 +178,100 @@ async function init() {
   showLogin();
 }
 
-async function connect() {
-  setConnectMessage("Connecting", false);
+async function connect(credentials?: { password: string; username: string }) {
+  setConnectMessage(authRequired && !authAuthenticated ? "Signing in" : "Connecting", false);
   setConnectBusy(true);
 
   try {
+    if (authRequired && !authAuthenticated) {
+      const username = String(credentials?.username || "").trim();
+      const password = String(credentials?.password || "");
+      if (!username || !password) {
+        throw new Error("Enter username and password.");
+      }
+      const login = await postJson<AuthStatusResponse>("/api/auth/login", { username, password });
+      authAuthenticated = Boolean(login.authenticated);
+      authUser = login.user ?? null;
+      state.permissions = normalizePermissions(login.permissions, authAuthenticated);
+      renderLoginConnect();
+      setConnectMessage("Connecting", false);
+    }
     const connection = { ...DEFAULT_EAGLE_CONNECTION };
     const data = await postJson<ConnectResponse>("/api/connect", connection);
     showViewer(data);
     await Promise.all([loadFolders(), loadItems()]);
   } catch (error) {
+    if (handleAuthError(error)) return;
     showLogin();
-    setConnectMessage(error.message, true);
+    setConnectMessage(errorMessage(error), true);
   } finally {
     setConnectBusy(false);
   }
+}
+
+async function logout() {
+  setConnectMessage("", false);
+  setConnectBusy(true);
+  try {
+    const logoutStatus = await postJson<AuthStatusResponse>("/api/auth/logout", {});
+    const nextAuthRequired = Boolean(logoutStatus.required);
+    clearAuthState(nextAuthRequired);
+    state.permissions = normalizePermissions(logoutStatus.permissions, !nextAuthRequired);
+    clearViewerSessionState();
+    renderLoginConnect();
+    showLogin();
+  } catch (error) {
+    setConnectMessage(errorMessage(error), true);
+  } finally {
+    setConnectBusy(false);
+  }
+}
+
+async function loadAuthStatus() {
+  try {
+    const data = await getJson<AuthStatusResponse>("/api/auth/status");
+    authAuthenticated = Boolean(data.authenticated);
+    authRequired = Boolean(data.required);
+    authUser = data.user ?? null;
+    state.permissions = normalizePermissions(data.permissions, !authRequired || authAuthenticated);
+  } catch {
+    clearAuthState(false);
+  }
+  renderLoginConnect();
+}
+
+function defaultPermissions(read = true): ViewerPermissions {
+  return {
+    read,
+    writeMetadata: false,
+    writeRating: false,
+  };
+}
+
+function normalizePermissions(value: AuthStatusResponse["permissions"], readFallback = true): ViewerPermissions {
+  return {
+    ...defaultPermissions(readFallback),
+    read: Boolean(value?.read ?? readFallback),
+    writeMetadata: Boolean(value?.writeMetadata),
+    writeRating: Boolean(value?.writeRating),
+  };
+}
+
+function clearAuthState(nextAuthRequired: boolean) {
+  authAuthenticated = false;
+  authRequired = nextAuthRequired;
+  authUser = null;
+  state.permissions = defaultPermissions(!authRequired);
+}
+
+function handleAuthError(error: unknown) {
+  if (!(error instanceof ApiError) || error.status !== 401) return false;
+  clearAuthState(true);
+  clearViewerSessionState();
+  renderLoginConnect();
+  showLogin();
+  setConnectMessage(errorMessage(error), true);
+  return true;
 }
 
 function showLogin() {
@@ -193,12 +281,35 @@ function showLogin() {
 function showViewer(data: ConnectResponse) {
   setShellView("viewer");
   setLibraryFooterName(libraryLabel(data));
+  resetViewerResults();
   renderSearchControlButtons();
-  state.total = 0;
-  state.items = [];
   applyControlsFromState();
   updateStatus();
   updatePager();
+}
+
+function clearViewerSessionState() {
+  state.requestId += 1;
+  resetViewerResults({ resetOffset: true });
+  Object.assign(state, resetFilterState());
+  hideTagSuggestions();
+  resetTileAutoLoading();
+  closePreview({ skipHistory: true });
+  syncUrlState({ replace: true });
+  setLibraryFooterName("");
+  renderTagChips();
+  renderSearchControlButtons();
+  updateStatus();
+  updatePager();
+}
+
+function resetViewerResults({ resetOffset = false }: { resetOffset?: boolean } = {}) {
+  pendingRatingItemIds.clear();
+  state.tilesLoadingMore = false;
+  state.items = [];
+  state.folders = [];
+  state.total = 0;
+  if (resetOffset) state.offset = 0;
 }
 
 function setConnectMessage(message: string, isError: boolean) {
@@ -214,9 +325,12 @@ function setConnectBusy(isBusy: boolean) {
 
 function renderLoginConnect() {
   setLoginConnectState({
+    authenticated: authAuthenticated,
+    authRequired,
     disabled: connectBusy,
     isError: connectMessageIsError,
     message: connectMessageText,
+    user: authUser,
   });
 }
 
@@ -231,7 +345,8 @@ async function loadFolders() {
     const data = await getJson<LoadFoldersResponse>("/api/folders");
     state.folders = flattenFolders(data.items);
     renderSearchControlButtons();
-  } catch {
+  } catch (error) {
+    if (handleAuthError(error)) return;
     state.folders = [];
     // Folder loading is optional; item browsing still works without it.
   }
@@ -272,15 +387,16 @@ async function loadItems({ append = false }: LoadItemsOptions = {}) {
     syncPreviewFromState();
   } catch (error) {
     if (requestId !== state.requestId) return;
+    if (handleAuthError(error)) return;
     state.tilesLoadingMore = false;
     if (append) {
-      renderTilesSentinel(error.message);
+      renderTilesSentinel(errorMessage(error));
       updatePager();
       return;
     }
     state.items = [];
     state.total = 0;
-    renderMessage(error.message, "error");
+    renderMessage(errorMessage(error), "error");
     updateStatus();
     updatePager();
     setupTileAutoLoading();
@@ -314,10 +430,7 @@ function openPreview(item: EagleItem, { skipHistory = false }: OpenPreviewOption
     originalName: originalFileName(item),
   });
   clearPreviewBodyState();
-  setPreviewRatingState({
-    item,
-    onSelect: (star) => setItemStar(item, star),
-  });
+  renderPreviewRating(item);
   renderPreviewDetails(item);
 
   const { kind, srcKind } = previewBodyForItem(item);
@@ -464,7 +577,8 @@ async function loadTagSuggestions() {
     if (requestId !== state.tagSuggestionsRequestId) return;
     const items = Array.isArray(data.items) ? data.items : [];
     renderTagSuggestions(items.filter((item) => item?.name && !state.tags.includes(item.name)));
-  } catch {
+  } catch (error) {
+    if (requestId === state.tagSuggestionsRequestId && handleAuthError(error)) return;
     if (requestId === state.tagSuggestionsRequestId) hideTagSuggestions();
   }
 }
@@ -541,35 +655,40 @@ function clearPreviewContents() {
 }
 
 async function setItemStar(item: EagleItem, star: number) {
-  const previous = Number(item.star || 0);
+  if (!state.permissions.writeRating) return;
+  const itemId = String(item.id || "");
+  if (!itemId || pendingRatingItemIds.has(itemId)) return;
+  const previous = normalizeRating(item.star);
+  pendingRatingItemIds.add(itemId);
   item.star = star;
-  updateItemInState(String(item.id || ""), { star });
+  updateItemInState(itemId, { star });
   render();
-  if (isPreviewDialogOpen()) {
-    setPreviewRatingState({
-      item,
-      onSelect: (nextStar) => setItemStar(item, nextStar),
-    });
-  }
+  if (isPreviewDialogOpen()) renderPreviewRating(item);
 
   try {
-    const data = await postJson<{ star?: unknown }>(`/api/items/${encodeURIComponent(String(item.id || ""))}/star`, { star });
-    const savedStar = Number(data.star ?? star);
+    const data = await postJson<{ star?: unknown }>(`/api/items/${encodeURIComponent(itemId)}/star`, { star });
+    const savedStar = normalizeRating(data.star ?? star);
     item.star = savedStar;
-    updateItemInState(String(item.id || ""), { star: savedStar });
+    updateItemInState(itemId, { star: savedStar });
   } catch (error) {
     item.star = previous;
-    updateItemInState(String(item.id || ""), { star: previous });
-    alert(error.message);
+    updateItemInState(itemId, { star: previous });
+    if (handleAuthError(error)) return;
+    alert(errorMessage(error));
   } finally {
+    pendingRatingItemIds.delete(itemId);
     render();
-    if (isPreviewDialogOpen()) {
-      setPreviewRatingState({
-        item,
-        onSelect: (nextStar) => setItemStar(item, nextStar),
-      });
-    }
+    if (isPreviewDialogOpen()) renderPreviewRating(item);
   }
+}
+
+function renderPreviewRating(item: EagleItem) {
+  setPreviewRatingState({
+    canEdit: state.permissions.writeRating,
+    item,
+    onSelect: (star) => setItemStar(item, star),
+    saving: pendingRatingItemIds.has(String(item.id || "")),
+  });
 }
 
 function isPreviewDialogOpen() {
@@ -653,6 +772,8 @@ function currentFetchLimit() {
 
 function goToPage(page: number) {
   state.offset = (page - 1) * state.limit;
+  resetPreviewState();
+  syncUrlState();
   loadItems();
 }
 
@@ -660,6 +781,7 @@ function renderPreviewDetails(item: EagleItem) {
   setPreviewInfoState({
     item,
     detailRows: previewDetailRows(item),
+    canEditMetadata: state.permissions.writeMetadata,
     folders: state.folders,
     onTagSuggestions: tagSuggestionItems,
     onFolderSuggestions: folderSuggestionItems,
@@ -668,6 +790,9 @@ function renderPreviewDetails(item: EagleItem) {
 }
 
 async function savePreviewMetadata(item: EagleItem, { tags, folders }: { tags: string[]; folders: string[] }) {
+  if (!state.permissions.writeMetadata) {
+    throw new Error("Metadata editing is not allowed for this viewer");
+  }
   try {
     const data = await postJson<{
       tags?: unknown;
@@ -682,8 +807,11 @@ async function savePreviewMetadata(item: EagleItem, { tags, folders }: { tags: s
     Object.assign(item, patch);
     updateItemInState(String(item.id || ""), patch);
     render();
+    if (isPreviewDialogOpen()) renderPreviewDetails(item);
+    return patch;
   } catch (error) {
-    throw error instanceof Error ? error : new Error(String(error));
+    handleAuthError(error);
+    throw error instanceof Error ? error : new Error(errorMessage(error));
   }
 }
 
@@ -698,7 +826,10 @@ function tagSuggestionItems(query: string, selectedValues: string[]): Promise<Me
       const remote = Array.isArray(data.items) ? data.items : [];
       return buildTagSuggestionItems({ query, selectedValues, recentTags, remoteTags: remote });
     })
-    .catch(() => buildTagSuggestionItems({ query, selectedValues, recentTags }));
+    .catch((error) => {
+      handleAuthError(error);
+      return buildTagSuggestionItems({ query, selectedValues, recentTags });
+    });
 }
 
 function folderSuggestionItems(query: string, selectedValues: string[]) {

@@ -54,6 +54,26 @@ export interface ConnectResponse {
   };
 }
 
+export interface ViewerPermissions {
+  read: boolean;
+  writeMetadata: boolean;
+  writeRating: boolean;
+}
+
+export interface AuthStatusPermissions extends Partial<ViewerPermissions> {
+  manageLibrary?: boolean;
+}
+
+export interface AuthStatusResponse {
+  authenticated?: boolean;
+  permissions?: AuthStatusPermissions;
+  required?: boolean;
+  user?: {
+    role?: string;
+    username?: string;
+  } | null;
+}
+
 export interface LoadFoldersResponse {
   items?: EagleFolder[];
 }
@@ -98,4 +118,5 @@ export interface ViewerState {
   previewItemId: string;
   previewInfoOpen: boolean;
   restoringHistory: boolean;
+  permissions: ViewerPermissions;
 }

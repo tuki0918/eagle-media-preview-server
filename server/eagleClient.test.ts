@@ -276,6 +276,8 @@ test("updateItemStar uses V2 item/update with a 0-5 star value", async () => {
 test("updateItemStar rejects values outside 0-5", async () => {
   const client = createEagleClient();
   await assert.rejects(() => client.updateItemStar("abc", 6), /0-5/);
+  await assert.rejects(() => client.updateItemStar("abc", 2.5), /0-5/);
+  await assert.rejects(() => client.updateItemStar("abc", "4x"), /0-5/);
 });
 
 test("updateItemMetadata uses V2 item/update with tags and folders", async () => {

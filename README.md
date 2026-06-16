@@ -11,12 +11,26 @@ You can preview your media from other devices on the same network.
 - One-click local preview server
 - Access from devices on the same network
 - Basic authentication
-- Read-only media browsing, with rating updates supported
+- Multiple users with Viewer, Editor, and Admin roles
+- Read-only media browsing by default
+- Role-based metadata editing for rating, tags, and categories
 
 ## Requirements
 
 - Eagle 4.0 Build 23 or later
 - Node.js 20 or later
+
+## Authentication and roles
+
+Authentication is optional. When BasicAuth protection is enabled, browser access requires either a BasicAuth header or a `viewer_session` cookie issued by the login API.
+
+- Viewer users can browse and preview media.
+- Editor users can edit rating, tags, and categories from the preview panel.
+- Admin users can edit metadata and switch the active Eagle library.
+
+Plain text passwords are never persisted. New passwords are saved as salted PBKDF2-SHA-256 hashes, and existing legacy SHA-256 hashes remain accepted for migration compatibility. The viewer session is a server-side cookie session rather than a JWT.
+
+If a viewer session expires or an authenticated API call returns `401`, the browser viewer clears the current library state and returns to the login screen.
 
 ## Development
 

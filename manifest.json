@@ -16,8 +16,8 @@
     "minWidth": 600,
     "minHeight": 600,
     "frame": false,
-    "resizable": false,
-    "maximizable": false,
+    "resizable": true,
+    "maximizable": true,
     "fullscreenable": false,
     "multiple": false,
     "backgroundColor": "#f6f8fb"

@@ -3,17 +3,30 @@ import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { SidebarProvider } from "../src/components/ui/sidebar";
+import { TooltipProvider } from "../src/components/ui/tooltip";
 import {
+  AccountSideMenu,
   AdvancedFilters,
   ConnectButton,
   ConnectMessage,
+  LibraryFooter,
   LoginView,
   PreviewActions,
   PreviewDetailsPanel,
   ResultList,
   SearchControls,
+  SearchFiltersButton,
 } from "../src/viewer/ViewerShell";
+import { setLoginConnectState } from "../src/viewer/loginConnectState";
 import { PAGE_SIZE_OPTIONS } from "../src/viewer/shellConfig";
+
+function accountSideMenuElement() {
+  return createElement(TooltipProvider, null, createElement(SidebarProvider, null, [
+    createElement(AccountSideMenu, { key: "sidebar" }),
+    createElement(SearchControls, { key: "search" }),
+  ]));
+}
 
 async function readViewerSources() {
   const files = [
@@ -48,6 +61,7 @@ async function readAppSources() {
   const files = [
     "../src/App.tsx",
     "../src/viewer/ViewerShell.tsx",
+    "../src/viewer/components/AccountSideMenu.tsx",
     "../src/viewer/components/CardTemplate.tsx",
     "../src/viewer/components/FolderOptions.tsx",
     "../src/viewer/components/Icons.tsx",
@@ -110,6 +124,183 @@ test("public login no longer renders advanced Eagle connection settings", async 
   assert.doesNotMatch(app, /restoreConnectionForm/);
 });
 
+test("public login renders credentials when server auth is required", async () => {
+  const app = await readViewerSources();
+  setLoginConnectState({
+    authenticated: false,
+    authRequired: true,
+    disabled: false,
+    isError: false,
+    message: "",
+    user: null,
+  });
+  const login = renderToStaticMarkup(createElement(LoginView, { hidden: false }));
+  const button = renderToStaticMarkup(createElement(ConnectButton, { disabled: false }));
+
+  assert.match(login, /id="authUsernameInput"/);
+  assert.match(login, /name="username"/);
+  assert.match(login, /aria-label="Username"/);
+  assert.match(login, /id="authUsernameInput"[\s\S]*required=""/);
+  assert.match(login, /id="authPasswordInput"/);
+  assert.match(login, /name="password"/);
+  assert.match(login, /aria-label="Password"/);
+  assert.match(login, /id="authPasswordInput"[\s\S]*required=""/);
+  assert.match(button, /Sign in/);
+  assert.match(app, /postJson<AuthStatusResponse>\("\/api\/auth\/login", \{ username, password \}\)/);
+  assert.match(app, /Enter username and password\./);
+  assert.match(app, /const passwordField = event\.currentTarget\.elements\.namedItem\("password"\);/);
+  assert.match(app, /if \(passwordField instanceof HTMLInputElement\) passwordField\.value = "";/);
+
+  setLoginConnectState({
+    authenticated: false,
+    authRequired: false,
+    disabled: false,
+    isError: false,
+    message: "",
+    user: null,
+  });
+});
+
+test("public viewer exposes sign out when authenticated", async () => {
+  const app = await readViewerSources();
+  const types = await readFile(new URL("../src/viewer/types.ts", import.meta.url), "utf8");
+  setLoginConnectState({
+    authenticated: true,
+    authRequired: true,
+    disabled: false,
+    isError: false,
+    message: "",
+    user: { role: "editor", username: "ed" },
+  });
+  const accountMenu = renderToStaticMarkup(accountSideMenuElement());
+  const footer = renderToStaticMarkup(createElement(LibraryFooter, { name: "My Library" }));
+
+  assert.match(accountMenu, /id="accountSideMenu"/);
+  assert.match(accountMenu, /id="authUserLabel"/);
+  assert.match(accountMenu, />ed</);
+  assert.match(accountMenu, /id="authAccountLabel"/);
+  assert.match(accountMenu, /aria-label="ed - Editor\. Can edit ratings, tags, and categories"/);
+  assert.match(accountMenu, /title="Can edit ratings, tags, and categories"/);
+  assert.match(accountMenu, /id="authRoleLabel"/);
+  assert.match(accountMenu, />Editor</);
+  assert.match(accountMenu, /aria-haspopup="menu"/);
+  assert.match(accountMenu, /lucide-user-round/);
+  assert.match(accountMenu, /data-slot="sidebar"/);
+  assert.match(accountMenu, /data-sidebar="menu-button"/);
+  assert.match(accountMenu, /hidden=""/);
+  assert.doesNotMatch(accountMenu, /md:hidden/);
+  assert.doesNotMatch(accountMenu, /fixed left-3/);
+  assert.doesNotMatch(accountMenu, /authFooterMessage/);
+  assert.match(footer, /id="libraryFooterName"/);
+  assert.doesNotMatch(footer, /logoutButton/);
+  assert.match(app, /authUser = login\.user \?\? null/);
+  assert.match(app, /authUser = data\.user \?\? null/);
+  assert.match(app, /state\.permissions = normalizePermissions\(login\.permissions, authAuthenticated\);/);
+  assert.match(app, /state\.permissions = normalizePermissions\(data\.permissions, !authRequired \|\| authAuthenticated\);/);
+  assert.match(app, /state\.permissions = defaultPermissions\(!authRequired\);/);
+  assert.match(app, /function normalizePermissions\(value: AuthStatusResponse\["permissions"\], readFallback = true\)/);
+  assert.match(app, /function clearAuthState\(nextAuthRequired: boolean\) \{/);
+  assert.match(app, /const logoutStatus = await postJson<AuthStatusResponse>\("\/api\/auth\/logout", \{\}\);/);
+  assert.match(app, /const nextAuthRequired = Boolean\(logoutStatus\.required\);/);
+  assert.match(app, /clearAuthState\(nextAuthRequired\);/);
+  assert.match(app, /state\.permissions = normalizePermissions\(logoutStatus\.permissions, !nextAuthRequired\);/);
+  assert.match(app, /clearAuthState\(false\);/);
+  assert.match(app, /clearAuthState\(true\);/);
+  assert.match(app, /clearViewerSessionState\(\);/);
+  assert.match(app, /function clearViewerSessionState\(\) \{/);
+  assert.match(app, /function resetViewerResults\(\{ resetOffset = false \}: \{ resetOffset\?: boolean \} = \{\}\) \{/);
+  assert.match(app, /function resetViewerResults\(\{ resetOffset = false \}: \{ resetOffset\?: boolean \} = \{\}\) \{[\s\S]*pendingRatingItemIds\.clear\(\);/);
+  assert.match(app, /resetViewerResults\(\{ resetOffset: true \}\);/);
+  assert.match(app, /state\.folders = \[\];/);
+  assert.match(app, /function showViewer\(data: ConnectResponse\) \{[\s\S]*resetViewerResults\(\);/);
+  assert.match(app, /state\.requestId \+= 1;/);
+  assert.match(app, /Object\.assign\(state, resetFilterState\(\)\);/);
+  assert.match(app, /function clearViewerSessionState\(\) \{[\s\S]*closePreview\(\{ skipHistory: true \}\);[\s\S]*syncUrlState\(\{ replace: true \}\);/);
+  assert.match(app, /if \(handleAuthError\(error\)\) return;/);
+  assert.match(app, /function handleAuthError\(error: unknown\) \{/);
+  assert.match(app, /error instanceof ApiError/);
+  assert.match(app, /error\.status !== 401/);
+  assert.match(app, /import \{ ApiError, debounce, errorMessage, getJson, postJson \} from "\.\/viewer\/api";/);
+  assert.doesNotMatch(app, /setConnectMessage\(error\.message, true\)/);
+  assert.doesNotMatch(app, /alert\(error\.message\)/);
+  assert.match(app, /async function loadFolders\(\) \{[\s\S]*if \(handleAuthError\(error\)\) return;/);
+  assert.match(app, /async function loadTagSuggestions\(\) \{[\s\S]*handleAuthError\(error\)/);
+  assert.match(app, /async function setItemStar\([\s\S]*if \(handleAuthError\(error\)\) return;/);
+  assert.match(app, /async function savePreviewMetadata\([\s\S]*handleAuthError\(error\);/);
+  assert.match(app, /showLogin\(\);/);
+  assert.match(types, /export interface AuthStatusPermissions extends Partial<ViewerPermissions>/);
+  assert.match(types, /manageLibrary\?: boolean;/);
+  assert.match(types, /permissions\?: AuthStatusPermissions;/);
+  assert.doesNotMatch(app, /manageLibrary/);
+
+  setLoginConnectState({
+    authenticated: false,
+    authRequired: false,
+    disabled: false,
+    isError: false,
+    message: "",
+    user: null,
+  });
+});
+
+test("public login shows auth errors above the submit button", () => {
+  setLoginConnectState({
+    authenticated: false,
+    authRequired: true,
+    disabled: false,
+    isError: true,
+    message: "Invalid username or password",
+    user: null,
+  });
+  const login = renderToStaticMarkup(createElement(LoginView, { hidden: false }));
+  const message = renderToStaticMarkup(createElement(ConnectMessage, { message: "Invalid username or password", isError: true }));
+
+  assert.match(message, /grid-cols-\[auto_minmax\(0,1fr\)\]/);
+  assert.match(message, /bg-destructive\/10/);
+  assert.doesNotMatch(message, /\bborder\b/);
+  assert.doesNotMatch(message, /border-destructive/);
+  assert.match(message, /text-left/);
+  assert.match(message, /lucide-circle-alert/);
+  assert.ok(login.indexOf('id="connectMessage"') < login.indexOf('id="connectButton"'));
+
+  setLoginConnectState({
+    authenticated: false,
+    authRequired: false,
+    disabled: false,
+    isError: false,
+    message: "",
+    user: null,
+  });
+});
+
+test("public viewer exposes auth errors in the footer", () => {
+  setLoginConnectState({
+    authenticated: true,
+    authRequired: true,
+    disabled: false,
+    isError: true,
+    message: "Sign out failed",
+    user: { role: "viewer", username: "reader" },
+  });
+  const accountMenu = renderToStaticMarkup(accountSideMenuElement());
+  const footerMessageClass = accountMenu.match(/id="authFooterMessage" class="([^"]*)"/)?.[1] ?? "";
+
+  assert.match(accountMenu, /id="authFooterMessage"/);
+  assert.match(accountMenu, /role="alert"/);
+  assert.doesNotMatch(footerMessageClass, /\bborder\b/);
+  assert.doesNotMatch(footerMessageClass, /border-destructive/);
+  assert.match(accountMenu, /Sign out failed/);
+
+  setLoginConnectState({
+    authenticated: false,
+    authRequired: false,
+    disabled: false,
+    isError: false,
+    message: "",
+    user: null,
+  });
+});
+
 test("public UI no longer shows connect lock icon or connection settings button", async () => {
   const html = await readAppSources();
   const app = await readViewerSources();
@@ -146,13 +337,16 @@ test("public UI no longer shows connect lock icon or connection settings button"
   assert.match(html, /useSyncExternalStore\(subscribeShellView, getShellView, getShellView\)/);
   assert.match(html, /<LoginView hidden=\{shellView !== "login"\} \/>/);
   assert.match(html, /<ViewerShellLayout hidden=\{shellView !== "viewer"\} \/>/);
+  assert.match(html, /<SidebarProvider/);
+  assert.match(html, /"--sidebar-width-icon": "3rem"/);
+  assert.match(html, /<AccountSideMenu \/>/);
   assert.doesNotMatch(app, /loginView: document\.querySelector\("#loginView"\),/);
   assert.doesNotMatch(app, /viewerShell: document\.querySelector\("#viewerShell"\),/);
   assert.doesNotMatch(app, /els\.loginView\.hidden/);
   assert.doesNotMatch(app, /els\.viewerShell\.hidden/);
   assert.match(app, /setShellView\("login"\);/);
   assert.match(app, /setShellView\("viewer"\);/);
-  assert.match(html, /<LibraryFooter \/>/);
+  assert.doesNotMatch(html, /<LibraryFooter \/>/);
   assert.doesNotMatch(html, /id="libraryFooterNameHost"/);
   assert.match(app, /setLibraryFooterName\(libraryLabel\(data\)\);/);
   assert.match(html, /useSyncExternalStore\(subscribeLibraryFooterName, getLibraryFooterName, getLibraryFooterName\)/);
@@ -170,12 +364,13 @@ test("public UI no longer shows connect lock icon or connection settings button"
   assert.doesNotMatch(app, /setConnectionStatus/);
   assert.match(login, /w-\[min\(320px,100%\)\]/);
   assert.match(login, /pt-\[42px\]/);
-  assert.match(message, /bottom-\[max\(24px,env\(safe-area-inset-bottom\)\)\]/);
+  assert.match(message, /min-h-\[18px\]/);
+  assert.doesNotMatch(message, /fixed/);
   assert.match(message, /empty:hidden/);
   assert.doesNotMatch(css, /\.login-panel\s*\{/);
   assert.doesNotMatch(css, /\.connect-message\s*\{/);
-  assert.match(html, /className="status-line grid grid-cols-\[minmax\(0,1fr\)_auto\]/);
-  assert.match(html, /max-\[540px\]:gap-2 max-\[540px\]:text-xs/);
+  assert.match(html, /className="status-line flex justify-end py-1"/);
+  assert.match(html, /className="view-toggle w-fit"/);
   assert.doesNotMatch(css, /\.status-line\s*\{/);
   assert.doesNotMatch(css, /\.status-actions\s*\{/);
   assert.match(controls, /id="pageSizeSelect"[^>]*aria-label="Page size"/);
@@ -217,7 +412,7 @@ test("public image preview fit mode scales to the viewport and refreshes on resi
   assert.match(html, /transform: `translate\(-50%, -50%\) translate3d\(\$\{imageState\.transform\.x\}px, \$\{imageState\.transform\.y\}px, 0\) scale\(\$\{imageState\.transform\.scale\}\)`/);
   assert.match(html, /const previewLayoutClassName = \[/);
   assert.match(html, /const previewImageClassName =[\s\S]*"preview-image absolute left-1\/2 top-1\/2/);
-  assert.match(html, /backdrop:bg-\[rgba\(15,23,42,0\.32\)\]/);
+  assert.match(html, /backdrop:bg-foreground\/30/);
   assert.match(html, /\[&:fullscreen\]:h-screen \[&:fullscreen\]:w-screen/);
 });
 
@@ -296,7 +491,7 @@ test("public preview renders text-like files and PDFs from their thumbnails", as
   assert.match(app, /function previewFileName\(item[^)]*\) \{/);
   assert.match(app, /PreviewDialogMode = "" \| "audio" \| "image" \| "text" \| "unsupported" \| "video"/);
   assert.doesNotMatch(app, /pdf-mode/);
-  assert.match(html, /if \(kind === "text"\) return `\$\{base\} overflow-auto bg-\[#f8fafc\] p-\[18px\]`;/);
+  assert.match(html, /if \(kind === "text"\) return `\$\{base\} overflow-auto bg-muted p-\[18px\]`;/);
   assert.match(html, /const textPreviewClassName =/);
   assert.doesNotMatch(css, /\.pdf-mode \.preview-body/);
   assert.doesNotMatch(css, /\.pdf-preview/);
@@ -365,14 +560,34 @@ test("public ratings are static in grid and table but editable in the preview mo
   const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
-  assert.match(html, /function RatingStars\(\{ className, id, interactive = false, item, onSelect \}/);
-  assert.match(html, /const ratingStarBaseClassName =[\s\S]*rating-star[\s\S]*data-\[active=true\]:text-app-warn/);
+  assert.match(html, /function RatingStars\(\{ className, disabled = false, disabledLabel, id, interactive = false, item, onSelect \}/);
+  assert.match(html, /const ratingStarBaseClassName =[\s\S]*rating-star[\s\S]*data-\[active=true\]:text-yellow-500/);
+  assert.match(html, /const interactiveRatingStarClassName = `\$\{ratingStarBaseClassName\} cursor-pointer`/);
+  assert.match(html, /const cardRatingClassName =[\s\S]*\[&_\.rating-star\[data-active=true\]\]:text-yellow-300/);
+  assert.match(html, /const canSelect = interactive && !disabled;/);
+  assert.match(html, /const label = interactive && disabled && disabledLabel \? disabledLabel : interactive \? "Rating" : "Rating \(read only\)";/);
+  assert.match(html, /aria-label=\{label\}/);
+  assert.match(html, /title=\{interactive && disabled && disabledLabel \? disabledLabel : interactive \? `\$\{value\}` : undefined\}/);
+  assert.match(html, /disabled=\{interactive \? disabled : undefined\}/);
   assert.match(html, /const staticRatingStarClassName = `\$\{ratingStarBaseClassName\} rating-star-static cursor-default`/);
+  assert.match(html, /const current = normalizeRating\(item\.star\);/);
   assert.match(html, /data-active=\{value <= current \? "true" : "false"\}/);
+  assert.match(app, /const pendingRatingItemIds = new Set<string>\(\);/);
+  assert.match(app, /if \(!itemId \|\| pendingRatingItemIds\.has\(itemId\)\) return;/);
+  assert.match(app, /pendingRatingItemIds\.add\(itemId\);/);
+  assert.match(app, /pendingRatingItemIds\.delete\(itemId\);/);
+  assert.match(app, /const previous = normalizeRating\(item\.star\);/);
+  assert.match(app, /item\.star = previous;[\s\S]*if \(handleAuthError\(error\)\) return;/);
+  assert.match(app, /const savedStar = normalizeRating\(data\.star \?\? star\);/);
   assert.doesNotMatch(app, /renderRatingView\(els\.previewRating, \{/);
   assert.doesNotMatch(html, /function renderRatingView\(container[^,]*,\s*props: RatingStarsProps\)/);
   assert.doesNotMatch(app, /previewRating: document\.querySelector\("#previewRating"\),/);
-  assert.match(app, /setPreviewRatingState\(\{/);
+  assert.match(app, /function renderPreviewRating\(item: EagleItem\) \{[\s\S]*setPreviewRatingState\(\{/);
+  assert.match(app, /saving: pendingRatingItemIds\.has\(String\(item\.id \|\| ""\)\)/);
+  assert.match(html, /disabledLabel=\{state\.saving \? "Saving rating" : undefined\}/);
+  assert.match(app, /renderPreviewRating\(item\);/);
+  assert.match(app, /if \(isPreviewDialogOpen\(\)\) renderPreviewRating\(item\);/);
+  assert.doesNotMatch(app, /if \(isPreviewDialogOpen\(\)\) \{\s*setPreviewRatingState/s);
   assert.match(html, /const Tag = interactive \? "button" : "span";/);
 });
 
@@ -421,18 +636,37 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(html, /function PreviewMetadataEditor\(\{/);
   assert.match(html, /<PreviewEditField label="Tags">/);
   assert.match(html, /<PreviewEditField label="Categories">/);
-  assert.match(html, /await onSaveMetadata\(item, \{ tags, folders: categories \}\);/);
+  assert.match(html, /const saved = await onSaveMetadata\(item, \{ tags, folders: categories \}\);/);
+  assert.match(html, /const \[savedTags, setSavedTags\] = useState\(\(\) => initialTags\);/);
+  assert.match(html, /const \[savedCategories, setSavedCategories\] = useState\(\(\) => initialCategories\);/);
+  assert.match(html, /const hasMetadataChanges = !sameStringValues\(tags, savedTags\) \|\| !sameStringValues\(categories, savedCategories\);/);
+  assert.match(html, /const saveButtonLabel = saving \? "Saving metadata" : hasMetadataChanges \? "Save metadata" : "No metadata changes";/);
+  assert.match(html, /setTags\(saved\.tags\);/);
+  assert.match(html, /setCategories\(saved\.folders\);/);
+  assert.match(html, /setSavedTags\(saved\.tags\);/);
+  assert.match(html, /setSavedCategories\(saved\.folders\);/);
+  assert.match(html, /if \(hasMetadataChanges && status === "Saved"\) setStatus\(""\);/);
+  assert.match(html, /if \(!hasMetadataChanges\) return;/);
+  assert.match(html, /disabled=\{saving \|\| !hasMetadataChanges\}/);
+  assert.match(html, /aria-label=\{saveButtonLabel\}/);
+  assert.match(html, /title=\{saveButtonLabel\}/);
+  assert.match(html, /function sameStringValues\(left: readonly string\[\], right: readonly string\[\]\) \{/);
   assert.match(html, /onSubmit=\{submitMetadata\}/);
   assert.match(app, /postJson<\{[\s\S]*folders\?: unknown;[\s\S]*\}>\(`\/api\/items\/\$\{encodeURIComponent\(String\(item\.id \|\| ""\)\)\}\/metadata`, \{ tags, folders \}\)/);
   assert.match(app, /rememberRecentValues\(RECENT_TAGS_STORAGE_KEY, patch\.tags\);/);
   assert.match(app, /rememberRecentValues\(RECENT_FOLDERS_STORAGE_KEY, patch\.folders\);/);
+  assert.match(app, /if \(isPreviewDialogOpen\(\)\) renderPreviewDetails\(item\);/);
+  assert.match(app, /return patch;/);
   assert.match(html, /setStatus\("Saved"\);/);
   assert.match(app, /const RECENT_TAGS_STORAGE_KEY = "eagleRecentTags";/);
   assert.match(app, /const RECENT_FOLDERS_STORAGE_KEY = "eagleRecentFolders";/);
   assert.match(html, /function MetadataChipEditor\(\{/);
-  assert.match(html, /onPointerDown=\{\(\) => updateSuggestions\(\)\}/);
+  assert.doesNotMatch(html, /initialValues/);
+  assert.match(html, /const clearDebounceTimer = \(\) => \{/);
+  assert.match(html, /return \(\) => \{\s*requestId\.current \+= 1;\s*clearDebounceTimer\(\);\s*\};/);
+  assert.match(html, /input\.addEventListener\("pointerdown", handlePointerDown\)/);
   assert.match(html, /onPointerDown=\{\(event\) => event\.stopPropagation\(\)\}/);
-  assert.match(html, /setQuery\(""\);\s*hideSuggestions\(\);/);
+  assert.match(html, /setQuery\(""\);[\s\S]*inputRef\.current\.value = "";[\s\S]*hideSuggestions\(\);/);
   assert.match(app, /function readRecentList\(key[^)]*\) \{/);
   assert.match(app, /function writeRecentList\(key[^,]*,\s*values[^)]*\) \{/);
   assert.match(app, /function tagSuggestionItems\(\{/);
@@ -454,12 +688,12 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(html, /preview-rating-section grid min-h-8/);
   assert.match(html, /const previewDetailRowClassName =[\s\S]*min-h-7/);
   assert.match(html, /const previewChipListClassName = "preview-chip-list/);
-  assert.match(html, /const previewChipClassName =[\s\S]*min-h-6[\s\S]*bg-\[#e2e8f0\][\s\S]*text-\[11px\][\s\S]*font-medium/);
+  assert.match(html, /const previewChipClassName =[\s\S]*min-h-6[\s\S]*bg-secondary[\s\S]*text-\[11px\][\s\S]*font-medium/);
   assert.match(html, /className="rating-control inline-flex items-center gap-2\.5 \[&_\.rating-star\]:h-6 \[&_\.rating-star\]:w-6 \[&_\.rating-star\]:text-xl"/);
-  assert.match(html, /const previewLabelClassName = "preview-detail-label text-xs font-normal text-app-muted"/);
+  assert.match(html, /const previewLabelClassName = "preview-detail-label text-xs font-normal text-muted-foreground"/);
   assert.match(html, /const previewDetailValueClassName =[\s\S]*text-sm[\s\S]*max-\[540px\]:text-\[13px\]/);
   assert.doesNotMatch(css, /\.preview-chip-empty/);
-  assert.match(html, /className="preview-info-actions border-t border-\[rgba\(148,163,184,0\.22\)\] px-2 pt-3"/);
+  assert.match(html, /className="preview-info-actions border-t border-border px-2 pt-3"/);
   assert.match(html, /const previewEditFormClassName = "preview-edit-form/);
   assert.match(html, /const previewEditRowClassName =[\s\S]*grid-cols-\[minmax\(96px,112px\)_minmax\(0,1fr\)\]/);
   assert.match(html, /const previewChipEditorClassName = "preview-chip-editor/);
@@ -469,7 +703,7 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(html, /const previewChipSuggestionsClassName = "preview-chip-suggestions/);
   assert.match(html, /const previewChipSuggestionClassName = "preview-chip-suggestion/);
   assert.match(html, /className="preview-edit-actions flex items-center justify-end gap-2\.5"/);
-  assert.match(html, /const directFileLinkClassName =[\s\S]*min-h-\[52px\] w-full[\s\S]*bg-app-accent[\s\S]*text-white/);
+  assert.match(html, /const directFileLinkClassName =[\s\S]*min-h-\[52px\] w-full[\s\S]*bg-primary[\s\S]*text-primary-foreground/);
   assert.match(html, /max-\[540px\]:max-h-\[min\(72dvh,560px\)\]/);
   assert.match(html, /max-\[540px\]:gap-3/);
   assert.match(html, /<div id="previewDetails" className="preview-details grid gap-2\.5">/);
@@ -558,6 +792,7 @@ test("public UI supports tag filter chips", async () => {
   const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
   const advancedFiltersSource = html.match(/export function AdvancedFilters\([\s\S]*?\nfunction ResetFiltersButton/)?.[0] || "";
+  const searchButton = renderToStaticMarkup(createElement(SearchFiltersButton, { filtersOpen: true }));
   const controls = renderToStaticMarkup(createElement(SearchControls, {
     filtersOpen: true,
     folders: [{ id: "folder-1", name: "Folder 1", imageCount: 2 }],
@@ -576,8 +811,8 @@ test("public UI supports tag filter chips", async () => {
   assert.match(controls, /id="resetFiltersButton"/);
   assert.match(controls, /aria-label="Reset filters"/);
   assert.doesNotMatch(controls, /disabled=""/);
-  assert.match(controls, /id="toggleFiltersButton"/);
-  assert.match(controls, /aria-expanded="true"/);
+  assert.match(searchButton, /id="toggleFiltersButton"/);
+  assert.match(searchButton, /aria-expanded="true"/);
   assert.doesNotMatch(controls, /id="tagInput"/);
   assert.doesNotMatch(advancedFiltersSource, /id="tagChips"/);
   assert.doesNotMatch(controls, /id="advancedFiltersHost"/);
@@ -634,8 +869,8 @@ test("public UI supports tag filter chips", async () => {
   assert.match(app, /function renderTagChips\(\) \{/);
   assert.match(app, /Object\.assign\(state, resetFilterState\(\)\);/);
   assert.match(controls, /search-composer[^"]*max-\[540px\]:flex-nowrap/);
-  assert.match(controls, /search-row[^"]*grid-cols-\[minmax\(0,1fr\)_auto_auto\]/);
-  assert.match(controls, /filter-reset-button[^"]*max-\[540px\]:w-11/);
+  assert.match(controls, /search-row[^"]*grid items-stretch gap-3/);
+  assert.match(controls, /filter-reset-button[^"]*max-\[540px\]:size-11/);
   assert.match(controls, /filter-reset-button[^"]*disabled:opacity-\[0\.42\]/);
   assert.match(controls, /unified-search-input[^"]*max-\[540px\]:basis-\[72px\]/);
   assert.doesNotMatch(css, /\.tag-input\s*\{/);
@@ -651,9 +886,15 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(html, /id="tilesViewButton"/);
-  assert.match(html, /<ViewModeButton id="tilesViewButton" mode="tiles" selectedMode=\{displayViewMode\} label="Tiles" \/>/);
-  assert.match(html, /<ViewModeButton id="gridViewButton" mode="grid" selectedMode=\{displayViewMode\} label="Grid" \/>/);
-  assert.match(html, /aria-pressed=\{pressed\} onClick=\{\(\) => selectViewMode\(mode\)\}/);
+  assert.match(html, /<Tabs[\s\S]*value=\{displayViewMode\}/);
+  assert.match(html, /<TabsList className="rounded-lg bg-muted shadow-none" aria-label="View mode">/);
+  assert.match(html, /import \{ LayoutDashboard, LayoutGrid, List, type LucideIcon \} from "lucide-react";/);
+  assert.match(html, /<ViewModeButton id="tilesViewButton" mode="tiles" label="Tiles" icon=\{LayoutDashboard\} \/>/);
+  assert.match(html, /<ViewModeButton id="gridViewButton" mode="grid" label="Grid" icon=\{LayoutGrid\} \/>/);
+  assert.match(html, /<ViewModeButton id="tableViewButton" mode="table" label="Table" icon=\{List\} \/>/);
+  assert.match(html, /<Icon data-icon="inline-start" aria-hidden="true" \/>/);
+  assert.match(html, /data-\[state=active\]:bg-background/);
+  assert.match(html, /data-active:bg-background/);
   assert.match(html, /id="tilesSentinel"/);
   assert.match(app, /const DEFAULT_VIEW_MODE = "tiles";/);
   assert.match(app, /const TILE_PREFETCH_PAGES = 3;/);
@@ -673,6 +914,7 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   assert.match(html, /onClick=\{trigger\.onClick\}/);
   assert.match(app, /setResultSurfaceState\(\{[\s\S]*kind: "list",/);
   assert.match(app, /setPagerState\(\{/);
+  assert.match(app, /function goToPage\(page: number\) \{[\s\S]*state\.offset = \(page - 1\) \* state\.limit;[\s\S]*resetPreviewState\(\);[\s\S]*syncUrlState\(\);[\s\S]*loadItems\(\);[\s\S]*\}/);
   assert.match(app, /setTilesSentinelState\(\{/);
   assert.match(app, /getTilesSentinelElement\(\)/);
   assert.match(app, /function setupTileAutoLoading\(\) \{/);
@@ -690,10 +932,10 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   assert.match(app, /params\.get\("view"\) === "tiles"/);
   assert.match(html, /media-tiles grid content-start gap-1 \[grid-auto-flow:dense\] \[grid-auto-rows:4px\] \[grid-template-columns:repeat\(auto-fill,minmax\(180px,1fr\)\)\]/);
   assert.match(html, /const tileButtonClassName =[\s\S]*tile-item[\s\S]*\[contain:layout_paint\]/);
-  assert.match(html, /animate-pulse bg-\[linear-gradient/);
+  assert.match(html, /animate-pulse rounded-none bg-muted/);
   assert.match(html, /gridRowEnd: `span \$\{tileMasonrySpan\(width, height\)\}`/);
   assert.match(html, /max-\[540px\]:grid-cols-3 max-\[540px\]:gap-\[3px\]/);
-  assert.match(html, /className="tiles-sentinel mt-3 grid min-h-\[52px\] place-items-center text-\[13px\] font-\[680\] text-app-muted"/);
+  assert.match(html, /className="tiles-sentinel mt-3 grid min-h-\[52px\] place-items-center text-\[13px\] font-\[680\] text-muted-foreground"/);
 });
 
 test("public extension pills use varied colors for common text formats", async () => {
@@ -711,6 +953,15 @@ test("public extension pills use varied colors for common text formats", async (
   assert.match(html, /js: "bg-\[#fefce8\] text-\[#a16207\]"/);
   assert.match(html, /md: "bg-\[#f8fafc\] text-\[#475569\]"/);
   assert.match(html, /txt: "bg-\[#f1f5f9\] text-\[#334155\]"/);
+});
+
+test("public table rows left align filenames and ratings", async () => {
+  const html = await readAppSources();
+
+  assert.match(html, /const tableRowClassName =[\s\S]*\[&>span:not\(\.row-name-cell\)\]:justify-self-center/);
+  assert.match(html, /const tableHeaderClassName =[\s\S]*!min-h-8 !py-1/);
+  assert.match(html, /const rowNameCellClassName =[\s\S]*text-left justify-self-stretch/);
+  assert.match(html, /const tableRatingClassName = "rating-control inline-flex items-center justify-self-start gap-px text-left"/);
 });
 
 test("public UI syncs filters, pagination, and preview state into the URL history", async () => {
@@ -737,7 +988,8 @@ test("public results status and empty states stay concise and consistent across 
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(html, /useSyncExternalStore\(subscribeResultsStatusState, getResultsStatusState, getResultsStatusState\)/);
-  assert.match(html, /<span id="resultCount" className="justify-self-start whitespace-nowrap">\{displayTotal\.toLocaleString\(\)\} items<\/span>/);
+  assert.doesNotMatch(html, /id="resultCount"/);
+  assert.doesNotMatch(html, /\{displayTotal\.toLocaleString\(\)\} items/);
   assert.doesNotMatch(app, /renderResultsStatusView\(els\.resultsStatusHost, \{/);
   assert.doesNotMatch(app, /els\.resultCount\.textContent/);
   assert.doesNotMatch(app, /items · \$\{start\}-\$\{end\}/);

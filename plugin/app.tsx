@@ -3,24 +3,26 @@ import { createRoot } from "react-dom/client";
 import qrcodeFactory from "qrcode-generator";
 
 type ServerState = "error" | "running" | "stopped";
+type UserRole = "admin" | "editor" | "viewer";
+
+interface AuthUser {
+  passwordHash?: string;
+  role?: UserRole;
+  username?: string;
+}
 
 interface PluginSettings {
+  allowMetadataEditing?: boolean;
+  authUsers?: AuthUser[];
   authEnabled?: boolean;
   autoStart?: boolean;
   basicAuthUser?: string;
   host?: string;
   passwordHash?: string;
   port?: number | string;
-  preferredLanAddress?: string;
-}
-
-interface LanAddress {
-  address: string;
-  label: string;
 }
 
 interface PluginStatus {
-  lanAddresses?: LanAddress[];
   lastError?: string;
   settings?: PluginSettings;
   state?: ServerState | string;
@@ -52,6 +54,9 @@ declare global {
 }
 
 const busyStoppedFrames = Object.freeze([".", "..", "...", "....", "....."]);
+const AUTH_PASSWORD_REQUIRED_MESSAGE = "Enter a password for every user before enabling password protection.";
+const settingInputClassName = "h-7 min-w-0 rounded-md border border-[#d7d9de] bg-white px-2 text-[11px] text-[#111] outline-0 focus:border-[rgba(31,116,255,0.58)] focus:shadow-[0_0_0_3px_rgba(31,116,255,0.12)] disabled:cursor-not-allowed disabled:bg-[#f4f5f7] disabled:text-[#8a8f99]";
+const authActionButtonClassName = "border border-[#d7d9de] bg-white text-[#555c66] hover:bg-[#f4f5f7] disabled:cursor-not-allowed disabled:opacity-45";
 
 function App() {
   const managerRef = useRef<ServerManager | null>(null);
@@ -59,16 +64,19 @@ function App() {
   const [busyFrame, setBusyFrame] = useState(0);
   const [message, setMessageState] = useState("");
   const [messageIsError, setMessageIsError] = useState(false);
-  const [passwordVisible, setPasswordVisible] = useState(false);
-  const [password, setPassword] = useState("");
+  const [passwordVisibleByIndex, setPasswordVisibleByIndex] = useState<Record<string, boolean>>({});
+  const [settingsExpanded, setSettingsExpanded] = useState(false);
+  const [passwordDraftRevision, setPasswordDraftRevision] = useState(0);
+  const userPasswordsRef = useRef<Record<string, string>>({});
   const [status, setStatus] = useState<PluginStatus>(() => ({
     settings: {
       autoStart: false,
+      allowMetadataEditing: false,
+      authUsers: [],
       authEnabled: false,
       basicAuthUser: "eagle",
       host: "0.0.0.0",
       port: 41532,
-      preferredLanAddress: "",
     },
     state: "stopped",
     url: "",
@@ -80,8 +88,15 @@ function App() {
   const restartingStopped = busy && serverState === "stopped";
   const statusLabel = restartingStopped ? busyStoppedFrames[busyFrame] : titleCase(serverState);
   const authEnabled = Boolean(settings.authEnabled);
+  const authUsers = normalizedAuthUsers(settings);
+  const metadataEditingEnabled = authEnabled && authUsersCanEditMetadata(authUsers);
+  const authUsersStatusLabel = authEnabled ? "Active" : "Inactive";
+  const authUsersStatusClassName = !authEnabled
+    ? "border-[#d5d9df] bg-[#f3f4f6] text-[#626975]"
+    : metadataEditingEnabled
+      ? "border-[#b5ebc1] bg-[#e7f8eb] text-[#178c35]"
+      : "border-[#c5d4f3] bg-[#edf3ff] text-[#2f5fbd]";
   const publicNetwork = (settings.host || "0.0.0.0") === "0.0.0.0";
-  const selectedLanAddress = settings.preferredLanAddress || "";
   const qrSrc = useMemo(() => {
     if (!status.url || serverState !== "running") return "";
     return createQrDataUrl(status.url);
@@ -126,38 +141,62 @@ function App() {
       } else if (!quiet) {
         setMessage("");
       }
+      return true;
     } catch (error) {
       setErrorMessage(error);
+      return false;
     } finally {
       setBusy(false);
     }
   }
 
-  async function saveSettings({ restartRunning = true, patch = {} }: { restartRunning?: boolean; patch?: Record<string, unknown> } = {}) {
+  async function saveSettings({ restartRunning = true, patch = {}, passwordDrafts = userPasswordsRef.current }: { passwordDrafts?: Record<string, string>; restartRunning?: boolean; patch?: Record<string, unknown> } = {}) {
+    const effectiveAuthUsers = Array.isArray(patch.authUsers)
+      ? patch.authUsers.map((user) => normalizeAuthUser(user as AuthUser))
+      : authUsers;
+    if (!validateAuthUsers(effectiveAuthUsers)) return false;
+    const nextAuthEnabled = Boolean(patch.authEnabled ?? authEnabled);
+    if (nextAuthEnabled && authUsersMissingPassword(effectiveAuthUsers, passwordDrafts)) {
+      setMessage(AUTH_PASSWORD_REQUIRED_MESSAGE, true);
+      return false;
+    }
     const payload: Record<string, unknown> = {
       autoStart: settings.autoStart,
       host: publicNetwork ? "0.0.0.0" : "127.0.0.1",
       port: settings.port || 41532,
-      authEnabled,
-      basicAuthUser: settings.basicAuthUser || "eagle",
-      preferredLanAddress: selectedLanAddress,
       ...patch,
+      authEnabled: nextAuthEnabled,
+      authUsers: effectiveAuthUsers,
     };
-    if (password) {
-      payload.password = password;
-      payload.confirmPassword = password;
+    const cleanUserPasswords = collectUserPasswords(effectiveAuthUsers, passwordDrafts);
+    const hasUserPasswords = Object.keys(cleanUserPasswords).length > 0;
+    if (hasUserPasswords) {
+      payload.userPasswords = cleanUserPasswords;
+    }
+    if (!hasUserPasswords && !settingsPayloadChanged(settings, payload)) {
+      setMessage("");
+      return true;
     }
 
     if (restartRunning) {
       if (willRestartServer(status, payload)) {
         setStatus((current) => ({ ...current, state: "stopped" }));
       }
-      await runCommand(() => managerRef.current?.saveSettings(payload), { quiet: true });
-      return;
+      const saved = await runCommand(() => managerRef.current?.saveSettings(payload), { quiet: true });
+      if (saved && hasUserPasswords) clearUserPasswordDrafts();
+      if (saved) setMessage("");
+      return saved;
     }
-    const nextStatus = await managerRef.current?.saveSettings(payload);
-    if (nextStatus) setStatus(nextStatus);
-    setMessage("");
+    try {
+      const nextStatus = await managerRef.current?.saveSettings(payload);
+      if (nextStatus) setStatus(nextStatus);
+      if (hasUserPasswords) clearUserPasswordDrafts();
+      setMessage("");
+      return true;
+    } catch (error) {
+      setErrorMessage(error);
+      return false;
+    }
   }
 
   function setMessage(value: string, isError = false) {
@@ -166,7 +205,23 @@ function App() {
   }
 
   function setErrorMessage(error: unknown) {
-    setMessage(error instanceof Error ? error.message : String(error), true);
+    setMessage(errorMessage(error), true);
+  }
+
+  function setUserPasswordDraft(index: number, value: string) {
+    userPasswordsRef.current = {
+      ...userPasswordsRef.current,
+      [String(index)]: value,
+    };
+  }
+
+  function replaceUserPasswordDrafts(nextDrafts: Record<string, string>) {
+    userPasswordsRef.current = nextDrafts;
+    setPasswordDraftRevision((current) => current + 1);
+  }
+
+  function clearUserPasswordDrafts() {
+    replaceUserPasswordDrafts({});
   }
 
   function updateSettings(patch: PluginSettings) {
@@ -179,10 +234,61 @@ function App() {
     }));
   }
 
+  function validateAuthUsers(users: AuthUser[]) {
+    if (users.some((user) => !String(user.username || "").trim())) {
+      setMessage("Enter a username for every user.", true);
+      return false;
+    }
+    const duplicate = duplicateUsername(users);
+    if (duplicate) {
+      setMessage(`Username "${duplicate}" is already used.`, true);
+      return false;
+    }
+    return true;
+  }
+
+  function updateAuthUser(index: number, patch: AuthUser) {
+    updateAuthUsers(replaceAuthUser(authUsers, index, patch));
+  }
+
+  function updateAuthUsers(nextUsers: AuthUser[]) {
+    updateSettings({
+      authUsers: nextUsers,
+    });
+  }
+
+  function saveAuthUser(index: number, patch: AuthUser) {
+    const nextUsers = replaceAuthUser(authUsers, index, patch);
+    updateAuthUsers(nextUsers);
+    saveSettings({ patch: { authUsers: nextUsers } });
+  }
+
+  function addAuthUser() {
+    updateAuthUsers([...authUsers, nextDefaultUser(authUsers)]);
+  }
+
+  function removeAuthUser(index: number) {
+    if (authUsers.length <= 1) return;
+    const nextUsers = authUsers.filter((_, userIndex) => userIndex !== index);
+    const nextUserPasswords = removeIndexedValue(userPasswordsRef.current, index);
+    setPasswordVisibleByIndex((current) => removeIndexedValue(current, index));
+    replaceUserPasswordDrafts(nextUserPasswords);
+    updateAuthUsers(nextUsers);
+    saveSettings({ patch: { authUsers: nextUsers }, passwordDrafts: nextUserPasswords });
+  }
+
+  function togglePasswordVisible(index: number) {
+    setPasswordVisibleByIndex((current) => ({
+      ...current,
+      [String(index)]: !current[String(index)],
+    }));
+  }
+
   async function startOrStopServer(checked: boolean) {
     if (busy) return;
     if (checked) {
-      await saveSettings({ restartRunning: false });
+      const saved = await saveSettings({ restartRunning: false });
+      if (!saved) return;
       await runCommand(() => managerRef.current?.start());
     } else {
       await runCommand(() => managerRef.current?.stop());
@@ -280,15 +386,16 @@ function App() {
                 checked={authEnabled}
                 disabled={formDisabled}
                 icon={<ShieldIcon />}
-                title="BasicAuth protection"
+                title="Password protection"
                 description="Require username & password to access."
                 onChange={(checked) => {
-                  if (checked && !settings.passwordHash && !password) {
-                    setMessage("Enter a password to enable BasicAuth protection.", true);
+                  if (checked && authUsersMissingPassword(authUsers, userPasswordsRef.current)) {
+                    setMessage(AUTH_PASSWORD_REQUIRED_MESSAGE, true);
                     return;
                   }
-                  updateSettings({ authEnabled: checked });
-                  saveSettings({ patch: { authEnabled: checked } });
+                  const patch = { authEnabled: checked };
+                  updateSettings(patch);
+                  saveSettings({ patch });
                 }}
               />
               <OptionRow
@@ -322,13 +429,25 @@ function App() {
           if (!busy) saveSettings();
         }}
       >
-        <div className="mb-2.5 border-b border-[#e1e3e7] pb-2.5">
-          <SectionHeading icon={<SettingsIcon />}>Settings</SectionHeading>
-        </div>
-        <div className="mt-2.5 grid">
+        <button
+          className={`${settingsExpanded ? "mb-2.5 border-b border-[#e1e3e7] pb-2.5" : ""} flex w-full items-center justify-between gap-3 border-0 bg-transparent p-0 text-left`}
+          type="button"
+          aria-controls="settingsPanel"
+          aria-expanded={settingsExpanded}
+          aria-label={settingsExpanded ? "Hide settings" : "Show settings"}
+          id="settingsToggleButton"
+          onClick={() => setSettingsExpanded((current) => !current)}
+        >
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-flex items-center text-[#5f6670] [&_svg]:h-4 [&_svg]:w-4" aria-hidden="true"><SettingsIcon /></span>
+            <span className="m-0 text-base font-[420] leading-none text-[#111]">Settings</span>
+          </span>
+          <ChevronIcon className={`h-[12px] w-[12px] text-[#555c66] transition-transform ${settingsExpanded ? "rotate-180" : ""}`} />
+        </button>
+        <div id="settingsPanel" className="mt-2.5 grid" hidden={!settingsExpanded}>
           <SettingRow label="Port" help="The port the server listens on.">
             <input
-              className="h-7 w-full rounded-md border border-[#d7d9de] bg-white px-2 text-[11px] text-[#111] outline-0 focus:border-[rgba(31,116,255,0.58)] focus:shadow-[0_0_0_3px_rgba(31,116,255,0.12)]"
+              className={`${settingInputClassName} w-full`}
               type="number"
               min="1"
               max="65535"
@@ -338,48 +457,88 @@ function App() {
               onBlur={(event) => saveSettings({ patch: { port: event.currentTarget.value } })}
             />
           </SettingRow>
-          <SettingRow label="User" help="BasicAuth username.">
-            <input
-              className="h-7 w-full rounded-md border border-[#d7d9de] bg-white px-2 text-[11px] text-[#111] outline-0 focus:border-[rgba(31,116,255,0.58)] focus:shadow-[0_0_0_3px_rgba(31,116,255,0.12)]"
-              type="text"
-              autoComplete="username"
-              disabled={formDisabled}
-              value={settings.basicAuthUser || "eagle"}
-              onChange={(event) => updateSettings({ basicAuthUser: event.currentTarget.value })}
-              onBlur={(event) => saveSettings({ patch: { basicAuthUser: event.currentTarget.value } })}
-            />
-          </SettingRow>
-          <SettingRow label="Password" help="BasicAuth password.">
-            <div className="relative">
-              <input
-                className="h-7 w-full rounded-md border border-[#d7d9de] bg-white px-2 pr-[30px] text-[11px] text-[#111] outline-0 focus:border-[rgba(31,116,255,0.58)] focus:shadow-[0_0_0_3px_rgba(31,116,255,0.12)]"
-                type={passwordVisible ? "text" : "password"}
-                autoComplete="new-password"
-                disabled={formDisabled}
-                placeholder={!password && settings.authEnabled && settings.passwordHash ? "••••••••" : ""}
-                value={password}
-                onChange={(event) => setPassword(event.currentTarget.value)}
-                onBlur={() => saveSettings()}
-              />
-              <button className="absolute right-1 top-1 grid h-[22px] w-[22px] place-items-center rounded-[5px] border-0 bg-transparent p-1 text-[#555c66] hover:bg-[#f4f5f7]" type="button" aria-label={passwordVisible ? "Hide password" : "Show password"} title={passwordVisible ? "Hide password" : "Show password"} disabled={formDisabled} onClick={() => setPasswordVisible((current) => !current)}>
-                {passwordVisible ? <EyeIcon className="h-[13px] w-[13px]" /> : <EyeOffIcon className="h-[13px] w-[13px]" />}
-              </button>
+          <SettingRow label="Users" help={authEnabled ? "Viewer can browse. Editor can edit metadata. Admin has all permissions." : "Saved users apply when password protection is enabled."}>
+            <div className="grid gap-2">
+              <div className="flex justify-end">
+                <span id="authUsersStatus" className={`inline-flex min-h-5 items-center rounded-md border px-2 text-[10px] font-medium ${authUsersStatusClassName}`} role="status">
+                  {authUsersStatusLabel}
+                </span>
+              </div>
+              <div className="grid grid-cols-[minmax(80px,1fr)_86px_minmax(76px,0.8fr)_28px_28px] gap-1.5 px-0.5 text-[9px] font-medium uppercase leading-none text-[#8a8f99]">
+                <span>Username</span>
+                <span>Role</span>
+                <span>Password</span>
+                <span aria-hidden="true" />
+                <span aria-hidden="true" />
+              </div>
+              {authUsers.map((user, index) => {
+                const canTogglePasswordVisible = !user.passwordHash;
+                const passwordVisible = canTogglePasswordVisible && passwordVisibleByIndex[String(index)];
+                return (
+                  <div key={index} className="grid grid-cols-[minmax(80px,1fr)_86px_minmax(76px,0.8fr)_28px_28px] items-center gap-1.5">
+                    <input
+                      className={settingInputClassName}
+                      type="text"
+                      aria-label={`Username for user ${index + 1}`}
+                      autoComplete="username"
+                      disabled={formDisabled}
+                      value={user.username}
+                      onChange={(event) => updateAuthUser(index, { username: event.currentTarget.value })}
+                      onBlur={() => saveSettings()}
+                    />
+                    <select
+                      className={`${settingInputClassName} px-1.5`}
+                      aria-label={`Role for ${user.username || `user ${index + 1}`}`}
+                      disabled={formDisabled}
+                      value={user.role}
+                      onChange={(event) => {
+                        saveAuthUser(index, { role: event.currentTarget.value as UserRole });
+                      }}
+                    >
+                      <option value="viewer">Viewer</option>
+                      <option value="editor">Editor</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                    <input
+                      key={`${passwordDraftRevision}-${index}`}
+                      className={settingInputClassName}
+                      type={passwordVisible ? "text" : "password"}
+                      aria-label={`Password for ${user.username || `user ${index + 1}`}`}
+                      autoComplete="new-password"
+                      disabled={formDisabled}
+                      placeholder={user.passwordHash ? "••••••••" : "Password"}
+                      defaultValue={userPasswordsRef.current[String(index)] || ""}
+                      onChange={(event) => setUserPasswordDraft(index, event.currentTarget.value)}
+                    />
+                    <button
+                      className={`grid h-7 w-7 place-items-center rounded-md p-1 ${authActionButtonClassName}`}
+                      type="button"
+                      aria-label={canTogglePasswordVisible ? (passwordVisible ? `Hide password for ${user.username || `user ${index + 1}`}` : `Show password for ${user.username || `user ${index + 1}`}`) : `Saved password for ${user.username || `user ${index + 1}`} is hidden`}
+                      title={canTogglePasswordVisible ? (passwordVisible ? "Hide password" : "Show password") : "Saved password is hidden"}
+                      disabled={formDisabled || !canTogglePasswordVisible}
+                      onClick={canTogglePasswordVisible ? () => togglePasswordVisible(index) : undefined}
+                    >
+                      {passwordVisible ? <EyeIcon className="h-[13px] w-[13px]" /> : <EyeOffIcon className="h-[13px] w-[13px]" />}
+                    </button>
+                    <button className={`grid h-7 w-7 place-items-center rounded-md ${authActionButtonClassName}`} type="button" aria-label={`Remove ${user.username || "user"}`} title="Remove user" disabled={formDisabled || authUsers.length <= 1} onClick={() => removeAuthUser(index)}>
+                      <CloseIcon className="h-[11px] w-[11px]" />
+                    </button>
+                  </div>
+                );
+              })}
+              <div className="flex items-center justify-start gap-2">
+                <button className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium text-[#111] ${authActionButtonClassName}`} type="button" disabled={formDisabled} onClick={addAuthUser}>
+                  <PlusIcon className="h-[12px] w-[12px]" />
+                  <span>Add user</span>
+                </button>
+              </div>
+              <div className="flex justify-end">
+                <button className={`inline-flex h-7 items-center rounded-md px-2 text-[11px] font-medium text-[#111] ${authActionButtonClassName}`} type="submit" disabled={formDisabled}>
+                  Save
+                </button>
+              </div>
             </div>
           </SettingRow>
-          <select
-            hidden
-            value={selectedLanAddress}
-            onChange={(event) => {
-              updateSettings({ preferredLanAddress: event.currentTarget.value });
-              saveSettings({ patch: { preferredLanAddress: event.currentTarget.value } });
-            }}
-          >
-            <option value="">Auto</option>
-            {(status.lanAddresses || []).map((entry) => (
-              <option key={entry.address} value={entry.address}>{`${entry.address} (${entry.label})`}</option>
-            ))}
-          </select>
-          <button type="submit" hidden disabled={formDisabled}>Save settings</button>
         </div>
       </form>
       <p className="mx-[9px] mb-2.5 mt-0 px-0.5 text-center text-[10px] text-[#d92d20]" aria-live="polite" hidden={!message || !messageIsError}>
@@ -414,7 +573,7 @@ function StatusBadge({ label, state }: { label: string; state: ServerState }) {
 
 function PowerSwitch({ checked, disabled, onChange }: { checked: boolean; disabled: boolean; onChange: (checked: boolean) => void }) {
   return (
-    <label className="[-webkit-app-region:no-drag] relative block h-7 w-12 cursor-pointer" aria-label="Start or stop server">
+    <label className="[-webkit-app-region:no-drag] relative block h-7 w-12 cursor-pointer has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60" aria-label="Start or stop server">
       <input className="absolute opacity-0" type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.currentTarget.checked)} />
       <span className={`absolute inset-0 rounded-full transition-colors after:absolute after:left-[3px] after:top-[3px] after:h-[22px] after:w-[22px] after:rounded-full after:bg-white after:transition-transform ${checked ? "bg-[#1f74ff] after:translate-x-5" : "bg-[#d7dbe1]"}`} />
     </label>
@@ -430,8 +589,8 @@ function OptionRow({ checked, description, disabled, icon, onChange, title }: {
   title: string;
 }) {
   return (
-    <label className="grid cursor-pointer grid-cols-[14px_24px_minmax(0,1fr)] items-center gap-x-[11px] gap-y-2">
-      <input className="h-3.5 w-3.5 cursor-pointer accent-[#1463e8]" type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.currentTarget.checked)} />
+    <label className="grid cursor-pointer grid-cols-[14px_24px_minmax(0,1fr)] items-center gap-x-[11px] gap-y-2 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60">
+      <input className="h-3.5 w-3.5 cursor-pointer accent-[#1463e8] disabled:cursor-not-allowed" type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.currentTarget.checked)} />
       <span className="grid h-6 w-6 place-items-center rounded-md border border-[#e1e3e7] bg-white text-[#565c66] [&_svg]:h-3 [&_svg]:w-3" aria-hidden="true">{icon}</span>
       <span>
         <strong className="block text-[11px] font-[620] text-[#111]">{title}</strong>
@@ -443,13 +602,13 @@ function OptionRow({ checked, description, disabled, icon, onChange, title }: {
 
 function SettingRow({ children, help, label }: { children: React.ReactNode; help: string; label: string }) {
   return (
-    <label className="grid grid-cols-[72px_minmax(0,1fr)] gap-2.5 border-t border-[#e1e3e7] py-2 first:border-t-0 max-[520px]:grid-cols-1">
+    <div className="grid grid-cols-[72px_minmax(0,1fr)] gap-2.5 border-t border-[#e1e3e7] py-2 first:border-t-0 max-[520px]:grid-cols-1">
       <span className="pt-[7px] text-[11px] font-medium text-[#111]">{label}</span>
       <span className="grid gap-1">
         {children}
         <small className="text-[9px] text-[#8a8f99]">{help}</small>
       </span>
-    </label>
+    </div>
   );
 }
 
@@ -470,15 +629,125 @@ function createQrDataUrl(value: string) {
 function willRestartServer(status: PluginStatus, nextSettings: Record<string, unknown>) {
   const current = status.settings;
   if (!current || status.state !== "running") return false;
+  return serverRestartSettingsChanged(current, nextSettings);
+}
+
+function settingsPayloadChanged(current: PluginSettings | undefined, nextSettings: Record<string, unknown>) {
+  if (!current) return true;
+  if (Boolean(nextSettings.autoStart ?? current.autoStart) !== Boolean(current.autoStart)) return true;
+  return serverSettingsChanged(current, nextSettings);
+}
+
+function serverSettingsChanged(current: PluginSettings, nextSettings: Record<string, unknown>) {
   if ((nextSettings.host ?? current.host) !== current.host) return true;
   if (Number(nextSettings.port ?? current.port) !== Number(current.port)) return true;
   if (Boolean(nextSettings.authEnabled ?? current.authEnabled) !== Boolean(current.authEnabled)) return true;
-  if ((nextSettings.basicAuthUser ?? current.basicAuthUser) !== current.basicAuthUser) return true;
-  return Boolean(nextSettings.password);
+  if (JSON.stringify(nextSettings.authUsers ?? current.authUsers ?? []) !== JSON.stringify(current.authUsers ?? [])) return true;
+  return false;
+}
+
+function serverRestartSettingsChanged(current: PluginSettings, nextSettings: Record<string, unknown>) {
+  const currentAuthEnabled = Boolean(current.authEnabled);
+  const nextAuthEnabled = Boolean(nextSettings.authEnabled ?? current.authEnabled);
+  if ((nextSettings.host ?? current.host) !== current.host) return true;
+  if (Number(nextSettings.port ?? current.port) !== Number(current.port)) return true;
+  if (nextAuthEnabled !== currentAuthEnabled) return true;
+  if (!currentAuthEnabled && !nextAuthEnabled) return false;
+  if (hasPasswordUpdates(nextSettings.userPasswords)) return true;
+  if (JSON.stringify(nextSettings.authUsers ?? current.authUsers ?? []) !== JSON.stringify(current.authUsers ?? [])) return true;
+  return false;
+}
+
+function hasPasswordUpdates(value: unknown) {
+  return Boolean(value && typeof value === "object" && Object.keys(value).length);
+}
+
+function normalizedAuthUsers(settings: PluginSettings): AuthUser[] {
+  const users = Array.isArray(settings.authUsers) ? settings.authUsers.map(normalizeAuthUser) : [];
+  if (users.length) return users;
+  return [{
+    username: settings.basicAuthUser || "eagle",
+    passwordHash: settings.passwordHash || "",
+    role: settings.authEnabled && settings.allowMetadataEditing ? "editor" : "viewer",
+  }];
+}
+
+function normalizeAuthUser(user: AuthUser): AuthUser {
+  return {
+    username: String(user.username || "").trim(),
+    passwordHash: String(user.passwordHash || ""),
+    role: normalizeRole(user.role),
+  };
+}
+
+function normalizeRole(role: unknown): UserRole {
+  return role === "admin" || role === "editor" ? role : "viewer";
+}
+
+function canRoleEditMetadata(role: unknown) {
+  return role === "admin" || role === "editor";
+}
+
+function authUsersCanEditMetadata(users: AuthUser[]) {
+  return users.some((user) => canRoleEditMetadata(user.role));
+}
+
+function authUsersMissingPassword(users: AuthUser[], values: Record<string, string>) {
+  return users.some((user, index) => !user.passwordHash && !values[String(index)]?.trim());
+}
+
+function replaceAuthUser(users: AuthUser[], index: number, patch: AuthUser) {
+  return users.map((user, userIndex) => userIndex === index ? normalizeAuthUser({ ...user, ...patch }) : user);
+}
+
+function duplicateUsername(users: AuthUser[]) {
+  const seen = new Set<string>();
+  for (const user of users) {
+    const username = String(user.username || "").trim().toLowerCase();
+    if (!username) continue;
+    if (seen.has(username)) return user.username || username;
+    seen.add(username);
+  }
+  return "";
+}
+
+function removeIndexedValue<T>(values: Record<string, T>, removedIndex: number) {
+  const next: Record<string, T> = {};
+  for (const [rawIndex, value] of Object.entries(values)) {
+    const index = Number.parseInt(rawIndex, 10);
+    if (!Number.isInteger(index) || index === removedIndex) continue;
+    next[String(index > removedIndex ? index - 1 : index)] = value;
+  }
+  return next;
+}
+
+function collectUserPasswords(users: AuthUser[], values: Record<string, string>) {
+  const output: Record<string, string> = {};
+  users.forEach((user, index) => {
+    const username = String(user.username || "").trim();
+    const password = values[String(index)] || "";
+    if (username && password.trim()) output[username] = password;
+  });
+  return output;
+}
+
+function nextDefaultUser(users: AuthUser[]): AuthUser {
+  let index = users.length + 1;
+  const names = new Set(users.map((user) => String(user.username || "").toLowerCase()));
+  while (names.has(`viewer${index}`)) index += 1;
+  return {
+    username: `viewer${index}`,
+    passwordHash: "",
+    role: "viewer",
+  };
 }
 
 function normalizeServerState(value: unknown): ServerState {
   return value === "running" || value === "error" ? value : "stopped";
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function pluginRequirePath(relativePath: string) {
@@ -514,6 +783,10 @@ function CloseIcon({ className }: { className?: string }) {
   return <Svg className={className}><path d="M6 6l12 12M18 6 6 18" /></Svg>;
 }
 
+function ChevronIcon({ className }: { className?: string }) {
+  return <Svg className={className}><path d="m6 9 6 6 6-6" /></Svg>;
+}
+
 function CopyIcon({ className }: { className?: string }) {
   return <Svg className={className}><rect x="9" y="9" width="10" height="10" rx="2" /><rect x="5" y="5" width="10" height="10" rx="2" /></Svg>;
 }
@@ -536,6 +809,10 @@ function GlobeIcon() {
 
 function PowerIcon() {
   return <Svg><path d="M12 2v10" /><path d="M18.4 6.6a9 9 0 1 1-12.8 0" /></Svg>;
+}
+
+function PlusIcon({ className }: { className?: string }) {
+  return <Svg className={className}><path d="M12 5v14M5 12h14" /></Svg>;
 }
 
 function ServerIcon() {

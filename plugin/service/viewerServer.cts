@@ -1,12 +1,14 @@
 const { createReadStream, existsSync } = require("fs");
 const { stat } = require("fs").promises;
 const { createServer } = require("http");
-const { createHash, randomUUID, timingSafeEqual } = require("crypto");
+const { createHash, pbkdf2Sync, randomUUID, timingSafeEqual } = require("crypto");
 const { extname, join, normalize, resolve } = require("path");
-const { createEagleClient, pathFromFileValue, resolveLibraryItemFile } = require("./eagleClient.cjs");
+const { createEagleClient, normalizeStringArray, pathFromFileValue, resolveLibraryItemFile } = require("./eagleClient.cjs");
 const { buildConnectionCandidates, createConnectionContext } = require("./connection.cjs");
 
 interface ViewerServerOptions {
+  allowMetadataEditing?: boolean;
+  authUsers?: AuthUser[];
   basicAuthUsername?: string;
   eagleClient?: EagleClient;
   host?: string;
@@ -15,6 +17,30 @@ interface ViewerServerOptions {
   publicDir?: string;
   viewerPassword?: string;
 }
+
+type UserRole = "admin" | "editor" | "viewer";
+
+interface AuthUser {
+  passwordHash: string;
+  role: UserRole;
+  username: string;
+}
+
+interface AuthSession {
+  expiresAt: number;
+  role: UserRole;
+  username: string;
+}
+
+const PASSWORD_HASH_ALGORITHM = "sha256";
+const PASSWORD_HASH_KEY_LENGTH = 32;
+const AUTH_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
+const AUTH_USER_CACHE = Symbol("authUser");
+const INVALID_LOGIN_MESSAGE = "Invalid username or password";
+const RATING_WRITE_FORBIDDEN_MESSAGE = "Rating editing is not allowed for this viewer";
+const METADATA_WRITE_FORBIDDEN_MESSAGE = "Metadata editing is not allowed for this viewer";
+const MIN_PASSWORD_HASH_ITERATIONS = 100000;
+const MAX_PASSWORD_HASH_ITERATIONS = 1000000;
 
 interface EagleLibraryInfo {
   path?: string;
@@ -110,9 +136,21 @@ const mimeTypes = {
   ".txt": "text/plain; charset=utf-8",
   ".md": "text/plain; charset=utf-8",
 };
+const MAX_JSON_BODY_BYTES = 1024 * 1024;
+
+class HttpError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
 
 function createViewerServer({
   host = "0.0.0.0",
+  allowMetadataEditing = false,
+  authUsers = [],
   port = 41532,
   publicDir = defaultPublicDir,
   viewerPassword = "",
@@ -126,7 +164,8 @@ function createViewerServer({
   let boundPort = 0;
   let lastError = "";
   let requestCount = 0;
-  const authSessions = new Set();
+  const resolvedAuthUsers = resolveAuthUsers({ allowMetadataEditing, authUsers, basicAuthUsername, passwordHash, viewerPassword });
+  const authSessions = new Map<string, AuthSession>();
   let currentSession = createConnectionContext({
     connection: {
       host: "127.0.0.1",
@@ -140,7 +179,11 @@ function createViewerServer({
   const server = createServer(async (req, res) => {
     try {
       const url = new URL(req.url || "/", `http://${req.headers.host}`);
-      const auth = { authSessions, viewerPassword, passwordHash, basicAuthUsername };
+      const auth = { authSessions, users: resolvedAuthUsers };
+      if (!isTrustedUnsafeRequest(req, url)) {
+        sendJson(res, 403, { error: "Cross-origin writes are not allowed" });
+        return;
+      }
       if (authRequired(auth) && !url.pathname.startsWith("/api/auth/") && !isAuthorized(req, auth)) {
         sendAuthRequired(res);
         return;
@@ -155,6 +198,7 @@ function createViewerServer({
           return;
         }
         await handleApi(req, url, res, {
+          auth,
           getSession: () => currentSession,
           setSession: (nextSession) => {
             currentSession = nextSession;
@@ -173,7 +217,8 @@ function createViewerServer({
       }
       await serveStatic(url.pathname, res, publicDir);
     } catch (error) {
-      sendJson(res, 500, { error: error.message || "Internal server error" });
+      const status = error instanceof HttpError ? error.status : 500;
+      sendJson(res, status, { error: error.message || "Internal server error" });
     }
   });
 
@@ -223,6 +268,7 @@ function createViewerServer({
     },
 
     status() {
+      pruneAuthSessions(authSessions);
       return {
         state,
         host,
@@ -239,10 +285,10 @@ function createViewerServer({
   };
 }
 
-async function handleApi(req, url, res, { getSession, setSession }: ApiContext) {
+async function handleApi(req, url, res, { auth, getSession, setSession }: ApiContext & { auth: AuthContext }) {
   if (url.pathname === "/api/connect") {
     if (req.method !== "POST") {
-      sendJson(res, 405, { error: "Method not allowed" });
+      sendMethodNotAllowed(res, ["POST"]);
       return;
     }
     await handleConnect(req, res, setSession);
@@ -252,6 +298,10 @@ async function handleApi(req, url, res, { getSession, setSession }: ApiContext) 
   const session = getSession();
 
   if (url.pathname === "/api/health") {
+    if (req.method !== "GET") {
+      sendMethodNotAllowed(res, ["GET"]);
+      return;
+    }
     const [app, library] = await Promise.allSettled([
       session.client.appInfo(),
       session.libraryInfo(),
@@ -265,11 +315,19 @@ async function handleApi(req, url, res, { getSession, setSession }: ApiContext) 
   }
 
   if (url.pathname === "/api/folders") {
+    if (req.method !== "GET") {
+      sendMethodNotAllowed(res, ["GET"]);
+      return;
+    }
     sendJson(res, 200, await session.client.folders());
     return;
   }
 
   if (url.pathname === "/api/libraries") {
+    if (req.method !== "GET") {
+      sendMethodNotAllowed(res, ["GET"]);
+      return;
+    }
     const [library, history] = await Promise.all([
       session.libraryInfo(),
       session.client.libraryHistory(),
@@ -284,7 +342,11 @@ async function handleApi(req, url, res, { getSession, setSession }: ApiContext) 
 
   if (url.pathname === "/api/library/switch") {
     if (req.method !== "POST") {
-      sendJson(res, 405, { error: "Method not allowed" });
+      sendMethodNotAllowed(res, ["POST"]);
+      return;
+    }
+    if (!hasAdminAccess(req, auth)) {
+      sendJson(res, 403, { error: "Admin permission is required" });
       return;
     }
     const body = await readJson(req);
@@ -301,6 +363,10 @@ async function handleApi(req, url, res, { getSession, setSession }: ApiContext) 
   }
 
   if (url.pathname === "/api/items") {
+    if (req.method !== "GET") {
+      sendMethodNotAllowed(res, ["GET"]);
+      return;
+    }
     const query = url.searchParams.get("q")?.trim();
     const offset = url.searchParams.get("offset") || 0;
     const limit = url.searchParams.get("limit") || 30;
@@ -327,6 +393,10 @@ async function handleApi(req, url, res, { getSession, setSession }: ApiContext) 
   }
 
   if (url.pathname === "/api/tags") {
+    if (req.method !== "GET") {
+      sendMethodNotAllowed(res, ["GET"]);
+      return;
+    }
     const query = url.searchParams.get("q") || "";
     const limit = url.searchParams.get("limit") || 20;
     const result = await session.client.listTags({ query, limit });
@@ -337,32 +407,39 @@ async function handleApi(req, url, res, { getSession, setSession }: ApiContext) 
   const starMatch = url.pathname.match(/^\/api\/items\/([^/]+)\/star$/);
   if (starMatch) {
     if (req.method !== "POST") {
-      sendJson(res, 405, { error: "Method not allowed" });
+      sendMethodNotAllowed(res, ["POST"]);
+      return;
+    }
+    if (!hasRatingWriteAccess(req, auth)) {
+      sendJson(res, 403, { error: RATING_WRITE_FORBIDDEN_MESSAGE });
       return;
     }
     const itemId = decodeURIComponent(starMatch[1]);
     const body = await readJson(req);
-    const item = await session.client.updateItemStar(itemId, body.star);
-    sendJson(res, 200, { id: item.id || itemId, star: item.star ?? Number(body.star) });
+    const star = normalizeStar(body.star);
+    const item = await session.client.updateItemStar(itemId, star);
+    sendJson(res, 200, { id: item.id || itemId, star: item.star ?? star });
     return;
   }
 
   const metadataMatch = url.pathname.match(/^\/api\/items\/([^/]+)\/metadata$/);
   if (metadataMatch) {
     if (req.method !== "POST") {
-      sendJson(res, 405, { error: "Method not allowed" });
+      sendMethodNotAllowed(res, ["POST"]);
+      return;
+    }
+    if (!hasMetadataWriteAccess(req, auth)) {
+      sendJson(res, 403, { error: METADATA_WRITE_FORBIDDEN_MESSAGE });
       return;
     }
     const itemId = decodeURIComponent(metadataMatch[1]);
     const body = await readJson(req);
-    const item = await session.client.updateItemMetadata(itemId, {
-      tags: body.tags,
-      folders: body.folders,
-    });
+    const metadataPatch = normalizeMetadataPatch(body);
+    const item = await session.client.updateItemMetadata(itemId, metadataPatch);
     sendJson(res, 200, {
       id: item.id || itemId,
-      tags: Array.isArray(item.tags) ? item.tags : body.tags,
-      folders: Array.isArray(item.folders) ? item.folders : body.folders,
+      tags: Array.isArray(item.tags) ? item.tags : metadataPatch.tags,
+      folders: Array.isArray(item.folders) ? item.folders : metadataPatch.folders,
     });
     return;
   }
@@ -376,36 +453,66 @@ async function handleApi(req, url, res, { getSession, setSession }: ApiContext) 
   sendJson(res, 404, { error: "Not found" });
 }
 
-async function handleAuthRoutes(req, url, res, { authSessions, viewerPassword, passwordHash, basicAuthUsername }) {
+interface AuthContext {
+  authSessions: Map<string, AuthSession>;
+  users: AuthUser[];
+}
+
+async function handleAuthRoutes(req, url, res, auth: AuthContext) {
   if (url.pathname === "/api/auth/status") {
-    sendJson(res, 200, {
-      required: authRequired({ viewerPassword, passwordHash }),
-      authenticated: isAuthorized(req, { authSessions, viewerPassword, passwordHash, basicAuthUsername }),
-    });
+    if (req.method !== "GET") {
+      sendMethodNotAllowed(res, ["GET"]);
+      return true;
+    }
+    pruneAuthSessions(auth.authSessions);
+    const user = authenticatedUser(req, auth);
+    const authenticated = !authRequired(auth) || Boolean(user);
+    sendJson(res, 200, authStatusResponse(auth, user, { authenticated }));
     return true;
   }
 
   if (url.pathname === "/api/auth/login") {
     if (req.method !== "POST") {
-      sendJson(res, 405, { error: "Method not allowed" });
+      sendMethodNotAllowed(res, ["POST"]);
       return true;
     }
-    if (!authRequired({ viewerPassword, passwordHash })) {
-      sendJson(res, 200, { authenticated: true });
+    if (!authRequired(auth)) {
+      sendJson(res, 200, authStatusResponse(auth, null, { authenticated: true }));
       return true;
     }
     const body = await readJson(req);
-    if (String(body.username || basicAuthUsername) !== basicAuthUsername || !passwordMatches(String(body.password || ""), { viewerPassword, passwordHash })) {
-      sendJson(res, 401, { error: "Invalid password" });
+    const user = findPasswordUser(String(body.username || ""), String(body.password || ""), auth);
+    if (!user) {
+      sendJson(res, 401, { error: INVALID_LOGIN_MESSAGE });
       return true;
     }
+    pruneAuthSessions(auth.authSessions);
     const token = randomUUID();
-    authSessions.add(token);
+    auth.authSessions.set(token, {
+      expiresAt: Date.now() + AUTH_SESSION_MAX_AGE_SECONDS * 1000,
+      role: user.role,
+      username: user.username,
+    });
     res.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
-      "Set-Cookie": `viewer_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000`,
+      "Set-Cookie": authSessionCookie(token),
     });
-    res.end(JSON.stringify({ authenticated: true }));
+    res.end(JSON.stringify(authStatusResponse(auth, user, { authenticated: true })));
+    return true;
+  }
+
+  if (url.pathname === "/api/auth/logout") {
+    if (req.method !== "POST") {
+      sendMethodNotAllowed(res, ["POST"]);
+      return true;
+    }
+    const token = parseCookies(req.headers.cookie || "").viewer_session;
+    if (token) auth.authSessions.delete(token);
+    res.writeHead(200, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Set-Cookie": authSessionCookie("", 0),
+    });
+    res.end(JSON.stringify(authStatusResponse(auth, null, { authenticated: !authRequired(auth) })));
     return true;
   }
 
@@ -456,7 +563,7 @@ async function handleConnect(req, res, setSession) {
 
 async function streamItemMedia(id, kind, req, res, session) {
   if (!["GET", "HEAD"].includes(req.method || "GET")) {
-    sendJson(res, 405, { error: "Method not allowed" });
+    sendMethodNotAllowed(res, ["GET", "HEAD"]);
     return;
   }
 
@@ -601,29 +708,190 @@ function sendJson(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
-function authRequired({ viewerPassword, passwordHash }) {
-  return Boolean(viewerPassword || passwordHash);
+function sendMethodNotAllowed(res, methods) {
+  res.writeHead(405, {
+    "Allow": methods.join(", "),
+    "Content-Type": "application/json; charset=utf-8",
+  });
+  res.end(JSON.stringify({ error: "Method not allowed" }));
+}
+
+function normalizeMetadataPatch(body) {
+  return {
+    tags: body.tags === undefined ? undefined : normalizeStringArray(body.tags, "tags"),
+    folders: body.folders === undefined ? undefined : normalizeStringArray(body.folders, "folders"),
+  };
+}
+
+function normalizeStar(value: unknown) {
+  const star = Number(value);
+  if (!Number.isInteger(star) || star < 0 || star > 5) {
+    throw new HttpError(400, "star must be an integer from 0-5");
+  }
+  return star;
+}
+
+function authRequired({ users = [] }: { users?: AuthUser[] }) {
+  return Boolean(users.length);
 }
 
 function isAuthorized(req, auth) {
   if (!authRequired(auth)) return true;
-  if (basicAuthMatches(req.headers.authorization || "", auth)) return true;
-  const token = parseCookies(req.headers.cookie || "").viewer_session;
-  return Boolean(token && auth.authSessions.has(token));
+  return Boolean(authenticatedUser(req, auth));
 }
 
-function basicAuthMatches(header, { basicAuthUsername, viewerPassword, passwordHash }) {
-  if (!header.startsWith("Basic ")) return false;
+function isTrustedUnsafeRequest(req, requestUrl) {
+  if (!isUnsafeMethod(req.method)) return true;
+  const expectedOrigin = `${requestUrl.protocol}//${requestUrl.host}`;
+  const origin = headerValue(req.headers.origin);
+  if (origin) return origin === expectedOrigin;
+  const referer = headerValue(req.headers.referer);
+  if (!referer) return true;
   try {
-    const decoded = Buffer.from(header.slice(6), "base64").toString("utf8");
-    const separator = decoded.indexOf(":");
-    if (separator === -1) return false;
-    const username = decoded.slice(0, separator);
-    const password = decoded.slice(separator + 1);
-    return username === basicAuthUsername && passwordMatches(password, { viewerPassword, passwordHash });
+    const refererUrl = new URL(referer);
+    return `${refererUrl.protocol}//${refererUrl.host}` === expectedOrigin;
   } catch {
     return false;
   }
+}
+
+function isUnsafeMethod(method) {
+  return !["GET", "HEAD", "OPTIONS"].includes(String(method || "GET").toUpperCase());
+}
+
+function headerValue(value) {
+  return Array.isArray(value) ? value[0] : String(value || "");
+}
+
+function hasMetadataWriteAccess(req, auth: AuthContext) {
+  const user = authenticatedUser(req, auth);
+  return rolePermissions(user?.role).writeMetadata;
+}
+
+function hasRatingWriteAccess(req, auth: AuthContext) {
+  const user = authenticatedUser(req, auth);
+  return rolePermissions(user?.role).writeRating;
+}
+
+function hasAdminAccess(req, auth: AuthContext) {
+  const user = authenticatedUser(req, auth);
+  return rolePermissions(user?.role).manageLibrary;
+}
+
+function authenticatedUser(req, auth: AuthContext): AuthSession | null {
+  if (Object.prototype.hasOwnProperty.call(req, AUTH_USER_CACHE)) {
+    return req[AUTH_USER_CACHE];
+  }
+  const user = resolveAuthenticatedUser(req, auth);
+  req[AUTH_USER_CACHE] = user;
+  return user;
+}
+
+function resolveAuthenticatedUser(req, auth: AuthContext): AuthSession | null {
+  if (!authRequired(auth)) return null;
+  const basicUser = basicAuthUser(req.headers.authorization || "", auth);
+  if (basicUser) {
+    return {
+      expiresAt: Date.now() + AUTH_SESSION_MAX_AGE_SECONDS * 1000,
+      role: basicUser.role,
+      username: basicUser.username,
+    };
+  }
+  const token = parseCookies(req.headers.cookie || "").viewer_session;
+  if (!token) return null;
+  const session = auth.authSessions.get(token);
+  if (!session) return null;
+  if (session.expiresAt <= Date.now()) {
+    auth.authSessions.delete(token);
+    return null;
+  }
+  return session;
+}
+
+function pruneAuthSessions(authSessions: Map<string, AuthSession>) {
+  const now = Date.now();
+  for (const [token, session] of authSessions) {
+    if (session.expiresAt <= now) authSessions.delete(token);
+  }
+}
+
+function basicAuthUser(header, auth: AuthContext): AuthUser | null {
+  if (!/^Basic\s+/i.test(header)) return null;
+  try {
+    const encoded = header.replace(/^Basic\s+/i, "");
+    const decoded = Buffer.from(encoded, "base64").toString("utf8");
+    const separator = decoded.indexOf(":");
+    if (separator === -1) return null;
+    const username = decoded.slice(0, separator);
+    const password = decoded.slice(separator + 1);
+    return findPasswordUser(username, password, auth);
+  } catch {
+    return null;
+  }
+}
+
+function findPasswordUser(username, password, auth: AuthContext): AuthUser | null {
+  const user = auth.users.find((entry) => entry.username === username);
+  if (user?.passwordHash && passwordMatches(password, user.passwordHash)) return user;
+  return null;
+}
+
+function authStatusResponse(auth: AuthContext, user: AuthSession | AuthUser | null, { authenticated = Boolean(user) } = {}) {
+  return {
+    required: authRequired(auth),
+    authenticated,
+    user: user ? { role: user.role, username: user.username } : null,
+    permissions: permissionsForUser(user, { authenticated }),
+  };
+}
+
+function permissionsForUser(user: AuthSession | AuthUser | null, { authenticated = Boolean(user) } = {}) {
+  const read = authenticated;
+  const roleAccess = rolePermissions(user?.role);
+  return {
+    manageLibrary: roleAccess.manageLibrary,
+    read,
+    writeMetadata: roleAccess.writeMetadata,
+    writeRating: roleAccess.writeRating,
+  };
+}
+
+function rolePermissions(role: UserRole | undefined) {
+  const manageLibrary = role === "admin";
+  const writeMetadata = role === "admin" || role === "editor";
+  const writeRating = writeMetadata;
+  return {
+    manageLibrary,
+    writeMetadata,
+    writeRating,
+  };
+}
+
+function resolveAuthUsers({ allowMetadataEditing, authUsers, basicAuthUsername, passwordHash, viewerPassword }: {
+  allowMetadataEditing?: boolean;
+  authUsers?: AuthUser[];
+  basicAuthUsername?: string;
+  passwordHash?: string;
+  viewerPassword?: string;
+}): AuthUser[] {
+  const users = Array.isArray(authUsers)
+    ? authUsers.map((user) => ({
+        username: String(user.username || "").trim(),
+        passwordHash: String(user.passwordHash || ""),
+        role: normalizeRole(user.role),
+      })).filter((user) => user.username && user.passwordHash)
+    : [];
+  if (users.length) return users;
+  const legacyPasswordHash = passwordHash || (viewerPassword ? sha256(viewerPassword) : "");
+  return legacyPasswordHash ? [{
+    username: basicAuthUsername || "eagle",
+    passwordHash: legacyPasswordHash,
+    role: allowMetadataEditing ? "editor" as const : "viewer" as const,
+  }] : [];
+}
+
+function normalizeRole(value): UserRole {
+  return value === "admin" || value === "editor" ? value : "viewer";
 }
 
 function sendAuthRequired(res) {
@@ -634,11 +902,29 @@ function sendAuthRequired(res) {
   res.end(JSON.stringify({ error: "Authentication required" }));
 }
 
-function passwordMatches(value, { viewerPassword, passwordHash }) {
-  const expectedValue = passwordHash || viewerPassword;
-  const actualValue = passwordHash ? sha256(value) : value;
-  const expected = Buffer.from(expectedValue);
-  const actual = Buffer.from(actualValue);
+function authSessionCookie(token: string, maxAge = AUTH_SESSION_MAX_AGE_SECONDS) {
+  return `viewer_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}`;
+}
+
+function passwordMatches(value: string, passwordHash: string) {
+  if (passwordHash.startsWith("pbkdf2$")) return pbkdf2PasswordMatches(value, passwordHash);
+  return safeEqual(sha256(value), passwordHash);
+}
+
+function pbkdf2PasswordMatches(value, passwordHash: string) {
+  const [scheme, algorithm, rawIterations, salt, expectedDigest] = passwordHash.split("$");
+  if (scheme !== "pbkdf2" || algorithm !== PASSWORD_HASH_ALGORITHM || !salt || !expectedDigest) return false;
+  const iterations = Number.parseInt(rawIterations, 10);
+  if (!Number.isInteger(iterations) || iterations < MIN_PASSWORD_HASH_ITERATIONS || iterations > MAX_PASSWORD_HASH_ITERATIONS) {
+    return false;
+  }
+  const actualDigest = pbkdf2Sync(String(value), salt, iterations, PASSWORD_HASH_KEY_LENGTH, algorithm).toString("base64url");
+  return safeEqual(actualDigest, expectedDigest);
+}
+
+function safeEqual(actualValue, expectedValue) {
+  const expected = Buffer.from(String(expectedValue));
+  const actual = Buffer.from(String(actualValue));
   return expected.length === actual.length && timingSafeEqual(expected, actual);
 }
 
@@ -651,9 +937,19 @@ function parseCookies(header: string): Record<string, string> {
   for (const part of header.split(";")) {
     const index = part.indexOf("=");
     if (index === -1) continue;
-    output[part.slice(0, index).trim()] = decodeURIComponent(part.slice(index + 1).trim());
+    const name = part.slice(0, index).trim();
+    const value = safeDecodeCookieValue(part.slice(index + 1).trim());
+    if (name && value !== null) output[name] = value;
   }
   return output;
+}
+
+function safeDecodeCookieValue(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return null;
+  }
 }
 
 function attachRequestCounter(res, onFinish) {
@@ -675,11 +971,20 @@ function getSession(session) {
 
 async function readJson(req) {
   const chunks = [];
+  let size = 0;
   for await (const chunk of req) {
+    size += chunk.length;
+    if (size > MAX_JSON_BODY_BYTES) {
+      throw new HttpError(413, "Request body is too large");
+    }
     chunks.push(chunk);
   }
   if (!chunks.length) return {};
-  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  } catch {
+    throw new HttpError(400, "Invalid JSON body");
+  }
 }
 
 function parseRange(header, size) {

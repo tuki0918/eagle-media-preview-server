@@ -1,3 +1,17 @@
+export class ApiError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+export function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export async function getJson<T = unknown>(url: string): Promise<T> {
   return requestJson<T>(url);
 }
@@ -12,9 +26,17 @@ export async function postJson<T = unknown>(url: string, body: unknown): Promise
 
 async function requestJson<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, options);
-  const data = await response.json() as unknown;
-  if (!response.ok) throw new Error(responseErrorMessage(data, response.status));
+  const data = await safeJson(response);
+  if (!response.ok) throw new ApiError(response.status, responseErrorMessage(data, response.status));
   return data as T;
+}
+
+async function safeJson(response: Response) {
+  try {
+    return await response.json() as unknown;
+  } catch {
+    return null;
+  }
 }
 
 function responseErrorMessage(data: unknown, status: number) {

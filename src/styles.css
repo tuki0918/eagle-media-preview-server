@@ -1,3 +1,6 @@
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/geist";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -5,38 +8,65 @@
 @layer base {
   :root {
     color-scheme: light;
-    --bg: #f6f8fb;
-    --surface: #ffffff;
-    --surface-strong: #f8fafc;
-    --surface-soft: #f1f5f9;
-    --text: #101828;
-    --text-soft: #334155;
-    --muted: #667085;
-    --muted-soft: #98a2b3;
-    --border: #d9e2ee;
-    --border-strong: #cbd5e1;
-    --accent: #2563eb;
-    --accent-strong: #1d4ed8;
-    --accent-soft: #eff6ff;
-    --warn: #f59e0b;
-    --success: #16a34a;
-    --danger: #dc2626;
-    --nav: #111827;
-    --shadow: 0 20px 50px rgba(16, 24, 40, 0.10);
-    --shadow-soft: 0 8px 22px rgba(16, 24, 40, 0.06);
     font-family: "SF Pro Text", "SF Pro Display", system-ui, Avenir, Helvetica, Arial, sans-serif;
+    --background: #ffffff;
+    --foreground: #171717;
+    --card: #ffffff;
+    --card-foreground: #171717;
+    --popover: #ffffff;
+    --popover-foreground: #171717;
+    --primary: #262626;
+    --primary-foreground: #fafafa;
+    --secondary: #f5f5f5;
+    --secondary-foreground: #262626;
+    --muted: #f5f5f5;
+    --muted-foreground: #737373;
+    --accent: #f5f5f5;
+    --accent-foreground: #262626;
+    --destructive: #dc2626;
+    --border: #e5e5e5;
+    --input: #e5e5e5;
+    --ring: #a3a3a3;
+    --chart-1: #d4d4d4;
+    --chart-2: #737373;
+    --chart-3: #525252;
+    --chart-4: #404040;
+    --chart-5: #262626;
+    --radius: 0.625rem;
+    --sidebar: #fafafa;
+    --sidebar-foreground: #171717;
+    --sidebar-primary: #262626;
+    --sidebar-primary-foreground: #fafafa;
+    --sidebar-accent: #f5f5f5;
+    --sidebar-accent-foreground: #262626;
+    --sidebar-border: #e5e5e5;
+    --sidebar-ring: #a3a3a3;
+    --app-bg: var(--background);
+    --app-surface: var(--card);
+    --app-surface-strong: var(--muted);
+    --app-surface-soft: var(--accent);
+    --app-text: var(--foreground);
+    --app-text-soft: var(--muted-foreground);
+    --app-muted: var(--muted-foreground);
+    --app-muted-soft: var(--muted-foreground);
+    --app-border-strong: var(--border);
+    --app-accent-strong: var(--primary);
+    --app-accent-soft: var(--accent);
+    --app-warn: var(--primary);
+    --app-success: var(--primary);
+    --app-danger: var(--destructive);
+    --app-nav: var(--foreground);
+    --shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-soft: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   }
 
   * {
-    @apply box-border;
+    @apply box-border border-border;
+    outline-color: rgba(163, 163, 163, 0.5);
   }
 
   body {
-    @apply m-0 min-h-dvh text-sm antialiased;
-    background:
-      radial-gradient(circle at 20% -12%, rgba(37, 99, 235, 0.07), transparent 31%),
-      linear-gradient(180deg, #f8fafc 0%, var(--bg) 52%, #eef2f7 100%);
-    color: var(--text);
+    @apply m-0 min-h-dvh text-sm antialiased bg-background text-foreground;
     line-height: 1.45;
     text-rendering: optimizeLegibility;
   }
@@ -75,8 +105,8 @@
   select:focus-visible,
   button:focus-visible {
     @apply outline-0;
-    border-color: rgba(37, 99, 235, 0.72);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    border-color: var(--ring);
+    box-shadow: 0 0 0 3px rgba(163, 163, 163, 0.2);
   }
 
   @media (hover: none) and (pointer: coarse) {
@@ -88,5 +118,48 @@
 
   [hidden] {
     display: none !important;
+  }
+  .theme {
+    --font-heading: var(--font-sans);
+    --font-sans: 'Geist Variable', sans-serif;
+  }
+  .dark {
+    --background: #171717;
+    --foreground: #fafafa;
+    --card: #262626;
+    --card-foreground: #fafafa;
+    --popover: #262626;
+    --popover-foreground: #fafafa;
+    --primary: #e5e5e5;
+    --primary-foreground: #262626;
+    --secondary: #404040;
+    --secondary-foreground: #fafafa;
+    --muted: #404040;
+    --muted-foreground: #a3a3a3;
+    --accent: #404040;
+    --accent-foreground: #fafafa;
+    --destructive: #f87171;
+    --border: rgba(255, 255, 255, 0.1);
+    --input: rgba(255, 255, 255, 0.15);
+    --ring: #737373;
+    --chart-1: #d4d4d4;
+    --chart-2: #737373;
+    --chart-3: #525252;
+    --chart-4: #404040;
+    --chart-5: #262626;
+    --sidebar: #262626;
+    --sidebar-foreground: #fafafa;
+    --sidebar-primary: #2563eb;
+    --sidebar-primary-foreground: #fafafa;
+    --sidebar-accent: #404040;
+    --sidebar-accent-foreground: #fafafa;
+    --sidebar-border: rgba(255, 255, 255, 0.1);
+    --sidebar-ring: #737373;
+  }
+  button:not(:disabled), [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  html {
+    @apply font-sans;
   }
 }

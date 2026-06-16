@@ -10,7 +10,7 @@ const meta = {
   },
   render: (args) => (
     <div className={storyPanelClassName}>
-      <select className="min-h-[46px] w-full rounded-app border border-app-border bg-app-surface px-3">
+      <select className="min-h-[46px] w-full rounded-md border border-border bg-card px-3">
         <FolderOptions {...args} />
       </select>
     </div>

@@ -1,6 +1,11 @@
+import { act } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { JSDOM } from "jsdom";
 import { describe, expect, test } from "vitest";
+import { SidebarProvider } from "@/components/ui/sidebar";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import {
+  AccountSideMenu,
   AdvancedFilters,
   CardTemplate,
   ConnectButton,
@@ -37,6 +42,18 @@ import { resetPreviewDialogState, setPreviewDialogState } from "./previewDialogS
 import { setImageOverlayControlsVisible } from "./imageOverlayState";
 import { setVideoOverlayControlsVisible } from "./videoOverlayState";
 import { MEDIA_TYPE_OPTIONS, PAGE_SIZE_OPTIONS, RATING_OPTIONS } from "./shellConfig";
+import { setLoginConnectState } from "./loginConnectState";
+
+function renderAccountSideMenu() {
+  return renderToStaticMarkup(
+    <TooltipProvider>
+      <SidebarProvider>
+        <AccountSideMenu />
+        <SearchControls />
+      </SidebarProvider>
+    </TooltipProvider>,
+  );
+}
 
 const REQUIRED_ELEMENT_IDS = [
   "loginView",
@@ -56,14 +73,12 @@ const REQUIRED_ELEMENT_IDS = [
   "advancedFilters",
   "grid",
   "tilesSentinel",
-  "resultCount",
   "tilesViewButton",
   "gridViewButton",
   "tableViewButton",
   "prevButton",
   "nextButton",
   "pageButtons",
-  "libraryFooterName",
   "previewDialog",
   "previewMeta",
   "previewBody",
@@ -111,13 +126,19 @@ describe("ViewerAppShell", () => {
     }
   });
 
-  test("renders selected view mode with blue active styling", () => {
+  test("renders selected view mode with shadcn active styling", () => {
     const html = renderToStaticMarkup(<ResultsStatus total={12} viewMode="grid" />);
 
     expect(html).toContain('id="gridViewButton"');
-    expect(html).toContain('aria-pressed="true"');
-    expect(html).toContain("bg-blue-600");
-    expect(html).toContain("hover:bg-blue-700");
+    expect(html).toContain('data-slot="tabs"');
+    expect(html).toContain('data-slot="tabs-list"');
+    expect(html).toContain('data-slot="tabs-trigger"');
+    expect(html).toContain('data-icon="inline-start"');
+    expect(html).toContain("data-[state=active]:bg-background");
+    expect(html).toContain("data-[state=active]:text-foreground");
+    expect(html).toContain("data-active:bg-background");
+    expect(html).toContain("data-active:text-foreground");
+    expect(html).toContain("text-muted-foreground");
   });
 
   test("renders login connection controls as reusable components", () => {
@@ -128,14 +149,18 @@ describe("ViewerAppShell", () => {
     expect(button).toContain("disabled");
     expect(message).toContain('id="connectMessage"');
     expect(message).toContain("No Eagle");
-    expect(message).toContain("text-app-danger");
+    expect(message).toContain("text-destructive");
+    expect(message).toContain("text-left");
+    expect(message).toContain("lucide-circle-alert");
+    expect(message).toContain('role="alert"');
+    expect(message).not.toContain("fixed bottom-");
   });
 
   test("exports independently renderable shell components", () => {
     const components = [
       { Component: LoginView, expectedId: "loginView" },
       { Component: SearchControls, expectedId: "advancedFilters" },
-      { Component: ResultsStatus, expectedId: "resultCount" },
+      { Component: ResultsStatus, expectedId: "gridViewButton" },
       { Component: ResultSurface, expectedId: "grid" },
       { Component: Pager, expectedId: "pageButtons" },
       { Component: PreviewDialog, expectedId: "previewDialog" },
@@ -148,7 +173,7 @@ describe("ViewerAppShell", () => {
     ] as const;
 
     for (const { Component, expectedId } of components) {
-      expect(renderToStaticMarkup(<Component />)).toContain(`id="${expectedId}"`);
+      expect(renderToStaticMarkup(<TooltipProvider><Component /></TooltipProvider>)).toContain(`id="${expectedId}"`);
     }
   });
 
@@ -211,8 +236,8 @@ describe("ViewerAppShell", () => {
     expect(dialog).toContain("rounded-full");
     expect(dialog).toContain("bg-[rgba(15,23,42,0.48)]");
     expect(body).toContain("image-toolbar");
-    expect(body).toContain("bg-[rgba(255,255,255,0.92)]");
-    expect(body).toContain("text-app-text-soft");
+    expect(body).toContain("bg-card");
+    expect(body).toContain("text-muted-foreground");
   });
 
   test("hides image overlay buttons and toolbar when image controls are toggled off", () => {
@@ -270,6 +295,43 @@ describe("ViewerAppShell", () => {
 
     expect(html).toContain('id="libraryFooterName"');
     expect(html).toContain("My Library - Eagle 4.0");
+    expect(html).not.toContain("logoutButton");
+    expect(html).not.toContain("authFooterMessage");
+  });
+
+  test("renders authenticated account controls in a responsive side menu", () => {
+    setLoginConnectState({
+      authenticated: true,
+      authRequired: true,
+      disabled: false,
+      isError: false,
+      message: "",
+      user: { role: "editor", username: "ed" },
+    });
+    const html = renderAccountSideMenu();
+
+    expect(html).toContain('id="accountSideMenu"');
+    expect(html).toContain('id="authAccountLabel"');
+    expect(html).toContain('id="authUserLabel"');
+    expect(html).toContain('id="authRoleLabel"');
+    expect(html).toContain('aria-haspopup="menu"');
+    expect(html).toContain("lucide-user-round");
+    expect(html).toContain('data-slot="sidebar"');
+    expect(html).toContain('data-variant="inset"');
+    expect(html).toContain('data-sidebar="menu-button"');
+    expect(html).toContain("group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4)))]");
+    expect(html).toContain("group-data-[collapsible=icon]:!size-8");
+    expect(html).not.toContain("md:hidden");
+    expect(html).not.toContain("fixed left-3");
+
+    setLoginConnectState({
+      authenticated: false,
+      authRequired: false,
+      disabled: false,
+      isError: false,
+      message: "",
+      user: null,
+    });
   });
 
   test("renders advanced filters as a reusable component", () => {
@@ -373,20 +435,243 @@ describe("ViewerAppShell", () => {
   test("renders preview info as reusable detail and action components", () => {
     const details = renderToStaticMarkup(
       <PreviewDetailsPanel
+        canEditMetadata
         item={{ id: "item-1", tags: ["alpha"], folders: ["folder-1"] }}
         folders={[{ id: "folder-1", name: "Folder 1" }]}
         detailRows={[{ label: "Type", value: "Image" }]}
         onTagSuggestions={() => []}
         onFolderSuggestions={() => []}
-        onSaveMetadata={async () => {}}
+        onSaveMetadata={async (_item, patch) => patch}
       />,
     );
     const actions = renderToStaticMarkup(<PreviewActions item={{ id: "item-1" }} />);
 
     expect(details).toContain("preview-details-section");
     expect(details).toContain("preview-edit-form");
+    expect(details).toContain("preview-edit-save");
+    expect(details).toContain("disabled");
     expect(actions).toContain("direct-file-link");
     expect(actions).toContain("preview-info-cta");
+  });
+
+  test("disables preview metadata save after successful save", async () => {
+    const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
+    const testGlobal = globalThis as typeof globalThis & {
+      IS_REACT_ACT_ENVIRONMENT?: boolean;
+    };
+    const previousWindow = globalThis.window;
+    const previousDocument = globalThis.document;
+    const previousNode = globalThis.Node;
+    const previousHTMLElement = globalThis.HTMLElement;
+    const previousIS_REACT_ACT_ENVIRONMENT = testGlobal.IS_REACT_ACT_ENVIRONMENT;
+    globalThis.window = dom.window;
+    globalThis.document = dom.window.document;
+    globalThis.Node = dom.window.Node;
+    globalThis.HTMLElement = dom.window.HTMLElement;
+    testGlobal.IS_REACT_ACT_ENVIRONMENT = true;
+
+    const { createRoot } = await import("react-dom/client");
+    let root: import("react-dom/client").Root | null = null;
+    const savedPatches: Array<{ tags: string[]; folders: string[] }> = [];
+    try {
+      const container = dom.window.document.querySelector("#root");
+      if (!(container instanceof dom.window.HTMLElement)) throw new Error("Missing test root");
+      root = createRoot(container);
+
+      await act(async () => {
+        root?.render(
+          <PreviewDetailsPanel
+            canEditMetadata
+            item={{ id: "item-1", tags: ["alpha"], folders: ["folder-1"] }}
+            folders={[{ id: "folder-1", name: "Folder 1" }]}
+            detailRows={[{ label: "Type", value: "Image" }]}
+            onTagSuggestions={() => []}
+            onFolderSuggestions={() => []}
+            onSaveMetadata={async (_item, patch) => {
+              savedPatches.push(patch);
+              return { tags: ["alpha", "beta-saved"], folders: patch.folders };
+            }}
+          />,
+        );
+      });
+
+      const saveButton = container.querySelector(".preview-edit-save");
+      const tagInput = Array.from(container.querySelectorAll("input")).find((input) => input.placeholder === "Add tag");
+      const form = container.querySelector("form");
+      if (!(saveButton instanceof dom.window.HTMLButtonElement) || !(tagInput instanceof dom.window.HTMLInputElement) || !(form instanceof dom.window.HTMLFormElement)) {
+        throw new Error("Missing metadata editor controls");
+      }
+
+      expect(saveButton.disabled).toBe(true);
+      expect(saveButton.getAttribute("aria-label")).toBe("No metadata changes");
+      expect(saveButton.title).toBe("No metadata changes");
+      await act(async () => {
+        const valueSetter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")?.set;
+        valueSetter?.call(tagInput, "beta");
+        tagInput.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
+      });
+
+      expect(saveButton.disabled).toBe(false);
+      expect(saveButton.getAttribute("aria-label")).toBe("Save metadata");
+      await act(async () => {
+        form.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }));
+      });
+
+      expect(savedPatches).toEqual([{ tags: ["alpha", "beta"], folders: ["folder-1"] }]);
+      expect(saveButton.disabled).toBe(true);
+      expect(container.querySelector(".preview-edit-status")?.textContent).toBe("Saved");
+      expect(container.textContent).toContain("beta-saved");
+    } finally {
+      if (root) {
+        await act(async () => {
+          root?.unmount();
+        });
+      }
+      globalThis.window = previousWindow;
+      globalThis.document = previousDocument;
+      globalThis.Node = previousNode;
+      globalThis.HTMLElement = previousHTMLElement;
+      testGlobal.IS_REACT_ACT_ENVIRONMENT = previousIS_REACT_ACT_ENVIRONMENT;
+    }
+  });
+
+  test("locks preview metadata controls while saving", async () => {
+    const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
+    const testGlobal = globalThis as typeof globalThis & {
+      IS_REACT_ACT_ENVIRONMENT?: boolean;
+    };
+    const previousWindow = globalThis.window;
+    const previousDocument = globalThis.document;
+    const previousNode = globalThis.Node;
+    const previousHTMLElement = globalThis.HTMLElement;
+    const previousIS_REACT_ACT_ENVIRONMENT = testGlobal.IS_REACT_ACT_ENVIRONMENT;
+    globalThis.window = dom.window;
+    globalThis.document = dom.window.document;
+    globalThis.Node = dom.window.Node;
+    globalThis.HTMLElement = dom.window.HTMLElement;
+    testGlobal.IS_REACT_ACT_ENVIRONMENT = true;
+
+    const { createRoot } = await import("react-dom/client");
+    let root: import("react-dom/client").Root | null = null;
+    let resolveSave: ((value: { tags: string[]; folders: string[] }) => void) | null = null;
+    try {
+      const container = dom.window.document.querySelector("#root");
+      if (!(container instanceof dom.window.HTMLElement)) throw new Error("Missing test root");
+      root = createRoot(container);
+
+      await act(async () => {
+        root?.render(
+          <PreviewDetailsPanel
+            canEditMetadata
+            item={{ id: "item-1", tags: ["alpha"], folders: ["folder-1"] }}
+            folders={[{ id: "folder-1", name: "Folder 1" }]}
+            detailRows={[{ label: "Type", value: "Image" }]}
+            onTagSuggestions={() => []}
+            onFolderSuggestions={() => []}
+            onSaveMetadata={async (_item, patch) => new Promise((resolve) => {
+              resolveSave = resolve;
+            })}
+          />,
+        );
+      });
+
+      const saveButton = container.querySelector(".preview-edit-save");
+      const removeButton = container.querySelector(".preview-edit-chip button");
+      const tagInput = Array.from(container.querySelectorAll("input")).find((input) => input.placeholder === "Add tag");
+      const form = container.querySelector("form");
+      if (!(saveButton instanceof dom.window.HTMLButtonElement)
+        || !(removeButton instanceof dom.window.HTMLButtonElement)
+        || !(tagInput instanceof dom.window.HTMLInputElement)
+        || !(form instanceof dom.window.HTMLFormElement)) {
+        throw new Error("Missing metadata editor controls");
+      }
+
+      await act(async () => {
+        const valueSetter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")?.set;
+        valueSetter?.call(tagInput, "beta");
+        tagInput.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
+      });
+
+      expect(saveButton.disabled).toBe(false);
+      act(() => {
+        form.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }));
+      });
+
+      expect(form.getAttribute("aria-busy")).toBe("true");
+      expect(saveButton.disabled).toBe(true);
+      expect(saveButton.textContent).toBe("Saving");
+      expect(saveButton.getAttribute("aria-label")).toBe("Saving metadata");
+      expect(saveButton.title).toBe("Saving metadata");
+      expect(tagInput.disabled).toBe(true);
+      expect(removeButton.disabled).toBe(true);
+
+      await act(async () => {
+        resolveSave?.({ tags: ["alpha", "beta"], folders: ["folder-1"] });
+      });
+
+      expect(form.getAttribute("aria-busy")).toBe("false");
+      expect(tagInput.disabled).toBe(false);
+      expect(removeButton.disabled).toBe(false);
+    } finally {
+      if (root) {
+        await act(async () => {
+          root?.unmount();
+        });
+      }
+      globalThis.window = previousWindow;
+      globalThis.document = previousDocument;
+      globalThis.Node = previousNode;
+      globalThis.HTMLElement = previousHTMLElement;
+      testGlobal.IS_REACT_ACT_ENVIRONMENT = previousIS_REACT_ACT_ENVIRONMENT;
+    }
+  });
+
+  test("renders preview metadata as read-only chips without edit permission", () => {
+    const details = renderToStaticMarkup(
+      <PreviewDetailsPanel
+        item={{ id: "item-1", tags: ["alpha"], folders: ["folder-1"] }}
+        folders={[{ id: "folder-1", name: "Folder 1" }]}
+        detailRows={[{ label: "Type", value: "Image" }]}
+        onTagSuggestions={() => []}
+        onFolderSuggestions={() => []}
+        onSaveMetadata={async (_item, patch) => patch}
+      />,
+    );
+
+    expect(details).toContain("Tags");
+    expect(details).toContain("alpha");
+    expect(details).toContain("Categories");
+    expect(details).toContain("Folder 1");
+    expect(details).not.toContain("preview-edit-form");
+  });
+
+  test("deduplicates preview metadata chips from existing item values", () => {
+    const readOnly = renderToStaticMarkup(
+      <PreviewDetailsPanel
+        item={{ id: "item-1", tags: ["alpha", " alpha "], folders: ["folder-1", "folder-1"] }}
+        folders={[{ id: "folder-1", name: "Folder 1" }]}
+        detailRows={[{ label: "Type", value: "Image" }]}
+        onTagSuggestions={() => []}
+        onFolderSuggestions={() => []}
+        onSaveMetadata={async (_item, patch) => patch}
+      />,
+    );
+    const editable = renderToStaticMarkup(
+      <PreviewDetailsPanel
+        canEditMetadata
+        item={{ id: "item-1", tags: ["alpha", " alpha "], folders: ["folder-1", "folder-1"] }}
+        folders={[{ id: "folder-1", name: "Folder 1" }]}
+        detailRows={[{ label: "Type", value: "Image" }]}
+        onTagSuggestions={() => []}
+        onFolderSuggestions={() => []}
+        onSaveMetadata={async (_item, patch) => patch}
+      />,
+    );
+
+    expect(readOnly.match(/>alpha</g)?.length).toBe(1);
+    expect(readOnly.match(/>Folder 1</g)?.length).toBe(1);
+    expect(editable.match(/>alpha</g)?.length).toBe(1);
+    expect(editable.match(/>Folder 1</g)?.length).toBe(1);
   });
 
   test("renders preview body media variants", () => {
@@ -413,11 +698,22 @@ describe("ViewerAppShell", () => {
   test("renders rating stars as reusable static and interactive controls", () => {
     const statik = renderToStaticMarkup(<RatingStars className="rating-control" item={{ star: 3 }} />);
     const interactive = renderToStaticMarkup(<RatingStars className="rating-control" item={{ star: 2 }} interactive onSelect={() => {}} />);
+    const disabled = renderToStaticMarkup(<RatingStars className="rating-control" item={{ star: 2 }} interactive disabled onSelect={() => {}} />);
+    const saving = renderToStaticMarkup(<RatingStars className="rating-control" item={{ star: 2 }} interactive disabled disabledLabel="Saving rating" onSelect={() => {}} />);
 
     expect(statik).toContain("rating-star");
     expect(statik).toContain("rating-star-static");
+    expect(statik).toContain("cursor-default");
+    expect(statik).not.toContain("cursor-pointer");
     expect(statik).toContain('data-active="true"');
+    expect(statik).toContain('aria-label="Rating (read only)"');
+    expect(statik).not.toContain("title=");
     expect(interactive).toContain('aria-pressed="true"');
+    expect(interactive).toContain("cursor-pointer");
+    expect(interactive).toContain('aria-label="Rating"');
     expect(interactive).toContain("Rating 2");
+    expect(disabled).toContain("disabled");
+    expect(saving).toContain('aria-label="Saving rating"');
+    expect(saving).toContain('title="Saving rating"');
   });
 });
