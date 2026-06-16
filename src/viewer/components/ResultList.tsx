@@ -61,7 +61,7 @@ const overlayIconClassName =
 const durationBadgeClassName =
   "duration-badge absolute bottom-1.5 right-1.5 rounded-md bg-[rgba(15,23,42,0.78)] px-1.5 py-[3px] text-[10px] font-bold leading-[1.2] text-white";
 const tableRowClassName =
-  "media-row grid min-h-[70px] grid-cols-[78px_minmax(160px,1.8fr)_90px_90px_minmax(120px,1fr)_90px_130px] items-center gap-3 border-b border-border px-3 py-2 text-[13px] text-muted-foreground last:border-b-0 max-[540px]:grid-cols-[56px_minmax(0,1fr)] [&>.rating-control]:justify-self-center [&>.rating-control]:text-center [&>span]:justify-self-center [&>span]:text-center";
+  "media-row grid min-h-[70px] grid-cols-[78px_minmax(160px,1.8fr)_90px_90px_minmax(120px,1fr)_90px_130px] items-center gap-3 border-b border-border px-3 py-2 text-[13px] text-muted-foreground last:border-b-0 max-[540px]:grid-cols-[56px_minmax(0,1fr)] [&>span:not(.row-name-cell)]:justify-self-center [&>span:not(.row-name-cell)]:text-center";
 const tableHeaderClassName =
   `${tableRowClassName} media-row-header min-h-[34px] bg-muted text-xs font-[760] text-muted-foreground [&>span:nth-child(2)]:justify-self-stretch [&>span:nth-child(2)]:text-left max-[540px]:[&>span:nth-child(2)]:pl-3.5 max-[540px]:[&>span:nth-child(n+3)]:hidden`;
 const rowNameCellClassName =
@@ -73,7 +73,7 @@ const tableMobileMetaClassName =
 const tableHiddenOnMobileClassName = "max-[540px]:hidden";
 const cardRatingClassName =
   "rating-control absolute bottom-1.5 left-1.5 z-[2] inline-flex items-center gap-0 rounded-md bg-[rgba(15,23,42,0.78)] px-1 py-[3px] leading-[1.2] text-white [&_.rating-star]:h-3 [&_.rating-star]:w-3 [&_.rating-star]:text-[10px] [&_.rating-star]:text-[rgba(255,255,255,0.34)] [&_.rating-star[data-active=true]]:text-primary-foreground";
-const tableRatingClassName = "rating-control inline-flex items-center gap-px justify-self-start";
+const tableRatingClassName = "rating-control inline-flex items-center justify-self-start gap-px text-left";
 const tileMasonryBaseWidth = 168;
 const tileMasonryGap = 4;
 const tileMasonryRowHeight = 4;

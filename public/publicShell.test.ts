@@ -899,6 +899,14 @@ test("public extension pills use varied colors for common text formats", async (
   assert.match(html, /txt: "bg-\[#f1f5f9\] text-\[#334155\]"/);
 });
 
+test("public table rows left align filenames and ratings", async () => {
+  const html = await readAppSources();
+
+  assert.match(html, /const tableRowClassName =[\s\S]*\[&>span:not\(\.row-name-cell\)\]:justify-self-center/);
+  assert.match(html, /const rowNameCellClassName =[\s\S]*text-left justify-self-stretch/);
+  assert.match(html, /const tableRatingClassName = "rating-control inline-flex items-center justify-self-start gap-px text-left"/);
+});
+
 test("public UI syncs filters, pagination, and preview state into the URL history", async () => {
   const html = await readAppSources();
   const app = await readViewerSources();
