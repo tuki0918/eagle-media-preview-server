@@ -314,6 +314,8 @@ describe("ViewerAppShell", () => {
     expect(html).toContain('data-slot="sidebar"');
     expect(html).toContain('data-variant="sidebar"');
     expect(html).toContain('data-sidebar="menu-button"');
+    expect(html).toContain("md:peer-data-[state=collapsed]:left-1.5");
+    expect(html).not.toContain("md:hidden");
 
     setLoginConnectState({
       authenticated: false,

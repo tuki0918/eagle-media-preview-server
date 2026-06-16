@@ -25,7 +25,7 @@ const meta = {
 
     return (
       <TooltipProvider>
-        <SidebarProvider defaultOpen style={{ "--sidebar-width": "14rem", "--sidebar-width-icon": "4.5rem" } as CSSProperties}>
+        <SidebarProvider defaultOpen style={{ "--sidebar-width": "14rem", "--sidebar-width-icon": "3rem" } as CSSProperties}>
           <AccountSideMenu />
           <SidebarInset className="min-h-dvh p-6">
             <h1 className="m-0 text-xl font-bold text-foreground">Viewer content</h1>

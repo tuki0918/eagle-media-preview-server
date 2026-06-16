@@ -21,7 +21,7 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
         defaultOpen
         style={{
           "--sidebar-width": "14rem",
-          "--sidebar-width-icon": "4.5rem",
+          "--sidebar-width-icon": "3rem",
         } as CSSProperties}
       >
         <AccountSideMenu />

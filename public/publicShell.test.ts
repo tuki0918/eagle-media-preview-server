@@ -184,6 +184,8 @@ test("public viewer exposes sign out when authenticated", async () => {
   assert.match(accountMenu, /Sign out/);
   assert.match(accountMenu, /data-slot="sidebar"/);
   assert.match(accountMenu, /data-sidebar="menu-button"/);
+  assert.match(accountMenu, /md:peer-data-\[state=collapsed\]:left-1\.5/);
+  assert.doesNotMatch(accountMenu, /md:hidden/);
   assert.doesNotMatch(accountMenu, /authFooterMessage/);
   assert.match(footer, /id="libraryFooterName"/);
   assert.doesNotMatch(footer, /logoutButton/);
@@ -332,6 +334,7 @@ test("public UI no longer shows connect lock icon or connection settings button"
   assert.match(html, /<LoginView hidden=\{shellView !== "login"\} \/>/);
   assert.match(html, /<ViewerShellLayout hidden=\{shellView !== "viewer"\} \/>/);
   assert.match(html, /<SidebarProvider/);
+  assert.match(html, /"--sidebar-width-icon": "3rem"/);
   assert.match(html, /<AccountSideMenu \/>/);
   assert.doesNotMatch(app, /loginView: document\.querySelector\("#loginView"\),/);
   assert.doesNotMatch(app, /viewerShell: document\.querySelector\("#viewerShell"\),/);

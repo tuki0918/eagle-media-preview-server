@@ -33,13 +33,6 @@ export function AccountSideMenu() {
 
   return (
     <>
-      <SidebarTrigger
-        id="accountMenuButton"
-        className="fixed left-3 top-[calc(12px+env(safe-area-inset-top))] z-30 rounded-full bg-background shadow-sm md:hidden"
-        variant="outline"
-        size="icon-lg"
-        aria-controls="accountSideMenu"
-      />
       <Sidebar
         id="accountSideMenu"
         collapsible="icon"
@@ -50,7 +43,7 @@ export function AccountSideMenu() {
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton size="lg" className="h-12 px-2" tooltip="Media Preview">
-                <img className="size-9 rounded-xl object-cover shadow-sm" src={iconOnUrl} alt="" aria-hidden="true" />
+                <img className="size-8 rounded-lg object-cover shadow-sm" src={iconOnUrl} alt="" aria-hidden="true" />
                 <span className="grid min-w-0 group-data-[collapsible=icon]:hidden">
                   <span className="truncate text-sm font-[720] leading-tight text-sidebar-foreground">Media Preview</span>
                   <span className="truncate text-[11px] leading-tight text-muted-foreground">{displayName}</span>
@@ -73,7 +66,7 @@ export function AccountSideMenu() {
                     aria-label={accountStatusLabel || accountLabel}
                     title={roleDescription || undefined}
                   >
-                    <span className="grid size-9 place-items-center rounded-full bg-secondary text-sm font-[760] text-secondary-foreground" aria-hidden="true">
+                    <span className="grid size-8 place-items-center rounded-full bg-secondary text-sm font-[760] text-secondary-foreground" aria-hidden="true">
                       {accountInitial(username)}
                     </span>
                     <span className="grid min-w-0 gap-1 group-data-[collapsible=icon]:hidden">
@@ -110,6 +103,13 @@ export function AccountSideMenu() {
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>
+      <SidebarTrigger
+        id="accountMenuButton"
+        className="fixed left-3 top-[calc(12px+env(safe-area-inset-top))] z-30 rounded-full bg-background shadow-sm md:left-[calc(var(--sidebar-width)-2.75rem)] md:peer-data-[state=collapsed]:left-1.5"
+        variant="outline"
+        size="icon-lg"
+        aria-controls="accountSideMenu"
+      />
     </>
   );
 }
