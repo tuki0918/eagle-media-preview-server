@@ -14,7 +14,7 @@ export interface RatingStarsProps {
 }
 
 const ratingStarBaseClassName =
-  "rating-star inline-grid h-6 w-[22px] cursor-pointer place-items-center border-0 bg-transparent p-0 text-[17px] leading-none text-muted-foreground shadow-none data-[active=true]:text-primary disabled:cursor-not-allowed disabled:opacity-70";
+  "rating-star inline-grid h-6 w-[22px] cursor-pointer place-items-center border-0 bg-transparent p-0 text-[17px] leading-none text-muted-foreground shadow-none data-[active=true]:text-yellow-500 disabled:cursor-not-allowed disabled:opacity-70";
 const staticRatingStarClassName = `${ratingStarBaseClassName} rating-star-static cursor-default`;
 
 export function RatingStars({ className, disabled = false, disabledLabel, id, interactive = false, item, onSelect }: RatingStarsProps) {

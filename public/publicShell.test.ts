@@ -561,7 +561,8 @@ test("public ratings are static in grid and table but editable in the preview mo
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(html, /function RatingStars\(\{ className, disabled = false, disabledLabel, id, interactive = false, item, onSelect \}/);
-  assert.match(html, /const ratingStarBaseClassName =[\s\S]*rating-star[\s\S]*data-\[active=true\]:text-primary/);
+  assert.match(html, /const ratingStarBaseClassName =[\s\S]*rating-star[\s\S]*data-\[active=true\]:text-yellow-500/);
+  assert.match(html, /const cardRatingClassName =[\s\S]*\[&_\.rating-star\[data-active=true\]\]:text-yellow-300/);
   assert.match(html, /const canSelect = interactive && !disabled;/);
   assert.match(html, /const label = interactive && disabled && disabledLabel \? disabledLabel : interactive \? "Rating" : "Rating \(read only\)";/);
   assert.match(html, /aria-label=\{label\}/);

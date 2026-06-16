@@ -72,7 +72,7 @@ const tableMobileMetaClassName =
   "table-mobile-meta hidden text-[11px] leading-[1.3] text-muted-foreground max-[540px]:col-start-2 max-[540px]:row-start-1 max-[540px]:block max-[540px]:justify-self-end max-[540px]:whitespace-nowrap max-[540px]:text-right";
 const tableHiddenOnMobileClassName = "max-[540px]:hidden";
 const cardRatingClassName =
-  "rating-control absolute bottom-1.5 left-1.5 z-[2] inline-flex items-center gap-0 rounded-md bg-[rgba(15,23,42,0.78)] px-1 py-[3px] leading-[1.2] text-white [&_.rating-star]:h-3 [&_.rating-star]:w-3 [&_.rating-star]:text-[10px] [&_.rating-star]:text-[rgba(255,255,255,0.34)] [&_.rating-star[data-active=true]]:text-primary-foreground";
+  "rating-control absolute bottom-1.5 left-1.5 z-[2] inline-flex items-center gap-0 rounded-md bg-[rgba(15,23,42,0.78)] px-1 py-[3px] leading-[1.2] text-white [&_.rating-star]:h-3 [&_.rating-star]:w-3 [&_.rating-star]:text-[10px] [&_.rating-star]:text-[rgba(255,255,255,0.34)] [&_.rating-star[data-active=true]]:text-yellow-300";
 const tableRatingClassName = "rating-control inline-flex items-center justify-self-start gap-px text-left";
 const tileMasonryBaseWidth = 168;
 const tileMasonryGap = 4;
