@@ -20,6 +20,9 @@ interface PluginSettings {
   authEnabled: boolean;
   basicAuthUser: string;
   host: string;
+  httpsCertPath: string;
+  httpsEnabled: boolean;
+  httpsKeyPath: string;
   lastServerStatus: ServerStatus;
   passwordHash: string;
   port: number;
@@ -60,6 +63,9 @@ interface ServerManagerOptions {
   viewerServerFactory?: (settings: {
     authUsers: AuthUser[];
     host: string;
+    httpsCertPath: string;
+    httpsEnabled: boolean;
+    httpsKeyPath: string;
     port: number;
   }) => ManagedViewer;
 }
@@ -78,6 +84,9 @@ const DEFAULT_SETTINGS: PluginSettings = {
   port: 41532,
   authEnabled: false,
   basicAuthUser: "eagle",
+  httpsCertPath: "",
+  httpsEnabled: false,
+  httpsKeyPath: "",
   passwordHash: "",
   lastServerStatus: "stopped",
 };
@@ -119,6 +128,9 @@ function createSettingsStore({ filePath = defaultSettingsPath() }: { filePath?: 
       if (next.authEnabled && authUsersMissingPassword(next.authUsers)) {
         throw new Error("Password is required for every enabled user");
       }
+      if (next.httpsEnabled && (!next.httpsCertPath || !next.httpsKeyPath)) {
+        throw new Error("HTTPS requires certificate and key paths");
+      }
       if (!next.authEnabled) {
         if (input.allowMetadataEditing === true) {
           throw new Error("Password protection is required when metadata editing is enabled");
@@ -149,6 +161,9 @@ function normalizeSettings(input: SettingsInput = {}): PluginSettings {
     allowMetadataEditing: Boolean(input.allowMetadataEditing ?? DEFAULT_SETTINGS.allowMetadataEditing),
     authUsers: normalizeAuthUsers(input.authUsers, input),
     host: String(input.host || DEFAULT_SETTINGS.host).trim() || DEFAULT_SETTINGS.host,
+    httpsCertPath: String(input.httpsCertPath || "").trim(),
+    httpsEnabled: Boolean(input.httpsEnabled ?? DEFAULT_SETTINGS.httpsEnabled),
+    httpsKeyPath: String(input.httpsKeyPath || "").trim(),
     port,
     authEnabled: Boolean(input.authEnabled ?? DEFAULT_SETTINGS.authEnabled),
     basicAuthUser: String(input.basicAuthUser || DEFAULT_SETTINGS.basicAuthUser).trim() || DEFAULT_SETTINGS.basicAuthUser,
@@ -266,13 +281,14 @@ function getLanAddresses() {
   return output;
 }
 
-function buildAccessUrl({ host = "0.0.0.0", port = 41532, lanAddresses = [] }: {
+function buildAccessUrl({ host = "0.0.0.0", httpsEnabled = false, port = 41532, lanAddresses = [] }: {
   host?: string;
+  httpsEnabled?: boolean;
   lanAddresses?: LanAddress[];
   port?: number;
 } = {}) {
   const address = selectLanAddress({ lanAddresses, host });
-  return `http://${address}:${port}`;
+  return `${httpsEnabled ? "https" : "http"}://${address}:${port}`;
 }
 
 function selectLanAddress({ lanAddresses = [], host = "0.0.0.0" }: {
@@ -309,6 +325,7 @@ function createServerManager({
       lanAddresses,
       url: buildAccessUrl({
         host: loadedSettings.host,
+        httpsEnabled: loadedSettings.httpsEnabled,
         port: status.port || loadedSettings.port,
         lanAddresses,
       }),
@@ -319,6 +336,9 @@ function createServerManager({
   async function createViewer(settings: PluginSettings) {
     return viewerServerFactory({
       host: settings.host,
+      httpsCertPath: settings.httpsCertPath,
+      httpsEnabled: settings.httpsEnabled,
+      httpsKeyPath: settings.httpsKeyPath,
       port: settings.port,
       authUsers: settings.authEnabled ? settings.authUsers : [],
     });
@@ -326,6 +346,9 @@ function createServerManager({
 
   function needsServerRestart(prev: PluginSettings, next: PluginSettings) {
     if (prev.host !== next.host) return true;
+    if (prev.httpsEnabled !== next.httpsEnabled) return true;
+    if (prev.httpsCertPath !== next.httpsCertPath) return true;
+    if (prev.httpsKeyPath !== next.httpsKeyPath) return true;
     if (prev.port !== next.port) return true;
     if (prev.authEnabled !== next.authEnabled) return true;
     if (!prev.authEnabled && !next.authEnabled) return false;
@@ -341,8 +364,8 @@ function createServerManager({
 
     async start() {
       const settings = await settingsStore.load();
-      if (!viewer) viewer = await createViewer(settings);
       try {
+        if (!viewer) viewer = await createViewer(settings);
         await viewer.start();
         stateOverride = "running";
         lastError = "";

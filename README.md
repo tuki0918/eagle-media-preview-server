@@ -10,7 +10,7 @@ You can preview your media from other devices on the same network.
 
 - One-click local preview server
 - Access from devices on the same network
-- Basic authentication
+- Password-protected viewer login
 - Multiple users with Viewer, Editor, and Admin roles
 - Read-only media browsing by default
 - Role-based metadata editing for rating, tags, and categories
@@ -22,7 +22,7 @@ You can preview your media from other devices on the same network.
 
 ## Authentication and roles
 
-Authentication is optional. When BasicAuth protection is enabled, browser access requires either a BasicAuth header or a `viewer_session` cookie issued by the login API.
+Authentication is optional. When password protection is enabled, browser access uses the built-in login screen and a `viewer_session` cookie issued by the login API. Passwords are only sent to `POST /api/auth/login`; follow-up API and media requests use the session cookie instead of resending credentials. HTTP sessions use `HttpOnly; SameSite=Lax`; when HTTPS is enabled with a certificate and key, session cookies also use `Secure`.
 
 - Viewer users can browse and preview media.
 - Editor users can edit rating, tags, and categories from the preview panel.
@@ -31,6 +31,47 @@ Authentication is optional. When BasicAuth protection is enabled, browser access
 Plain text passwords are never persisted. New passwords are saved as salted PBKDF2-SHA-256 hashes, and existing legacy SHA-256 hashes remain accepted for migration compatibility. The viewer session is a server-side cookie session rather than a JWT.
 
 If a viewer session expires or an authenticated API call returns `401`, the browser viewer clears the current library state and returns to the login screen.
+
+## Enabling HTTPS with mkcert
+
+HTTPS requires a certificate file and a private key file. For local/LAN use, `mkcert` is the recommended way to create a trusted development certificate.
+
+```sh
+brew install mkcert
+mkcert -install
+mkcert 127.0.0.1 localhost 192.168.x.x
+```
+
+Replace `192.168.x.x` with the LAN IP address shown in the plugin Endpoint URL. If that LAN IP changes, create a new certificate that includes the new IP.
+
+`mkcert` creates files like:
+
+```text
+127.0.0.1+2.pem      -> set as TLS Cert
+127.0.0.1+2-key.pem  -> set as TLS Key
+```
+
+Keep the `*-key.pem` file private. It is the TLS private key.
+
+To avoid browser certificate warnings on another device, that device must trust the mkcert root CA.
+
+On the Mac that created the certificate:
+
+```sh
+mkcert -CAROOT
+```
+
+This prints the folder containing `rootCA.pem`.
+
+For another Mac, copy `rootCA.pem` to that Mac, open it in Keychain Access, add it to the System keychain, and set it to Always Trust.
+
+For iPhone or iPad, send `rootCA.pem` to the device, install the downloaded profile, then enable full trust in:
+
+```text
+Settings > General > About > Certificate Trust Settings
+```
+
+Without trusting the root CA, HTTPS still encrypts the connection, but browsers will show a certificate warning.
 
 ## Development
 

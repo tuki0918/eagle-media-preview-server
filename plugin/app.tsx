@@ -18,6 +18,9 @@ interface PluginSettings {
   autoStart?: boolean;
   basicAuthUser?: string;
   host?: string;
+  httpsCertPath?: string;
+  httpsEnabled?: boolean;
+  httpsKeyPath?: string;
   passwordHash?: string;
   port?: number | string;
 }
@@ -55,6 +58,7 @@ declare global {
 
 const busyStoppedFrames = Object.freeze([".", "..", "...", "....", "....."]);
 const AUTH_PASSWORD_REQUIRED_MESSAGE = "Enter a password for every user before enabling password protection.";
+const HTTPS_CERTIFICATE_REQUIRED_MESSAGE = "Enter certificate and key paths before enabling HTTPS.";
 const settingInputClassName = "h-7 min-w-0 rounded-md border border-[#d7d9de] bg-white px-2 text-[11px] text-[#111] outline-0 focus:border-[rgba(31,116,255,0.58)] focus:shadow-[0_0_0_3px_rgba(31,116,255,0.12)] disabled:cursor-not-allowed disabled:bg-[#f4f5f7] disabled:text-[#8a8f99]";
 const authActionButtonClassName = "border border-[#d7d9de] bg-white text-[#555c66] hover:bg-[#f4f5f7] disabled:cursor-not-allowed disabled:opacity-45";
 
@@ -76,6 +80,9 @@ function App() {
       authEnabled: false,
       basicAuthUser: "eagle",
       host: "0.0.0.0",
+      httpsCertPath: "",
+      httpsEnabled: false,
+      httpsKeyPath: "",
       port: 41532,
     },
     state: "stopped",
@@ -90,6 +97,7 @@ function App() {
   const authEnabled = Boolean(settings.authEnabled);
   const authUsers = normalizedAuthUsers(settings);
   const metadataEditingEnabled = authEnabled && authUsersCanEditMetadata(authUsers);
+  const httpsEnabled = Boolean(settings.httpsEnabled);
   const authUsersStatusLabel = authEnabled ? "Active" : "Inactive";
   const authUsersStatusClassName = !authEnabled
     ? "border-[#d5d9df] bg-[#f3f4f6] text-[#626975]"
@@ -156,13 +164,23 @@ function App() {
       : authUsers;
     if (!validateAuthUsers(effectiveAuthUsers)) return false;
     const nextAuthEnabled = Boolean(patch.authEnabled ?? authEnabled);
+    const nextHttpsEnabled = Boolean(patch.httpsEnabled ?? httpsEnabled);
+    const nextHttpsCertPath = String(patch.httpsCertPath ?? settings.httpsCertPath ?? "").trim();
+    const nextHttpsKeyPath = String(patch.httpsKeyPath ?? settings.httpsKeyPath ?? "").trim();
     if (nextAuthEnabled && authUsersMissingPassword(effectiveAuthUsers, passwordDrafts)) {
       setMessage(AUTH_PASSWORD_REQUIRED_MESSAGE, true);
+      return false;
+    }
+    if (nextHttpsEnabled && (!nextHttpsCertPath || !nextHttpsKeyPath)) {
+      setMessage(HTTPS_CERTIFICATE_REQUIRED_MESSAGE, true);
       return false;
     }
     const payload: Record<string, unknown> = {
       autoStart: settings.autoStart,
       host: publicNetwork ? "0.0.0.0" : "127.0.0.1",
+      httpsCertPath: settings.httpsCertPath || "",
+      httpsEnabled: nextHttpsEnabled,
+      httpsKeyPath: settings.httpsKeyPath || "",
       port: settings.port || 41532,
       ...patch,
       authEnabled: nextAuthEnabled,
@@ -410,6 +428,21 @@ function App() {
                   saveSettings({ patch: { host } });
                 }}
               />
+              <OptionRow
+                checked={httpsEnabled}
+                disabled={formDisabled}
+                icon={<ShieldIcon />}
+                title="HTTPS"
+                description="Use TLS when certificate paths are set."
+                onChange={(checked) => {
+                  if (checked && (!String(settings.httpsCertPath || "").trim() || !String(settings.httpsKeyPath || "").trim())) {
+                    setMessage(HTTPS_CERTIFICATE_REQUIRED_MESSAGE, true);
+                    return;
+                  }
+                  updateSettings({ httpsEnabled: checked });
+                  saveSettings({ patch: { httpsEnabled: checked } });
+                }}
+              />
             </div>
           </div>
 
@@ -539,6 +572,28 @@ function App() {
               </div>
             </div>
           </SettingRow>
+          <SettingRow label="TLS Cert" help="PEM certificate file used when HTTPS is enabled.">
+            <input
+              className={`${settingInputClassName} w-full`}
+              type="text"
+              disabled={formDisabled}
+              placeholder="/path/to/cert.pem"
+              value={settings.httpsCertPath || ""}
+              onChange={(event) => updateSettings({ httpsCertPath: event.currentTarget.value })}
+              onBlur={(event) => saveSettings({ patch: { httpsCertPath: event.currentTarget.value } })}
+            />
+          </SettingRow>
+          <SettingRow label="TLS Key" help="PEM private key file used when HTTPS is enabled.">
+            <input
+              className={`${settingInputClassName} w-full`}
+              type="text"
+              disabled={formDisabled}
+              placeholder="/path/to/key.pem"
+              value={settings.httpsKeyPath || ""}
+              onChange={(event) => updateSettings({ httpsKeyPath: event.currentTarget.value })}
+              onBlur={(event) => saveSettings({ patch: { httpsKeyPath: event.currentTarget.value } })}
+            />
+          </SettingRow>
         </div>
       </form>
       <p className="mx-[9px] mb-2.5 mt-0 px-0.5 text-center text-[10px] text-[#d92d20]" aria-live="polite" hidden={!message || !messageIsError}>
@@ -640,6 +695,9 @@ function settingsPayloadChanged(current: PluginSettings | undefined, nextSetting
 
 function serverSettingsChanged(current: PluginSettings, nextSettings: Record<string, unknown>) {
   if ((nextSettings.host ?? current.host) !== current.host) return true;
+  if (Boolean(nextSettings.httpsEnabled ?? current.httpsEnabled) !== Boolean(current.httpsEnabled)) return true;
+  if ((nextSettings.httpsCertPath ?? current.httpsCertPath ?? "") !== (current.httpsCertPath ?? "")) return true;
+  if ((nextSettings.httpsKeyPath ?? current.httpsKeyPath ?? "") !== (current.httpsKeyPath ?? "")) return true;
   if (Number(nextSettings.port ?? current.port) !== Number(current.port)) return true;
   if (Boolean(nextSettings.authEnabled ?? current.authEnabled) !== Boolean(current.authEnabled)) return true;
   if (JSON.stringify(nextSettings.authUsers ?? current.authUsers ?? []) !== JSON.stringify(current.authUsers ?? [])) return true;
@@ -650,6 +708,9 @@ function serverRestartSettingsChanged(current: PluginSettings, nextSettings: Rec
   const currentAuthEnabled = Boolean(current.authEnabled);
   const nextAuthEnabled = Boolean(nextSettings.authEnabled ?? current.authEnabled);
   if ((nextSettings.host ?? current.host) !== current.host) return true;
+  if (Boolean(nextSettings.httpsEnabled ?? current.httpsEnabled) !== Boolean(current.httpsEnabled)) return true;
+  if ((nextSettings.httpsCertPath ?? current.httpsCertPath ?? "") !== (current.httpsCertPath ?? "")) return true;
+  if ((nextSettings.httpsKeyPath ?? current.httpsKeyPath ?? "") !== (current.httpsKeyPath ?? "")) return true;
   if (Number(nextSettings.port ?? current.port) !== Number(current.port)) return true;
   if (nextAuthEnabled !== currentAuthEnabled) return true;
   if (!currentAuthEnabled && !nextAuthEnabled) return false;

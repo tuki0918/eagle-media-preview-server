@@ -1,6 +1,7 @@
-const { createReadStream, existsSync } = require("fs");
+const { createReadStream, existsSync, readFileSync } = require("fs");
 const { stat } = require("fs").promises;
-const { createServer } = require("http");
+const { createServer: createHttpServer } = require("http");
+const { createServer: createHttpsServer } = require("https");
 const { createHash, pbkdf2Sync, randomUUID, timingSafeEqual } = require("crypto");
 const { extname, join, normalize, resolve } = require("path");
 const { createEagleClient, normalizeStringArray, pathFromFileValue, resolveLibraryItemFile } = require("./eagleClient.cjs");
@@ -12,6 +13,9 @@ interface ViewerServerOptions {
   basicAuthUsername?: string;
   eagleClient?: EagleClient;
   host?: string;
+  httpsCertPath?: string;
+  httpsEnabled?: boolean;
+  httpsKeyPath?: string;
   passwordHash?: string;
   port?: number;
   publicDir?: string;
@@ -156,6 +160,9 @@ function createViewerServer({
   viewerPassword = "",
   passwordHash = "",
   basicAuthUsername = "eagle",
+  httpsEnabled = false,
+  httpsCertPath = "",
+  httpsKeyPath = "",
   eagleClient = createEagleClient(),
 }: ViewerServerOptions = {}) {
   let serverInstance = null;
@@ -176,16 +183,12 @@ function createViewerServer({
     client: eagleClient,
   });
 
-  const server = createServer(async (req, res) => {
+  const server = createProtocolServer({ httpsCertPath, httpsEnabled, httpsKeyPath }, async (req, res) => {
     try {
-      const url = new URL(req.url || "/", `http://${req.headers.host}`);
-      const auth = { authSessions, users: resolvedAuthUsers };
+      const url = new URL(req.url || "/", `${httpsEnabled ? "https" : "http"}://${req.headers.host}`);
+      const auth = { authSessions, secureCookies: httpsEnabled, users: resolvedAuthUsers };
       if (!isTrustedUnsafeRequest(req, url)) {
         sendJson(res, 403, { error: "Cross-origin writes are not allowed" });
-        return;
-      }
-      if (authRequired(auth) && !url.pathname.startsWith("/api/auth/") && !isAuthorized(req, auth)) {
-        sendAuthRequired(res);
         return;
       }
       if (url.pathname.startsWith("/api/")) {
@@ -208,6 +211,10 @@ function createViewerServer({
       }
       const fileMatch = url.pathname.match(/^\/file\/([^/]+)(?:\/[^/]+)?$/);
       if (fileMatch) {
+        if (!isAuthorized(req, auth)) {
+          sendAuthRequired(res);
+          return;
+        }
         attachRequestCounter(res, () => {
           requestCount += 1;
         });
@@ -283,6 +290,19 @@ function createViewerServer({
 
     server,
   };
+}
+
+function createProtocolServer({ httpsCertPath = "", httpsEnabled = false, httpsKeyPath = "" }, handler) {
+  if (!httpsEnabled) return createHttpServer(handler);
+  const keyPath = String(httpsKeyPath || "").trim();
+  const certPath = String(httpsCertPath || "").trim();
+  if (!keyPath || !certPath) {
+    throw new Error("HTTPS requires both certificate and key paths");
+  }
+  return createHttpsServer({
+    cert: readFileSync(certPath),
+    key: readFileSync(keyPath),
+  }, handler);
 }
 
 async function handleApi(req, url, res, { auth, getSession, setSession }: ApiContext & { auth: AuthContext }) {
@@ -455,6 +475,7 @@ async function handleApi(req, url, res, { auth, getSession, setSession }: ApiCon
 
 interface AuthContext {
   authSessions: Map<string, AuthSession>;
+  secureCookies?: boolean;
   users: AuthUser[];
 }
 
@@ -495,7 +516,7 @@ async function handleAuthRoutes(req, url, res, auth: AuthContext) {
     });
     res.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
-      "Set-Cookie": authSessionCookie(token),
+      "Set-Cookie": authSessionCookie(token, AUTH_SESSION_MAX_AGE_SECONDS, auth.secureCookies),
     });
     res.end(JSON.stringify(authStatusResponse(auth, user, { authenticated: true })));
     return true;
@@ -510,7 +531,7 @@ async function handleAuthRoutes(req, url, res, auth: AuthContext) {
     if (token) auth.authSessions.delete(token);
     res.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
-      "Set-Cookie": authSessionCookie("", 0),
+      "Set-Cookie": authSessionCookie("", 0, auth.secureCookies),
     });
     res.end(JSON.stringify(authStatusResponse(auth, null, { authenticated: !authRequired(auth) })));
     return true;
@@ -789,14 +810,6 @@ function authenticatedUser(req, auth: AuthContext): AuthSession | null {
 
 function resolveAuthenticatedUser(req, auth: AuthContext): AuthSession | null {
   if (!authRequired(auth)) return null;
-  const basicUser = basicAuthUser(req.headers.authorization || "", auth);
-  if (basicUser) {
-    return {
-      expiresAt: Date.now() + AUTH_SESSION_MAX_AGE_SECONDS * 1000,
-      role: basicUser.role,
-      username: basicUser.username,
-    };
-  }
   const token = parseCookies(req.headers.cookie || "").viewer_session;
   if (!token) return null;
   const session = auth.authSessions.get(token);
@@ -812,21 +825,6 @@ function pruneAuthSessions(authSessions: Map<string, AuthSession>) {
   const now = Date.now();
   for (const [token, session] of authSessions) {
     if (session.expiresAt <= now) authSessions.delete(token);
-  }
-}
-
-function basicAuthUser(header, auth: AuthContext): AuthUser | null {
-  if (!/^Basic\s+/i.test(header)) return null;
-  try {
-    const encoded = header.replace(/^Basic\s+/i, "");
-    const decoded = Buffer.from(encoded, "base64").toString("utf8");
-    const separator = decoded.indexOf(":");
-    if (separator === -1) return null;
-    const username = decoded.slice(0, separator);
-    const password = decoded.slice(separator + 1);
-    return findPasswordUser(username, password, auth);
-  } catch {
-    return null;
   }
 }
 
@@ -897,13 +895,12 @@ function normalizeRole(value): UserRole {
 function sendAuthRequired(res) {
   res.writeHead(401, {
     "Content-Type": "application/json; charset=utf-8",
-    "WWW-Authenticate": 'Basic realm="Media Preview Server", charset="UTF-8"',
   });
   res.end(JSON.stringify({ error: "Authentication required" }));
 }
 
-function authSessionCookie(token: string, maxAge = AUTH_SESSION_MAX_AGE_SECONDS) {
-  return `viewer_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}`;
+function authSessionCookie(token: string, maxAge = AUTH_SESSION_MAX_AGE_SECONDS, secure = false) {
+  return `viewer_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${secure ? "; Secure" : ""}`;
 }
 
 function passwordMatches(value: string, passwordHash: string) {

@@ -8,6 +8,7 @@ import { join } from "node:path";
 const require = createRequire(import.meta.url);
 const {
   DEFAULT_SETTINGS,
+  buildAccessUrl,
   createServerManager,
   createSettingsStore,
   hashPassword,
@@ -17,8 +18,17 @@ const PASSWORD_HASH_PATTERN = /^pbkdf2\$sha256\$210000\$[^$]+\$[^$]+$/;
 
 test("generated CommonJS runtime loads with require for Eagle plugin windows", () => {
   assert.equal(normalizeSettings({}).port, DEFAULT_SETTINGS.port);
+  assert.equal(normalizeSettings({}).httpsEnabled, false);
   assert.equal("requestLogEnabled" in normalizeSettings({ requestLogEnabled: false }), false);
   assert.equal("preferredLanAddress" in normalizeSettings({ preferredLanAddress: "192.168.1.50" }), false);
+});
+
+test("generated runtime builds HTTPS access URLs when enabled", () => {
+  assert.equal(buildAccessUrl({
+    host: "127.0.0.1",
+    httpsEnabled: true,
+    port: 4443,
+  }), "https://localhost:4443");
 });
 
 test("generated settings store uses the product settings directory by default", () => {
@@ -133,6 +143,16 @@ test("generated settings store requires password protection before metadata edit
   );
 });
 
+test("generated settings store requires certificate paths before HTTPS can be enabled", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-runtime-"));
+  const store = createSettingsStore({ filePath: join(dir, "settings.json") });
+
+  await assert.rejects(
+    () => store.save({ httpsEnabled: true }),
+    /HTTPS requires certificate and key paths/i,
+  );
+});
+
 test("generated settings store clears metadata editing when password protection is disabled", async () => {
   const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-runtime-"));
   const store = createSettingsStore({ filePath: join(dir, "settings.json") });
@@ -209,6 +229,61 @@ test("generated server manager restarts after auth user roles change while runni
   ]);
 });
 
+test("generated server manager passes HTTPS settings and restarts when they change", async () => {
+  const calls: unknown[] = [];
+  let settings = {
+    ...DEFAULT_SETTINGS,
+    host: "127.0.0.1",
+    port: 41532,
+  };
+  const manager = createServerManager({
+    settingsStore: {
+      async load() {
+        return settings;
+      },
+      async save(input: Record<string, unknown>) {
+        settings = { ...settings, ...input };
+        calls.push(["save", settings.httpsEnabled, settings.httpsCertPath, settings.httpsKeyPath]);
+        return settings;
+      },
+    },
+    viewerServerFactory(options: { httpsCertPath: string; httpsEnabled: boolean; httpsKeyPath: string }) {
+      calls.push(["create", options.httpsEnabled, options.httpsCertPath, options.httpsKeyPath]);
+      return {
+        async start() {
+          calls.push(["start", options.httpsEnabled]);
+        },
+        async stop() {
+          calls.push(["stop", options.httpsEnabled]);
+        },
+        status() {
+          return { state: "running", host: "127.0.0.1", port: 41532 };
+        },
+      };
+    },
+    lanAddressProvider() {
+      return [{ label: "lo0", address: "127.0.0.1" }];
+    },
+  });
+
+  await manager.start();
+  const saved = await manager.saveSettings({
+    httpsCertPath: "/tmp/cert.pem",
+    httpsEnabled: true,
+    httpsKeyPath: "/tmp/key.pem",
+  });
+
+  assert.equal(saved.url, "https://localhost:41532");
+  assert.deepEqual(calls, [
+    ["create", false, "", ""],
+    ["start", false],
+    ["save", true, "/tmp/cert.pem", "/tmp/key.pem"],
+    ["stop", false],
+    ["create", true, "/tmp/cert.pem", "/tmp/key.pem"],
+    ["start", true],
+  ]);
+});
+
 test("generated server manager can start and stop a viewer server", async () => {
   let settings = {
     ...DEFAULT_SETTINGS,
@@ -240,7 +315,7 @@ test("generated server manager can start and stop a viewer server", async () => 
   assert.equal(stopped.state, "stopped");
 });
 
-test("generated server manager accepts PBKDF2 password hashes for BasicAuth", async () => {
+test("generated server manager accepts PBKDF2 password hashes for cookie login", async () => {
   let settings = {
     ...DEFAULT_SETTINGS,
     authEnabled: true,
@@ -266,9 +341,21 @@ test("generated server manager accepts PBKDF2 password hashes for BasicAuth", as
   });
 
   const started = await manager.start();
-  const token = Buffer.from("editor:secret").toString("base64");
-  const response = await fetch(`http://127.0.0.1:${started.port}/api/auth/status`, {
-    headers: { Authorization: `Basic ${token}` },
+  const origin = `http://127.0.0.1:${started.port}`;
+  const login = await fetch(`${origin}/api/auth/login`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Origin: origin,
+    },
+    body: JSON.stringify({ username: "editor", password: "secret" }),
+  });
+  assert.equal(login.status, 200);
+  const cookie = login.headers.get("set-cookie") || "";
+  assert.match(cookie, /viewer_session=/);
+
+  const response = await fetch(`${origin}/api/auth/status`, {
+    headers: { Cookie: cookie },
   });
   const body = await response.json();
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Eagle | Media Preview Server is an Eagle plugin that starts a local HTTP server on the computer running Eagle, allowing devices on the same LAN to browse media from the Eagle library.
+Eagle | Media Preview Server is an Eagle plugin that starts a local HTTP or HTTPS server on the computer running Eagle, allowing devices on the same LAN to browse media from the Eagle library.
 
 The product has two user-facing surfaces:
 
@@ -20,7 +20,7 @@ External devices connect to the plugin server, not directly to Eagle's Web API.
 - Start and stop the media preview server from inside Eagle
 - Browse Eagle media from iPhone, iPad, and other computers on the same LAN
 - Make access simple through an Endpoint URL and QR code
-- Optionally protect access with BasicAuth
+- Optionally protect access with a viewer login
 - Serve images, videos, audio, and text-like files in browser-friendly formats
 - Keep server status and settings understandable for non-technical users
 
@@ -53,7 +53,8 @@ Defaults:
 - Viewer server port: `41532`
 - Eagle API host: `127.0.0.1`
 - Eagle API port: `41595`
-- BasicAuth: disabled
+- Password protection: disabled
+- HTTPS: disabled
 - Public Network: enabled (`0.0.0.0`)
 - Auto start: disabled
 
@@ -120,10 +121,13 @@ Build output is created under `dist`:
 - `Options`
   - Auto start
   - Password protection
+  - HTTPS
   - Public Network
 - `Settings`
   - Collapsible settings panel
   - Port
+  - TLS certificate path
+  - TLS key path
   - Users
   - Per-user role and password
 
@@ -139,6 +143,9 @@ type Settings = {
   }>;
   autoStart: boolean;
   host: string;
+  httpsCertPath: string;
+  httpsEnabled: boolean;
+  httpsKeyPath: string;
   port: number;
   authEnabled: boolean;
   // Legacy single-user compatibility fields. New UI writes `authUsers`.
@@ -210,7 +217,7 @@ Settings path:
 - Unsupported timed media
   - Shows the thumbnail and an unsupported-format message
 
-## HTTP Server
+## HTTP/HTTPS Server
 
 ### Static Routes
 
@@ -264,15 +271,17 @@ Settings path:
 
 ## Authentication
 
-When BasicAuth protection is enabled, static viewer routes, API routes, and media routes require authentication except:
+When password protection is enabled, viewer API routes and media routes require authentication except:
 
 - `/api/auth/status`
 - `/api/auth/login`
 
+Static viewer routes stay available so unauthenticated browsers can load the login screen.
+
 Supported authentication paths:
 
-- BasicAuth header
 - `viewer_session` cookie issued by the login API; cookie and server-side session tokens expire after 30 days
+- HTTPS mode requires certificate and private key paths, serves the endpoint with `https://`, and adds `Secure` to `viewer_session`
 - If a cookie session expires or is rejected, viewer API requests return `401`; the browser viewer treats that as an auth reset and prompts for login again
 
 Roles:
@@ -341,8 +350,9 @@ Main status fields:
 1. Add at least one user with a password
 2. Assign Viewer, Editor, or Admin roles
 3. Enable Password protection
-4. If the server is already running, settings changes that affect binding or auth restart it automatically
-5. External browser access requires authentication
+4. To protect credentials and sessions on the wire, enter TLS certificate/key paths and enable HTTPS
+5. If the server is already running, settings changes that affect binding, protocol, TLS paths, or auth restart it automatically
+6. External browser access requires authentication
 
 ## Build and Verification
 
