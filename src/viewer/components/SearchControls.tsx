@@ -1,8 +1,10 @@
 import { useEffect, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { FunnelXIcon, SlidersHorizontalIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { MEDIA_TYPE_OPTIONS, PAGE_SIZE_OPTIONS, RATING_OPTIONS } from "../shellConfig";
+import { getLoginConnectState, subscribeLoginConnectState } from "../loginConnectState";
 import {
   getSearchControlsState,
   subscribeSearchControlsState,
@@ -65,6 +67,8 @@ export function SearchControls({
   const displaySelectedFolderId = selectedFolderId ?? state.selectedFolderId;
   const displaySelectedLimit = selectedLimit ?? state.selectedLimit;
   const displaySelectedRating = selectedRating ?? state.selectedRating;
+  const loginState = useSyncExternalStore(subscribeLoginConnectState, getLoginConnectState, getLoginConnectState);
+  const showAccountMenuTrigger = loginState.authRequired && loginState.authenticated;
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
@@ -76,7 +80,13 @@ export function SearchControls({
 
   return (
     <section className="controls grid gap-4 pb-2" aria-label="Search and filters">
-      <div className="search-row grid grid-cols-[minmax(0,1fr)_auto_auto] items-stretch gap-3 max-[540px]:gap-2">
+      <div
+        className={cn(
+          "search-row grid items-stretch gap-3 max-[540px]:gap-2",
+          showAccountMenuTrigger ? "grid-cols-[auto_minmax(0,1fr)_auto_auto]" : "grid-cols-[minmax(0,1fr)_auto_auto]",
+        )}
+      >
+        {showAccountMenuTrigger ? <AccountMenuTrigger /> : null}
         <div className="search-box relative flex min-h-[50px] items-center gap-2.5 rounded-lg border border-input bg-card px-3 py-1.5 shadow-sm transition-colors hover:bg-muted/20 max-[540px]:min-h-11 max-[540px]:gap-2 max-[540px]:px-2.5 max-[540px]:py-[5px]">
           <SearchIcon />
           <div className="search-composer flex min-w-0 flex-auto flex-wrap items-center gap-x-2 gap-y-1.5 max-[540px]:flex-nowrap max-[540px]:overflow-hidden max-[540px]:gap-1.5">
@@ -98,6 +108,18 @@ export function SearchControls({
         selectedRating={displaySelectedRating}
       />
     </section>
+  );
+}
+
+function AccountMenuTrigger() {
+  return (
+    <SidebarTrigger
+      id="accountMenuButton"
+      className="icon-button size-[50px] min-w-[50px] flex-[0_0_40px] self-stretch rounded-lg max-[540px]:size-11 max-[540px]:min-w-11"
+      variant="outline"
+      size="icon-lg"
+      aria-controls="accountSideMenu"
+    />
   );
 }
 

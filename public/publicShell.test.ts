@@ -21,7 +21,10 @@ import { setLoginConnectState } from "../src/viewer/loginConnectState";
 import { PAGE_SIZE_OPTIONS } from "../src/viewer/shellConfig";
 
 function accountSideMenuElement() {
-  return createElement(TooltipProvider, null, createElement(SidebarProvider, null, createElement(AccountSideMenu)));
+  return createElement(TooltipProvider, null, createElement(SidebarProvider, null, [
+    createElement(AccountSideMenu, { key: "sidebar" }),
+    createElement(SearchControls, { key: "search" }),
+  ]));
 }
 
 async function readViewerSources() {
@@ -184,8 +187,9 @@ test("public viewer exposes sign out when authenticated", async () => {
   assert.match(accountMenu, /Sign out/);
   assert.match(accountMenu, /data-slot="sidebar"/);
   assert.match(accountMenu, /data-sidebar="menu-button"/);
-  assert.match(accountMenu, /md:peer-data-\[state=collapsed\]:left-1\.5/);
+  assert.match(accountMenu, /grid-cols-\[auto_minmax\(0,1fr\)_auto_auto\]/);
   assert.doesNotMatch(accountMenu, /md:hidden/);
+  assert.doesNotMatch(accountMenu, /fixed left-3/);
   assert.doesNotMatch(accountMenu, /authFooterMessage/);
   assert.match(footer, /id="libraryFooterName"/);
   assert.doesNotMatch(footer, /logoutButton/);

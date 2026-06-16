@@ -49,6 +49,7 @@ function renderAccountSideMenu() {
     <TooltipProvider>
       <SidebarProvider>
         <AccountSideMenu />
+        <SearchControls />
       </SidebarProvider>
     </TooltipProvider>,
   );
@@ -314,8 +315,9 @@ describe("ViewerAppShell", () => {
     expect(html).toContain('data-slot="sidebar"');
     expect(html).toContain('data-variant="sidebar"');
     expect(html).toContain('data-sidebar="menu-button"');
-    expect(html).toContain("md:peer-data-[state=collapsed]:left-1.5");
+    expect(html).toContain("grid-cols-[auto_minmax(0,1fr)_auto_auto]");
     expect(html).not.toContain("md:hidden");
+    expect(html).not.toContain("fixed left-3");
 
     setLoginConnectState({
       authenticated: false,

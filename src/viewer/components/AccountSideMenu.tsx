@@ -12,7 +12,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
-  SidebarTrigger,
 } from "@/components/ui/sidebar";
 import iconOnUrl from "../../assets/icon_on.svg";
 import { getLibraryFooterName, subscribeLibraryFooterName } from "../libraryFooterState";
@@ -103,13 +102,6 @@ export function AccountSideMenu() {
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>
-      <SidebarTrigger
-        id="accountMenuButton"
-        className="fixed left-3 top-[calc(12px+env(safe-area-inset-top))] z-30 rounded-full bg-background shadow-sm md:left-[calc(var(--sidebar-width)-2.75rem)] md:peer-data-[state=collapsed]:left-1.5"
-        variant="outline"
-        size="icon-lg"
-        aria-controls="accountSideMenu"
-      />
     </>
   );
 }
