@@ -1,9 +1,13 @@
-import { ChevronsUpDownIcon, LogOutIcon, UserRoundIcon } from "lucide-react";
+import { ChevronsUpDownIcon, FolderIcon, FolderOpenIcon, InboxIcon, LogOutIcon, UserRoundIcon } from "lucide-react";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Sidebar,
+  SidebarContent,
   SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -11,13 +15,17 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import iconOnUrl from "../../assets/icon_on.svg";
+import { UNCATEGORIZED_FOLDER_ID } from "../constants";
 import { getLibraryFooterName, subscribeLibraryFooterName } from "../libraryFooterState";
 import { getLoginConnectState, subscribeLoginConnectState } from "../loginConnectState";
-import { submitLogout } from "../shellActions";
+import { getSearchControlsState, subscribeSearchControlsState } from "../searchControlsState";
+import { changeFolder, submitLogout } from "../shellActions";
+import type { EagleFolder } from "../types";
 
 export function AccountSideMenu() {
   const displayName = useSyncExternalStore(subscribeLibraryFooterName, getLibraryFooterName, getLibraryFooterName);
   const loginState = useSyncExternalStore(subscribeLoginConnectState, getLoginConnectState, getLoginConnectState);
+  const searchState = useSyncExternalStore(subscribeSearchControlsState, getSearchControlsState, getSearchControlsState);
   const username = loginState.user?.username?.trim();
   const roleLabel = authRoleLabel(loginState.user?.role);
   const roleDescription = authRoleDescription(loginState.user?.role);
@@ -54,7 +62,12 @@ export function AccountSideMenu() {
           </SidebarMenu>
         </SidebarHeader>
 
-        <div className="min-h-0 flex-1" />
+        <SidebarContent>
+          <FolderSideNav
+            folders={searchState.folders}
+            selectedFolderId={searchState.selectedFolderId}
+          />
+        </SidebarContent>
 
         {loginState.authRequired && loginState.authenticated ? (
           <SidebarFooter className="p-2">
@@ -74,6 +87,110 @@ export function AccountSideMenu() {
         ) : null}
       </Sidebar>
     </>
+  );
+}
+
+function FolderSideNav({
+  folders,
+  selectedFolderId,
+}: {
+  folders: readonly EagleFolder[];
+  selectedFolderId: string;
+}) {
+  const { isMobile, setOpenMobile } = useSidebar();
+
+  const selectFolder = (folderId: string) => {
+    changeFolder({ currentTarget: { value: folderId } });
+    if (isMobile) setOpenMobile(false);
+  };
+
+  return (
+    <SidebarGroup className="px-2 pb-2 pt-1">
+      <SidebarGroupLabel className="h-7 px-2 text-[11px] uppercase tracking-normal">
+        Folders
+      </SidebarGroupLabel>
+      <SidebarGroupContent>
+        <SidebarMenu className="gap-0.5" aria-label="Folder tree">
+          <FolderNavItem
+            active={!selectedFolderId}
+            count={folders.reduce((total, folder) => total + (Number(folder.imageCount) || 0), 0)}
+            depth={0}
+            icon="open"
+            label="All folders"
+            onSelect={() => selectFolder("")}
+          />
+          <FolderNavItem
+            active={selectedFolderId === UNCATEGORIZED_FOLDER_ID}
+            depth={0}
+            icon="inbox"
+            label="Uncategorized"
+            onSelect={() => selectFolder(UNCATEGORIZED_FOLDER_ID)}
+          />
+          {folders.length ? (
+            folders.map((folder) => (
+              <FolderNavItem
+                key={folder.id}
+                active={selectedFolderId === folder.id}
+                count={folder.imageCount}
+                depth={folder.depth || 0}
+                icon={selectedFolderId === folder.id ? "open" : "folder"}
+                label={folder.name}
+                onSelect={() => selectFolder(folder.id)}
+              />
+            ))
+          ) : (
+            <SidebarMenuItem>
+              <div className="px-2 py-2 text-xs leading-snug text-muted-foreground group-data-[collapsible=icon]:hidden">
+                No folders loaded
+              </div>
+            </SidebarMenuItem>
+          )}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  );
+}
+
+function FolderNavItem({
+  active,
+  count,
+  depth,
+  icon,
+  label,
+  onSelect,
+}: {
+  active: boolean;
+  count?: number;
+  depth: number;
+  icon: "folder" | "inbox" | "open";
+  label: string;
+  onSelect: () => void;
+}) {
+  const Icon = icon === "inbox" ? InboxIcon : icon === "open" ? FolderOpenIcon : FolderIcon;
+  const safeDepth = Math.max(0, Math.min(depth, 8));
+  const title = count === undefined ? label : `${label} (${Number(count).toLocaleString()})`;
+
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        className="h-8 gap-2 text-[13px] font-normal data-active:font-[650] group-data-[collapsible=icon]:!pl-2"
+        isActive={active}
+        style={{ paddingLeft: `calc(0.5rem + ${safeDepth} * 0.875rem)` }}
+        tooltip={title}
+        type="button"
+        aria-current={active ? "page" : undefined}
+        title={title}
+        onClick={onSelect}
+      >
+        <Icon className="text-muted-foreground" aria-hidden="true" />
+        <span className="min-w-0 truncate">{label}</span>
+        {count === undefined ? null : (
+          <span className="ml-auto shrink-0 text-[11px] font-normal text-muted-foreground [font-variant-numeric:tabular-nums] group-data-[collapsible=icon]:hidden">
+            {Number(count).toLocaleString()}
+          </span>
+        )}
+      </SidebarMenuButton>
+    </SidebarMenuItem>
   );
 }
 

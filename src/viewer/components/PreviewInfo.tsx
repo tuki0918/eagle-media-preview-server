@@ -211,8 +211,8 @@ function PreviewMetadataEditor({
           kind="category"
           selected={categories}
           setSelected={setCategories}
-          placeholder="Add category"
-          inputLabel="Add category"
+          placeholder="Select folder"
+          inputLabel="Select existing folder"
           labelForValue={(value) => folderLabel(value, folders)}
           onSuggestions={onFolderSuggestions}
           normalizeValue={(value) => String(value || "").trim()}
@@ -282,7 +282,7 @@ function MetadataChipEditor({
       const items = await onSuggestions(nextQuery.trim(), nextSelected);
       if (currentRequest !== requestId.current) return;
       setSuggestions(items);
-      setSuggestionsOpen(items.length > 0);
+      setSuggestionsOpen(items.length > 0 || (kind === "category" && nextQuery.trim().length > 0));
     } catch {
       if (currentRequest === requestId.current) hideSuggestions();
     }
@@ -325,7 +325,10 @@ function MetadataChipEditor({
       addValue(value);
       return;
     }
-    if (suggestions[0]) addValue(suggestions[0].value);
+    const suggestion = value && kind === "category"
+      ? suggestions.find((item) => suggestionMatchesQuery(item, value))
+      : suggestions[0];
+    if (suggestion) addValue(suggestion.value);
   };
 
   useEffect(() => {
@@ -381,7 +384,7 @@ function MetadataChipEditor({
           defaultValue=""
         />
         <div className={previewChipSuggestionsClassName} role="listbox" hidden={!suggestionsOpen}>
-          {suggestions.map((item) => (
+          {suggestions.length ? suggestions.map((item) => (
             <button
               key={item.value}
               type="button"
@@ -396,11 +399,21 @@ function MetadataChipEditor({
               <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{item.label}</span>
               {item.meta ? <span className="preview-chip-suggestion-meta flex-none text-[11px] text-muted-foreground">{item.meta}</span> : null}
             </button>
-          ))}
+          )) : (
+            <div className="preview-chip-suggestion-empty px-2 py-2 text-[12px] leading-snug text-muted-foreground">
+              No matching folder. Create folders in Eagle first.
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
+}
+
+function suggestionMatchesQuery(item: MetadataSuggestion, query: string) {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return true;
+  return item.value.toLowerCase().includes(needle) || item.label.trim().toLowerCase().includes(needle);
 }
 
 function PreviewEditField({ children, label }: { children: ReactNode; label: string }) {

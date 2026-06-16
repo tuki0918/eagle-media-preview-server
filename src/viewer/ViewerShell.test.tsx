@@ -43,6 +43,7 @@ import { setImageOverlayControlsVisible } from "./imageOverlayState";
 import { setVideoOverlayControlsVisible } from "./videoOverlayState";
 import { MEDIA_TYPE_OPTIONS, PAGE_SIZE_OPTIONS, RATING_OPTIONS } from "./shellConfig";
 import { setLoginConnectState } from "./loginConnectState";
+import { setSearchControlsState } from "./searchControlsState";
 
 function renderAccountSideMenu() {
   return renderToStaticMarkup(
@@ -300,6 +301,19 @@ describe("ViewerAppShell", () => {
   });
 
   test("renders authenticated account controls in a responsive side menu", () => {
+    setSearchControlsState({
+      filtersOpen: false,
+      folders: [
+        { id: "parent", name: "Parent", imageCount: 10, depth: 0 },
+        { id: "child", name: "Child", imageCount: 4, depth: 1 },
+      ],
+      hasActiveFilters: true,
+      searchQuery: "",
+      selectedExt: "",
+      selectedFolderId: "child",
+      selectedLimit: 30,
+      selectedRating: "",
+    });
     setLoginConnectState({
       authenticated: true,
       authRequired: true,
@@ -316,6 +330,14 @@ describe("ViewerAppShell", () => {
     expect(html).toContain('id="authRoleLabel"');
     expect(html).toContain('aria-haspopup="menu"');
     expect(html).toContain("lucide-user-round");
+    expect(html).toContain("Folders");
+    expect(html).toContain('aria-label="Folder tree"');
+    expect(html).toContain("All folders");
+    expect(html).toContain("Uncategorized");
+    expect(html).toContain("Parent");
+    expect(html).toContain("Child");
+    expect(html).toContain('aria-current="page"');
+    expect(html).toContain("calc(0.5rem + 1 * 0.875rem)");
     expect(html).toContain('data-slot="sidebar"');
     expect(html).toContain('data-variant="inset"');
     expect(html).toContain('data-sidebar="menu-button"');
@@ -331,6 +353,16 @@ describe("ViewerAppShell", () => {
       isError: false,
       message: "",
       user: null,
+    });
+    setSearchControlsState({
+      filtersOpen: false,
+      folders: [],
+      hasActiveFilters: false,
+      searchQuery: "",
+      selectedExt: "",
+      selectedFolderId: "",
+      selectedLimit: 30,
+      selectedRating: "",
     });
   });
 
@@ -612,6 +644,83 @@ describe("ViewerAppShell", () => {
       expect(form.getAttribute("aria-busy")).toBe("false");
       expect(tagInput.disabled).toBe(false);
       expect(removeButton.disabled).toBe(false);
+    } finally {
+      if (root) {
+        await act(async () => {
+          root?.unmount();
+        });
+      }
+      globalThis.window = previousWindow;
+      globalThis.document = previousDocument;
+      globalThis.Node = previousNode;
+      globalThis.HTMLElement = previousHTMLElement;
+      testGlobal.IS_REACT_ACT_ENVIRONMENT = previousIS_REACT_ACT_ENVIRONMENT;
+    }
+  });
+
+  test("keeps category editing limited to existing folder suggestions", async () => {
+    const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
+    const testGlobal = globalThis as typeof globalThis & {
+      IS_REACT_ACT_ENVIRONMENT?: boolean;
+    };
+    const previousWindow = globalThis.window;
+    const previousDocument = globalThis.document;
+    const previousNode = globalThis.Node;
+    const previousHTMLElement = globalThis.HTMLElement;
+    const previousIS_REACT_ACT_ENVIRONMENT = testGlobal.IS_REACT_ACT_ENVIRONMENT;
+    globalThis.window = dom.window;
+    globalThis.document = dom.window.document;
+    globalThis.Node = dom.window.Node;
+    globalThis.HTMLElement = dom.window.HTMLElement;
+    testGlobal.IS_REACT_ACT_ENVIRONMENT = true;
+
+    const { createRoot } = await import("react-dom/client");
+    let root: import("react-dom/client").Root | null = null;
+    const savedPatches: Array<{ tags: string[]; folders: string[] }> = [];
+    try {
+      const container = dom.window.document.querySelector("#root");
+      if (!(container instanceof dom.window.HTMLElement)) throw new Error("Missing test root");
+      root = createRoot(container);
+
+      await act(async () => {
+        root?.render(
+          <PreviewDetailsPanel
+            canEditMetadata
+            item={{ id: "item-1", tags: ["alpha"], folders: ["folder-1"] }}
+            folders={[{ id: "folder-1", name: "Folder 1" }]}
+            detailRows={[{ label: "Type", value: "Image" }]}
+            onTagSuggestions={() => []}
+            onFolderSuggestions={() => []}
+            onSaveMetadata={async (_item, patch) => {
+              savedPatches.push(patch);
+              return patch;
+            }}
+          />,
+        );
+      });
+
+      const saveButton = container.querySelector(".preview-edit-save");
+      const categoryInput = Array.from(container.querySelectorAll("input")).find((input) => input.placeholder === "Select folder");
+      if (!(saveButton instanceof dom.window.HTMLButtonElement) || !(categoryInput instanceof dom.window.HTMLInputElement)) {
+        throw new Error("Missing category editor controls");
+      }
+
+      await act(async () => {
+        const valueSetter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")?.set;
+        valueSetter?.call(categoryInput, "New folder");
+        categoryInput.dispatchEvent(new dom.window.Event("input", { bubbles: true, cancelable: true }));
+        await new Promise((resolve) => setTimeout(resolve, 180));
+      });
+
+      expect(container.textContent).toContain("No matching folder. Create folders in Eagle first.");
+
+      await act(async () => {
+        categoryInput.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
+      });
+
+      expect(saveButton.disabled).toBe(true);
+      expect(savedPatches).toEqual([]);
+      expect(container.textContent).not.toContain("New folder");
     } finally {
       if (root) {
         await act(async () => {
