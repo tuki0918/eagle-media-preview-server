@@ -109,7 +109,7 @@ export function ConnectMessage({ isError, message }: ConnectMessageProps) {
   const displayIsError = isError ?? state.isError;
   const displayMessage = message ?? state.message;
   const className = displayIsError
-    ? "connect-message m-0 grid min-h-[38px] grid-cols-[auto_minmax(0,1fr)] items-start gap-2 rounded-lg border border-destructive/25 bg-destructive/10 px-3 py-2.5 text-left text-xs font-medium leading-[1.45] text-destructive empty:hidden"
+    ? "connect-message m-0 grid min-h-[38px] grid-cols-[auto_minmax(0,1fr)] items-start gap-2 rounded-lg bg-destructive/10 px-3 py-2.5 text-left text-xs font-medium leading-[1.45] text-destructive empty:hidden"
     : "connect-message m-0 min-h-[18px] rounded-md px-3 py-2 text-center text-xs leading-[1.35] text-muted-foreground empty:hidden";
 
   return (

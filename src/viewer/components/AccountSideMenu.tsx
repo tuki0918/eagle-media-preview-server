@@ -103,7 +103,7 @@ export function AccountSideMenu() {
             </SidebarMenuItem>
           </SidebarMenu>
           {authError ? (
-            <p id="authFooterMessage" className="m-0 rounded-md border border-destructive/30 bg-destructive/10 px-2.5 py-2 text-xs leading-[1.35] text-destructive group-data-[collapsible=icon]:hidden" role="alert">
+            <p id="authFooterMessage" className="m-0 rounded-md bg-destructive/10 px-2.5 py-2 text-xs leading-[1.35] text-destructive group-data-[collapsible=icon]:hidden" role="alert">
               {authError}
             </p>
           ) : null}

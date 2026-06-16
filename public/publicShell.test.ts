@@ -251,6 +251,8 @@ test("public login shows auth errors above the submit button", () => {
 
   assert.match(message, /grid-cols-\[auto_minmax\(0,1fr\)\]/);
   assert.match(message, /bg-destructive\/10/);
+  assert.doesNotMatch(message, /\bborder\b/);
+  assert.doesNotMatch(message, /border-destructive/);
   assert.match(message, /text-left/);
   assert.match(message, /lucide-circle-alert/);
   assert.ok(login.indexOf('id="connectMessage"') < login.indexOf('id="connectButton"'));
@@ -275,9 +277,12 @@ test("public viewer exposes auth errors in the footer", () => {
     user: { role: "viewer", username: "reader" },
   });
   const accountMenu = renderToStaticMarkup(accountSideMenuElement());
+  const footerMessageClass = accountMenu.match(/id="authFooterMessage" class="([^"]*)"/)?.[1] ?? "";
 
   assert.match(accountMenu, /id="authFooterMessage"/);
   assert.match(accountMenu, /role="alert"/);
+  assert.doesNotMatch(footerMessageClass, /\bborder\b/);
+  assert.doesNotMatch(footerMessageClass, /border-destructive/);
   assert.match(accountMenu, /Sign out failed/);
 
   setLoginConnectState({
