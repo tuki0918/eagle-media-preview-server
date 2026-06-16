@@ -1,7 +1,14 @@
 import { useEffect, useState, useSyncExternalStore, type CSSProperties } from "react";
-import { FunnelXIcon } from "lucide-react";
+import { FunnelXIcon, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+  InputGroupText,
+} from "@/components/ui/input-group";
 import { cn } from "@/lib/utils";
+import { getResultsStatusState, subscribeResultsStatusState } from "../resultsStatusState";
 import { MEDIA_TYPE_OPTIONS, PAGE_SIZE_OPTIONS, RATING_OPTIONS } from "../shellConfig";
 import {
   getSearchControlsState,
@@ -57,6 +64,7 @@ export function SearchControls({
   selectedRating,
 }: SearchControlsProps) {
   const state = useSyncExternalStore(subscribeSearchControlsState, getSearchControlsState, getSearchControlsState);
+  const resultsStatus = useSyncExternalStore(subscribeResultsStatusState, getResultsStatusState, getResultsStatusState);
   const displayFiltersOpen = filtersOpen ?? state.filtersOpen;
   const displayFolders = folders ?? state.folders;
   const displayHasActiveFilters = hasActiveFilters ?? state.hasActiveFilters;
@@ -65,6 +73,7 @@ export function SearchControls({
   const displaySelectedFolderId = selectedFolderId ?? state.selectedFolderId;
   const displaySelectedLimit = selectedLimit ?? state.selectedLimit;
   const displaySelectedRating = selectedRating ?? state.selectedRating;
+  const displayTotal = resultsStatus.total;
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
@@ -77,13 +86,18 @@ export function SearchControls({
   return (
     <section className="controls grid gap-4 rounded-lg border border-border bg-popover p-3 text-popover-foreground shadow-sm max-[540px]:rounded-none max-[540px]:border-x-0 max-[540px]:px-3" aria-label="Search and filters" hidden={!displayFiltersOpen}>
       <div className="search-row grid items-stretch gap-3 max-[540px]:gap-2">
-        <div className="search-box relative flex min-h-[46px] items-center gap-2.5 rounded-lg border border-input bg-card px-3 py-1.5 transition-colors hover:bg-muted/20 max-[540px]:min-h-11 max-[540px]:gap-2 max-[540px]:px-2.5 max-[540px]:py-[5px]">
-          <SearchIcon />
-          <div className="search-composer flex min-w-0 flex-auto items-center">
-            <SearchInput value={displaySearchQuery} />
-          </div>
+        <InputGroup className="search-box min-h-[46px] transition-colors hover:bg-muted/20 max-[540px]:min-h-11">
+          <SearchInput value={displaySearchQuery} />
+          <InputGroupAddon>
+            <Search />
+          </InputGroupAddon>
+          <InputGroupAddon align="inline-end" className="max-w-[92px]">
+            <InputGroupText className="truncate [font-variant-numeric:tabular-nums]">
+              {displayTotal.toLocaleString()} items
+            </InputGroupText>
+          </InputGroupAddon>
           <TagSuggestions />
-        </div>
+        </InputGroup>
         <TagChips />
       </div>
 
@@ -110,9 +124,9 @@ export function SearchInput({ value = "" }: { value?: string }) {
   }, [value]);
 
   return (
-    <input
+    <InputGroupInput
       id="searchInput"
-      className="unified-search-input h-9 min-w-[180px] flex-[1_1_220px] border-0 bg-transparent px-0 text-base text-foreground shadow-none focus-visible:border-transparent focus-visible:ring-0 min-[720px]:text-sm max-[540px]:min-w-0 max-[540px]:basis-[72px]"
+      className="unified-search-input min-w-0 pl-10 pr-24"
       type="search"
       placeholder="Search title or tag"
       autoComplete="off"

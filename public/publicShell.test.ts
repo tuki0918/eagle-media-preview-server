@@ -854,7 +854,7 @@ test("public UI supports tag filter chips", async () => {
   assert.match(app, /selectedLimit:\s*state\.limit,/);
   assert.doesNotMatch(app, /els\.resetFiltersButton\.disabled/);
   assert.doesNotMatch(app, /tagInput:/);
-  assert.match(controls, /id="searchInput"[^>]*type="search"/);
+  assert.match(controls, /type="search"[^>]*id="searchInput"/);
   assert.doesNotMatch(app, /els\.searchInput\.value/);
   assert.match(app, /searchChanged:\s*debounce\(\(query: string\) => \{[\s\S]*applyFilterChange\(\{ query: query\.trim\(\) \}\);[\s\S]*loadTagSuggestions\(\);/);
   assert.match(app, /params\.getAll\("tag"\)/);
@@ -868,12 +868,14 @@ test("public UI supports tag filter chips", async () => {
   assert.match(app, /function removeTagFilter\(tag[^)]*\) \{/);
   assert.match(app, /function renderTagChips\(\) \{/);
   assert.match(app, /Object\.assign\(state, resetFilterState\(\)\);/);
-  assert.match(controls, /search-composer[^"]*flex min-w-0 flex-auto items-center/);
+  assert.match(controls, /data-slot="input-group"/);
+  assert.match(controls, /data-slot="input-group-addon" data-align="inline-start"/);
+  assert.match(controls, /data-slot="input-group-addon" data-align="inline-end"/);
   assert.match(controls, /search-row[^"]*grid items-stretch gap-3/);
   assert.match(controls, /tag-chips[^"]*flex flex-wrap gap-1\.5 empty:hidden/);
   assert.match(controls, /filter-reset-button[^"]*max-\[540px\]:size-11/);
   assert.match(controls, /filter-reset-button[^"]*disabled:opacity-\[0\.42\]/);
-  assert.match(controls, /unified-search-input[^"]*max-\[540px\]:basis-\[72px\]/);
+  assert.match(controls, /unified-search-input min-w-0/);
   assert.doesNotMatch(css, /\.tag-input\s*\{/);
   assert.doesNotMatch(css, /\.tag-suggestions\s*\{/);
   assert.doesNotMatch(css, /\.tag-chips\s*\{/);
@@ -990,7 +992,7 @@ test("public results status and empty states stay concise and consistent across 
 
   assert.match(html, /useSyncExternalStore\(subscribeResultsStatusState, getResultsStatusState, getResultsStatusState\)/);
   assert.doesNotMatch(html, /id="resultCount"/);
-  assert.doesNotMatch(html, /\{displayTotal\.toLocaleString\(\)\} items/);
+  assert.match(html, /\{displayTotal\.toLocaleString\(\)\} items/);
   assert.doesNotMatch(app, /renderResultsStatusView\(els\.resultsStatusHost, \{/);
   assert.doesNotMatch(app, /els\.resultCount\.textContent/);
   assert.doesNotMatch(app, /items · \$\{start\}-\$\{end\}/);
