@@ -8,7 +8,7 @@ export type ResultStateViewProps =
 const emptyMessageClassName = "rounded-md border border-dashed border-border bg-card px-3.5 py-11 text-center text-muted-foreground";
 const errorMessageClassName = `${emptyMessageClassName} text-destructive`;
 const emptyStateClassName =
-  "col-span-full grid min-h-[320px] content-center justify-items-center gap-2.5 rounded-xl border border-dashed border-border bg-card px-5 py-14 text-center shadow-sm";
+  "col-span-full grid min-h-[320px] content-center justify-items-center gap-2.5 rounded-xl border border-dashed border-border bg-card px-5 py-14 text-center shadow-sm ring-0";
 const emptyStateButtonClassName = "mt-1 min-h-[38px] rounded-lg text-[13px] font-[680]";
 
 export function ResultStateView(props: ResultStateViewProps) {
