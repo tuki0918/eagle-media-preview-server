@@ -49,7 +49,7 @@ function ViewModeButton({
   return (
     <TabsTrigger
       id={id}
-      className="min-h-[30px] rounded-md px-[9px] text-xs font-[680] text-muted-foreground data-active:bg-background data-active:text-foreground data-active:shadow-sm data-active:hover:text-foreground"
+      className="min-h-[30px] rounded-md px-[9px] text-xs font-[680] text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:hover:text-foreground data-active:bg-background data-active:text-foreground data-active:shadow-sm data-active:hover:text-foreground"
       value={mode}
     >
       {label}
