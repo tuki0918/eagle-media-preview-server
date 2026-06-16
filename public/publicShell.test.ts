@@ -868,8 +868,9 @@ test("public UI supports tag filter chips", async () => {
   assert.match(app, /function removeTagFilter\(tag[^)]*\) \{/);
   assert.match(app, /function renderTagChips\(\) \{/);
   assert.match(app, /Object\.assign\(state, resetFilterState\(\)\);/);
-  assert.match(controls, /search-composer[^"]*max-\[540px\]:flex-nowrap/);
+  assert.match(controls, /search-composer[^"]*flex min-w-0 flex-auto items-center/);
   assert.match(controls, /search-row[^"]*grid items-stretch gap-3/);
+  assert.match(controls, /tag-chips[^"]*flex flex-wrap gap-1\.5 empty:hidden/);
   assert.match(controls, /filter-reset-button[^"]*max-\[540px\]:size-11/);
   assert.match(controls, /filter-reset-button[^"]*disabled:opacity-\[0\.42\]/);
   assert.match(controls, /unified-search-input[^"]*max-\[540px\]:basis-\[72px\]/);

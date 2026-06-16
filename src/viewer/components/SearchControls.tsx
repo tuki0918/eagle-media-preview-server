@@ -79,12 +79,12 @@ export function SearchControls({
       <div className="search-row grid items-stretch gap-3 max-[540px]:gap-2">
         <div className="search-box relative flex min-h-[46px] items-center gap-2.5 rounded-lg border border-input bg-card px-3 py-1.5 transition-colors hover:bg-muted/20 max-[540px]:min-h-11 max-[540px]:gap-2 max-[540px]:px-2.5 max-[540px]:py-[5px]">
           <SearchIcon />
-          <div className="search-composer flex min-w-0 flex-auto flex-wrap items-center gap-x-2 gap-y-1.5 max-[540px]:flex-nowrap max-[540px]:overflow-hidden max-[540px]:gap-1.5">
-            <TagChips />
+          <div className="search-composer flex min-w-0 flex-auto items-center">
             <SearchInput value={displaySearchQuery} />
           </div>
           <TagSuggestions />
         </div>
+        <TagChips />
       </div>
 
       <AdvancedFilters
