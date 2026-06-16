@@ -562,11 +562,12 @@ test("public ratings are static in grid and table but editable in the preview mo
 
   assert.match(html, /function RatingStars\(\{ className, disabled = false, disabledLabel, id, interactive = false, item, onSelect \}/);
   assert.match(html, /const ratingStarBaseClassName =[\s\S]*rating-star[\s\S]*data-\[active=true\]:text-yellow-500/);
+  assert.match(html, /const interactiveRatingStarClassName = `\$\{ratingStarBaseClassName\} cursor-pointer`/);
   assert.match(html, /const cardRatingClassName =[\s\S]*\[&_\.rating-star\[data-active=true\]\]:text-yellow-300/);
   assert.match(html, /const canSelect = interactive && !disabled;/);
   assert.match(html, /const label = interactive && disabled && disabledLabel \? disabledLabel : interactive \? "Rating" : "Rating \(read only\)";/);
   assert.match(html, /aria-label=\{label\}/);
-  assert.match(html, /title=\{interactive && disabled && disabledLabel \? disabledLabel : interactive \? `\$\{value\}` : `Rating \$\{value\} \(read only\)`\}/);
+  assert.match(html, /title=\{interactive && disabled && disabledLabel \? disabledLabel : interactive \? `\$\{value\}` : undefined\}/);
   assert.match(html, /disabled=\{interactive \? disabled : undefined\}/);
   assert.match(html, /const staticRatingStarClassName = `\$\{ratingStarBaseClassName\} rating-star-static cursor-default`/);
   assert.match(html, /const current = normalizeRating\(item\.star\);/);

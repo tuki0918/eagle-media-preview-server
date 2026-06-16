@@ -708,10 +708,13 @@ describe("ViewerAppShell", () => {
 
     expect(statik).toContain("rating-star");
     expect(statik).toContain("rating-star-static");
+    expect(statik).toContain("cursor-default");
+    expect(statik).not.toContain("cursor-pointer");
     expect(statik).toContain('data-active="true"');
     expect(statik).toContain('aria-label="Rating (read only)"');
-    expect(statik).toContain('title="Rating 1 (read only)"');
+    expect(statik).not.toContain("title=");
     expect(interactive).toContain('aria-pressed="true"');
+    expect(interactive).toContain("cursor-pointer");
     expect(interactive).toContain('aria-label="Rating"');
     expect(interactive).toContain("Rating 2");
     expect(disabled).toContain("disabled");

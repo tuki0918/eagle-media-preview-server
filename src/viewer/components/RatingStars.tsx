@@ -14,7 +14,8 @@ export interface RatingStarsProps {
 }
 
 const ratingStarBaseClassName =
-  "rating-star inline-grid h-6 w-[22px] cursor-pointer place-items-center border-0 bg-transparent p-0 text-[17px] leading-none text-muted-foreground shadow-none data-[active=true]:text-yellow-500 disabled:cursor-not-allowed disabled:opacity-70";
+  "rating-star inline-grid h-6 w-[22px] place-items-center border-0 bg-transparent p-0 text-[17px] leading-none text-muted-foreground shadow-none data-[active=true]:text-yellow-500 disabled:cursor-not-allowed disabled:opacity-70";
+const interactiveRatingStarClassName = `${ratingStarBaseClassName} cursor-pointer`;
 const staticRatingStarClassName = `${ratingStarBaseClassName} rating-star-static cursor-default`;
 
 export function RatingStars({ className, disabled = false, disabledLabel, id, interactive = false, item, onSelect }: RatingStarsProps) {
@@ -27,8 +28,8 @@ export function RatingStars({ className, disabled = false, disabledLabel, id, in
       {[1, 2, 3, 4, 5].map((value) => (
         <Tag
           key={value}
-          className={interactive ? ratingStarBaseClassName : staticRatingStarClassName}
-          title={interactive && disabled && disabledLabel ? disabledLabel : interactive ? `${value}` : `Rating ${value} (read only)`}
+          className={interactive ? interactiveRatingStarClassName : staticRatingStarClassName}
+          title={interactive && disabled && disabledLabel ? disabledLabel : interactive ? `${value}` : undefined}
           data-active={value <= current ? "true" : "false"}
           aria-hidden={interactive ? undefined : "true"}
           aria-label={interactive ? `Rating ${value}` : undefined}
