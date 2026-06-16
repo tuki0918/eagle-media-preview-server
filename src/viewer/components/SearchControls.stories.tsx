@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { AdvancedFilters, SearchControls, SearchInput } from "./SearchControls";
-import { sampleFolders, storyCanvasClassName, storyPanelClassName } from "./storyFixtures";
+import { storyCanvasClassName, storyPanelClassName } from "./storyFixtures";
 
 const meta = {
   title: "Viewer/SearchControls",
@@ -8,11 +8,9 @@ const meta = {
   decorators: [(Story) => <div className={storyCanvasClassName}><Story /></div>],
   args: {
     filtersOpen: true,
-    folders: sampleFolders,
     hasActiveFilters: true,
     searchQuery: "landing page",
     selectedExt: "jpg",
-    selectedFolderId: "design",
     selectedLimit: 30,
     selectedRating: "4",
   },
@@ -40,7 +38,7 @@ export const InputOnly: Story = {
 export const AdvancedFiltersOnly: Story = {
   render: () => (
     <div className={storyCanvasClassName}>
-      <AdvancedFilters filtersOpen folders={sampleFolders} selectedExt="mp4" selectedFolderId="campaigns" selectedLimit={60} selectedRating="3" />
+      <AdvancedFilters filtersOpen hasActiveFilters selectedExt="mp4" selectedLimit={60} selectedRating="3" />
     </div>
   ),
 };

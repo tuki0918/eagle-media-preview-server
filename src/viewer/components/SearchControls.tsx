@@ -15,7 +15,6 @@ import {
   subscribeSearchControlsState,
 } from "../searchControlsState";
 import {
-  changeFolder,
   changeMediaType,
   changePageSize,
   changeRating,
@@ -26,19 +25,15 @@ import {
   resetFilters,
   toggleFilters,
 } from "../shellActions";
-import type { EagleFolder } from "../types";
-import { FolderOptions } from "./FolderOptions";
 import { SearchIcon } from "./Icons";
 import { TagChips } from "./TagChips";
 import { TagSuggestions } from "./TagSuggestions";
 
 interface SearchControlsProps {
   filtersOpen?: boolean;
-  folders?: readonly EagleFolder[];
   hasActiveFilters?: boolean;
   searchQuery?: string;
   selectedExt?: string;
-  selectedFolderId?: string;
   selectedLimit?: number;
   selectedRating?: string;
 }
@@ -55,22 +50,18 @@ const selectArrowStyle: CSSProperties = {
 
 export function SearchControls({
   filtersOpen,
-  folders,
   hasActiveFilters,
   searchQuery,
   selectedExt,
-  selectedFolderId,
   selectedLimit,
   selectedRating,
 }: SearchControlsProps) {
   const state = useSyncExternalStore(subscribeSearchControlsState, getSearchControlsState, getSearchControlsState);
   const resultsStatus = useSyncExternalStore(subscribeResultsStatusState, getResultsStatusState, getResultsStatusState);
   const displayFiltersOpen = filtersOpen ?? state.filtersOpen;
-  const displayFolders = folders ?? state.folders;
   const displayHasActiveFilters = hasActiveFilters ?? state.hasActiveFilters;
   const displaySearchQuery = searchQuery ?? state.searchQuery;
   const displaySelectedExt = selectedExt ?? state.selectedExt;
-  const displaySelectedFolderId = selectedFolderId ?? state.selectedFolderId;
   const displaySelectedLimit = selectedLimit ?? state.selectedLimit;
   const displaySelectedRating = selectedRating ?? state.selectedRating;
   const displayTotal = resultsStatus.total;
@@ -103,15 +94,11 @@ export function SearchControls({
 
       <AdvancedFilters
         filtersOpen={displayFiltersOpen}
-        folders={displayFolders}
+        hasActiveFilters={displayHasActiveFilters}
         selectedExt={displaySelectedExt}
-        selectedFolderId={displaySelectedFolderId}
         selectedLimit={displaySelectedLimit}
         selectedRating={displaySelectedRating}
       />
-      <div className="flex justify-end">
-        <ResetFiltersButton hasActiveFilters={displayHasActiveFilters} />
-      </div>
     </section>
   );
 }
@@ -144,19 +131,13 @@ export function SearchInput({ value = "" }: { value?: string }) {
 
 export function AdvancedFilters({
   filtersOpen = false,
-  folders = [],
+  hasActiveFilters = false,
   selectedExt = "",
-  selectedFolderId = "",
   selectedLimit = 30,
   selectedRating = "",
-}: Pick<SearchControlsProps, "filtersOpen" | "folders" | "selectedExt" | "selectedFolderId" | "selectedLimit" | "selectedRating">) {
+}: Pick<SearchControlsProps, "filtersOpen" | "hasActiveFilters" | "selectedExt" | "selectedLimit" | "selectedRating">) {
   return (
-    <div id="advancedFilters" className="filter-row grid grid-cols-4 gap-6 max-[540px]:grid-cols-1 max-[540px]:gap-3" hidden={!filtersOpen}>
-      <label className="grid gap-2">
-        <select id="folderSelect" className={selectClassName} style={selectArrowStyle} aria-label="Folder" value={selectedFolderId} onChange={changeFolder}>
-          <FolderOptions folders={folders} />
-        </select>
-      </label>
+    <div id="advancedFilters" className="filter-row grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-4 max-[540px]:grid-cols-1" hidden={!filtersOpen}>
       <label className="grid gap-2">
         <select id="extSelect" className={selectClassName} style={selectArrowStyle} aria-label="Type" value={selectedExt} onChange={changeMediaType}>
           <option value="">All types</option>
@@ -187,6 +168,9 @@ export function AdvancedFilters({
           ))}
         </select>
       </label>
+      <div className="flex justify-end">
+        <ResetFiltersButton hasActiveFilters={hasActiveFilters} />
+      </div>
     </div>
   );
 }

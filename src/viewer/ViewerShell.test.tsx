@@ -62,7 +62,6 @@ const REQUIRED_ELEMENT_IDS = [
   "connectButton",
   "connectMessage",
   "viewerShell",
-  "folderSelect",
   "extSelect",
   "ratingSelect",
   "pageSizeSelect",
@@ -370,20 +369,19 @@ describe("ViewerAppShell", () => {
     const html = renderToStaticMarkup(
       <AdvancedFilters
         filtersOpen
-        folders={[{ id: "folder-1", name: "Folder 1", imageCount: 8, depth: 0 }]}
+        hasActiveFilters
         selectedExt="jpg"
-        selectedFolderId="folder-1"
         selectedLimit={60}
         selectedRating="3"
       />,
     );
 
     expect(html).toContain('id="advancedFilters"');
-    expect(html).not.toContain("hidden");
-    expect(html).toContain('id="folderSelect"');
+    expect(html).not.toContain('hidden=""');
+    expect(html).not.toContain('id="folderSelect"');
     expect(html).toContain('id="pageSizeSelect"');
-    expect(html).toContain('value="folder-1"');
-    expect(html).toContain("Folder 1 (8)");
+    expect(html).toContain('id="resetFiltersButton"');
+    expect(html).toContain('aria-label="Reset filters"');
   });
 
   test("renders search input as a reusable component", () => {

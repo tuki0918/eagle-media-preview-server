@@ -310,11 +310,9 @@ test("public UI no longer shows connect lock icon or connection settings button"
   const login = renderToStaticMarkup(createElement(LoginView, { hidden: false }));
   const controls = renderToStaticMarkup(createElement(SearchControls, {
     filtersOpen: true,
-    folders: [{ id: "folder-1", name: "Folder 1", imageCount: 2 }],
     hasActiveFilters: true,
     searchQuery: "alpha",
     selectedExt: "jpg",
-    selectedFolderId: "folder-1",
     selectedLimit: 60,
     selectedRating: "3",
   }));
@@ -762,19 +760,19 @@ test("public UI labels media extensions as type", async () => {
   const app = await readViewerSources();
   const filters = renderToStaticMarkup(createElement(AdvancedFilters, {
     filtersOpen: true,
-    folders: [{ id: "folder-1", name: "Folder 1", imageCount: 2 }],
+    hasActiveFilters: true,
     selectedExt: "jpg",
-    selectedFolderId: "folder-1",
     selectedLimit: 60,
     selectedRating: "3",
   }));
 
-  assert.match(filters, /id="folderSelect"[^>]*aria-label="Folder"/);
+  assert.doesNotMatch(filters, /id="folderSelect"[^>]*aria-label="Folder"/);
   assert.match(filters, /id="extSelect"[^>]*aria-label="Type"/);
   assert.match(filters, /<option value="">All types<\/option>/);
   assert.match(filters, /id="ratingSelect"[^>]*aria-label="Rating"/);
   assert.match(filters, /<option value="">All ratings<\/option>/);
   assert.match(filters, /id="pageSizeSelect"[^>]*aria-label="Page size"/);
+  assert.match(filters, /id="resetFiltersButton"[^>]*aria-label="Reset filters"/);
   for (const pageSize of PAGE_SIZE_OPTIONS) {
     assert.match(filters, new RegExp(`value="${pageSize}"[\\s\\S]*${pageSize} items`));
   }
@@ -795,11 +793,9 @@ test("public UI supports tag filter chips", async () => {
   const searchButton = renderToStaticMarkup(createElement(SearchFiltersButton, { filtersOpen: true }));
   const controls = renderToStaticMarkup(createElement(SearchControls, {
     filtersOpen: true,
-    folders: [{ id: "folder-1", name: "Folder 1", imageCount: 2 }],
     hasActiveFilters: true,
     searchQuery: "alpha",
     selectedExt: "jpg",
-    selectedFolderId: "folder-1",
     selectedLimit: 60,
     selectedRating: "3",
   }));
@@ -829,7 +825,7 @@ test("public UI supports tag filter chips", async () => {
   assert.doesNotMatch(app, /resetFiltersButton: document\.querySelector\("#resetFiltersButton"\),/);
   assert.doesNotMatch(app, /advancedFilters: document\.querySelector\("#advancedFilters"\),/);
   assert.doesNotMatch(app, /els\.advancedFilters\.hidden/);
-  assert.match(controls, /Uncategorized/);
+  assert.doesNotMatch(controls, /Uncategorized/);
   assert.doesNotMatch(app, /renderFolderOptionsView/);
   assert.match(app, /setTagChipsState\(\{/);
   assert.match(app, /setSearchControlsState\(\{/);
