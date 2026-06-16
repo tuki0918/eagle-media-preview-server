@@ -882,13 +882,21 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   assert.match(html, /className="tiles-sentinel mt-3 grid min-h-\[52px\] place-items-center text-\[13px\] font-\[680\] text-muted-foreground"/);
 });
 
-test("public extension pills use shadcn semantic colors", async () => {
+test("public extension pills use varied colors for common text formats", async () => {
   const html = await readAppSources();
 
-  assert.match(html, /const extensionPillClassName = "border-border bg-secondary text-secondary-foreground";/);
-  assert.match(html, /const fileBadgeClassName = "bg-secondary text-secondary-foreground";/);
-  assert.doesNotMatch(html, /const extensionColorClassNames/);
-  assert.doesNotMatch(html, /const fileBadgeColorClassNames/);
+  assert.match(html, /const extensionColorClassNames: Record<string, string> = \{/);
+  assert.match(html, /html: "border-\[#fed7aa\] bg-\[#fff7ed\] text-\[#c2410c\]"/);
+  assert.match(html, /css: "border-\[#bfdbfe\] bg-\[#eff6ff\] text-\[#2563eb\]"/);
+  assert.match(html, /js: "border-\[#fde68a\] bg-\[#fefce8\] text-\[#a16207\]"/);
+  assert.match(html, /md: "border-\[#cbd5e1\] bg-\[#f8fafc\] text-\[#475569\]"/);
+  assert.match(html, /txt: "border-\[#cbd5e1\] bg-\[#f1f5f9\] text-\[#334155\]"/);
+  assert.match(html, /const fileBadgeColorClassNames: Record<string, string> = \{/);
+  assert.match(html, /html: "bg-\[#fff7ed\] text-\[#c2410c\]"/);
+  assert.match(html, /css: "bg-\[#eff6ff\] text-\[#2563eb\]"/);
+  assert.match(html, /js: "bg-\[#fefce8\] text-\[#a16207\]"/);
+  assert.match(html, /md: "bg-\[#f8fafc\] text-\[#475569\]"/);
+  assert.match(html, /txt: "bg-\[#f1f5f9\] text-\[#334155\]"/);
 });
 
 test("public UI syncs filters, pagination, and preview state into the URL history", async () => {

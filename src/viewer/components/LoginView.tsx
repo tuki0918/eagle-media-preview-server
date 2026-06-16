@@ -26,7 +26,7 @@ export function LoginView({ hidden = false }: LoginViewProps) {
   return (
     <section id="loginView" className="login-view grid min-h-dvh place-items-center px-4 py-9" hidden={hidden}>
       <Card
-        className="login-panel w-[min(320px,100%)] rounded-lg border-border bg-card px-[30px] pb-[30px] pt-[42px] text-card-foreground shadow-sm"
+        className="login-panel w-[min(320px,100%)] rounded-lg border border-border bg-card px-[30px] pb-[30px] pt-[42px] text-card-foreground shadow-sm ring-0"
       >
       <form
         id="connectForm"

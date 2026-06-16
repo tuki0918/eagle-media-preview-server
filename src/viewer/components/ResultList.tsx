@@ -45,14 +45,14 @@ const overlayIconPaths = {
   ),
 };
 
-const mediaCardClassName = "media-card min-w-0 overflow-hidden rounded-lg border border-border bg-card p-0 py-0 shadow-sm transition-shadow hover:shadow-md";
+const mediaCardClassName = "media-card min-w-0 overflow-hidden rounded-lg border border-border bg-card p-0 py-0 shadow-sm ring-0 transition-shadow hover:border-border hover:shadow-md";
 const cardMetaClassName = "card-meta px-2 pb-2 pt-[9px] [&>span]:mt-0.5 [&>span]:block [&>span]:min-w-0 [&>span]:overflow-hidden [&>span]:text-ellipsis [&>span]:whitespace-nowrap [&>span]:text-xs [&>span]:text-muted-foreground [&>strong]:block [&>strong]:min-w-0 [&>strong]:overflow-hidden [&>strong]:text-ellipsis [&>strong]:whitespace-nowrap [&>strong]:text-[13px] [&>strong]:font-[420] [&>strong]:leading-[1.3]";
 const tileButtonClassName =
   "tile-item relative block h-full w-full cursor-zoom-in overflow-hidden border-0 bg-muted p-0 shadow-none [border-radius:0] [contain:layout_paint] [&>img]:block [&>img]:h-full [&>img]:w-full [&>img]:object-contain";
 const gridThumbButtonClassName =
-  "thumb-button relative block aspect-[3/2] w-full touch-manipulation overflow-hidden border-0 bg-muted p-0 shadow-none [border-radius:0] [transition:border-color_150ms_ease,box-shadow_150ms_ease,background-color_150ms_ease] hover:border-ring hover:shadow-[inset_0_0_0_1px_var(--ring)] focus-visible:border-ring focus-visible:shadow-[inset_0_0_0_1px_var(--ring)] [&>img]:block [&>img]:h-full [&>img]:w-full [&>img]:object-cover";
+  "thumb-button relative block aspect-[3/2] w-full touch-manipulation overflow-hidden border-0 bg-muted p-0 shadow-none [border-radius:0] [transition:border-color_150ms_ease,box-shadow_150ms_ease,background-color_150ms_ease] hover:border-border hover:shadow-[inset_0_0_0_1px_var(--border)] focus-visible:border-border focus-visible:shadow-[inset_0_0_0_1px_var(--border)] [&>img]:block [&>img]:h-full [&>img]:w-full [&>img]:object-cover";
 const rowThumbButtonClassName =
-  "row-thumb relative h-[42px] w-[70px] touch-manipulation overflow-hidden rounded-md border border-border bg-muted p-0 [transition:border-color_150ms_ease,box-shadow_150ms_ease,background-color_150ms_ease] hover:border-ring hover:shadow-[inset_0_0_0_1px_var(--ring)] focus-visible:border-ring focus-visible:shadow-[inset_0_0_0_1px_var(--ring)] [&>img]:block [&>img]:h-full [&>img]:w-full [&>img]:object-cover";
+  "row-thumb relative h-[42px] w-[70px] touch-manipulation overflow-hidden rounded-md border border-border bg-muted p-0 [transition:border-color_150ms_ease,box-shadow_150ms_ease,background-color_150ms_ease] hover:border-border hover:shadow-[inset_0_0_0_1px_var(--border)] focus-visible:border-border focus-visible:shadow-[inset_0_0_0_1px_var(--border)] [&>img]:block [&>img]:h-full [&>img]:w-full [&>img]:object-cover";
 const missingThumbClassName = "grid place-items-center bg-muted";
 const overlayClassName =
   "thumb-overlay pointer-events-none absolute inset-0 grid place-items-center opacity-0 transition-[opacity,background-color] duration-150 group-hover:opacity-100 group-focus-visible:opacity-100";
@@ -78,8 +78,78 @@ const tileMasonryBaseWidth = 168;
 const tileMasonryGap = 4;
 const tileMasonryRowHeight = 4;
 
-const extensionPillClassName = "border-border bg-secondary text-secondary-foreground";
-const fileBadgeClassName = "bg-secondary text-secondary-foreground";
+const extensionColorClassNames: Record<string, string> = {
+  jpg: "border-[#bbf7d0] bg-[#f0fdf4] text-[#15803d]",
+  jpeg: "border-[#bbf7d0] bg-[#f0fdf4] text-[#15803d]",
+  png: "border-[#bfdbfe] bg-[#eff6ff] text-[#2563eb]",
+  html: "border-[#fed7aa] bg-[#fff7ed] text-[#c2410c]",
+  css: "border-[#bfdbfe] bg-[#eff6ff] text-[#2563eb]",
+  js: "border-[#fde68a] bg-[#fefce8] text-[#a16207]",
+  mjs: "border-[#fde68a] bg-[#fefce8] text-[#a16207]",
+  cjs: "border-[#fde68a] bg-[#fefce8] text-[#a16207]",
+  ts: "border-[#c7d2fe] bg-[#eef2ff] text-[#4338ca]",
+  tsx: "border-[#c7d2fe] bg-[#eef2ff] text-[#4338ca]",
+  jsx: "border-[#c7d2fe] bg-[#eef2ff] text-[#4338ca]",
+  md: "border-[#cbd5e1] bg-[#f8fafc] text-[#475569]",
+  txt: "border-[#cbd5e1] bg-[#f1f5f9] text-[#334155]",
+  log: "border-[#cbd5e1] bg-[#f1f5f9] text-[#334155]",
+  json: "border-[#a7f3d0] bg-[#ecfdf5] text-[#047857]",
+  xml: "border-[#a7f3d0] bg-[#ecfdf5] text-[#047857]",
+  csv: "border-[#a7f3d0] bg-[#ecfdf5] text-[#047857]",
+  yml: "border-[#a7f3d0] bg-[#ecfdf5] text-[#047857]",
+  yaml: "border-[#a7f3d0] bg-[#ecfdf5] text-[#047857]",
+  gif: "border-[#bae6fd] bg-[#f0f9ff] text-[#0369a1]",
+  webp: "border-[#bae6fd] bg-[#f0f9ff] text-[#0369a1]",
+  svg: "border-[#99f6e4] bg-[#f0fdfa] text-[#0f766e]",
+  mp4: "border-[#ddd6fe] bg-[#f5f3ff] text-[#7c3aed]",
+  mov: "border-[#ddd6fe] bg-[#f5f3ff] text-[#7c3aed]",
+  webm: "border-[#ddd6fe] bg-[#f5f3ff] text-[#7c3aed]",
+  m4v: "border-[#ddd6fe] bg-[#f5f3ff] text-[#7c3aed]",
+  avi: "border-[#fed7aa] bg-[#fff7ed] text-[#c2410c]",
+  mkv: "border-[#fed7aa] bg-[#fff7ed] text-[#c2410c]",
+  mp3: "border-[#fbcfe8] bg-[#fdf2f8] text-[#be185d]",
+  wav: "border-[#fbcfe8] bg-[#fdf2f8] text-[#be185d]",
+  m4a: "border-[#fbcfe8] bg-[#fdf2f8] text-[#be185d]",
+  aac: "border-[#fbcfe8] bg-[#fdf2f8] text-[#be185d]",
+  ogg: "border-[#fbcfe8] bg-[#fdf2f8] text-[#be185d]",
+  pdf: "border-[#fecaca] bg-[#fef2f2] text-[#dc2626]",
+};
+
+const fileBadgeColorClassNames: Record<string, string> = {
+  jpg: "bg-[rgba(22,163,74,0.92)] text-white",
+  jpeg: "bg-[rgba(22,163,74,0.92)] text-white",
+  png: "bg-[rgba(20,99,243,0.92)] text-white",
+  gif: "bg-[rgba(14,165,233,0.92)] text-white",
+  webp: "bg-[rgba(14,165,233,0.92)] text-white",
+  svg: "bg-[rgba(15,118,110,0.92)] text-white",
+  mp4: "bg-[rgba(124,58,237,0.92)] text-white",
+  mov: "bg-[rgba(124,58,237,0.92)] text-white",
+  webm: "bg-[rgba(124,58,237,0.92)] text-white",
+  m4v: "bg-[rgba(124,58,237,0.92)] text-white",
+  avi: "bg-[rgba(217,119,6,0.94)] text-white",
+  mkv: "bg-[rgba(217,119,6,0.94)] text-white",
+  mp3: "bg-[rgba(219,39,119,0.92)] text-white",
+  wav: "bg-[rgba(219,39,119,0.92)] text-white",
+  m4a: "bg-[rgba(219,39,119,0.92)] text-white",
+  aac: "bg-[rgba(219,39,119,0.92)] text-white",
+  ogg: "bg-[rgba(219,39,119,0.92)] text-white",
+  html: "bg-[#fff7ed] text-[#c2410c]",
+  css: "bg-[#eff6ff] text-[#2563eb]",
+  js: "bg-[#fefce8] text-[#a16207]",
+  mjs: "bg-[#fefce8] text-[#a16207]",
+  cjs: "bg-[#fefce8] text-[#a16207]",
+  ts: "bg-[#eef2ff] text-[#4338ca]",
+  tsx: "bg-[#eef2ff] text-[#4338ca]",
+  jsx: "bg-[#eef2ff] text-[#4338ca]",
+  md: "bg-[#f8fafc] text-[#475569]",
+  txt: "bg-[#f1f5f9] text-[#334155]",
+  log: "bg-[#f1f5f9] text-[#334155]",
+  json: "bg-[#ecfdf5] text-[#047857]",
+  xml: "bg-[#ecfdf5] text-[#047857]",
+  csv: "bg-[#ecfdf5] text-[#047857]",
+  yml: "bg-[#ecfdf5] text-[#047857]",
+  yaml: "bg-[#ecfdf5] text-[#047857]",
+};
 
 export function ResultList({ items, viewMode, onOpenPreview }: ResultListProps) {
   return (
@@ -191,7 +261,7 @@ function TableCell({ className = "", title = "", value }: { className?: string; 
 function ExtensionPill({ item }: { item: EagleItem }) {
   const ext = normalizeExt(item.ext || "file");
   return (
-    <Badge variant="outline" className={`ext-pill inline-flex h-auto w-fit min-w-11 justify-center rounded-md px-[7px] py-[3px] text-[11px] font-[760] max-[540px]:hidden ${extensionPillClassName}`} data-ext={ext}>
+    <Badge variant="outline" className={`ext-pill inline-flex h-auto w-fit min-w-11 justify-center rounded-md px-[7px] py-[3px] text-[11px] font-[760] max-[540px]:hidden ${extensionColorClassNames[ext] || "border-[#bfdbfe] bg-[#eff6ff] text-[#1d4ed8]"}`} data-ext={ext}>
       {String(ext).toUpperCase()}
     </Badge>
   );
@@ -249,7 +319,7 @@ function ThumbnailButton({ children, item, onOpenPreview, style, variant, withBa
       {withBadges ? (
         <>
           {withFileBadge ? (
-            <Badge className={`file-badge absolute left-1.5 top-1.5 h-auto max-w-[calc(100%_-_12px)] overflow-hidden text-ellipsis whitespace-nowrap rounded-md border-0 px-1.5 py-[3px] text-[10px] font-[720] leading-[1.2] ${fileBadgeClassName}`} data-ext={normalizeExt(item.ext || "file")}>
+            <Badge className={`file-badge absolute left-1.5 top-1.5 h-auto max-w-[calc(100%_-_12px)] overflow-hidden text-ellipsis whitespace-nowrap rounded-md border-0 px-1.5 py-[3px] text-[10px] font-[720] leading-[1.2] ${fileBadgeColorClassName(item.ext)}`} data-ext={normalizeExt(item.ext || "file")}>
               {(item.ext || "").toUpperCase()}
             </Badge>
           ) : null}
@@ -288,6 +358,10 @@ function LoadingIndicator({ variant }: { variant: ThumbnailButtonProps["variant"
 
 function normalizeExt(value: unknown) {
   return String(value || "file").toLowerCase();
+}
+
+function fileBadgeColorClassName(ext: unknown) {
+  return fileBadgeColorClassNames[normalizeExt(ext)] || "bg-[rgba(20,99,243,0.92)] text-white";
 }
 
 function usePreviewTrigger(item: EagleItem, onOpenPreview: (item: EagleItem) => void) {
