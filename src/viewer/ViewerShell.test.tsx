@@ -132,9 +132,11 @@ describe("ViewerAppShell", () => {
     const html = renderToStaticMarkup(<ResultsStatus total={12} viewMode="grid" />);
 
     expect(html).toContain('id="gridViewButton"');
-    expect(html).toContain('aria-pressed="true"');
-    expect(html).toContain("bg-primary");
-    expect(html).toContain("text-primary-foreground");
+    expect(html).toContain('data-slot="tabs"');
+    expect(html).toContain('data-slot="tabs-list"');
+    expect(html).toContain('data-slot="tabs-trigger"');
+    expect(html).toContain("data-active:bg-primary");
+    expect(html).toContain("data-active:text-primary-foreground");
   });
 
   test("renders login connection controls as reusable components", () => {

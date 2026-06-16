@@ -883,9 +883,11 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 
   assert.match(html, /id="tilesViewButton"/);
-  assert.match(html, /<ViewModeButton id="tilesViewButton" mode="tiles" selectedMode=\{displayViewMode\} label="Tiles" \/>/);
-  assert.match(html, /<ViewModeButton id="gridViewButton" mode="grid" selectedMode=\{displayViewMode\} label="Grid" \/>/);
-  assert.match(html, /aria-pressed=\{pressed\} onClick=\{\(\) => selectViewMode\(mode\)\}/);
+  assert.match(html, /<Tabs[\s\S]*value=\{displayViewMode\}/);
+  assert.match(html, /<TabsList className="rounded-lg border border-input bg-card shadow-sm">/);
+  assert.match(html, /<ViewModeButton id="tilesViewButton" mode="tiles" label="Tiles" \/>/);
+  assert.match(html, /<ViewModeButton id="gridViewButton" mode="grid" label="Grid" \/>/);
+  assert.match(html, /data-active:bg-primary/);
   assert.match(html, /id="tilesSentinel"/);
   assert.match(app, /const DEFAULT_VIEW_MODE = "tiles";/);
   assert.match(app, /const TILE_PREFETCH_PAGES = 3;/);
