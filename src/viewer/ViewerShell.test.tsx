@@ -2,6 +2,8 @@ import { act } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { JSDOM } from "jsdom";
 import { describe, expect, test } from "vitest";
+import { SidebarProvider } from "@/components/ui/sidebar";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   AccountSideMenu,
   AdvancedFilters,
@@ -41,6 +43,16 @@ import { setImageOverlayControlsVisible } from "./imageOverlayState";
 import { setVideoOverlayControlsVisible } from "./videoOverlayState";
 import { MEDIA_TYPE_OPTIONS, PAGE_SIZE_OPTIONS, RATING_OPTIONS } from "./shellConfig";
 import { setLoginConnectState } from "./loginConnectState";
+
+function renderAccountSideMenu() {
+  return renderToStaticMarkup(
+    <TooltipProvider>
+      <SidebarProvider>
+        <AccountSideMenu />
+      </SidebarProvider>
+    </TooltipProvider>,
+  );
+}
 
 const REQUIRED_ELEMENT_IDS = [
   "loginView",
@@ -291,7 +303,7 @@ describe("ViewerAppShell", () => {
       message: "",
       user: { role: "editor", username: "ed" },
     });
-    const html = renderToStaticMarkup(<AccountSideMenu />);
+    const html = renderAccountSideMenu();
 
     expect(html).toContain('id="accountMenuButton"');
     expect(html).toContain('id="accountSideMenu"');
@@ -299,9 +311,9 @@ describe("ViewerAppShell", () => {
     expect(html).toContain('id="authUserLabel"');
     expect(html).toContain('id="authRoleLabel"');
     expect(html).toContain('id="logoutButton"');
-    expect(html).toContain("min-[720px]:w-[72px]");
-    expect(html).toContain("min-[1180px]:w-[224px]");
-    expect(html).toContain("min-[720px]:hidden min-[1180px]:inline");
+    expect(html).toContain('data-slot="sidebar"');
+    expect(html).toContain('data-variant="sidebar"');
+    expect(html).toContain('data-sidebar="menu-button"');
 
     setLoginConnectState({
       authenticated: false,

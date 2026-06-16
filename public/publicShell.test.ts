@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { SidebarProvider } from "../src/components/ui/sidebar";
+import { TooltipProvider } from "../src/components/ui/tooltip";
 import {
   AccountSideMenu,
   AdvancedFilters,
@@ -17,6 +19,10 @@ import {
 } from "../src/viewer/ViewerShell";
 import { setLoginConnectState } from "../src/viewer/loginConnectState";
 import { PAGE_SIZE_OPTIONS } from "../src/viewer/shellConfig";
+
+function accountSideMenuElement() {
+  return createElement(TooltipProvider, null, createElement(SidebarProvider, null, createElement(AccountSideMenu)));
+}
 
 async function readViewerSources() {
   const files = [
@@ -162,7 +168,7 @@ test("public viewer exposes sign out when authenticated", async () => {
     message: "",
     user: { role: "editor", username: "ed" },
   });
-  const accountMenu = renderToStaticMarkup(createElement(AccountSideMenu));
+  const accountMenu = renderToStaticMarkup(accountSideMenuElement());
   const footer = renderToStaticMarkup(createElement(LibraryFooter, { name: "My Library" }));
 
   assert.match(accountMenu, /id="accountMenuButton"/);
@@ -176,8 +182,8 @@ test("public viewer exposes sign out when authenticated", async () => {
   assert.match(accountMenu, />Editor</);
   assert.match(accountMenu, /id="logoutButton"/);
   assert.match(accountMenu, /Sign out/);
-  assert.match(accountMenu, /min-\[720px\]:w-\[72px\]/);
-  assert.match(accountMenu, /min-\[1180px\]:w-\[224px\]/);
+  assert.match(accountMenu, /data-slot="sidebar"/);
+  assert.match(accountMenu, /data-sidebar="menu-button"/);
   assert.doesNotMatch(accountMenu, /authFooterMessage/);
   assert.match(footer, /id="libraryFooterName"/);
   assert.doesNotMatch(footer, /logoutButton/);
@@ -268,7 +274,7 @@ test("public viewer exposes auth errors in the footer", () => {
     message: "Sign out failed",
     user: { role: "viewer", username: "reader" },
   });
-  const accountMenu = renderToStaticMarkup(createElement(AccountSideMenu));
+  const accountMenu = renderToStaticMarkup(accountSideMenuElement());
 
   assert.match(accountMenu, /id="authFooterMessage"/);
   assert.match(accountMenu, /role="alert"/);
@@ -320,6 +326,7 @@ test("public UI no longer shows connect lock icon or connection settings button"
   assert.match(html, /useSyncExternalStore\(subscribeShellView, getShellView, getShellView\)/);
   assert.match(html, /<LoginView hidden=\{shellView !== "login"\} \/>/);
   assert.match(html, /<ViewerShellLayout hidden=\{shellView !== "viewer"\} \/>/);
+  assert.match(html, /<SidebarProvider/);
   assert.match(html, /<AccountSideMenu \/>/);
   assert.doesNotMatch(app, /loginView: document\.querySelector\("#loginView"\),/);
   assert.doesNotMatch(app, /viewerShell: document\.querySelector\("#viewerShell"\),/);

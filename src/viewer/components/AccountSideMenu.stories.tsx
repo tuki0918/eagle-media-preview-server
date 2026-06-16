@@ -1,4 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
+import type { CSSProperties } from "react";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { AccountSideMenu } from "./AccountSideMenu";
 import { setLibraryFooterName } from "../libraryFooterState";
 import { setLoginConnectState } from "../loginConnectState";
@@ -21,13 +24,15 @@ const meta = {
     });
 
     return (
-      <div className="min-h-dvh pl-0 min-[720px]:pl-[72px] min-[1180px]:pl-[224px]">
-        <AccountSideMenu />
-        <main className="p-6">
-          <h1 className="m-0 text-xl font-bold text-foreground">Viewer content</h1>
-          <p className="text-muted-foreground">Account menu layout check</p>
-        </main>
-      </div>
+      <TooltipProvider>
+        <SidebarProvider defaultOpen style={{ "--sidebar-width": "14rem", "--sidebar-width-icon": "4.5rem" } as CSSProperties}>
+          <AccountSideMenu />
+          <SidebarInset className="min-h-dvh p-6">
+            <h1 className="m-0 text-xl font-bold text-foreground">Viewer content</h1>
+            <p className="text-muted-foreground">Account menu layout check</p>
+          </SidebarInset>
+        </SidebarProvider>
+      </TooltipProvider>
     );
   },
 } satisfies Meta<typeof AccountSideMenu>;
