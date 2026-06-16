@@ -48,7 +48,7 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
             </div>
             <SearchFiltersButton filtersOpen={searchState.filtersOpen} />
           </header>
-          <div className="mx-auto flex w-[min(1180px,100%)] flex-col gap-2 px-2 pb-3 pt-1 min-[720px]:px-3 min-[1180px]:px-4 min-[1440px]:px-0">
+          <div className="flex w-full flex-col gap-2 px-2 pb-3 pt-1 min-[720px]:px-3">
             <SearchControls />
             <ResultsStatus />
             <ResultSurface />
