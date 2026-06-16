@@ -953,6 +953,7 @@ test("public table rows left align filenames and ratings", async () => {
   const html = await readAppSources();
 
   assert.match(html, /const tableRowClassName =[\s\S]*\[&>span:not\(\.row-name-cell\)\]:justify-self-center/);
+  assert.match(html, /const tableHeaderClassName =[\s\S]*!min-h-8 !py-1/);
   assert.match(html, /const rowNameCellClassName =[\s\S]*text-left justify-self-stretch/);
   assert.match(html, /const tableRatingClassName = "rating-control inline-flex items-center justify-self-start gap-px text-left"/);
 });

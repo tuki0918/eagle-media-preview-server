@@ -63,7 +63,7 @@ const durationBadgeClassName =
 const tableRowClassName =
   "media-row grid min-h-[70px] grid-cols-[78px_minmax(160px,1.8fr)_90px_90px_minmax(120px,1fr)_90px_130px] items-center gap-3 border-b border-border px-3 py-2 text-[13px] text-muted-foreground last:border-b-0 max-[540px]:grid-cols-[56px_minmax(0,1fr)] [&>span:not(.row-name-cell)]:justify-self-center [&>span:not(.row-name-cell)]:text-center";
 const tableHeaderClassName =
-  `${tableRowClassName} media-row-header min-h-[34px] bg-muted text-xs font-[760] text-muted-foreground [&>span:nth-child(2)]:justify-self-stretch [&>span:nth-child(2)]:text-left max-[540px]:[&>span:nth-child(2)]:pl-3.5 max-[540px]:[&>span:nth-child(n+3)]:hidden`;
+  `${tableRowClassName} media-row-header !min-h-8 !py-1 bg-muted text-xs font-[760] text-muted-foreground [&>span:nth-child(2)]:justify-self-stretch [&>span:nth-child(2)]:text-left max-[540px]:[&>span:nth-child(2)]:pl-3.5 max-[540px]:[&>span:nth-child(n+3)]:hidden`;
 const rowNameCellClassName =
   "row-name-cell grid min-w-0 content-center justify-items-start gap-1.5 overflow-hidden text-left justify-self-stretch max-[540px]:grid-cols-[minmax(0,1fr)_auto] max-[540px]:items-center max-[540px]:pl-3.5 [&_.rating-control]:justify-self-start max-[540px]:[&_.rating-control]:col-span-2 max-[540px]:[&_.rating-control]:row-start-2";
 const rowFileNameClassName =
