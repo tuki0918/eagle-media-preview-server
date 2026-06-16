@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { CircleAlertIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -22,6 +23,7 @@ interface LoginViewProps {
 export function LoginView({ hidden = false }: LoginViewProps) {
   const state = useSyncExternalStore(subscribeLoginConnectState, getLoginConnectState, getLoginConnectState);
   const showCredentials = state.authRequired && !state.authenticated;
+  const showInlineError = showCredentials && state.isError && Boolean(state.message);
 
   return (
     <section id="loginView" className="login-view grid min-h-dvh place-items-center px-4 py-9" hidden={hidden}>
@@ -47,10 +49,11 @@ export function LoginView({ hidden = false }: LoginViewProps) {
         <div className="login-primary">
           <div className="form-actions grid grid-cols-1 gap-2.5">
             {showCredentials ? <LoginCredentials disabled={state.disabled} /> : null}
+            {showInlineError ? <ConnectMessage /> : null}
             <ConnectButton />
           </div>
         </div>
-        <ConnectMessage />
+        {showInlineError ? null : <ConnectMessage />}
       </form>
       </Card>
     </section>
@@ -105,15 +108,19 @@ export function ConnectMessage({ isError, message }: ConnectMessageProps) {
   const state = useSyncExternalStore(subscribeLoginConnectState, getLoginConnectState, getLoginConnectState);
   const displayIsError = isError ?? state.isError;
   const displayMessage = message ?? state.message;
+  const className = displayIsError
+    ? "connect-message m-0 grid min-h-[38px] grid-cols-[auto_minmax(0,1fr)] items-start gap-2 rounded-lg border border-destructive/25 bg-destructive/10 px-3 py-2.5 text-left text-xs font-medium leading-[1.45] text-destructive empty:hidden"
+    : "connect-message m-0 min-h-[18px] rounded-md px-3 py-2 text-center text-xs leading-[1.35] text-muted-foreground empty:hidden";
 
   return (
     <p
       id="connectMessage"
-      className={`connect-message m-0 min-h-[18px] rounded-md px-3 py-2 text-center text-xs leading-[1.35] text-muted-foreground empty:hidden${displayIsError ? " border border-destructive/30 bg-destructive/10 text-destructive" : ""}`}
+      className={className}
       aria-live="polite"
       role={displayIsError ? "alert" : undefined}
     >
-      {displayMessage}
+      {displayIsError && displayMessage ? <CircleAlertIcon className="mt-px size-4 flex-none" aria-hidden="true" /> : null}
+      {displayMessage ? <span>{displayMessage}</span> : null}
     </p>
   );
 }

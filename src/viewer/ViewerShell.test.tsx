@@ -133,6 +133,8 @@ describe("ViewerAppShell", () => {
     expect(message).toContain('id="connectMessage"');
     expect(message).toContain("No Eagle");
     expect(message).toContain("text-destructive");
+    expect(message).toContain("text-left");
+    expect(message).toContain("lucide-circle-alert");
     expect(message).toContain('role="alert"');
     expect(message).not.toContain("fixed bottom-");
   });

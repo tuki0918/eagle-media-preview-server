@@ -231,6 +231,34 @@ test("public viewer exposes sign out when authenticated", async () => {
   });
 });
 
+test("public login shows auth errors above the submit button", () => {
+  setLoginConnectState({
+    authenticated: false,
+    authRequired: true,
+    disabled: false,
+    isError: true,
+    message: "Invalid username or password",
+    user: null,
+  });
+  const login = renderToStaticMarkup(createElement(LoginView, { hidden: false }));
+  const message = renderToStaticMarkup(createElement(ConnectMessage, { message: "Invalid username or password", isError: true }));
+
+  assert.match(message, /grid-cols-\[auto_minmax\(0,1fr\)\]/);
+  assert.match(message, /bg-destructive\/10/);
+  assert.match(message, /text-left/);
+  assert.match(message, /lucide-circle-alert/);
+  assert.ok(login.indexOf('id="connectMessage"') < login.indexOf('id="connectButton"'));
+
+  setLoginConnectState({
+    authenticated: false,
+    authRequired: false,
+    disabled: false,
+    isError: false,
+    message: "",
+    user: null,
+  });
+});
+
 test("public viewer exposes auth errors in the footer", () => {
   setLoginConnectState({
     authenticated: true,
