@@ -138,10 +138,12 @@ test("public login renders credentials when server auth is required", async () =
   const button = renderToStaticMarkup(createElement(ConnectButton, { disabled: false }));
 
   assert.match(login, /id="authUsernameInput"/);
+  assert.match(login, /class="[^"]*\btext-base\b[^"]*\bmin-\[720px\]:text-sm\b[^"]*" id="authUsernameInput"/);
   assert.match(login, /name="username"/);
   assert.match(login, /aria-label="Username"/);
   assert.match(login, /id="authUsernameInput"[\s\S]*required=""/);
   assert.match(login, /id="authPasswordInput"/);
+  assert.match(login, /class="[^"]*\btext-base\b[^"]*\bmin-\[720px\]:text-sm\b[^"]*" id="authPasswordInput"/);
   assert.match(login, /name="password"/);
   assert.match(login, /aria-label="Password"/);
   assert.match(login, /id="authPasswordInput"[\s\S]*required=""/);

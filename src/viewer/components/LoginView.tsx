@@ -66,7 +66,7 @@ function LoginCredentials({ disabled }: { disabled: boolean }) {
       <Input
         id="authUsernameInput"
         name="username"
-        className="min-h-[42px] rounded-lg bg-background px-3 text-sm text-foreground"
+        className="min-h-[42px] rounded-lg bg-background px-3 text-base text-foreground min-[720px]:text-sm"
         aria-label="Username"
         autoComplete="username"
         disabled={disabled}
@@ -77,7 +77,7 @@ function LoginCredentials({ disabled }: { disabled: boolean }) {
       <Input
         id="authPasswordInput"
         name="password"
-        className="min-h-[42px] rounded-lg bg-background px-3 text-sm text-foreground"
+        className="min-h-[42px] rounded-lg bg-background px-3 text-base text-foreground min-[720px]:text-sm"
         aria-label="Password"
         autoComplete="current-password"
         disabled={disabled}
