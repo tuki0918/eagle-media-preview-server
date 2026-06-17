@@ -1161,6 +1161,51 @@ test("createViewerServer restricts library switching to admins", async () => {
   }
 });
 
+test("createViewerServer restricts Eagle API connection changes to admins", async () => {
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    authUsers: [
+      { username: "reader", passwordHash: sha256("read"), role: "viewer" },
+      { username: "owner", passwordHash: sha256("own"), role: "admin" },
+    ],
+  });
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const origin = `http://127.0.0.1:${status.port}`;
+    const readerCookie = await loginCookie(origin, "reader", "read");
+
+    const deniedRemoteHost = await fetch(`${origin}/api/connect`, {
+      method: "POST",
+      headers: {
+        Cookie: readerCookie,
+        "Content-Type": "application/json",
+        Origin: origin,
+      },
+      body: JSON.stringify({ host: "192.168.1.20", port: "41595", token: "secret" }),
+    });
+    assert.equal(deniedRemoteHost.status, 403);
+    assert.deepEqual(await deniedRemoteHost.json(), {
+      error: "Admin permission is required to change the Eagle API connection",
+    });
+
+    const deniedLocalPort = await fetch(`${origin}/api/connect`, {
+      method: "POST",
+      headers: {
+        Cookie: readerCookie,
+        "Content-Type": "application/json",
+        Origin: origin,
+      },
+      body: JSON.stringify({ host: "127.0.0.1", port: "41596" }),
+    });
+    assert.equal(deniedLocalPort.status, 403);
+  } finally {
+    await viewer.stop();
+  }
+});
+
 test("createViewerServer serves direct file routes from /file/:id", async () => {
   const root = join(tmpdir(), `eagle-media-preview-server-${Date.now()}`);
   await mkdir(root, { recursive: true });

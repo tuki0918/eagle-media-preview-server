@@ -318,7 +318,7 @@ async function handleApi(req, url, res, { auth, getSession, setSession }: ApiCon
       sendMethodNotAllowed(res, ["POST"]);
       return;
     }
-    await handleConnect(req, res, setSession);
+    await handleConnect(req, res, setSession, auth);
     return;
   }
 
@@ -559,8 +559,12 @@ async function handleAuthRoutes(req, url, res, auth: AuthContext) {
   return false;
 }
 
-async function handleConnect(req, res, setSession) {
+async function handleConnect(req, res, setSession, auth: AuthContext) {
   const input = await readJson(req);
+  if (!hasAdminAccess(req, auth) && !isDefaultLocalEagleConnectionInput(input)) {
+    sendJson(res, 403, { error: "Admin permission is required to change the Eagle API connection" });
+    return;
+  }
   let candidates = [];
   try {
     candidates = buildConnectionCandidates({
@@ -599,6 +603,13 @@ async function handleConnect(req, res, setSession) {
   }
 
   sendJson(res, 502, { error: `Unable to connect to Eagle API: ${errors.join(" / ")}` });
+}
+
+function isDefaultLocalEagleConnectionInput(input) {
+  const host = String(input.host || "127.0.0.1").trim() || "127.0.0.1";
+  const port = String(input.port || "41595").trim() || "41595";
+  const token = String(input.token || "").trim();
+  return ["127.0.0.1", "localhost", "::1"].includes(host) && port === "41595" && !token;
 }
 
 async function streamItemMedia(id, kind, req, res, session) {
