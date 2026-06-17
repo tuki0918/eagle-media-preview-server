@@ -138,25 +138,17 @@ function FolderSideNav({
             label="Uncategorized"
             onSelect={() => selectFolder(UNCATEGORIZED_FOLDER_ID)}
           />
-          {folders.length ? (
-            folders.map((folder) => (
-              <FolderNavItem
-                key={folder.id}
-                active={selectedFolderId === folder.id}
-                count={folder.imageCount}
-                depth={folder.depth || 0}
-                icon={selectedFolderId === folder.id ? "open" : "folder"}
-                label={folder.name}
-                onSelect={() => selectFolder(folder.id)}
-              />
-            ))
-          ) : (
-            <SidebarMenuItem>
-              <div className="px-2 py-2 text-xs leading-snug text-muted-foreground group-data-[collapsible=icon]:hidden">
-                No folders loaded
-              </div>
-            </SidebarMenuItem>
-          )}
+          {folders.map((folder) => (
+            <FolderNavItem
+              key={folder.id}
+              active={selectedFolderId === folder.id}
+              count={folder.imageCount}
+              depth={folder.depth || 0}
+              icon={selectedFolderId === folder.id ? "open" : "folder"}
+              label={folder.name}
+              onSelect={() => selectFolder(folder.id)}
+            />
+          ))}
         </SidebarMenu>
       </SidebarGroupContent>
     </SidebarGroup>

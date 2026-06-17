@@ -346,6 +346,7 @@ describe("ViewerAppShell", () => {
     expect(html).toContain('aria-label="Folder tree"');
     expect(html).toContain("All folders");
     expect(html).toContain("Uncategorized");
+    expect(html).not.toContain("No folders loaded");
     expect(html).toContain("Parent");
     expect(html).toContain("Child");
     expect(html).toContain('aria-current="page"');
