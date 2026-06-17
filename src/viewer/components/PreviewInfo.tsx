@@ -7,6 +7,7 @@ import { directFileUrl } from "../fileLinks";
 import { folderIds, itemTags } from "../format";
 import { uniqueValues, type MetadataSuggestion } from "../metadata";
 import { getPreviewInfoState, subscribePreviewInfoState } from "../previewInfoState";
+import { showErrorToast, showSuccessToast } from "../toasts";
 import type { EagleFolder, EagleItem } from "../types";
 
 export interface PreviewDetailRow {
@@ -182,20 +183,14 @@ function PreviewMetadataEditor({
   const [savedTags, setSavedTags] = useState(() => initialTags);
   const [savedCategories, setSavedCategories] = useState(() => initialCategories);
   const [saving, setSaving] = useState(false);
-  const [status, setStatus] = useState("");
   const [editing, setEditing] = useState(false);
   const hasMetadataChanges = !sameStringValues(tags, savedTags) || !sameStringValues(categories, savedCategories);
   const changeCount = Number(!sameStringValues(tags, savedTags)) + Number(!sameStringValues(categories, savedCategories));
-
-  useEffect(() => {
-    if (hasMetadataChanges && status === "Saved") setStatus("");
-  }, [hasMetadataChanges, status]);
 
   const cancelMetadataChanges = () => {
     if (saving) return;
     setTags(savedTags);
     setCategories(savedCategories);
-    setStatus("");
     setEditing(false);
   };
 
@@ -203,17 +198,20 @@ function PreviewMetadataEditor({
     event.preventDefault();
     if (!hasMetadataChanges) return;
     setSaving(true);
-    setStatus("Saving");
     try {
       const saved = await onSaveMetadata(item, { tags, folders: categories });
       setTags(saved.tags);
       setCategories(saved.folders);
       setSavedTags(saved.tags);
       setSavedCategories(saved.folders);
-      setStatus("Saved");
       setEditing(false);
+      showSuccessToast("Metadata saved", {
+        description: "Tags and folders were updated.",
+      });
     } catch (error) {
-      setStatus(errorMessage(error));
+      showErrorToast("Unable to save metadata", {
+        description: errorMessage(error),
+      });
     } finally {
       setSaving(false);
     }
@@ -231,7 +229,6 @@ function PreviewMetadataEditor({
             variant="outline"
             className={`${textActionButtonClassName} preview-edit-toggle min-h-8 gap-1.5 px-2.5`}
             onClick={() => {
-              setStatus("");
               setEditing(true);
             }}
           >
@@ -241,11 +238,6 @@ function PreviewMetadataEditor({
         </div>
         <MetadataReadOnlyRow label="Tags" values={savedTags} emptyLabel="No tags" />
         <MetadataReadOnlyRow label="Folders" values={savedCategories.map((value) => folderLabel(value, folders))} emptyLabel="No folders" />
-        {status ? (
-          <span className="preview-edit-status min-w-0 text-xs text-muted-foreground" role="status">
-            {status}
-          </span>
-        ) : null}
       </section>
     );
   }

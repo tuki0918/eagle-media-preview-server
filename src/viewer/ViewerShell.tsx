@@ -1,9 +1,11 @@
 import { useEffect, useSyncExternalStore } from "react";
+import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { LoginView } from "./components/LoginView";
 import { ViewerShellLayout } from "./components/ViewerShellLayout";
 import { handleUrlPop } from "./shellActions";
 import { getShellView, subscribeShellView } from "./shellVisibility";
+import { VIEWER_TOASTER_ID } from "./toasts";
 
 export function ViewerAppShell() {
   const shellView = useSyncExternalStore(subscribeShellView, getShellView, getShellView);
@@ -17,6 +19,7 @@ export function ViewerAppShell() {
     <TooltipProvider>
       <LoginView hidden={shellView !== "login"} />
       <ViewerShellLayout hidden={shellView !== "viewer"} />
+      <Toaster id={VIEWER_TOASTER_ID} />
     </TooltipProvider>
   );
 }

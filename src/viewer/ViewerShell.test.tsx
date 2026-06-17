@@ -701,7 +701,6 @@ describe("ViewerAppShell", () => {
       });
 
       expect(savedPatches).toEqual([{ tags: ["alpha", "beta"], folders: ["folder-1"] }]);
-      expect(container.querySelector(".preview-edit-status")?.textContent).toBe("Saved");
       expect(container.textContent).toContain("beta-saved");
       expect(container.querySelector(".preview-edit-form")).toBeNull();
     } finally {
@@ -874,7 +873,7 @@ describe("ViewerAppShell", () => {
       });
 
       expect(container.querySelector(".preview-edit-form")).toBeNull();
-      expect(container.textContent).toContain("Saved");
+      expect(container.textContent).toContain("beta");
     } finally {
       if (root) {
         await act(async () => {

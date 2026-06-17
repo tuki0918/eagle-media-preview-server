@@ -67,6 +67,7 @@ import {
 import { setViewerShellActions } from "./viewer/shellActions";
 import { getShellView, setShellView } from "./viewer/shellVisibility";
 import { state } from "./viewer/state";
+import { showErrorToast, showSuccessToast } from "./viewer/toasts";
 import {
   canLoadMoreTiles,
   shouldShowTileSentinel,
@@ -736,11 +737,16 @@ async function setItemStar(item: EagleItem, star: number) {
     const savedStar = normalizeRating(data.star ?? star);
     item.star = savedStar;
     updateItemInState(itemId, { star: savedStar });
+    showSuccessToast("Rating saved", {
+      description: ratingSavedDescription(savedStar),
+    });
   } catch (error) {
     item.star = previous;
     updateItemInState(itemId, { star: previous });
     if (handleAuthError(error)) return;
-    alert(errorMessage(error));
+    showErrorToast("Unable to save rating", {
+      description: errorMessage(error),
+    });
   } finally {
     pendingRatingItemIds.delete(itemId);
     render();
@@ -755,6 +761,11 @@ function renderPreviewRating(item: EagleItem) {
     onSelect: (star) => setItemStar(item, star),
     saving: pendingRatingItemIds.has(String(item.id || "")),
   });
+}
+
+function ratingSavedDescription(star: number) {
+  if (star <= 0) return "Rating was cleared.";
+  return `Rating was set to ${star}.`;
 }
 
 function isPreviewDialogOpen() {

@@ -659,7 +659,8 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(html, /setCategories\(saved\.folders\);/);
   assert.match(html, /setSavedTags\(saved\.tags\);/);
   assert.match(html, /setSavedCategories\(saved\.folders\);/);
-  assert.match(html, /if \(hasMetadataChanges && status === "Saved"\) setStatus\(""\);/);
+  assert.match(html, /showSuccessToast\("Metadata saved"/);
+  assert.match(html, /showErrorToast\("Unable to save metadata"/);
   assert.match(html, /if \(!hasMetadataChanges\) return;/);
   assert.match(html, /disabled=\{saving \|\| !hasMetadataChanges\}/);
   assert.match(html, /aria-label=\{saveButtonLabel\}/);
@@ -671,7 +672,9 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(app, /rememberRecentValues\(RECENT_FOLDERS_STORAGE_KEY, patch\.folders\);/);
   assert.match(app, /if \(isPreviewDialogOpen\(\)\) renderPreviewDetails\(item\);/);
   assert.match(app, /return patch;/);
-  assert.match(html, /setStatus\("Saved"\);/);
+  assert.doesNotMatch(html, /setStatus\("Saved"\);/);
+  assert.match(app, /showSuccessToast\("Rating saved"/);
+  assert.match(app, /showErrorToast\("Unable to save rating"/);
   assert.match(app, /const RECENT_TAGS_STORAGE_KEY = "eagleRecentTags";/);
   assert.match(app, /const RECENT_FOLDERS_STORAGE_KEY = "eagleRecentFolders";/);
   assert.match(html, /function TagChipEditor\(\{/);

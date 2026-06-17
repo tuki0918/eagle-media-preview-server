@@ -1,4 +1,5 @@
 import { useEffect, useRef, useSyncExternalStore, type PointerEvent } from "react";
+import { Toaster } from "@/components/ui/sonner";
 import {
   closePreview,
   handlePreviewClose,
@@ -15,6 +16,7 @@ import {
   getVideoOverlayControlsVisible,
   subscribeVideoOverlayControls,
 } from "../videoOverlayState";
+import { PREVIEW_TOASTER_ID } from "../toasts";
 import { PreviewBodyHost } from "./PreviewBody";
 import {
   ChevronLeftIcon,
@@ -246,6 +248,7 @@ export function PreviewDialog() {
           <PreviewInfoActions />
         </aside>
       </div>
+      <Toaster id={PREVIEW_TOASTER_ID} />
     </dialog>
   );
 }
