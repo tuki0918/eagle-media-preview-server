@@ -6,6 +6,12 @@ You can preview your media from other devices on the same network.
 ![](docs/concept.png)
 ![](docs/server_panel.png)
 
+## Disclaimer
+
+This plugin is intended for use on a local or trusted LAN, not for public internet access.
+
+The author is not responsible for unintended access, data exposure, or any damage caused by misconfiguration, insecure network settings, weak passwords, disabled authentication, or public exposure of the server.
+
 ## Features
 
 - One-click local preview server
