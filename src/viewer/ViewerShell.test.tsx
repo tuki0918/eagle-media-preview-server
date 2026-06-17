@@ -539,9 +539,22 @@ describe("ViewerAppShell", () => {
   test("renders result state as a reusable component", () => {
     const message = renderToStaticMarkup(<ResultStateView kind="message" text="Loading" />);
     const empty = renderToStaticMarkup(<ResultStateView kind="empty" hasActiveFilters={true} onClearFilters={() => {}} />);
+    const libraryEmpty = renderToStaticMarkup(<ResultStateView kind="empty" hasActiveFilters={false} onClearFilters={() => {}} />);
+    const error = renderToStaticMarkup(
+      <ResultStateView
+        kind="message"
+        className="error"
+        title="Eagle connection lost"
+        text="The preview server could not reach Eagle while loading items."
+        detail="Make sure Eagle is running."
+      />,
+    );
 
     expect(message).toContain("Loading");
     expect(empty).toContain("Clear filters");
+    expect(libraryEmpty).toContain("Library is empty");
+    expect(error).toContain("Eagle connection lost");
+    expect(error).toContain("Make sure Eagle is running.");
   });
 
   test("renders tiles empty state with dense grid layout", () => {

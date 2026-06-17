@@ -10,8 +10,10 @@ export type ResultSurfaceState =
   }
   | {
     className?: string;
+    detail?: string;
     kind: "message";
     text: string;
+    title?: string;
     viewMode: ViewerMode;
   }
   | {

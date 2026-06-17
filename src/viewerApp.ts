@@ -204,7 +204,7 @@ async function connect(credentials?: { password: string; username: string }) {
   } catch (error) {
     if (handleAuthError(error)) return;
     showLogin();
-    setConnectMessage(errorMessage(error), true);
+    setConnectMessage(connectErrorMessage(error), true);
   } finally {
     setConnectBusy(false);
   }
@@ -273,8 +273,47 @@ function handleAuthError(error: unknown) {
   clearViewerSessionState();
   renderLoginConnect();
   showLogin();
-  setConnectMessage(errorMessage(error), true);
+  setConnectMessage("Your session expired. Sign in again.", true);
   return true;
+}
+
+function connectErrorMessage(error: unknown) {
+  const message = errorMessage(error);
+  if (isEagleConnectionError(error, message)) {
+    return "Cannot connect to Eagle. Make sure Eagle is running and the local Eagle API is available.";
+  }
+  if (error instanceof ApiError && error.status >= 500) {
+    return "The preview server could not reach Eagle. Check Eagle, then try connecting again.";
+  }
+  return message;
+}
+
+function loadErrorMessage(error: unknown) {
+  const message = errorMessage(error);
+  if (isEagleConnectionError(error, message)) {
+    return {
+      title: "Eagle connection lost",
+      text: "The preview server could not reach Eagle while loading items.",
+      detail: "Make sure Eagle is running on this computer, then reconnect from the login screen if the problem continues.",
+    };
+  }
+  if (error instanceof ApiError && error.status >= 500) {
+    return {
+      title: "Unable to load this library",
+      text: "Eagle returned an error while the preview server was loading items.",
+      detail: message,
+    };
+  }
+  return {
+    title: "Unable to load items",
+    text: message,
+    detail: "",
+  };
+}
+
+function isEagleConnectionError(error: unknown, message = errorMessage(error)) {
+  if (error instanceof ApiError && error.status === 502) return true;
+  return /unable to connect to eagle api|eagle unavailable|econnrefused|failed to fetch|networkerror/i.test(message);
 }
 
 function showLogin() {
@@ -405,7 +444,7 @@ async function loadItems({ append = false }: LoadItemsOptions = {}) {
     }
     state.items = [];
     state.total = 0;
-    renderMessage(errorMessage(error), "error");
+    renderLoadError(error);
     updateStatus();
     updatePager();
     setupTileAutoLoading();
@@ -849,6 +888,18 @@ function folderSuggestionItems(query: string, selectedValues: string[]) {
     selectedValues,
     recentFolderIds: readRecentList(RECENT_FOLDERS_STORAGE_KEY),
     folders: state.folders,
+  });
+}
+
+function renderLoadError(error: unknown) {
+  const message = loadErrorMessage(error);
+  setResultSurfaceState({
+    kind: "message",
+    className: "error",
+    title: message.title,
+    text: message.text,
+    detail: message.detail,
+    viewMode: state.viewMode,
   });
 }
 
