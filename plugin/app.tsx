@@ -93,6 +93,7 @@ function App() {
   const serverState = normalizeServerState(status.state);
   const settings = status.settings || {};
   const formDisabled = busy || !managerRef.current;
+  const portDisabled = formDisabled || serverState === "running";
   const restartingStopped = busy && serverState === "stopped";
   const statusLabel = restartingStopped ? busyStoppedFrames[busyFrame] : titleCase(serverState);
   const authEnabled = Boolean(settings.authEnabled);
@@ -493,13 +494,13 @@ function App() {
           <ChevronIcon className={`h-[12px] w-[12px] text-[#555c66] transition-transform ${settingsExpanded ? "rotate-180" : ""}`} />
         </button>
         <div id="settingsPanel" className="mt-2.5 grid" hidden={!settingsExpanded}>
-          <SettingRow label="Port" help="The port the server listens on.">
+          <SettingRow label="Port" help={serverState === "running" ? "Stop the server before changing the port." : "The port the server listens on."}>
             <input
               className={`${settingInputClassName} w-full`}
               type="number"
               min="1"
               max="65535"
-              disabled={formDisabled}
+              disabled={portDisabled}
               value={settings.port || 41532}
               onChange={(event) => updateSettings({ port: event.currentTarget.value })}
               onBlur={(event) => saveSettings({ forceSave: true, patch: { port: event.currentTarget.value }, successMessage: "Saved" })}

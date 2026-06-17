@@ -100,6 +100,7 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(app, /const \[passwordVisibleByIndex, setPasswordVisibleByIndex\] = useState<Record<string, boolean>>\(\{\}\);/);
   assert.match(app, /const \[passwordDraftRevision, setPasswordDraftRevision\] = useState\(0\);/);
   assert.match(app, /const userPasswordsRef = useRef<Record<string, string>>\(\{\}\);/);
+  assert.match(app, /const portDisabled = formDisabled \|\| serverState === "running";/);
   assert.match(app, /forceSave = false/);
   assert.match(app, /successMessage = ""/);
   assert.match(app, /if \(saved && hasUserPasswords\) clearUserPasswordDrafts\(\);/);
@@ -166,6 +167,8 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(app, />\s*Save\s*<\/button>/);
   assert.match(app, /saveSettings\(\{ forceSave: true, successMessage: "Saved" \}\)/);
   assert.match(app, /saveSettings\(\{ forceSave: true, patch: \{ port: event\.currentTarget\.value \}, successMessage: "Saved" \}\)/);
+  assert.match(app, /<SettingRow label="Port" help=\{serverState === "running" \? "Stop the server before changing the port\." : "The port the server listens on\."\}>/);
+  assert.match(app, /disabled=\{portDisabled\}/);
   assert.match(app, /hidden=\{!message\}/);
   assert.match(app, /messageIsError \? "text-\[#d92d20\]" : "text-\[#178c35\]"/);
   assert.doesNotMatch(app, /Save settings/);
@@ -392,6 +395,80 @@ test("plugin port input persists after editing", async () => {
 
   assert.equal(saveCalls[0].port, "6123");
   assert.match(dom.window.document.body.textContent || "", /Saved/);
+});
+
+test("plugin port input is disabled while the server is running", async () => {
+  const bundle = await esbuild({
+    bundle: true,
+    define: {
+      "process.env.NODE_ENV": JSON.stringify("test"),
+    },
+    entryPoints: [new URL("./app.tsx", import.meta.url).pathname],
+    format: "iife",
+    platform: "browser",
+    write: false,
+  });
+  const appScript = bundle.outputFiles[0].text;
+  const domOptions = {
+    runScripts: "outside-only",
+    url: "file:///tmp/eagle-plugin/plugin/index.html",
+  } as unknown as ConstructorParameters<typeof JSDOM>[1];
+  const dom = new JSDOM("<!doctype html><html><body><div id=\"root\"></div></body></html>", domOptions);
+  const pluginWindow = dom.window as unknown as Window & {
+    eval: (source: string) => unknown;
+    require: (id: string) => unknown;
+  };
+  const status = {
+    settings: {
+      authEnabled: false,
+      authUsers: [{ username: "eagle", role: "viewer", passwordHash: "hash" }],
+      autoStart: false,
+      host: "0.0.0.0",
+      port: 41532,
+    },
+    state: "running",
+    url: "http://127.0.0.1:41532",
+  };
+  pluginWindow.require = (id: string) => {
+    if (id === "path") return path;
+    return {
+      createServerManager() {
+        return {
+          async init() {
+            return status;
+          },
+          async saveSettings() {
+            return status;
+          },
+          async start() {
+            return status;
+          },
+          async status() {
+            return status;
+          },
+          async stop() {
+            return { ...status, state: "stopped" };
+          },
+        };
+      },
+    };
+  };
+
+  pluginWindow.eval(appScript);
+  await waitFor(() => {
+    const toggle = dom.window.document.querySelector("#settingsToggleButton");
+    return toggle instanceof dom.window.HTMLButtonElement;
+  });
+
+  const toggle = dom.window.document.querySelector("#settingsToggleButton");
+  assert.ok(toggle instanceof dom.window.HTMLButtonElement);
+  toggle.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+  await waitFor(() => !dom.window.document.querySelector("#settingsPanel")?.hasAttribute("hidden"));
+
+  const portInput = dom.window.document.querySelector("input[type=\"number\"]");
+  assert.ok(portInput instanceof dom.window.HTMLInputElement);
+  assert.equal(portInput.disabled, true);
+  assert.match(dom.window.document.body.textContent || "", /Stop the server before changing the port\./);
 });
 
 test("plugin copy URL uses Eagle clipboard API directly", async () => {
