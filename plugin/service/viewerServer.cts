@@ -2,7 +2,7 @@ const { createReadStream, existsSync, readFileSync } = require("fs");
 const { stat } = require("fs").promises;
 const { createServer: createHttpServer } = require("http");
 const { createServer: createHttpsServer } = require("https");
-const { createHash, createHmac, pbkdf2Sync, timingSafeEqual } = require("crypto");
+const { createHash, createHmac, pbkdf2Sync, randomBytes, timingSafeEqual } = require("crypto");
 const { extname, join, normalize, resolve } = require("path");
 const { createEagleClient, normalizeStringArray, pathFromFileValue, resolveLibraryItemFile } = require("./eagleClient.cjs");
 const { buildConnectionCandidates, createConnectionContext } = require("./connection.cjs");
@@ -19,6 +19,7 @@ interface ViewerServerOptions {
   passwordHash?: string;
   port?: number;
   publicDir?: string;
+  sessionSecret?: string;
   viewerPassword?: string;
 }
 
@@ -163,6 +164,7 @@ function createViewerServer({
   httpsEnabled = false,
   httpsCertPath = "",
   httpsKeyPath = "",
+  sessionSecret = "",
   eagleClient = createEagleClient(),
 }: ViewerServerOptions = {}) {
   let serverInstance = null;
@@ -172,6 +174,7 @@ function createViewerServer({
   let lastError = "";
   let requestCount = 0;
   const resolvedAuthUsers = resolveAuthUsers({ allowMetadataEditing, authUsers, basicAuthUsername, passwordHash, viewerPassword });
+  const resolvedSessionSecret = String(sessionSecret || "").trim() || randomBytes(32).toString("base64url");
   const authSessions = new Map<string, AuthSession>();
   const revokedAuthSessions = new Set<string>();
   let currentSession = createConnectionContext({
@@ -187,7 +190,7 @@ function createViewerServer({
   const server = createProtocolServer({ httpsCertPath, httpsEnabled, httpsKeyPath }, async (req, res) => {
     try {
       const url = new URL(req.url || "/", `${httpsEnabled ? "https" : "http"}://${req.headers.host}`);
-      const auth = { authSessions, revokedAuthSessions, secureCookies: httpsEnabled, users: resolvedAuthUsers };
+      const auth = { authSessions, revokedAuthSessions, secureCookies: httpsEnabled, sessionSecret: resolvedSessionSecret, users: resolvedAuthUsers };
       if (!isTrustedUnsafeRequest(req, url)) {
         sendJson(res, 403, { error: "Cross-origin writes are not allowed" });
         return;
@@ -478,6 +481,7 @@ interface AuthContext {
   authSessions: Map<string, AuthSession>;
   revokedAuthSessions: Set<string>;
   secureCookies?: boolean;
+  sessionSecret: string;
   users: AuthUser[];
 }
 
@@ -872,11 +876,7 @@ function verifyAuthSessionToken(token: string, auth: AuthContext): AuthSession |
 }
 
 function authSessionSignature(payload: string, auth: AuthContext) {
-  return createHmac("sha256", authSessionSecret()).update(payload).digest("base64url");
-}
-
-function authSessionSecret() {
-  return sha256("eagle-media-preview-session:v1");
+  return createHmac("sha256", auth.sessionSecret).update(payload).digest("base64url");
 }
 
 function userAuthVersion(user: AuthUser | undefined) {

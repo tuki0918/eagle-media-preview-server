@@ -26,6 +26,7 @@ interface PluginSettings {
   lastServerStatus: ServerStatus;
   passwordHash: string;
   port: number;
+  sessionSecret: string;
 }
 
 type SettingsInput = Partial<Omit<PluginSettings, "port">> & {
@@ -67,6 +68,7 @@ interface ServerManagerOptions {
     httpsEnabled: boolean;
     httpsKeyPath: string;
     port: number;
+    sessionSecret: string;
   }) => ManagedViewer;
 }
 
@@ -89,6 +91,7 @@ const DEFAULT_SETTINGS: PluginSettings = {
   httpsKeyPath: "",
   passwordHash: "",
   lastServerStatus: "stopped",
+  sessionSecret: "",
 };
 const PASSWORD_HASH_ALGORITHM = "sha256";
 const PASSWORD_HASH_ITERATIONS = 210000;
@@ -105,9 +108,19 @@ function createSettingsStore({ filePath = defaultSettingsPath() }: { filePath?: 
     async load() {
       try {
         const raw = await readFile(filePath, "utf8");
-        return normalizeSettings(JSON.parse(raw));
+        const settings = normalizeSettings(JSON.parse(raw));
+        if (!settings.sessionSecret) {
+          const migrated = withSessionSecret(settings);
+          await writeSettingsFile(filePath, migrated);
+          return migrated;
+        }
+        return settings;
       } catch (error) {
-        if (error.code === "ENOENT") return { ...DEFAULT_SETTINGS };
+        if (error.code === "ENOENT") {
+          const created = createDefaultSettings();
+          await writeSettingsFile(filePath, created);
+          return created;
+        }
         throw error;
       }
     },
@@ -115,7 +128,7 @@ function createSettingsStore({ filePath = defaultSettingsPath() }: { filePath?: 
     async save(input: SettingsInput = {}) {
       const current = await this.load();
       validateAuthUsersInput(input.authUsers);
-      const next = normalizeSettings({ ...current, ...input });
+      const next = withSessionSecret(normalizeSettings({ ...current, ...input }));
       const userPasswords = normalizeUserPasswords(input.userPasswords);
 
       if (userPasswords.size) {
@@ -144,11 +157,19 @@ function createSettingsStore({ filePath = defaultSettingsPath() }: { filePath?: 
         next.allowMetadataEditing = next.authEnabled && authUsersCanEditMetadata(next.authUsers);
       }
 
-      await mkdir(dirname(filePath), { recursive: true });
-      await writeFile(filePath, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+      await writeSettingsFile(filePath, next);
       return next;
     },
   };
+}
+
+async function writeSettingsFile(filePath: string, settings: PluginSettings) {
+  await mkdir(dirname(filePath), { recursive: true });
+  await writeFile(filePath, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
+}
+
+function createDefaultSettings(): PluginSettings {
+  return withSessionSecret({ ...DEFAULT_SETTINGS });
 }
 
 function normalizeSettings(input: SettingsInput = {}): PluginSettings {
@@ -165,6 +186,7 @@ function normalizeSettings(input: SettingsInput = {}): PluginSettings {
     httpsEnabled: Boolean(input.httpsEnabled ?? DEFAULT_SETTINGS.httpsEnabled),
     httpsKeyPath: String(input.httpsKeyPath || "").trim(),
     port,
+    sessionSecret: String(input.sessionSecret || "").trim(),
     authEnabled: Boolean(input.authEnabled ?? DEFAULT_SETTINGS.authEnabled),
     basicAuthUser: String(input.basicAuthUser || DEFAULT_SETTINGS.basicAuthUser).trim() || DEFAULT_SETTINGS.basicAuthUser,
     passwordHash: String(input.passwordHash || ""),
@@ -172,6 +194,18 @@ function normalizeSettings(input: SettingsInput = {}): PluginSettings {
       ? input.lastServerStatus
       : DEFAULT_SETTINGS.lastServerStatus,
   };
+}
+
+function withSessionSecret(settings: PluginSettings) {
+  if (settings.sessionSecret) return settings;
+  return {
+    ...settings,
+    sessionSecret: generateSessionSecret(),
+  };
+}
+
+function generateSessionSecret() {
+  return randomBytes(32).toString("base64url");
 }
 
 function isServerStatus(value: unknown): value is ServerStatus {
@@ -340,6 +374,7 @@ function createServerManager({
       httpsEnabled: settings.httpsEnabled,
       httpsKeyPath: settings.httpsKeyPath,
       port: settings.port,
+      sessionSecret: settings.sessionSecret,
       authUsers: settings.authEnabled ? settings.authUsers : [],
     });
   }

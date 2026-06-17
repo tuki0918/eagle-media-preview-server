@@ -639,7 +639,7 @@ test("plugin server caches authenticated users per request", async () => {
   assert.match(source, /\{ error: RATING_WRITE_FORBIDDEN_MESSAGE \}/);
   assert.match(source, /\{ error: METADATA_WRITE_FORBIDDEN_MESSAGE \}/);
   assert.doesNotMatch(source, /Invalid password/);
-  assert.match(source, /const auth = \{ authSessions, revokedAuthSessions, secureCookies: httpsEnabled, users: resolvedAuthUsers \};/);
+  assert.match(source, /const auth = \{ authSessions, revokedAuthSessions, secureCookies: httpsEnabled, sessionSecret: resolvedSessionSecret, users: resolvedAuthUsers \};/);
   assert.match(source, /revokedAuthSessions\.add\(token\)/);
   assert.match(source, /auth\.revokedAuthSessions\.has\(token\)/);
   assert.match(source, /function authRequired\(\{ users = \[\] \}/);

@@ -151,6 +151,7 @@ type Settings = {
   // Legacy single-user compatibility fields. New UI writes `authUsers`.
   basicAuthUser: string;
   passwordHash: string;
+  sessionSecret: string;
   lastServerStatus: "running" | "stopped" | "error";
 };
 ```

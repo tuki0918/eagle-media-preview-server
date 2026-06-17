@@ -1,6 +1,6 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -15,6 +15,7 @@ const {
   normalizeSettings,
 } = require("../../dist/.generated/plugin-service/runtime.cjs");
 const PASSWORD_HASH_PATTERN = /^pbkdf2\$sha256\$210000\$[^$]+\$[^$]+$/;
+const SESSION_SECRET_PATTERN = /^[A-Za-z0-9_-]{32,}$/;
 
 test("generated CommonJS runtime loads with require for Eagle plugin windows", () => {
   assert.equal(normalizeSettings({}).port, DEFAULT_SETTINGS.port);
@@ -50,6 +51,34 @@ test("generated settings store hashes per-user passwords", async () => {
   assert.match(saved.authUsers[0].passwordHash, PASSWORD_HASH_PATTERN);
   assert.notEqual(saved.authUsers[0].passwordHash, hashPassword("secret"));
   assert.equal(saved.passwordHash, saved.authUsers[0].passwordHash);
+});
+
+test("generated settings store creates and persists a session secret", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-runtime-"));
+  const filePath = join(dir, "settings.json");
+  const store = createSettingsStore({ filePath });
+
+  const loaded = await store.load();
+  assert.match(loaded.sessionSecret, SESSION_SECRET_PATTERN);
+
+  const raw = JSON.parse(await readFile(filePath, "utf8"));
+  assert.equal(raw.sessionSecret, loaded.sessionSecret);
+
+  const saved = await store.save({ autoStart: true });
+  assert.equal(saved.sessionSecret, loaded.sessionSecret);
+});
+
+test("generated settings store migrates existing settings with a session secret", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-runtime-"));
+  const filePath = join(dir, "settings.json");
+  await writeFile(filePath, JSON.stringify({ port: 41532 }), "utf8");
+  const store = createSettingsStore({ filePath });
+
+  const loaded = await store.load();
+  assert.match(loaded.sessionSecret, SESSION_SECRET_PATTERN);
+
+  const raw = JSON.parse(await readFile(filePath, "utf8"));
+  assert.equal(raw.sessionSecret, loaded.sessionSecret);
 });
 
 test("generated settings store saves multiple auth users with roles", async () => {
@@ -313,6 +342,51 @@ test("generated server manager can start and stop a viewer server", async () => 
 
   const stopped = await manager.stop();
   assert.equal(stopped.state, "stopped");
+});
+
+test("generated server manager passes the persisted session secret to the viewer server", async () => {
+  const calls: unknown[] = [];
+  let settings = {
+    ...DEFAULT_SETTINGS,
+    host: "127.0.0.1",
+    port: 41532,
+    sessionSecret: "persisted-secret",
+  };
+  const manager = createServerManager({
+    settingsStore: {
+      async load() {
+        return settings;
+      },
+      async save(input: Record<string, unknown>) {
+        settings = { ...settings, ...input };
+        return settings;
+      },
+    },
+    viewerServerFactory(options: { sessionSecret: string }) {
+      calls.push(["create", options.sessionSecret]);
+      return {
+        async start() {
+          calls.push(["start"]);
+        },
+        async stop() {
+          calls.push(["stop"]);
+        },
+        status() {
+          return { state: "running", host: "127.0.0.1", port: 41532 };
+        },
+      };
+    },
+    lanAddressProvider() {
+      return [{ label: "lo0", address: "127.0.0.1" }];
+    },
+  });
+
+  await manager.start();
+
+  assert.deepEqual(calls, [
+    ["create", "persisted-secret"],
+    ["start"],
+  ]);
 });
 
 test("generated server manager accepts PBKDF2 password hashes for cookie login", async () => {
