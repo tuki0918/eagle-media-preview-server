@@ -159,7 +159,7 @@ function App() {
     }
   }
 
-  async function saveSettings({ restartRunning = true, patch = {}, passwordDrafts = userPasswordsRef.current }: { passwordDrafts?: Record<string, string>; restartRunning?: boolean; patch?: Record<string, unknown> } = {}) {
+  async function saveSettings({ restartRunning = true, patch = {}, passwordDrafts = userPasswordsRef.current, successMessage = "" }: { passwordDrafts?: Record<string, string>; restartRunning?: boolean; patch?: Record<string, unknown>; successMessage?: string } = {}) {
     const effectiveAuthUsers = Array.isArray(patch.authUsers)
       ? patch.authUsers.map((user) => normalizeAuthUser(user as AuthUser))
       : authUsers;
@@ -193,7 +193,7 @@ function App() {
       payload.userPasswords = cleanUserPasswords;
     }
     if (!hasUserPasswords && !settingsPayloadChanged(settings, payload)) {
-      setMessage("");
+      setMessage(successMessage);
       return true;
     }
 
@@ -203,14 +203,14 @@ function App() {
       }
       const saved = await runCommand(() => managerRef.current?.saveSettings(payload), { quiet: true });
       if (saved && hasUserPasswords) clearUserPasswordDrafts();
-      if (saved) setMessage("");
+      if (saved) setMessage(successMessage);
       return saved;
     }
     try {
       const nextStatus = await managerRef.current?.saveSettings(payload);
       if (nextStatus) setStatus(nextStatus);
       if (hasUserPasswords) clearUserPasswordDrafts();
-      setMessage("");
+      setMessage(successMessage);
       return true;
     } catch (error) {
       setErrorMessage(error);
@@ -474,7 +474,7 @@ function App() {
         className="m-[9px] rounded-[10px] border border-[#d7d9de] bg-white px-3.5 pb-2.5 pt-3"
         onSubmit={(event) => {
           event.preventDefault();
-          if (!busy) saveSettings();
+          if (!busy) saveSettings({ successMessage: "Saved" });
         }}
       >
         <button
@@ -611,7 +611,7 @@ function App() {
           </SettingRow>
         </div>
       </form>
-      <p className="mx-[9px] mb-2.5 mt-0 px-0.5 text-center text-[10px] text-[#d92d20]" aria-live="polite" hidden={!message || !messageIsError}>
+      <p className={`mx-[9px] mb-2.5 mt-0 px-0.5 text-center text-[10px] ${messageIsError ? "text-[#d92d20]" : "text-[#178c35]"}`} aria-live="polite" hidden={!message}>
         {message}
       </p>
     </main>

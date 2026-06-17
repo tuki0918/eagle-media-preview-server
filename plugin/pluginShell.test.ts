@@ -100,8 +100,9 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(app, /const \[passwordVisibleByIndex, setPasswordVisibleByIndex\] = useState<Record<string, boolean>>\(\{\}\);/);
   assert.match(app, /const \[passwordDraftRevision, setPasswordDraftRevision\] = useState\(0\);/);
   assert.match(app, /const userPasswordsRef = useRef<Record<string, string>>\(\{\}\);/);
+  assert.match(app, /successMessage = ""/);
   assert.match(app, /if \(saved && hasUserPasswords\) clearUserPasswordDrafts\(\);/);
-  assert.match(app, /if \(saved\) setMessage\(""\);/);
+  assert.match(app, /if \(saved\) setMessage\(successMessage\);/);
   assert.match(app, /if \(hasUserPasswords\) clearUserPasswordDrafts\(\);/);
   assert.match(app, /if \(!hasUserPasswords && !settingsPayloadChanged\(settings, payload\)\)/);
   assert.match(app, /const AUTH_PASSWORD_REQUIRED_MESSAGE = "Enter a password for every user before enabling password protection\.";/);
@@ -162,6 +163,9 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.doesNotMatch(app, /value=\{userPasswords/);
   assert.match(app, /<button className=\{`inline-flex h-7 items-center rounded-md px-2 text-\[11px\] font-medium text-\[#111\] \$\{authActionButtonClassName\}`\} type="submit" disabled=\{formDisabled\}>/);
   assert.match(app, />\s*Save\s*<\/button>/);
+  assert.match(app, /saveSettings\(\{ successMessage: "Saved" \}\)/);
+  assert.match(app, /hidden=\{!message\}/);
+  assert.match(app, /messageIsError \? "text-\[#d92d20\]" : "text-\[#178c35\]"/);
   assert.doesNotMatch(app, /Save settings/);
   assert.doesNotMatch(app, /onBlur=\{\(\) => saveSettings\(\)\}\s*\/>\s*<button className=\{`grid h-7 w-7 place-items-center rounded-md \$\{authActionButtonClassName\}`\}/);
   assert.match(app, /const effectiveAuthUsers = Array\.isArray\(patch\.authUsers\)/);
@@ -292,8 +296,10 @@ test("plugin password drafts do not blank the management UI", async () => {
   assert.ok(form instanceof dom.window.HTMLFormElement);
   form.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }));
   await waitFor(() => saveCalls.length > 0);
+  await waitFor(() => /Saved/.test(dom.window.document.body.textContent || ""));
 
   assert.match(dom.window.document.body.textContent || "", /Media Preview Server/);
+  assert.match(dom.window.document.body.textContent || "", /Saved/);
   assert.deepEqual(JSON.parse(JSON.stringify(saveCalls[0].userPasswords)), { eagle: "secret123" });
 });
 
