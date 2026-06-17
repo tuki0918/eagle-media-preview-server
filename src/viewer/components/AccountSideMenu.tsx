@@ -75,6 +75,7 @@ export function AccountSideMenu() {
 
         <SidebarContent className="overflow-hidden">
           <FolderSideNav
+            allFoldersTotal={searchState.allFoldersTotal}
             folders={searchState.folders}
             selectedFolderId={searchState.selectedFolderId}
           />
@@ -103,9 +104,11 @@ export function AccountSideMenu() {
 }
 
 function FolderSideNav({
+  allFoldersTotal,
   folders,
   selectedFolderId,
 }: {
+  allFoldersTotal: number;
   folders: readonly EagleFolder[];
   selectedFolderId: string;
 }) {
@@ -125,7 +128,7 @@ function FolderSideNav({
         <SidebarMenu className="gap-0.5" aria-label="Folder tree">
           <FolderNavItem
             active={!selectedFolderId}
-            count={folders.reduce((total, folder) => total + (Number(folder.imageCount) || 0), 0)}
+            count={allFoldersTotal}
             depth={0}
             icon="open"
             label="All folders"

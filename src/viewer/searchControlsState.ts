@@ -1,6 +1,7 @@
 import type { EagleFolder } from "./types";
 
 export interface SearchControlsState {
+  allFoldersTotal: number;
   filtersOpen: boolean;
   folders: readonly EagleFolder[];
   hasActiveFilters: boolean;
@@ -13,6 +14,7 @@ export interface SearchControlsState {
 
 const listeners = new Set<() => void>();
 let currentSearchControls: SearchControlsState = {
+  allFoldersTotal: 0,
   filtersOpen: false,
   folders: [],
   hasActiveFilters: false,

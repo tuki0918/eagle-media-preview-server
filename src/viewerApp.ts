@@ -97,6 +97,7 @@ let connectBusy = false;
 let authAuthenticated = false;
 let authRequired = false;
 let authUser: NonNullable<AuthStatusResponse["user"]> | null = null;
+let allFoldersTotal = 0;
 const pendingRatingItemIds = new Set<string>();
 
 export function initViewer() {
@@ -290,6 +291,7 @@ function showViewer(data: ConnectResponse) {
 
 function clearViewerSessionState() {
   state.requestId += 1;
+  allFoldersTotal = 0;
   resetViewerResults({ resetOffset: true });
   Object.assign(state, resetFilterState());
   hideTagSuggestions();
@@ -374,6 +376,11 @@ async function loadItems({ append = false }: LoadItemsOptions = {}) {
     if (requestId !== state.requestId) return;
     const items = data.items || [];
     state.total = Number(data.total || 0);
+    if (!append && !hasActiveFilters(state)) {
+      const previousAllFoldersTotal = allFoldersTotal;
+      allFoldersTotal = state.total;
+      if (previousAllFoldersTotal !== allFoldersTotal) renderSearchControlButtons();
+    }
     state.items = append ? [...state.items, ...items] : items;
     state.tilesLoadingMore = false;
     if (append) {
@@ -611,6 +618,7 @@ function syncResetFiltersButton() {
 
 function renderSearchControlButtons() {
   setSearchControlsState({
+    allFoldersTotal,
     filtersOpen: state.filtersOpen,
     folders: state.folders,
     hasActiveFilters: hasActiveFilters(state),

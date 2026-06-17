@@ -302,6 +302,7 @@ describe("ViewerAppShell", () => {
 
   test("renders authenticated account controls in a responsive side menu", () => {
     setSearchControlsState({
+      allFoldersTotal: 99,
       filtersOpen: false,
       folders: [
         { id: "parent", name: "Parent", imageCount: 10, depth: 0 },
@@ -345,6 +346,7 @@ describe("ViewerAppShell", () => {
     expect(html).toContain('data-slot="tabs-trigger"');
     expect(html).toContain('aria-label="Folder tree"');
     expect(html).toContain("All folders");
+    expect(html).toContain("All folders (99)");
     expect(html).toContain("Uncategorized");
     expect(html).not.toContain("No folders loaded");
     expect(html).toContain("Parent");
@@ -370,6 +372,7 @@ describe("ViewerAppShell", () => {
       user: null,
     });
     setSearchControlsState({
+      allFoldersTotal: 0,
       filtersOpen: false,
       folders: [],
       hasActiveFilters: false,
