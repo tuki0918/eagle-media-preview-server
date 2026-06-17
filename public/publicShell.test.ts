@@ -149,6 +149,8 @@ test("public login renders credentials when server auth is required", async () =
   assert.match(login, /id="authPasswordInput"[\s\S]*required=""/);
   assert.match(button, /Sign in/);
   assert.match(app, /postJson<AuthStatusResponse>\("\/api\/auth\/login", \{ username, password \}\)/);
+  assert.match(app, /Sign-in succeeded, but the browser did not keep the session cookie/);
+  assert.match(app, /credentials: options\?\.credentials \?\? "same-origin"/);
   assert.match(app, /Enter username and password\./);
   assert.match(app, /const passwordField = event\.currentTarget\.elements\.namedItem\("password"\);/);
   assert.match(app, /if \(passwordField instanceof HTMLInputElement\) passwordField\.value = "";/);
@@ -222,7 +224,7 @@ test("public viewer exposes sign out when authenticated", async () => {
   assert.match(app, /function handleAuthError\(error: unknown\) \{/);
   assert.match(app, /error instanceof ApiError/);
   assert.match(app, /error\.status !== 401/);
-  assert.match(app, /import \{ ApiError, debounce, errorMessage, getJson, postJson \} from "\.\/viewer\/api";/);
+  assert.match(app, /import \{ ApiError, debounce, errorMessage, getJson, postJson, setAuthSessionToken \} from "\.\/viewer\/api";/);
   assert.doesNotMatch(app, /setConnectMessage\(error\.message, true\)/);
   assert.doesNotMatch(app, /alert\(error\.message\)/);
   assert.match(app, /async function loadFolders\(\) \{[\s\S]*if \(handleAuthError\(error\)\) return;/);

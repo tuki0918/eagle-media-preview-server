@@ -87,7 +87,7 @@ function authenticatedUser(req, auth: AuthContext): AuthSession | null {
 
 function resolveAuthenticatedUser(req, auth: AuthContext): AuthSession | null {
   if (!authRequired(auth)) return null;
-  const token = parseCookies(req.headers.cookie || "").viewer_session;
+  const token = authSessionTokenFromRequest(req);
   if (!token) return null;
   if (auth.revokedAuthSessions.has(token)) return null;
   const session = verifyAuthSessionToken(token, auth);
@@ -97,6 +97,16 @@ function resolveAuthenticatedUser(req, auth: AuthContext): AuthSession | null {
     return null;
   }
   return session;
+}
+
+function authSessionTokenFromRequest(req) {
+  return bearerAuthToken(req.headers.authorization) || parseCookies(req.headers.cookie || "").viewer_session;
+}
+
+function bearerAuthToken(value) {
+  const header = headerValue(value);
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : "";
 }
 
 function pruneAuthSessions(authSessions: Map<string, AuthSession>) {
@@ -271,6 +281,7 @@ module.exports = {
   AUTH_SESSION_MAX_AGE_SECONDS,
   authRequired,
   authSessionCookie,
+  authSessionTokenFromRequest,
   authStatusResponse,
   authenticatedUser,
   findPasswordUser,

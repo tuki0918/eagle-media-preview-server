@@ -10,6 +10,7 @@ const {
   AUTH_SESSION_MAX_AGE_SECONDS,
   authRequired,
   authSessionCookie,
+  authSessionTokenFromRequest,
   authStatusResponse,
   authenticatedUser,
   findPasswordUser,
@@ -537,7 +538,10 @@ async function handleAuthRoutes(req, url, res, auth: AuthContext) {
       "Content-Type": "application/json; charset=utf-8",
       "Set-Cookie": authSessionCookie(token, AUTH_SESSION_MAX_AGE_SECONDS, auth.secureCookies),
     });
-    res.end(JSON.stringify(authStatusResponse(auth, user, { authenticated: true })));
+    res.end(JSON.stringify({
+      ...authStatusResponse(auth, user, { authenticated: true }),
+      sessionToken: token,
+    }));
     return true;
   }
 
@@ -546,7 +550,7 @@ async function handleAuthRoutes(req, url, res, auth: AuthContext) {
       sendMethodNotAllowed(res, ["POST"]);
       return true;
     }
-    const token = parseCookies(req.headers.cookie || "").viewer_session;
+    const token = authSessionTokenFromRequest(req);
     if (token) {
       auth.authSessions.delete(token);
       auth.revokedAuthSessions.add(token);

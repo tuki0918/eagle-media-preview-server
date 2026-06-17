@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { ApiError, errorMessage, getJson } from "./api";
+import { ApiError, errorMessage, getJson, postJson, setAuthSessionToken } from "./api";
 
 describe("viewer API helpers", () => {
   afterEach(() => {
+    setAuthSessionToken("");
     vi.restoreAllMocks();
   });
 
@@ -18,6 +19,43 @@ describe("viewer API helpers", () => {
       name: "ApiError",
       status: 401,
     } satisfies Partial<ApiError>);
+  });
+
+  test("sends same-origin credentials with JSON requests", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true }),
+    } as Response);
+
+    await getJson("/api/auth/status");
+    await postJson("/api/auth/login", { username: "eagle", password: "secret" });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/auth/status", {
+      credentials: "same-origin",
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "eagle", password: "secret" }),
+      credentials: "same-origin",
+    });
+  });
+
+  test("sends the in-memory session token as bearer auth", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true }),
+    } as Response);
+
+    setAuthSessionToken("signed-session-token");
+    await getJson("/api/items");
+
+    const [, options] = fetchMock.mock.calls[0];
+    expect(options?.credentials).toBe("same-origin");
+    expect(options?.headers).toBeInstanceOf(Headers);
+    expect((options?.headers as Headers).get("Authorization")).toBe("Bearer signed-session-token");
   });
 
   test("throws ApiError with response status when the error body is not JSON", async () => {

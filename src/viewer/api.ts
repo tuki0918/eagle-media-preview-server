@@ -8,6 +8,12 @@ export class ApiError extends Error {
   }
 }
 
+let authSessionToken = "";
+
+export function setAuthSessionToken(token: string) {
+  authSessionToken = String(token || "");
+}
+
 export function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
@@ -25,7 +31,16 @@ export async function postJson<T = unknown>(url: string, body: unknown): Promise
 }
 
 async function requestJson<T>(url: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(url, options);
+  const requestOptions: RequestInit = {
+    ...options,
+    credentials: options?.credentials ?? "same-origin",
+  };
+  if (authSessionToken) {
+    const headers = new Headers(options?.headers);
+    if (!headers.has("Authorization")) headers.set("Authorization", `Bearer ${authSessionToken}`);
+    requestOptions.headers = headers;
+  }
+  const response = await fetch(url, requestOptions);
   const data = await safeJson(response);
   if (!response.ok) throw new ApiError(response.status, responseErrorMessage(data, response.status));
   return data as T;

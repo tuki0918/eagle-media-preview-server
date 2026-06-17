@@ -9,7 +9,7 @@ import {
   playableVideoExts,
   textPreviewExts,
 } from "./viewer/constants";
-import { ApiError, debounce, errorMessage, getJson, postJson } from "./viewer/api";
+import { ApiError, debounce, errorMessage, getJson, postJson, setAuthSessionToken } from "./viewer/api";
 import {
   flattenFolders,
   isTimedMedia,
@@ -182,6 +182,7 @@ async function init() {
 async function connect(credentials?: { password: string; username: string }) {
   setConnectMessage(authRequired && !authAuthenticated ? "Signing in" : "Connecting", false);
   setConnectBusy(true);
+  let signedInThisAttempt = false;
 
   try {
     if (authRequired && !authAuthenticated) {
@@ -194,6 +195,8 @@ async function connect(credentials?: { password: string; username: string }) {
       authAuthenticated = Boolean(login.authenticated);
       authUser = login.user ?? null;
       state.permissions = normalizePermissions(login.permissions, authAuthenticated);
+      setAuthSessionToken(login.sessionToken || "");
+      signedInThisAttempt = authAuthenticated;
       renderLoginConnect();
       setConnectMessage("Connecting", false);
     }
@@ -202,6 +205,7 @@ async function connect(credentials?: { password: string; username: string }) {
     showViewer(data);
     await Promise.all([loadFolders(), loadItems()]);
   } catch (error) {
+    if (signedInThisAttempt && handlePostLoginAuthError(error)) return;
     if (handleAuthError(error)) return;
     showLogin();
     setConnectMessage(connectErrorMessage(error), true);
@@ -216,6 +220,7 @@ async function logout() {
   try {
     const logoutStatus = await postJson<AuthStatusResponse>("/api/auth/logout", {});
     const nextAuthRequired = Boolean(logoutStatus.required);
+    setAuthSessionToken("");
     clearAuthState(nextAuthRequired);
     state.permissions = normalizePermissions(logoutStatus.permissions, !nextAuthRequired);
     clearViewerSessionState();
@@ -261,6 +266,7 @@ function normalizePermissions(value: AuthStatusResponse["permissions"], readFall
 }
 
 function clearAuthState(nextAuthRequired: boolean) {
+  setAuthSessionToken("");
   authAuthenticated = false;
   authRequired = nextAuthRequired;
   authUser = null;
@@ -274,6 +280,16 @@ function handleAuthError(error: unknown) {
   renderLoginConnect();
   showLogin();
   setConnectMessage("Your session expired. Sign in again.", true);
+  return true;
+}
+
+function handlePostLoginAuthError(error: unknown) {
+  if (!(error instanceof ApiError) || error.status !== 401) return false;
+  clearAuthState(true);
+  clearViewerSessionState();
+  renderLoginConnect();
+  showLogin();
+  setConnectMessage("Sign-in succeeded, but the browser did not keep the session cookie. Allow cookies for this address and try again.", true);
   return true;
 }
 

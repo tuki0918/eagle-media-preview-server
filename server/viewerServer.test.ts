@@ -584,9 +584,12 @@ test("createViewerServer logs out cookie sessions", async () => {
     assert.equal(login.status, 200);
     const cookie = login.headers.get("set-cookie") || "";
     assert.match(cookie, /viewer_session=/);
-    assert.deepEqual(await login.json(), {
+    const loginBody = await login.json();
+    assert.match(loginBody.sessionToken, /^[^.]+\.[^;]+/);
+    assert.deepEqual(loginBody, {
       required: true,
       authenticated: true,
+      sessionToken: loginBody.sessionToken,
       user: {
         role: "viewer",
         username: "eagle",
@@ -617,10 +620,16 @@ test("createViewerServer logs out cookie sessions", async () => {
       },
     });
 
+    const authenticatedWithBearer = await fetch(`${origin}/api/auth/status`, {
+      headers: { Authorization: `Bearer ${loginBody.sessionToken}` },
+    });
+    assert.equal(authenticatedWithBearer.status, 200);
+    assert.equal((await authenticatedWithBearer.json()).authenticated, true);
+
     const logout = await fetch(`${origin}/api/auth/logout`, {
       method: "POST",
       headers: {
-        Cookie: cookie,
+        Authorization: `Bearer ${loginBody.sessionToken}`,
         Origin: origin,
       },
     });
@@ -652,6 +661,11 @@ test("createViewerServer logs out cookie sessions", async () => {
         writeRating: false,
       },
     });
+
+    const revokedBearer = await fetch(`${origin}/api/auth/status`, {
+      headers: { Authorization: `Bearer ${loginBody.sessionToken}` },
+    });
+    assert.equal((await revokedBearer.json()).authenticated, false);
 
     const malformedCookie = await fetch(`${origin}/api/auth/status`, {
       headers: { Cookie: "viewer_session=%E0%A4%A" },
