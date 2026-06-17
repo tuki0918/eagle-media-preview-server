@@ -679,6 +679,7 @@ describe("ViewerAppShell", () => {
 
       expect(tagInput.className).toContain("pl-9");
       expect(tagInput.parentElement?.innerHTML).toContain("lucide-tag");
+      expect(container.querySelector(".preview-edit-done")).not.toBeNull();
       expect(container.querySelector(".preview-edit-save")).toBeNull();
       expect(container.querySelector(".preview-edit-cancel")).toBeNull();
       await act(async () => {
@@ -689,6 +690,7 @@ describe("ViewerAppShell", () => {
 
       const saveButton = container.querySelector(".preview-edit-save");
       if (!(saveButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing save button after editing");
+      expect(container.querySelector(".preview-edit-done")).toBeNull();
       expect(saveButton.disabled).toBe(false);
       expect(saveButton.getAttribute("aria-label")).toBe("Save metadata");
       expect(container.querySelector(".preview-edit-status")?.textContent).toBe("1 change");

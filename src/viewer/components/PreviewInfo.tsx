@@ -254,9 +254,11 @@ function PreviewMetadataEditor({
     <form className={previewEditFormClassName} aria-busy={saving} onSubmit={submitMetadata}>
       <div className={previewMetadataHeaderClassName}>
         <span className={previewMetadataLabelClassName}>Metadata</span>
-        <Button type="button" variant="outline" className={`${textActionButtonClassName} preview-edit-done min-h-8 px-2.5`} disabled={saving} onClick={() => setEditing(false)}>
-          Done
-        </Button>
+        {!hasMetadataChanges ? (
+          <Button type="button" variant="outline" className={`${textActionButtonClassName} preview-edit-done min-h-8 px-2.5`} disabled={saving} onClick={() => setEditing(false)}>
+            Done
+          </Button>
+        ) : null}
       </div>
       <PreviewEditField label="Tags">
         <TagChipEditor
