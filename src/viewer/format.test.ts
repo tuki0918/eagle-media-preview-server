@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   clamp,
+  displayFileName,
   flattenFolders,
   folderDisplayNames,
   folderIds,
@@ -23,6 +24,9 @@ describe("viewer format helpers", () => {
     expect(originalFileName({ id: "abc", name: "image.JPG", ext: ".jpg" })).toBe("image.JPG");
     expect(originalFileName({ id: "abc", ext: "png" })).toBe("abc.png");
     expect(previewFileName({ id: "abc", name: "clip", ext: "mp4" })).toBe("clip.mp4");
+    expect(displayFileName({ id: "abc", name: "clip", ext: "mp4" })).toBe("clip");
+    expect(displayFileName({ id: "abc", name: "clip.MP4", ext: ".mp4" })).toBe("clip");
+    expect(displayFileName({ id: "abc", name: "clip.final", ext: "mp4" })).toBe("clip.final");
   });
 
   test("formats media size and duration values for compact UI cells", () => {

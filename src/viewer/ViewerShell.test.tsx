@@ -1213,11 +1213,15 @@ describe("ViewerAppShell", () => {
 
     expect(video).toContain("video-player");
     expect(video).toContain("Playback position");
+    expect(video).toContain("Sample");
+    expect(video).not.toContain("Sample.mp4");
     expect(video).toContain("transition-opacity");
     expect(video).toContain("cursor-pointer");
     expect(video).toContain("Toggle video controls");
     expect(audio).toContain("audio-player-shell");
     expect(audio).toContain("audio-artwork");
+    expect(audio).toContain("Sample");
+    expect(audio).not.toContain("Sample.mp3");
     expect(audio).toContain("Playback speed");
     expect(image).toContain("image-viewport");
     expect(image).toContain("image-toolbar");

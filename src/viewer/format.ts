@@ -25,6 +25,16 @@ export function previewFileName(item: EagleItem) {
   return originalFileName(item);
 }
 
+export function displayFileName(item: EagleItem) {
+  const fileName = String(item.name || item.id || "file").trim() || "file";
+  const ext = String(item.ext || "").trim().replace(/^\./, "").toLowerCase();
+  if (!ext) return fileName;
+  const suffix = `.${ext}`;
+  return fileName.toLowerCase().endsWith(suffix)
+    ? fileName.slice(0, -suffix.length) || fileName
+    : fileName;
+}
+
 export function originalFileName(item: EagleItem) {
   const name = String(item.name || item.id || "file").trim() || "file";
   const ext = String(item.ext || "").trim().replace(/^\./, "");

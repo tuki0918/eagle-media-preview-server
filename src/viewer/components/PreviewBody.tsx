@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent, type ReactNode, type TouchEvent, type WheelEvent } from "react";
 import { errorMessage, mediaUrl } from "../api";
+import { displayFileName } from "../format";
 import { closePreview } from "../shellActions";
 import {
   getImageOverlayControlsVisible,
@@ -150,7 +151,7 @@ function AudioPreview({ item }: { item: EagleItem }) {
         )}
       </div>
       <div className="grid min-w-0 gap-1">
-        <strong className={mediaTitleClassName}>{item.name || item.id || "Audio preview"}</strong>
+        <strong className={mediaTitleClassName}>{displayFileName(item) || "Audio preview"}</strong>
         <span className="text-xs font-[620] text-[rgba(255,255,255,0.62)]">{(item.ext || "audio").toUpperCase()}</span>
       </div>
       <audio ref={audioRef} src={mediaUrl(String(item.id || ""), "file")} preload="metadata" />
@@ -254,7 +255,7 @@ function MediaControls({
   };
 
   const timeLabel = `${formatMediaTime(currentTime)} / ${formatMediaTime(duration)}`;
-  const title = item.name || item.id || (variant === "video" ? "Video preview" : "Audio preview");
+  const title = displayFileName(item) || (variant === "video" ? "Video preview" : "Audio preview");
   const mediaControlsVisibilityClassName = variant === "video" && !videoOverlayControlsVisible
     ? "pointer-events-none opacity-0"
     : "opacity-100";

@@ -10,6 +10,7 @@ import {
   formatDimensions,
   formatDuration,
   formatDurationCell,
+  displayFileName,
   isTimedMedia,
   originalFileName,
 } from "../format";
@@ -323,7 +324,7 @@ function ThumbnailButton({ children, item, onOpenPreview, style, variant, withBa
       ) : null}
       {withFileNameOverlay ? (
         <span className={fileNameOverlayClassName} aria-hidden="true">
-          <span className={fileNameOverlayTextClassName}>{fileNameWithoutExtension(item)}</span>
+          <span className={fileNameOverlayTextClassName}>{displayFileName(item)}</span>
         </span>
       ) : null}
       {withBadges ? (
@@ -372,16 +373,6 @@ function normalizeExt(value: unknown) {
 
 function fileBadgeColorClassName(ext: unknown) {
   return fileBadgeColorClassNames[normalizeExt(ext)] || "bg-[rgba(20,99,243,0.92)] text-white";
-}
-
-function fileNameWithoutExtension(item: EagleItem) {
-  const fileName = originalFileName(item) || item.name || item.id || "";
-  const ext = normalizeExt(item.ext || "");
-  if (!ext) return fileName;
-  const suffix = `.${ext}`;
-  return fileName.toLowerCase().endsWith(suffix)
-    ? fileName.slice(0, -suffix.length) || fileName
-    : fileName;
 }
 
 function usePreviewTrigger(item: EagleItem, onOpenPreview: (item: EagleItem) => void) {
