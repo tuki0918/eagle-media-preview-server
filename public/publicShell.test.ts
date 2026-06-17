@@ -547,7 +547,8 @@ test("public grid hover icons remain while tiles hover shows file names", async 
   assert.doesNotMatch(app, /mediaType === "document" \? "file-text"/);
   assert.doesNotMatch(app, /mediaType === "image" \? "maximize-2"/);
   assert.match(tilesList, /thumb-file-name-overlay/);
-  assert.match(tilesList, /Tile\.jpg/);
+  assert.match(tilesList, /Tile/);
+  assert.doesNotMatch(tilesList, /<span class="[^"]*thumb-file-name-overlay[\s\S]*Tile\.jpg/);
   assert.doesNotMatch(tilesList, /M8 5v14l11-7z/);
   assert.doesNotMatch(tilesList, /13 5 19 5 19 11/);
   assert.match(html, /<ThumbnailButton variant="grid" item=\{item\} onOpenPreview=\{onOpenPreview\} withBadges withOverlay>/);
