@@ -288,7 +288,7 @@ Roles:
 
 - Viewer: can browse and preview media
 - Editor: can browse and update rating, tags, and categories
-- Admin: can browse, edit metadata, and switch the active Eagle library
+- Admin: highest available role; includes metadata editing and any admin-only server capabilities exposed by the current UI/API
 
 Password handling:
 

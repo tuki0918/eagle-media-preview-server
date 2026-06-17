@@ -20,17 +20,15 @@ You can preview your media from other devices on the same network.
 - Eagle 4.0 Build 23 or later
 - Node.js 20 or later
 
-## Authentication and roles
+## Authentication
 
-Authentication is optional. When password protection is enabled, browser access uses the built-in login screen and a session cookie issued by the login API. Passwords are only sent to `POST /api/auth/login`; follow-up API and media requests use the session cookie instead of resending credentials. HTTP sessions use `HttpOnly; SameSite=Lax`; when HTTPS is enabled with a certificate and key, session cookies also use `Secure`.
+Authentication is optional. When password protection is enabled, browser access uses the built-in login screen and cookie-based sessions.
 
 - Viewer users can browse and preview media.
 - Editor users can edit rating, tags, and categories from the preview panel.
-- Admin users can edit metadata and switch the active Eagle library.
+- Admin users have the highest available management permissions.
 
-Plain text passwords are never persisted. New passwords are saved as salted PBKDF2-SHA-256 hashes, and existing legacy SHA-256 hashes remain accepted for migration compatibility. The viewer session is a server-side cookie session rather than a JWT.
-
-If a viewer session expires or an authenticated API call returns `401`, the browser viewer clears the current library state and returns to the login screen.
+See [Eagle | Media Preview Server Spec](EAGLE_PLUGIN_SPEC.md#authentication) for cookie, password storage, role, and session behavior details.
 
 ## Use HTTPS with mkcert
 

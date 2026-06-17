@@ -378,7 +378,7 @@ function authRoleLabel(role: unknown) {
 }
 
 function authRoleDescription(role: unknown) {
-  if (role === "admin") return "Can edit metadata and switch libraries";
+  if (role === "admin") return "Full access to available management actions";
   if (role === "editor") return "Can edit ratings, tags, and categories";
   if (role === "viewer") return "Can browse and preview";
   return "";
