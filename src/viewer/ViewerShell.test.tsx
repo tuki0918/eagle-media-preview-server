@@ -595,20 +595,14 @@ describe("ViewerAppShell", () => {
         editButton.click();
       });
 
-      const addTagButton = container.querySelector(".preview-add-tag");
-      if (!(addTagButton instanceof dom.window.HTMLButtonElement)) {
-        throw new Error("Missing add tag button");
-      }
-      await act(async () => {
-        addTagButton.click();
-      });
-
       const tagInput = Array.from(container.querySelectorAll("input")).find((input) => input.placeholder === "Add tag");
       const form = container.querySelector("form");
       if (!(tagInput instanceof dom.window.HTMLInputElement) || !(form instanceof dom.window.HTMLFormElement)) {
         throw new Error("Missing metadata editor controls");
       }
 
+      expect(tagInput.className).toContain("pl-9");
+      expect(tagInput.parentElement?.innerHTML).toContain("lucide-tag");
       expect(container.querySelector(".preview-edit-save")).toBeNull();
       expect(container.querySelector(".preview-edit-cancel")).toBeNull();
       await act(async () => {
@@ -691,13 +685,6 @@ describe("ViewerAppShell", () => {
         editButton.click();
       });
 
-      const addTagButton = container.querySelector(".preview-add-tag");
-      if (!(addTagButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing add tag button");
-
-      await act(async () => {
-        addTagButton.click();
-      });
-
       const tagInput = Array.from(container.querySelectorAll("input")).find((input) => input.placeholder === "Add tag");
       if (!(tagInput instanceof dom.window.HTMLInputElement)) throw new Error("Missing tag input");
 
@@ -770,14 +757,6 @@ describe("ViewerAppShell", () => {
 
       await act(async () => {
         editButton.click();
-      });
-
-      const addTagButton = container.querySelector(".preview-add-tag");
-      if (!(addTagButton instanceof dom.window.HTMLButtonElement)) {
-        throw new Error("Missing add tag button");
-      }
-      await act(async () => {
-        addTagButton.click();
       });
 
       const removeButton = container.querySelector(".preview-edit-chip button");

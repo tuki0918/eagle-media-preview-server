@@ -667,7 +667,7 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(html, /const clearDebounceTimer = \(\) => \{/);
   assert.match(html, /return \(\) => \{\s*requestId\.current \+= 1;\s*clearDebounceTimer\(\);\s*\};/);
   assert.match(html, /onPointerDown=\{\(event\) => event\.stopPropagation\(\)\}/);
-  assert.match(html, /className="preview-add-tag/);
+  assert.doesNotMatch(html, /className="preview-add-tag/);
   assert.match(html, /onPaste=\{handlePaste\}/);
   assert.match(html, /function folderChecklistSections\(\{/);
   assert.match(app, /function readRecentList\(key[^)]*\) \{/);
@@ -708,6 +708,8 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.doesNotMatch(html, /preview-folder-current-badge/);
   assert.doesNotMatch(html, /preview-folder-option-meta/);
   assert.match(html, /No matching folder\. Create folders in Eagle first\./);
+  assert.match(html, /<TagIcon className="pointer-events-none absolute left-3 top-1\/2 size-4 -translate-y-1\/2 text-muted-foreground"/);
+  assert.match(html, /className=\{`\$\{previewChipInputClassName\} pl-9`\}/);
   assert.match(html, /const previewChipInputClassName = "preview-chip-input/);
   assert.match(html, /const previewChipSuggestionsClassName = "preview-chip-suggestions/);
   assert.doesNotMatch(html, /preview-chip-suggestions[^"]*max-\[540px\]:fixed/);

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ClipboardEvent, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
-import { CheckIcon, PencilIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
+import { CheckIcon, PencilIcon, SearchIcon, TagIcon, XIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { errorMessage } from "../api";
@@ -313,7 +313,6 @@ function TagChipEditor({
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<MetadataSuggestion[]>([]);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
-  const [inputOpen, setInputOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const requestId = useRef(0);
   const debounceTimer = useRef<number | null>(null);
@@ -354,7 +353,7 @@ function TagChipEditor({
       const selectedSet = new Set(nextSelected);
       const visibleItems = items.filter((item) => !selectedSet.has(normalizeValue(item.value)));
       setSuggestions(visibleItems);
-      setSuggestionsOpen(inputOpen && (visibleItems.length > 0 || nextQuery.trim().length > 0));
+      setSuggestionsOpen(visibleItems.length > 0 || nextQuery.trim().length > 0);
     } catch {
       if (currentRequest === requestId.current) hideSuggestions();
     }
@@ -401,7 +400,6 @@ function TagChipEditor({
     if (disabled) return;
     if (event.key === "Escape") {
       hideSuggestions();
-      setInputOpen(false);
       return;
     }
     if (event.key !== "Enter" && event.key !== ",") return;
@@ -417,7 +415,6 @@ function TagChipEditor({
   };
 
   useEffect(() => {
-    if (!inputOpen) return;
     const input = inputRef.current;
     if (!input) return;
     const handleInput = () => {
@@ -428,7 +425,6 @@ function TagChipEditor({
       if (disabled) return;
       if (event.key === "Escape") {
         hideSuggestions();
-        setInputOpen(false);
         return;
       }
       if (event.key !== "Enter" && event.key !== ",") return;
@@ -476,55 +472,49 @@ function TagChipEditor({
           </Badge>
         ))}
       </div>
-      {inputOpen ? (
-        <div className="preview-chip-input-wrap relative">
-          <input
-            ref={inputRef}
-            className={previewChipInputClassName}
-            type="text"
-            placeholder={placeholder}
-            aria-label={inputLabel}
-            autoComplete="off"
-            disabled={disabled}
-            defaultValue=""
-            onInput={(event) => {
-              setQuery(event.currentTarget.value);
-              queueSuggestions(event.currentTarget.value);
-            }}
-            onFocus={() => updateSuggestions()}
-            onPointerDown={() => updateSuggestions()}
-            onKeyDown={handleKeyDown}
-            onPaste={handlePaste}
-          />
-          <div className={previewChipSuggestionsClassName} role="listbox" hidden={!suggestionsOpen}>
-            {suggestions.length ? suggestions.map((item) => (
-              <button
-                key={item.value}
-                type="button"
-                className={previewChipSuggestionClassName}
-                role="option"
-                disabled={disabled}
-                onPointerDown={(event) => {
-                  event.preventDefault();
-                  addValue(item.value);
-                }}
-              >
-                <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{item.label}</span>
-                {item.meta ? <span className="preview-chip-suggestion-meta flex-none rounded-full bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">{item.meta}</span> : null}
-              </button>
-            )) : (
-              <div className="preview-chip-suggestion-empty px-2.5 py-2 text-[12px] leading-snug text-muted-foreground">
-                Press Enter to add this tag.
-              </div>
-            )}
-          </div>
+      <div className="preview-chip-input-wrap relative">
+        <TagIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+        <input
+          ref={inputRef}
+          className={`${previewChipInputClassName} pl-9`}
+          type="text"
+          placeholder={placeholder}
+          aria-label={inputLabel}
+          autoComplete="off"
+          disabled={disabled}
+          defaultValue=""
+          onInput={(event) => {
+            setQuery(event.currentTarget.value);
+            queueSuggestions(event.currentTarget.value);
+          }}
+          onFocus={() => updateSuggestions()}
+          onPointerDown={() => updateSuggestions()}
+          onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
+        />
+        <div className={previewChipSuggestionsClassName} role="listbox" hidden={!suggestionsOpen}>
+          {suggestions.length ? suggestions.map((item) => (
+            <button
+              key={item.value}
+              type="button"
+              className={previewChipSuggestionClassName}
+              role="option"
+              disabled={disabled}
+              onPointerDown={(event) => {
+                event.preventDefault();
+                addValue(item.value);
+              }}
+            >
+              <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{item.label}</span>
+              {item.meta ? <span className="preview-chip-suggestion-meta flex-none rounded-full bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">{item.meta}</span> : null}
+            </button>
+          )) : (
+            <div className="preview-chip-suggestion-empty px-2.5 py-2 text-[12px] leading-snug text-muted-foreground">
+              Press Enter to add this tag.
+            </div>
+          )}
         </div>
-      ) : (
-        <Button type="button" variant="outline" className="preview-add-tag min-h-10 justify-start gap-2 px-3 text-[13px] font-[680]" disabled={disabled} onClick={() => setInputOpen(true)}>
-          <PlusIcon aria-hidden="true" />
-          Add tag
-        </Button>
-      )}
+      </div>
     </div>
   );
 }
