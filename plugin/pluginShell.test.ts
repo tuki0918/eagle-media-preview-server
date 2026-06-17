@@ -100,11 +100,12 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(app, /const \[passwordVisibleByIndex, setPasswordVisibleByIndex\] = useState<Record<string, boolean>>\(\{\}\);/);
   assert.match(app, /const \[passwordDraftRevision, setPasswordDraftRevision\] = useState\(0\);/);
   assert.match(app, /const userPasswordsRef = useRef<Record<string, string>>\(\{\}\);/);
+  assert.match(app, /forceSave = false/);
   assert.match(app, /successMessage = ""/);
   assert.match(app, /if \(saved && hasUserPasswords\) clearUserPasswordDrafts\(\);/);
   assert.match(app, /if \(saved\) setMessage\(successMessage\);/);
   assert.match(app, /if \(hasUserPasswords\) clearUserPasswordDrafts\(\);/);
-  assert.match(app, /if \(!hasUserPasswords && !settingsPayloadChanged\(settings, payload\)\)/);
+  assert.match(app, /if \(!forceSave && !hasUserPasswords && !settingsPayloadChanged\(settings, payload\)\)/);
   assert.match(app, /const AUTH_PASSWORD_REQUIRED_MESSAGE = "Enter a password for every user before enabling password protection\.";/);
   assert.match(app, /const nextAuthEnabled = Boolean\(patch\.authEnabled \?\? authEnabled\);/);
   assert.match(app, /if \(nextAuthEnabled && authUsersMissingPassword\(effectiveAuthUsers, passwordDrafts\)\)/);
@@ -163,7 +164,8 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.doesNotMatch(app, /value=\{userPasswords/);
   assert.match(app, /<button className=\{`inline-flex h-7 items-center rounded-md px-2 text-\[11px\] font-medium text-\[#111\] \$\{authActionButtonClassName\}`\} type="submit" disabled=\{formDisabled\}>/);
   assert.match(app, />\s*Save\s*<\/button>/);
-  assert.match(app, /saveSettings\(\{ successMessage: "Saved" \}\)/);
+  assert.match(app, /saveSettings\(\{ forceSave: true, successMessage: "Saved" \}\)/);
+  assert.match(app, /saveSettings\(\{ forceSave: true, patch: \{ port: event\.currentTarget\.value \}, successMessage: "Saved" \}\)/);
   assert.match(app, /hidden=\{!message\}/);
   assert.match(app, /messageIsError \? "text-\[#d92d20\]" : "text-\[#178c35\]"/);
   assert.doesNotMatch(app, /Save settings/);
@@ -301,6 +303,95 @@ test("plugin password drafts do not blank the management UI", async () => {
   assert.match(dom.window.document.body.textContent || "", /Media Preview Server/);
   assert.match(dom.window.document.body.textContent || "", /Saved/);
   assert.deepEqual(JSON.parse(JSON.stringify(saveCalls[0].userPasswords)), { eagle: "secret123" });
+});
+
+test("plugin port input persists after editing", async () => {
+  const bundle = await esbuild({
+    bundle: true,
+    define: {
+      "process.env.NODE_ENV": JSON.stringify("test"),
+    },
+    entryPoints: [new URL("./app.tsx", import.meta.url).pathname],
+    format: "iife",
+    platform: "browser",
+    write: false,
+  });
+  const appScript = bundle.outputFiles[0].text;
+  const domOptions = {
+    runScripts: "outside-only",
+    url: "file:///tmp/eagle-plugin/plugin/index.html",
+  } as unknown as ConstructorParameters<typeof JSDOM>[1];
+  const dom = new JSDOM("<!doctype html><html><body><div id=\"root\"></div></body></html>", domOptions);
+  const pluginWindow = dom.window as unknown as Window & {
+    eval: (source: string) => unknown;
+    require: (id: string) => unknown;
+  };
+  const saveCalls: Record<string, unknown>[] = [];
+  let status = {
+    settings: {
+      authEnabled: false,
+      authUsers: [{ username: "eagle", role: "viewer", passwordHash: "hash" }],
+      autoStart: false,
+      host: "0.0.0.0",
+      port: 41532,
+    },
+    state: "stopped",
+    url: "http://127.0.0.1:41532",
+  };
+  pluginWindow.require = (id: string) => {
+    if (id === "path") return path;
+    return {
+      createServerManager() {
+        return {
+          async init() {
+            return status;
+          },
+          async saveSettings(payload: Record<string, unknown>) {
+            saveCalls.push(payload);
+            status = {
+              ...status,
+              settings: {
+                ...status.settings,
+                ...payload,
+              },
+            };
+            return status;
+          },
+          async start() {
+            return status;
+          },
+          async status() {
+            return status;
+          },
+          async stop() {
+            return status;
+          },
+        };
+      },
+    };
+  };
+
+  pluginWindow.eval(appScript);
+  await waitFor(() => {
+    const toggle = dom.window.document.querySelector("#settingsToggleButton");
+    return toggle instanceof dom.window.HTMLButtonElement;
+  });
+
+  const toggle = dom.window.document.querySelector("#settingsToggleButton");
+  assert.ok(toggle instanceof dom.window.HTMLButtonElement);
+  toggle.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+  await waitFor(() => !dom.window.document.querySelector("#settingsPanel")?.hasAttribute("hidden"));
+
+  const portInput = dom.window.document.querySelector("input[type=\"number\"]");
+  assert.ok(portInput instanceof dom.window.HTMLInputElement);
+  const valueSetter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")?.set;
+  valueSetter?.call(portInput, "6123");
+  portInput.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+  portInput.dispatchEvent(new dom.window.FocusEvent("focusout", { bubbles: true }));
+  await waitFor(() => saveCalls.length > 0);
+
+  assert.equal(saveCalls[0].port, "6123");
+  assert.match(dom.window.document.body.textContent || "", /Saved/);
 });
 
 test("plugin copy URL uses Eagle clipboard API directly", async () => {

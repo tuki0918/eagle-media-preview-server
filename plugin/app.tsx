@@ -159,7 +159,7 @@ function App() {
     }
   }
 
-  async function saveSettings({ restartRunning = true, patch = {}, passwordDrafts = userPasswordsRef.current, successMessage = "" }: { passwordDrafts?: Record<string, string>; restartRunning?: boolean; patch?: Record<string, unknown>; successMessage?: string } = {}) {
+  async function saveSettings({ forceSave = false, restartRunning = true, patch = {}, passwordDrafts = userPasswordsRef.current, successMessage = "" }: { forceSave?: boolean; passwordDrafts?: Record<string, string>; restartRunning?: boolean; patch?: Record<string, unknown>; successMessage?: string } = {}) {
     const effectiveAuthUsers = Array.isArray(patch.authUsers)
       ? patch.authUsers.map((user) => normalizeAuthUser(user as AuthUser))
       : authUsers;
@@ -192,7 +192,7 @@ function App() {
     if (hasUserPasswords) {
       payload.userPasswords = cleanUserPasswords;
     }
-    if (!hasUserPasswords && !settingsPayloadChanged(settings, payload)) {
+    if (!forceSave && !hasUserPasswords && !settingsPayloadChanged(settings, payload)) {
       setMessage(successMessage);
       return true;
     }
@@ -474,7 +474,7 @@ function App() {
         className="m-[9px] rounded-[10px] border border-[#d7d9de] bg-white px-3.5 pb-2.5 pt-3"
         onSubmit={(event) => {
           event.preventDefault();
-          if (!busy) saveSettings({ successMessage: "Saved" });
+          if (!busy) saveSettings({ forceSave: true, successMessage: "Saved" });
         }}
       >
         <button
@@ -502,7 +502,7 @@ function App() {
               disabled={formDisabled}
               value={settings.port || 41532}
               onChange={(event) => updateSettings({ port: event.currentTarget.value })}
-              onBlur={(event) => saveSettings({ patch: { port: event.currentTarget.value } })}
+              onBlur={(event) => saveSettings({ forceSave: true, patch: { port: event.currentTarget.value }, successMessage: "Saved" })}
             />
           </SettingRow>
           <SettingRow label="Users" help={authEnabled ? "Viewer can browse. Editor can edit metadata. Admin has all permissions." : "Saved users apply when password protection is enabled."}>
@@ -532,7 +532,7 @@ function App() {
                       disabled={formDisabled}
                       value={user.username}
                       onChange={(event) => updateAuthUser(index, { username: event.currentTarget.value })}
-                      onBlur={() => saveSettings()}
+                      onBlur={() => saveSettings({ forceSave: true })}
                     />
                     <select
                       className={`${settingInputClassName} px-1.5`}
