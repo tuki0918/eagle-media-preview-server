@@ -98,14 +98,7 @@ function App() {
   const statusLabel = restartingStopped ? busyStoppedFrames[busyFrame] : titleCase(serverState);
   const authEnabled = Boolean(settings.authEnabled);
   const authUsers = normalizedAuthUsers(settings);
-  const metadataEditingEnabled = authEnabled && authUsersCanEditMetadata(authUsers);
   const httpsEnabled = Boolean(settings.httpsEnabled);
-  const authUsersStatusLabel = authEnabled ? "Active" : "Inactive";
-  const authUsersStatusClassName = !authEnabled
-    ? "border-[#d5d9df] bg-[#f3f4f6] text-[#626975]"
-    : metadataEditingEnabled
-      ? "border-[#b5ebc1] bg-[#e7f8eb] text-[#178c35]"
-      : "border-[#c5d4f3] bg-[#edf3ff] text-[#2f5fbd]";
   const publicNetwork = (settings.host || "0.0.0.0") === "0.0.0.0";
   const qrSrc = useMemo(() => {
     if (!status.url || serverState !== "running") return "";
@@ -500,11 +493,6 @@ function App() {
           </SettingRow>
           <SettingRow label="Users" help={authEnabled ? "Viewer can browse. Editor can edit metadata. Admin has all permissions." : "Saved users apply when password protection is enabled."}>
             <div className="grid gap-2">
-              <div className="flex justify-end">
-                <span id="authUsersStatus" className={`inline-flex min-h-5 items-center rounded-md border px-2 text-[10px] font-medium ${authUsersStatusClassName}`} role="status">
-                  {authUsersStatusLabel}
-                </span>
-              </div>
               <div className="grid grid-cols-[minmax(80px,1fr)_86px_minmax(76px,0.8fr)_28px_28px] gap-1.5 px-0.5 text-[9px] font-medium uppercase leading-none text-[#8a8f99]">
                 <span>Username</span>
                 <span>Role</span>
@@ -758,14 +746,6 @@ function normalizeAuthUser(user: AuthUser): AuthUser {
 
 function normalizeRole(role: unknown): UserRole {
   return role === "admin" || role === "editor" ? role : "viewer";
-}
-
-function canRoleEditMetadata(role: unknown) {
-  return role === "admin" || role === "editor";
-}
-
-function authUsersCanEditMetadata(users: AuthUser[]) {
-  return users.some((user) => canRoleEditMetadata(user.role));
 }
 
 function authUsersMissingPassword(users: AuthUser[], values: Record<string, string>) {
