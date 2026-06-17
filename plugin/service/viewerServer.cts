@@ -55,7 +55,14 @@ interface AuthSession {
   username: string;
 }
 
+interface LoginFailure {
+  count: number;
+  firstFailedAt: number;
+  lockedUntil: number;
+}
+
 const INVALID_LOGIN_MESSAGE = "Invalid username or password";
+const LOGIN_RATE_LIMIT_MESSAGE = "Too many failed login attempts. Try again later.";
 const RATING_WRITE_FORBIDDEN_MESSAGE = "Rating editing is not allowed for this viewer";
 const METADATA_WRITE_FORBIDDEN_MESSAGE = "Metadata editing is not allowed for this viewer";
 
@@ -122,6 +129,9 @@ const MAX_JSON_BODY_BYTES = 1024 * 1024;
 const DEFAULT_ITEMS_LIMIT = 30;
 const MAX_ITEMS_LIMIT = 1000;
 const MAX_ITEMS_OFFSET = 1000000;
+const LOGIN_FAILURE_LIMIT = 5;
+const LOGIN_FAILURE_WINDOW_MS = 10 * 60 * 1000;
+const LOGIN_LOCK_MS = 5 * 60 * 1000;
 
 class HttpError extends Error {
   status: number;
@@ -157,6 +167,7 @@ function createViewerServer({
   const resolvedSessionSecret = String(sessionSecret || "").trim() || randomBytes(32).toString("base64url");
   const authSessions = new Map<string, AuthSession>();
   const revokedAuthSessions = new Set<string>();
+  const loginFailures = new Map<string, LoginFailure>();
   let currentSession = createConnectionContext({
     connection: {
       host: "127.0.0.1",
@@ -170,7 +181,7 @@ function createViewerServer({
   const server = createProtocolServer({ httpsCertPath, httpsEnabled, httpsKeyPath }, async (req, res) => {
     try {
       const url = new URL(req.url || "/", `${httpsEnabled ? "https" : "http"}://${req.headers.host}`);
-      const auth = { authSessions, revokedAuthSessions, secureCookies: httpsEnabled, sessionSecret: resolvedSessionSecret, users: resolvedAuthUsers };
+      const auth = { authSessions, loginFailures, revokedAuthSessions, secureCookies: httpsEnabled, sessionSecret: resolvedSessionSecret, users: resolvedAuthUsers };
       if (!isTrustedUnsafeRequest(req, url)) {
         sendJson(res, 403, { error: "Cross-origin writes are not allowed" });
         return;
@@ -465,6 +476,7 @@ function boundedInteger(value, fallback, min, max) {
 
 interface AuthContext {
   authSessions: Map<string, AuthSession>;
+  loginFailures: Map<string, LoginFailure>;
   revokedAuthSessions: Set<string>;
   secureCookies?: boolean;
   sessionSecret: string;
@@ -494,11 +506,25 @@ async function handleAuthRoutes(req, url, res, auth: AuthContext) {
       return true;
     }
     const body = await readJson(req);
-    const user = findPasswordUser(String(body.username || ""), String(body.password || ""), auth);
+    const username = String(body.username || "").trim();
+    const password = String(body.password || "");
+    const loginKey = loginFailureKey(req, username);
+    const activeLockSeconds = activeLoginLockSeconds(auth.loginFailures, loginKey);
+    if (activeLockSeconds > 0) {
+      sendLoginRateLimited(res, activeLockSeconds);
+      return true;
+    }
+    const user = findPasswordUser(username, password, auth);
     if (!user) {
+      const retryAfterSeconds = recordFailedLogin(auth.loginFailures, loginKey);
+      if (retryAfterSeconds > 0) {
+        sendLoginRateLimited(res, retryAfterSeconds);
+        return true;
+      }
       sendJson(res, 401, { error: INVALID_LOGIN_MESSAGE });
       return true;
     }
+    auth.loginFailures.delete(loginKey);
     pruneAuthSessions(auth.authSessions);
     const session = {
       expiresAt: Date.now() + AUTH_SESSION_MAX_AGE_SECONDS * 1000,
@@ -534,6 +560,48 @@ async function handleAuthRoutes(req, url, res, auth: AuthContext) {
   }
 
   return false;
+}
+
+function loginFailureKey(req, username: string) {
+  return `${clientAddress(req)}:${username.toLowerCase()}`;
+}
+
+function clientAddress(req) {
+  const forwardedFor = String(req.headers["x-forwarded-for"] || "").split(",")[0]?.trim();
+  return forwardedFor || req.socket?.remoteAddress || "unknown";
+}
+
+function activeLoginLockSeconds(loginFailures: Map<string, LoginFailure>, key: string) {
+  const entry = loginFailures.get(key);
+  if (!entry) return 0;
+  const now = Date.now();
+  if (entry.lockedUntil > now) return Math.ceil((entry.lockedUntil - now) / 1000);
+  if (now - entry.firstFailedAt > LOGIN_FAILURE_WINDOW_MS) {
+    loginFailures.delete(key);
+  }
+  return 0;
+}
+
+function recordFailedLogin(loginFailures: Map<string, LoginFailure>, key: string) {
+  const now = Date.now();
+  const current = loginFailures.get(key);
+  const entry = current && now - current.firstFailedAt <= LOGIN_FAILURE_WINDOW_MS
+    ? current
+    : { count: 0, firstFailedAt: now, lockedUntil: 0 };
+  entry.count += 1;
+  if (entry.count >= LOGIN_FAILURE_LIMIT) {
+    entry.lockedUntil = now + LOGIN_LOCK_MS;
+  }
+  loginFailures.set(key, entry);
+  return entry.lockedUntil > now ? Math.ceil((entry.lockedUntil - now) / 1000) : 0;
+}
+
+function sendLoginRateLimited(res, retryAfterSeconds: number) {
+  res.writeHead(429, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Retry-After": String(Math.max(1, retryAfterSeconds)),
+  });
+  res.end(JSON.stringify({ error: LOGIN_RATE_LIMIT_MESSAGE }));
 }
 
 async function handleConnect(req, res, setSession, auth: AuthContext) {

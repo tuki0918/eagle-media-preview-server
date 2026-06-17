@@ -673,6 +673,71 @@ test("createViewerServer logs out cookie sessions", async () => {
   }
 });
 
+test("createViewerServer rate-limits repeated failed logins by client and username", async () => {
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    authUsers: [
+      { username: "eagle", passwordHash: sha256("secret"), role: "viewer" },
+      { username: "owner", passwordHash: sha256("own"), role: "admin" },
+    ],
+  });
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const origin = `http://127.0.0.1:${status.port}`;
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const response = await fetch(`${origin}/api/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Origin: origin,
+        },
+        body: JSON.stringify({ username: "eagle", password: "wrong" }),
+      });
+      assert.equal(response.status, 401);
+      assert.deepEqual(await response.json(), { error: "Invalid username or password" });
+    }
+
+    const locked = await fetch(`${origin}/api/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: origin,
+      },
+      body: JSON.stringify({ username: "eagle", password: "wrong" }),
+    });
+    assert.equal(locked.status, 429);
+    assert.match(locked.headers.get("retry-after") || "", /^\d+$/);
+    assert.deepEqual(await locked.json(), { error: "Too many failed login attempts. Try again later." });
+
+    const stillLocked = await fetch(`${origin}/api/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: origin,
+      },
+      body: JSON.stringify({ username: "eagle", password: "secret" }),
+    });
+    assert.equal(stillLocked.status, 429);
+    assert.deepEqual(await stillLocked.json(), { error: "Too many failed login attempts. Try again later." });
+
+    const otherUser = await fetch(`${origin}/api/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: origin,
+      },
+      body: JSON.stringify({ username: "owner", password: "own" }),
+    });
+    assert.equal(otherUser.status, 200);
+    assert.match(otherUser.headers.get("set-cookie") || "", /viewer_session=/);
+  } finally {
+    await viewer.stop();
+  }
+});
+
 test("createViewerServer accepts signed session cookies after restart and invalidates only changed users", async () => {
   const sessionSecret = "test-session-secret";
   const authUsers = [
