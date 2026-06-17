@@ -898,7 +898,9 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   assert.match(html, /data-active:bg-background/);
   assert.match(html, /id="tilesSentinel"/);
   assert.match(app, /const DEFAULT_VIEW_MODE = "tiles";/);
+  assert.match(app, /viewMode: DEFAULT_VIEW_MODE,/);
   assert.match(app, /const TILE_PREFETCH_PAGES = 3;/);
+  assert.match(html, /function resultSurfaceClassName\(viewMode: ViewerMode = DEFAULT_VIEW_MODE, isEmpty = true\)/);
   assert.match(app, /setResultsStatusState\(\{/);
   assert.doesNotMatch(app, /resultsStatusHost: document\.querySelector\("#resultsStatusHost"\),/);
   assert.doesNotMatch(app, /tilesViewButton: document\.querySelector\("#tilesViewButton"\),/);

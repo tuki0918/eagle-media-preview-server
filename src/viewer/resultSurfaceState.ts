@@ -1,3 +1,4 @@
+import { DEFAULT_VIEW_MODE } from "./constants";
 import type { EagleItem, ViewerMode } from "./types";
 
 export type ResultSurfaceState =
@@ -26,7 +27,7 @@ let currentResultSurface: ResultSurfaceState = {
   hasActiveFilters: false,
   kind: "empty",
   onClearFilters: noopClear,
-  viewMode: "grid",
+  viewMode: DEFAULT_VIEW_MODE,
 };
 
 export function getResultSurfaceState() {

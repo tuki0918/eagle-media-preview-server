@@ -4,6 +4,7 @@ import {
   subscribeResultSurfaceState,
   type ResultSurfaceState,
 } from "../resultSurfaceState";
+import { DEFAULT_VIEW_MODE } from "../constants";
 import type { ViewerMode } from "../types";
 import { ResultList } from "./ResultList";
 import { ResultStateView } from "./ResultState";
@@ -28,7 +29,7 @@ export function ResultSurface({ state }: ResultSurfaceProps) {
   );
 }
 
-function resultSurfaceClassName(viewMode: ViewerMode = "grid", isEmpty = true) {
+function resultSurfaceClassName(viewMode: ViewerMode = DEFAULT_VIEW_MODE, isEmpty = true) {
   const modeClassName = viewMode === "table"
     ? "media-table grid content-start gap-0 overflow-hidden rounded-lg border border-border bg-card shadow-sm"
     : viewMode === "tiles"

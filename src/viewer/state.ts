@@ -1,3 +1,4 @@
+import { DEFAULT_VIEW_MODE } from "./constants";
 import type { ViewerState } from "./types";
 
 export const state: ViewerState = {
@@ -13,7 +14,7 @@ export const state: ViewerState = {
   rating: "",
   filtersOpen: false,
   folders: [],
-  viewMode: "grid",
+  viewMode: DEFAULT_VIEW_MODE,
   tilesLoadingMore: false,
   tilesObserver: null,
   requestId: 0,
