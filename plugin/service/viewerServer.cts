@@ -142,6 +142,9 @@ const mimeTypes = {
   ".md": "text/plain; charset=utf-8",
 };
 const MAX_JSON_BODY_BYTES = 1024 * 1024;
+const DEFAULT_ITEMS_LIMIT = 30;
+const MAX_ITEMS_LIMIT = 1000;
+const MAX_ITEMS_OFFSET = 1000000;
 
 class HttpError extends Error {
   status: number;
@@ -392,8 +395,8 @@ async function handleApi(req, url, res, { auth, getSession, setSession }: ApiCon
       return;
     }
     const query = url.searchParams.get("q")?.trim();
-    const offset = url.searchParams.get("offset") || 0;
-    const limit = url.searchParams.get("limit") || 30;
+    const offset = boundedInteger(url.searchParams.get("offset"), 0, 0, MAX_ITEMS_OFFSET);
+    const limit = boundedInteger(url.searchParams.get("limit"), DEFAULT_ITEMS_LIMIT, 1, MAX_ITEMS_LIMIT);
     const tags = [...url.searchParams.getAll("tags"), ...url.searchParams.getAll("tag")]
       .map((tag) => tag.trim())
       .filter(Boolean);
@@ -475,6 +478,12 @@ async function handleApi(req, url, res, { auth, getSession, setSession }: ApiCon
   }
 
   sendJson(res, 404, { error: "Not found" });
+}
+
+function boundedInteger(value, fallback, min, max) {
+  const parsed = Number.parseInt(String(value ?? ""), 10);
+  if (!Number.isInteger(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
 }
 
 interface AuthContext {

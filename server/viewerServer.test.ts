@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createViewerServer, resolveDefaultPublicDir, sha256 } from "./viewerServer.js";
 
-type ItemListOptions = { keywords?: string; tags?: string[] };
+type ItemListOptions = { keywords?: string; limit?: number | string; offset?: number | string; query?: string; tags?: string[] };
 type TagListOptions = { query?: string; limit?: string };
 
 const TEST_TLS_CERT = `-----BEGIN CERTIFICATE-----
@@ -1302,6 +1302,79 @@ test("createViewerServer forwards repeated tag filters to item listing", async (
     assert.deepEqual(await response.json(), { items: [], total: 0, offset: 0, limit: 30 });
     assert.deepEqual(calls[0].tags, ["photo", "favorite"]);
     assert.equal(calls[0].keywords, "cat");
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer bounds item list limit and offset before forwarding to Eagle", async () => {
+  const calls: ItemListOptions[] = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    viewerPassword: "",
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/tmp/Test.library", name: "Test Library" };
+      },
+      async listItems(options: ItemListOptions) {
+        calls.push(options);
+        return { items: [], total: 0 };
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const origin = `http://127.0.0.1:${status.port}`;
+
+    await fetch(`${origin}/api/items?limit=999999&offset=999999999`);
+    await fetch(`${origin}/api/items?limit=-20&offset=-10`);
+    await fetch(`${origin}/api/items?limit=abc&offset=abc`);
+
+    assert.equal(calls[0].limit, 1000);
+    assert.equal(calls[0].offset, 1000000);
+    assert.equal(calls[1].limit, 1);
+    assert.equal(calls[1].offset, 0);
+    assert.equal(calls[2].limit, 30);
+    assert.equal(calls[2].offset, 0);
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer bounds search item limit and offset before forwarding to Eagle", async () => {
+  const calls: ItemListOptions[] = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    viewerPassword: "",
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/tmp/Test.library", name: "Test Library" };
+      },
+      async searchItems(options: ItemListOptions) {
+        calls.push(options);
+        return { items: [], total: 0 };
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const response = await fetch(`http://127.0.0.1:${status.port}/api/items?q=cat&limit=5000&offset=5000000`);
+
+    assert.equal(response.status, 200);
+    assert.equal(calls[0].limit, 1000);
+    assert.equal(calls[0].offset, 1000000);
   } finally {
     await viewer.stop();
   }
