@@ -2,7 +2,7 @@ const { createReadStream, existsSync, readFileSync } = require("fs");
 const { stat } = require("fs").promises;
 const { createServer: createHttpServer } = require("http");
 const { createServer: createHttpsServer } = require("https");
-const { createHash, pbkdf2Sync, randomUUID, timingSafeEqual } = require("crypto");
+const { createHash, createHmac, pbkdf2Sync, timingSafeEqual } = require("crypto");
 const { extname, join, normalize, resolve } = require("path");
 const { createEagleClient, normalizeStringArray, pathFromFileValue, resolveLibraryItemFile } = require("./eagleClient.cjs");
 const { buildConnectionCandidates, createConnectionContext } = require("./connection.cjs");
@@ -173,6 +173,7 @@ function createViewerServer({
   let requestCount = 0;
   const resolvedAuthUsers = resolveAuthUsers({ allowMetadataEditing, authUsers, basicAuthUsername, passwordHash, viewerPassword });
   const authSessions = new Map<string, AuthSession>();
+  const revokedAuthSessions = new Set<string>();
   let currentSession = createConnectionContext({
     connection: {
       host: "127.0.0.1",
@@ -186,7 +187,7 @@ function createViewerServer({
   const server = createProtocolServer({ httpsCertPath, httpsEnabled, httpsKeyPath }, async (req, res) => {
     try {
       const url = new URL(req.url || "/", `${httpsEnabled ? "https" : "http"}://${req.headers.host}`);
-      const auth = { authSessions, secureCookies: httpsEnabled, users: resolvedAuthUsers };
+      const auth = { authSessions, revokedAuthSessions, secureCookies: httpsEnabled, users: resolvedAuthUsers };
       if (!isTrustedUnsafeRequest(req, url)) {
         sendJson(res, 403, { error: "Cross-origin writes are not allowed" });
         return;
@@ -475,6 +476,7 @@ async function handleApi(req, url, res, { auth, getSession, setSession }: ApiCon
 
 interface AuthContext {
   authSessions: Map<string, AuthSession>;
+  revokedAuthSessions: Set<string>;
   secureCookies?: boolean;
   users: AuthUser[];
 }
@@ -508,12 +510,13 @@ async function handleAuthRoutes(req, url, res, auth: AuthContext) {
       return true;
     }
     pruneAuthSessions(auth.authSessions);
-    const token = randomUUID();
-    auth.authSessions.set(token, {
+    const session = {
       expiresAt: Date.now() + AUTH_SESSION_MAX_AGE_SECONDS * 1000,
       role: user.role,
       username: user.username,
-    });
+    };
+    const token = signedAuthSessionToken(session, auth);
+    auth.authSessions.set(token, session);
     res.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
       "Set-Cookie": authSessionCookie(token, AUTH_SESSION_MAX_AGE_SECONDS, auth.secureCookies),
@@ -528,7 +531,10 @@ async function handleAuthRoutes(req, url, res, auth: AuthContext) {
       return true;
     }
     const token = parseCookies(req.headers.cookie || "").viewer_session;
-    if (token) auth.authSessions.delete(token);
+    if (token) {
+      auth.authSessions.delete(token);
+      auth.revokedAuthSessions.add(token);
+    }
     res.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
       "Set-Cookie": authSessionCookie("", 0, auth.secureCookies),
@@ -812,7 +818,8 @@ function resolveAuthenticatedUser(req, auth: AuthContext): AuthSession | null {
   if (!authRequired(auth)) return null;
   const token = parseCookies(req.headers.cookie || "").viewer_session;
   if (!token) return null;
-  const session = auth.authSessions.get(token);
+  if (auth.revokedAuthSessions.has(token)) return null;
+  const session = verifyAuthSessionToken(token, auth);
   if (!session) return null;
   if (session.expiresAt <= Date.now()) {
     auth.authSessions.delete(token);
@@ -832,6 +839,57 @@ function findPasswordUser(username, password, auth: AuthContext): AuthUser | nul
   const user = auth.users.find((entry) => entry.username === username);
   if (user?.passwordHash && passwordMatches(password, user.passwordHash)) return user;
   return null;
+}
+
+function signedAuthSessionToken(session: AuthSession, auth: AuthContext) {
+  const payload = Buffer.from(JSON.stringify({
+    e: session.expiresAt,
+    r: session.role,
+    u: session.username,
+    v: authVersion(auth.users),
+  })).toString("base64url");
+  return `${payload}.${authSessionSignature(payload, auth)}`;
+}
+
+function verifyAuthSessionToken(token: string, auth: AuthContext): AuthSession | null {
+  const [payload, signature] = String(token || "").split(".");
+  if (!payload || !signature) return null;
+  if (!safeEqual(authSessionSignature(payload, auth), signature)) return null;
+  try {
+    const session = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    const username = String(session.u || "");
+    const role = normalizeRole(session.r);
+    const expiresAt = Number(session.e);
+    if (!username || !Number.isFinite(expiresAt)) return null;
+    if (String(session.v || "") !== authVersion(auth.users)) return null;
+    const user = auth.users.find((entry) => entry.username === username && entry.role === role);
+    if (!user) return null;
+    return { expiresAt, role, username };
+  } catch {
+    return null;
+  }
+}
+
+function authSessionSignature(payload: string, auth: AuthContext) {
+  return createHmac("sha256", authSessionSecret(auth.users)).update(payload).digest("base64url");
+}
+
+function authSessionSecret(users: AuthUser[]) {
+  return sha256(`eagle-media-preview-session:${canonicalAuthUsers(users)}`);
+}
+
+function authVersion(users: AuthUser[]) {
+  return sha256(`eagle-media-preview-auth-version:${canonicalAuthUsers(users)}`).slice(0, 16);
+}
+
+function canonicalAuthUsers(users: AuthUser[]) {
+  return JSON.stringify([...users]
+    .map((user) => ({
+      passwordHash: user.passwordHash,
+      role: user.role,
+      username: user.username,
+    }))
+    .sort((left, right) => left.username.localeCompare(right.username)));
 }
 
 function authStatusResponse(auth: AuthContext, user: AuthSession | AuthUser | null, { authenticated = Boolean(user) } = {}) {

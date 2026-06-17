@@ -673,6 +673,114 @@ test("createViewerServer logs out cookie sessions", async () => {
   }
 });
 
+test("createViewerServer accepts signed session cookies after restart and invalidates auth changes", async () => {
+  const authUsers = [{ username: "eagle", passwordHash: sha256("secret"), role: "viewer" as const }];
+  const firstViewer = createViewerServer({
+    authUsers,
+    host: "127.0.0.1",
+    port: 0,
+  });
+
+  await firstViewer.start();
+  let cookie = "";
+  try {
+    const status = firstViewer.status();
+    const origin = `http://127.0.0.1:${status.port}`;
+    const login = await fetch(`${origin}/api/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: origin,
+      },
+      body: JSON.stringify({ username: "eagle", password: "secret" }),
+    });
+    assert.equal(login.status, 200);
+    cookie = login.headers.get("set-cookie") || "";
+    assert.match(cookie, /viewer_session=[^.]+\.[^;]+/);
+    assert.equal(firstViewer.status().activeSessions, 1);
+  } finally {
+    await firstViewer.stop();
+  }
+
+  const restartedViewer = createViewerServer({
+    authUsers,
+    host: "127.0.0.1",
+    port: 0,
+  });
+  await restartedViewer.start();
+  try {
+    const status = restartedViewer.status();
+    const response = await fetch(`http://127.0.0.1:${status.port}/api/auth/status`, {
+      headers: { Cookie: cookie },
+    });
+    assert.deepEqual(await response.json(), {
+      required: true,
+      authenticated: true,
+      user: {
+        role: "viewer",
+        username: "eagle",
+      },
+      permissions: {
+        manageLibrary: false,
+        read: true,
+        writeMetadata: false,
+        writeRating: false,
+      },
+    });
+    assert.equal(restartedViewer.status().activeSessions, 0);
+  } finally {
+    await restartedViewer.stop();
+  }
+
+  const roleChangedViewer = createViewerServer({
+    authUsers: [{ username: "eagle", passwordHash: sha256("secret"), role: "editor" }],
+    host: "127.0.0.1",
+    port: 0,
+  });
+  await roleChangedViewer.start();
+  try {
+    const status = roleChangedViewer.status();
+    const response = await fetch(`http://127.0.0.1:${status.port}/api/auth/status`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal((await response.json()).authenticated, false);
+  } finally {
+    await roleChangedViewer.stop();
+  }
+
+  const userChangedViewer = createViewerServer({
+    authUsers: [{ username: "admin", passwordHash: sha256("secret"), role: "viewer" }],
+    host: "127.0.0.1",
+    port: 0,
+  });
+  await userChangedViewer.start();
+  try {
+    const status = userChangedViewer.status();
+    const response = await fetch(`http://127.0.0.1:${status.port}/api/auth/status`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal((await response.json()).authenticated, false);
+  } finally {
+    await userChangedViewer.stop();
+  }
+
+  const passwordChangedViewer = createViewerServer({
+    authUsers: [{ username: "eagle", passwordHash: sha256("changed"), role: "viewer" }],
+    host: "127.0.0.1",
+    port: 0,
+  });
+  await passwordChangedViewer.start();
+  try {
+    const status = passwordChangedViewer.status();
+    const response = await fetch(`http://127.0.0.1:${status.port}/api/auth/status`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal((await response.json()).authenticated, false);
+  } finally {
+    await passwordChangedViewer.stop();
+  }
+});
+
 test("createViewerServer expires cookie sessions server side", async () => {
   const viewer = createViewerServer({
     host: "127.0.0.1",
