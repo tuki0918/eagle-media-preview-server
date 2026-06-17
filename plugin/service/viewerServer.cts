@@ -842,11 +842,12 @@ function findPasswordUser(username, password, auth: AuthContext): AuthUser | nul
 }
 
 function signedAuthSessionToken(session: AuthSession, auth: AuthContext) {
+  const user = auth.users.find((entry) => entry.username === session.username && entry.role === session.role);
   const payload = Buffer.from(JSON.stringify({
     e: session.expiresAt,
     r: session.role,
     u: session.username,
-    v: authVersion(auth.users),
+    v: userAuthVersion(user),
   })).toString("base64url");
   return `${payload}.${authSessionSignature(payload, auth)}`;
 }
@@ -861,9 +862,9 @@ function verifyAuthSessionToken(token: string, auth: AuthContext): AuthSession |
     const role = normalizeRole(session.r);
     const expiresAt = Number(session.e);
     if (!username || !Number.isFinite(expiresAt)) return null;
-    if (String(session.v || "") !== authVersion(auth.users)) return null;
     const user = auth.users.find((entry) => entry.username === username && entry.role === role);
     if (!user) return null;
+    if (String(session.v || "") !== userAuthVersion(user)) return null;
     return { expiresAt, role, username };
   } catch {
     return null;
@@ -871,25 +872,24 @@ function verifyAuthSessionToken(token: string, auth: AuthContext): AuthSession |
 }
 
 function authSessionSignature(payload: string, auth: AuthContext) {
-  return createHmac("sha256", authSessionSecret(auth.users)).update(payload).digest("base64url");
+  return createHmac("sha256", authSessionSecret()).update(payload).digest("base64url");
 }
 
-function authSessionSecret(users: AuthUser[]) {
-  return sha256(`eagle-media-preview-session:${canonicalAuthUsers(users)}`);
+function authSessionSecret() {
+  return sha256("eagle-media-preview-session:v1");
 }
 
-function authVersion(users: AuthUser[]) {
-  return sha256(`eagle-media-preview-auth-version:${canonicalAuthUsers(users)}`).slice(0, 16);
+function userAuthVersion(user: AuthUser | undefined) {
+  if (!user) return "";
+  return sha256(`eagle-media-preview-user-auth-version:${canonicalAuthUser(user)}`).slice(0, 16);
 }
 
-function canonicalAuthUsers(users: AuthUser[]) {
-  return JSON.stringify([...users]
-    .map((user) => ({
-      passwordHash: user.passwordHash,
-      role: user.role,
-      username: user.username,
-    }))
-    .sort((left, right) => left.username.localeCompare(right.username)));
+function canonicalAuthUser(user: AuthUser) {
+  return JSON.stringify({
+    passwordHash: user.passwordHash,
+    role: user.role,
+    username: user.username,
+  });
 }
 
 function authStatusResponse(auth: AuthContext, user: AuthSession | AuthUser | null, { authenticated = Boolean(user) } = {}) {

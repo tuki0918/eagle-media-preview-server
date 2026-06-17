@@ -604,8 +604,9 @@ test("plugin server caches authenticated users per request", async () => {
   assert.match(source, /function signedAuthSessionToken\(session/);
   assert.match(source, /function verifyAuthSessionToken\(token/);
   assert.match(source, /function authSessionSignature\(payload/);
-  assert.match(source, /function authVersion\(users/);
-  assert.match(source, /canonicalAuthUsers\(users\)/);
+  assert.match(source, /function userAuthVersion\(user/);
+  assert.match(source, /canonicalAuthUser\(user\)/);
+  assert.doesNotMatch(source, /canonicalAuthUsers/);
   assert.doesNotMatch(source, /randomUUID/);
   assert.match(source, /function authStatusResponse\(auth, user, \{ authenticated = Boolean\(user\) \} = \{\}\)/);
   assert.match(source, /required: authRequired\(auth\)/);

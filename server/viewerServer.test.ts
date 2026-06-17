@@ -673,8 +673,11 @@ test("createViewerServer logs out cookie sessions", async () => {
   }
 });
 
-test("createViewerServer accepts signed session cookies after restart and invalidates auth changes", async () => {
-  const authUsers = [{ username: "eagle", passwordHash: sha256("secret"), role: "viewer" as const }];
+test("createViewerServer accepts signed session cookies after restart and invalidates only changed users", async () => {
+  const authUsers = [
+    { username: "eagle", passwordHash: sha256("secret"), role: "viewer" as const },
+    { username: "admin", passwordHash: sha256("admin"), role: "admin" as const },
+  ];
   const firstViewer = createViewerServer({
     authUsers,
     host: "127.0.0.1",
@@ -732,8 +735,65 @@ test("createViewerServer accepts signed session cookies after restart and invali
     await restartedViewer.stop();
   }
 
+  const otherUserAddedViewer = createViewerServer({
+    authUsers: [
+      ...authUsers,
+      { username: "new-user", passwordHash: sha256("new"), role: "viewer" },
+    ],
+    host: "127.0.0.1",
+    port: 0,
+  });
+  await otherUserAddedViewer.start();
+  try {
+    const status = otherUserAddedViewer.status();
+    const response = await fetch(`http://127.0.0.1:${status.port}/api/auth/status`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal((await response.json()).authenticated, true);
+  } finally {
+    await otherUserAddedViewer.stop();
+  }
+
+  const otherUserEditedViewer = createViewerServer({
+    authUsers: [
+      { username: "eagle", passwordHash: sha256("secret"), role: "viewer" },
+      { username: "admin", passwordHash: sha256("changed-admin"), role: "editor" },
+    ],
+    host: "127.0.0.1",
+    port: 0,
+  });
+  await otherUserEditedViewer.start();
+  try {
+    const status = otherUserEditedViewer.status();
+    const response = await fetch(`http://127.0.0.1:${status.port}/api/auth/status`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal((await response.json()).authenticated, true);
+  } finally {
+    await otherUserEditedViewer.stop();
+  }
+
+  const otherUserDeletedViewer = createViewerServer({
+    authUsers: [{ username: "eagle", passwordHash: sha256("secret"), role: "viewer" }],
+    host: "127.0.0.1",
+    port: 0,
+  });
+  await otherUserDeletedViewer.start();
+  try {
+    const status = otherUserDeletedViewer.status();
+    const response = await fetch(`http://127.0.0.1:${status.port}/api/auth/status`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal((await response.json()).authenticated, true);
+  } finally {
+    await otherUserDeletedViewer.stop();
+  }
+
   const roleChangedViewer = createViewerServer({
-    authUsers: [{ username: "eagle", passwordHash: sha256("secret"), role: "editor" }],
+    authUsers: [
+      { username: "eagle", passwordHash: sha256("secret"), role: "editor" },
+      { username: "admin", passwordHash: sha256("admin"), role: "admin" },
+    ],
     host: "127.0.0.1",
     port: 0,
   });
@@ -749,7 +809,10 @@ test("createViewerServer accepts signed session cookies after restart and invali
   }
 
   const userChangedViewer = createViewerServer({
-    authUsers: [{ username: "admin", passwordHash: sha256("secret"), role: "viewer" }],
+    authUsers: [
+      { username: "eagle-renamed", passwordHash: sha256("secret"), role: "viewer" },
+      { username: "admin", passwordHash: sha256("admin"), role: "admin" },
+    ],
     host: "127.0.0.1",
     port: 0,
   });
@@ -765,7 +828,10 @@ test("createViewerServer accepts signed session cookies after restart and invali
   }
 
   const passwordChangedViewer = createViewerServer({
-    authUsers: [{ username: "eagle", passwordHash: sha256("changed"), role: "viewer" }],
+    authUsers: [
+      { username: "eagle", passwordHash: sha256("changed"), role: "viewer" },
+      { username: "admin", passwordHash: sha256("admin"), role: "admin" },
+    ],
     host: "127.0.0.1",
     port: 0,
   });
