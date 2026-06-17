@@ -93,7 +93,7 @@ function App() {
   const serverState = normalizeServerState(status.state);
   const settings = status.settings || {};
   const formDisabled = busy || !managerRef.current;
-  const portDisabled = formDisabled || serverState === "running";
+  const settingsInputDisabled = formDisabled || serverState === "running";
   const restartingStopped = busy && serverState === "stopped";
   const statusLabel = restartingStopped ? busyStoppedFrames[busyFrame] : titleCase(serverState);
   const authEnabled = Boolean(settings.authEnabled);
@@ -500,7 +500,7 @@ function App() {
               type="number"
               min="1"
               max="65535"
-              disabled={portDisabled}
+              disabled={settingsInputDisabled}
               value={settings.port || 41532}
               onChange={(event) => updateSettings({ port: event.currentTarget.value })}
               onBlur={(event) => saveSettings({ forceSave: true, patch: { port: event.currentTarget.value }, successMessage: "Saved" })}
@@ -530,7 +530,7 @@ function App() {
                       type="text"
                       aria-label={`Username for user ${index + 1}`}
                       autoComplete="username"
-                      disabled={formDisabled}
+                      disabled={settingsInputDisabled}
                       value={user.username}
                       onChange={(event) => updateAuthUser(index, { username: event.currentTarget.value })}
                       onBlur={() => saveSettings({ forceSave: true })}
@@ -538,7 +538,7 @@ function App() {
                     <select
                       className={`${settingInputClassName} px-1.5`}
                       aria-label={`Role for ${user.username || `user ${index + 1}`}`}
-                      disabled={formDisabled}
+                      disabled={settingsInputDisabled}
                       value={user.role}
                       onChange={(event) => {
                         saveAuthUser(index, { role: event.currentTarget.value as UserRole });
@@ -554,7 +554,7 @@ function App() {
                       type={passwordVisible ? "text" : "password"}
                       aria-label={`Password for ${user.username || `user ${index + 1}`}`}
                       autoComplete="new-password"
-                      disabled={formDisabled}
+                      disabled={settingsInputDisabled}
                       placeholder={user.passwordHash ? "••••••••" : "Password"}
                       defaultValue={userPasswordsRef.current[String(index)] || ""}
                       onChange={(event) => setUserPasswordDraft(index, event.currentTarget.value)}
@@ -564,25 +564,25 @@ function App() {
                       type="button"
                       aria-label={canTogglePasswordVisible ? (passwordVisible ? `Hide password for ${user.username || `user ${index + 1}`}` : `Show password for ${user.username || `user ${index + 1}`}`) : `Saved password for ${user.username || `user ${index + 1}`} is hidden`}
                       title={canTogglePasswordVisible ? (passwordVisible ? "Hide password" : "Show password") : "Saved password is hidden"}
-                      disabled={formDisabled || !canTogglePasswordVisible}
+                      disabled={settingsInputDisabled || !canTogglePasswordVisible}
                       onClick={canTogglePasswordVisible ? () => togglePasswordVisible(index) : undefined}
                     >
                       {passwordVisible ? <EyeIcon className="h-[13px] w-[13px]" /> : <EyeOffIcon className="h-[13px] w-[13px]" />}
                     </button>
-                    <button className={`grid h-7 w-7 place-items-center rounded-md ${authActionButtonClassName}`} type="button" aria-label={`Remove ${user.username || "user"}`} title="Remove user" disabled={formDisabled || authUsers.length <= 1} onClick={() => removeAuthUser(index)}>
+                    <button className={`grid h-7 w-7 place-items-center rounded-md ${authActionButtonClassName}`} type="button" aria-label={`Remove ${user.username || "user"}`} title="Remove user" disabled={settingsInputDisabled || authUsers.length <= 1} onClick={() => removeAuthUser(index)}>
                       <CloseIcon className="h-[11px] w-[11px]" />
                     </button>
                   </div>
                 );
               })}
               <div className="flex items-center justify-start gap-2">
-                <button className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium text-[#111] ${authActionButtonClassName}`} type="button" disabled={formDisabled} onClick={addAuthUser}>
+                <button className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium text-[#111] ${authActionButtonClassName}`} type="button" disabled={settingsInputDisabled} onClick={addAuthUser}>
                   <PlusIcon className="h-[12px] w-[12px]" />
                   <span>Add user</span>
                 </button>
               </div>
               <div className="flex justify-end">
-                <button className={`inline-flex h-7 items-center rounded-md px-2 text-[11px] font-medium text-[#111] ${authActionButtonClassName}`} type="submit" disabled={formDisabled}>
+                <button className={`inline-flex h-7 items-center rounded-md px-2 text-[11px] font-medium text-[#111] ${authActionButtonClassName}`} type="submit" disabled={settingsInputDisabled}>
                   Save
                 </button>
               </div>
@@ -592,7 +592,7 @@ function App() {
             <input
               className={`${settingInputClassName} w-full`}
               type="text"
-              disabled={formDisabled}
+              disabled={settingsInputDisabled}
               placeholder="/path/to/cert.pem"
               value={settings.httpsCertPath || ""}
               onChange={(event) => updateSettings({ httpsCertPath: event.currentTarget.value })}
@@ -603,7 +603,7 @@ function App() {
             <input
               className={`${settingInputClassName} w-full`}
               type="text"
-              disabled={formDisabled}
+              disabled={settingsInputDisabled}
               placeholder="/path/to/key.pem"
               value={settings.httpsKeyPath || ""}
               onChange={(event) => updateSettings({ httpsKeyPath: event.currentTarget.value })}

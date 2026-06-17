@@ -100,7 +100,7 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(app, /const \[passwordVisibleByIndex, setPasswordVisibleByIndex\] = useState<Record<string, boolean>>\(\{\}\);/);
   assert.match(app, /const \[passwordDraftRevision, setPasswordDraftRevision\] = useState\(0\);/);
   assert.match(app, /const userPasswordsRef = useRef<Record<string, string>>\(\{\}\);/);
-  assert.match(app, /const portDisabled = formDisabled \|\| serverState === "running";/);
+  assert.match(app, /const settingsInputDisabled = formDisabled \|\| serverState === "running";/);
   assert.match(app, /forceSave = false/);
   assert.match(app, /successMessage = ""/);
   assert.match(app, /if \(saved && hasUserPasswords\) clearUserPasswordDrafts\(\);/);
@@ -155,7 +155,7 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(app, /type=\{passwordVisible \? "text" : "password"\}/);
   assert.match(app, /aria-label=\{canTogglePasswordVisible \? \(passwordVisible \? `Hide password for \$\{user\.username \|\| `user \$\{index \+ 1\}`\}` : `Show password for \$\{user\.username \|\| `user \$\{index \+ 1\}`\}`\) : `Saved password for \$\{user\.username \|\| `user \$\{index \+ 1\}`\} is hidden`\}/);
   assert.match(app, /title=\{canTogglePasswordVisible \? \(passwordVisible \? "Hide password" : "Show password"\) : "Saved password is hidden"\}/);
-  assert.match(app, /disabled=\{formDisabled \|\| !canTogglePasswordVisible\}/);
+  assert.match(app, /disabled=\{settingsInputDisabled \|\| !canTogglePasswordVisible\}/);
   assert.match(app, /onClick=\{canTogglePasswordVisible \? \(\) => togglePasswordVisible\(index\) : undefined\}/);
   assert.match(app, /passwordVisible \? <EyeIcon className="h-\[13px\] w-\[13px\]" \/> : <EyeOffIcon className="h-\[13px\] w-\[13px\]" \/>/);
   assert.doesNotMatch(app, /const \[passwordVisible, setPasswordVisible\]/);
@@ -163,12 +163,12 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.doesNotMatch(app, /Hide passwords/);
   assert.doesNotMatch(app, /const \[userPasswords, setUserPasswords\]/);
   assert.doesNotMatch(app, /value=\{userPasswords/);
-  assert.match(app, /<button className=\{`inline-flex h-7 items-center rounded-md px-2 text-\[11px\] font-medium text-\[#111\] \$\{authActionButtonClassName\}`\} type="submit" disabled=\{formDisabled\}>/);
+  assert.match(app, /<button className=\{`inline-flex h-7 items-center rounded-md px-2 text-\[11px\] font-medium text-\[#111\] \$\{authActionButtonClassName\}`\} type="submit" disabled=\{settingsInputDisabled\}>/);
   assert.match(app, />\s*Save\s*<\/button>/);
   assert.match(app, /saveSettings\(\{ forceSave: true, successMessage: "Saved" \}\)/);
   assert.match(app, /saveSettings\(\{ forceSave: true, patch: \{ port: event\.currentTarget\.value \}, successMessage: "Saved" \}\)/);
   assert.match(app, /<SettingRow label="Port" help=\{serverState === "running" \? "Stop the server before changing the port\." : "The port the server listens on\."\}>/);
-  assert.match(app, /disabled=\{portDisabled\}/);
+  assert.match(app, /disabled=\{settingsInputDisabled\}/);
   assert.match(app, /hidden=\{!message\}/);
   assert.match(app, /messageIsError \? "text-\[#d92d20\]" : "text-\[#178c35\]"/);
   assert.doesNotMatch(app, /Save settings/);
@@ -397,7 +397,7 @@ test("plugin port input persists after editing", async () => {
   assert.match(dom.window.document.body.textContent || "", /Saved/);
 });
 
-test("plugin port input is disabled while the server is running", async () => {
+test("plugin settings inputs are disabled while the server is running", async () => {
   const bundle = await esbuild({
     bundle: true,
     define: {
@@ -421,9 +421,15 @@ test("plugin port input is disabled while the server is running", async () => {
   const status = {
     settings: {
       authEnabled: false,
-      authUsers: [{ username: "eagle", role: "viewer", passwordHash: "hash" }],
+      authUsers: [
+        { username: "eagle", role: "viewer", passwordHash: "" },
+        { username: "admin", role: "admin", passwordHash: "hash" },
+      ],
       autoStart: false,
       host: "0.0.0.0",
+      httpsCertPath: "/tmp/cert.pem",
+      httpsEnabled: false,
+      httpsKeyPath: "/tmp/key.pem",
       port: 41532,
     },
     state: "running",
@@ -468,6 +474,38 @@ test("plugin port input is disabled while the server is running", async () => {
   const portInput = dom.window.document.querySelector("input[type=\"number\"]");
   assert.ok(portInput instanceof dom.window.HTMLInputElement);
   assert.equal(portInput.disabled, true);
+  const usernameInput = dom.window.document.querySelector("input[autocomplete=\"username\"]");
+  assert.ok(usernameInput instanceof dom.window.HTMLInputElement);
+  assert.equal(usernameInput.disabled, true);
+  const roleSelect = dom.window.document.querySelector("select");
+  assert.ok(roleSelect instanceof dom.window.HTMLSelectElement);
+  assert.equal(roleSelect.disabled, true);
+  const passwordInput = dom.window.document.querySelector("input[autocomplete=\"new-password\"]");
+  assert.ok(passwordInput instanceof dom.window.HTMLInputElement);
+  assert.equal(passwordInput.disabled, true);
+  const tlsCertInput = dom.window.document.querySelector("input[placeholder=\"/path/to/cert.pem\"]");
+  assert.ok(tlsCertInput instanceof dom.window.HTMLInputElement);
+  assert.equal(tlsCertInput.disabled, true);
+  const tlsKeyInput = dom.window.document.querySelector("input[placeholder=\"/path/to/key.pem\"]");
+  assert.ok(tlsKeyInput instanceof dom.window.HTMLInputElement);
+  assert.equal(tlsKeyInput.disabled, true);
+  const addUserButton = Array.from(dom.window.document.querySelectorAll("button")).find((button) => button.textContent?.includes("Add user"));
+  assert.ok(addUserButton instanceof dom.window.HTMLButtonElement);
+  assert.equal(addUserButton.disabled, true);
+  const saveButton = Array.from(dom.window.document.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Save");
+  assert.ok(saveButton instanceof dom.window.HTMLButtonElement);
+  assert.equal(saveButton.disabled, true);
+  const removeButton = dom.window.document.querySelector("button[title=\"Remove user\"]");
+  assert.ok(removeButton instanceof dom.window.HTMLButtonElement);
+  assert.equal(removeButton.disabled, true);
+  const powerSwitch = dom.window.document.querySelector("label[aria-label=\"Start or stop server\"] input[type=\"checkbox\"]");
+  assert.ok(powerSwitch instanceof dom.window.HTMLInputElement);
+  assert.equal(powerSwitch.disabled, false);
+  for (const label of ["Auto start", "Password protection", "Public Network", "HTTPS"]) {
+    const checkbox = dom.window.document.querySelector(`input[type="checkbox"][aria-label="${label}"]`);
+    assert.ok(checkbox instanceof dom.window.HTMLInputElement);
+    assert.equal(checkbox.disabled, false);
+  }
   assert.match(dom.window.document.body.textContent || "", /Stop the server before changing the port\./);
 });
 
