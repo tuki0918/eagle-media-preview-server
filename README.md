@@ -39,7 +39,7 @@ Authentication is optional. When password protection is enabled, browser access 
 - Editor users can edit rating, tags, and categories from the preview panel.
 - Admin users have the highest available management permissions.
 
-See [Eagle | Media Preview Server Spec](EAGLE_PLUGIN_SPEC.md#authentication) for cookie, password storage, role, and session behavior details.
+See [Eagle | Media Preview Server Spec](docs/EAGLE_PLUGIN_SPEC.md#authentication) for cookie, password storage, role, and session behavior details.
 
 ## Use HTTPS with mkcert
 
@@ -79,7 +79,7 @@ Run `npm run verify` before committing when you need the full TypeScript, Vite b
 
 ## Details
 
-See [EAGLE_PLUGIN_SPEC.md](EAGLE_PLUGIN_SPEC.md) for plugin behavior, settings, server routes, authentication, and runtime details.
+See [EAGLE_PLUGIN_SPEC.md](docs/EAGLE_PLUGIN_SPEC.md) for plugin behavior, settings, server routes, authentication, and runtime details.
 
 ## Disclaimer
 
