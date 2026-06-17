@@ -8,12 +8,23 @@ You can preview your media from other devices on the same network.
 
 ## Features
 
-- One-click local preview server
-- Access from devices on the same network
-- Password-protected viewer login
-- Multiple users with Viewer, Editor, and Admin roles
-- Read-only media browsing by default
-- Role-based metadata editing for rating, tags, and categories
+- One-click local preview server for your Eagle library
+- Browse Eagle media from phones, tablets, and other computers on the same LAN
+- Endpoint URL and QR code for quick access
+
+Optional:
+
+- Auto start: start the server automatically when Eagle launches.
+- Password protection: require a username and password to access the viewer.
+- Public Network: allow access from other devices on the network.
+- HTTPS: use TLS when certificate paths are set.
+- Multiple users with Viewer, Editor, and Admin roles.
+
+Roles:
+
+- Viewer: browse and preview media
+- Editor: edit rating, tags, and folders
+- Admin: has all available permissions
 
 ## Requirements
 
