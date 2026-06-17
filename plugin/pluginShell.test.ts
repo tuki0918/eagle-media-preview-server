@@ -565,10 +565,13 @@ test("plugin window no longer renders diagnostics UI", async () => {
 
 test("plugin CommonJS runtime avoids node protocol requires for older Eagle runtimes", async () => {
   const files = [
+    "auth.cjs",
     "runtime.cjs",
     "viewerServer.cjs",
     "eagleClient.cjs",
     "connection.cjs",
+    "media.cjs",
+    "static.cjs",
   ];
 
   for (const file of files) {
@@ -600,75 +603,78 @@ test("plugin settings runtime no longer accepts the removed single-password save
 });
 
 test("plugin server caches authenticated users per request", async () => {
-  const source = await readFile(new URL("viewerServer.cjs", generatedServiceUrl), "utf8");
+  const authSource = await readFile(new URL("auth.cjs", generatedServiceUrl), "utf8");
+  const serverSource = await readFile(new URL("viewerServer.cjs", generatedServiceUrl), "utf8");
 
-  assert.match(source, /AUTH_USER_CACHE = Symbol\("authUser"\)/);
-  assert.match(source, /hasOwnProperty\.call\(req, AUTH_USER_CACHE\)/);
-  assert.match(source, /req\[AUTH_USER_CACHE\] = user/);
-  assert.match(source, /function resolveAuthenticatedUser\(req, auth\)/);
-  assert.match(source, /function rolePermissions\(role\)/);
-  assert.match(source, /return rolePermissions\(user\?\.role\)\.writeMetadata;/);
-  assert.match(source, /return rolePermissions\(user\?\.role\)\.writeRating;/);
-  assert.match(source, /return rolePermissions\(user\?\.role\)\.manageLibrary;/);
-  assert.match(source, /const roleAccess = rolePermissions\(user\?\.role\);/);
-  assert.doesNotMatch(source, /\^Basic\\s\+\/i/);
-  assert.doesNotMatch(source, /WWW-Authenticate/);
-  assert.match(source, /function authSessionCookie\(token, maxAge = AUTH_SESSION_MAX_AGE_SECONDS, secure = false\)/);
-  assert.match(source, /"Set-Cookie": authSessionCookie\(token, AUTH_SESSION_MAX_AGE_SECONDS, auth\.secureCookies\)/);
-  assert.match(source, /"Set-Cookie": authSessionCookie\("", 0, auth\.secureCookies\)/);
-  assert.match(source, /secure \? "; Secure" : ""/);
-  assert.match(source, /createHmac/);
-  assert.match(source, /function signedAuthSessionToken\(session/);
-  assert.match(source, /function verifyAuthSessionToken\(token/);
-  assert.match(source, /function authSessionSignature\(payload/);
-  assert.match(source, /function userAuthVersion\(user/);
-  assert.match(source, /canonicalAuthUser\(user\)/);
-  assert.doesNotMatch(source, /canonicalAuthUsers/);
-  assert.doesNotMatch(source, /randomUUID/);
-  assert.match(source, /function authStatusResponse\(auth, user, \{ authenticated = Boolean\(user\) \} = \{\}\)/);
-  assert.match(source, /required: authRequired\(auth\)/);
-  assert.match(source, /user: user \? \{ role: user\.role, username: user\.username \} : null/);
-  assert.match(source, /permissions: permissionsForUser\(user, \{ authenticated \}\)/);
-  assert.match(source, /authStatusResponse\(auth, null, \{ authenticated: true \}\)/);
-  assert.match(source, /authStatusResponse\(auth, user, \{ authenticated: true \}\)/);
-  assert.match(source, /authStatusResponse\(auth, null, \{ authenticated: !authRequired\(auth\) \}\)/);
-  assert.match(source, /const INVALID_LOGIN_MESSAGE = "Invalid username or password";/);
-  assert.match(source, /const RATING_WRITE_FORBIDDEN_MESSAGE = "Rating editing is not allowed for this viewer";/);
-  assert.match(source, /const METADATA_WRITE_FORBIDDEN_MESSAGE = "Metadata editing is not allowed for this viewer";/);
-  assert.match(source, /\{ error: INVALID_LOGIN_MESSAGE \}/);
-  assert.match(source, /\{ error: RATING_WRITE_FORBIDDEN_MESSAGE \}/);
-  assert.match(source, /\{ error: METADATA_WRITE_FORBIDDEN_MESSAGE \}/);
-  assert.doesNotMatch(source, /Invalid password/);
-  assert.match(source, /const auth = \{ authSessions, revokedAuthSessions, secureCookies: httpsEnabled, sessionSecret: resolvedSessionSecret, users: resolvedAuthUsers \};/);
-  assert.match(source, /revokedAuthSessions\.add\(token\)/);
-  assert.match(source, /auth\.revokedAuthSessions\.has\(token\)/);
-  assert.match(source, /function authRequired\(\{ users = \[\] \}/);
-  assert.doesNotMatch(source, /username === auth\.basicAuthUsername/);
-  assert.doesNotMatch(source, /if \(!passwordHash\) return safeEqual/);
-  assert.match(source, /function safeDecodeCookieValue\(value\)/);
-  assert.match(source, /return decodeURIComponent\(value\);/);
-  assert.match(source, /if \(req\.method !== "GET"\) \{/);
-  assert.match(source, /function sendMethodNotAllowed\(res, methods\)/);
-  assert.match(source, /"Allow": methods\.join\(", "\)/);
-  assert.match(source, /sendMethodNotAllowed\(res, \["GET"\]\)/);
-  assert.match(source, /if \(url\.pathname === "\/api\/items"\) \{\s*if \(req\.method !== "GET"\)/);
-  assert.match(source, /if \(url\.pathname === "\/api\/tags"\) \{\s*if \(req\.method !== "GET"\)/);
-  assert.match(source, /const metadataPatch = normalizeMetadataPatch\(body\);/);
-  assert.match(source, /normalizeStringArray\(body\.tags, "tags"\)/);
-  assert.doesNotMatch(source, /function normalizeMetadataValues/);
-  assert.doesNotMatch(source, /function canRoleEditMetadata/);
-  assert.doesNotMatch(source, /const writeMetadata = Boolean\(user && canRoleEditMetadata\(user\.role\)\)/);
-  assert.doesNotMatch(source, /writeRating: roleAccess\.writeMetadata/);
-  assert.doesNotMatch(source, /const manageLibrary = user\?\.role === "admin"/);
+  assert.match(serverSource, /require\("\.\/auth\.cjs"\)/);
+  assert.match(authSource, /AUTH_USER_CACHE = Symbol\("authUser"\)/);
+  assert.match(authSource, /hasOwnProperty\.call\(req, AUTH_USER_CACHE\)/);
+  assert.match(authSource, /req\[AUTH_USER_CACHE\] = user/);
+  assert.match(authSource, /function resolveAuthenticatedUser\(req, auth\)/);
+  assert.match(authSource, /function rolePermissions\(role\)/);
+  assert.match(authSource, /return rolePermissions\(user\?\.role\)\.writeMetadata;/);
+  assert.match(authSource, /return rolePermissions\(user\?\.role\)\.writeRating;/);
+  assert.match(authSource, /return rolePermissions\(user\?\.role\)\.manageLibrary;/);
+  assert.match(authSource, /const roleAccess = rolePermissions\(user\?\.role\);/);
+  assert.doesNotMatch(authSource, /\^Basic\\s\+\/i/);
+  assert.doesNotMatch(serverSource, /WWW-Authenticate/);
+  assert.match(authSource, /function authSessionCookie\(token, maxAge = AUTH_SESSION_MAX_AGE_SECONDS, secure = false\)/);
+  assert.match(serverSource, /"Set-Cookie": authSessionCookie\(token, AUTH_SESSION_MAX_AGE_SECONDS, auth\.secureCookies\)/);
+  assert.match(serverSource, /"Set-Cookie": authSessionCookie\("", 0, auth\.secureCookies\)/);
+  assert.match(authSource, /secure \? "; Secure" : ""/);
+  assert.match(authSource, /createHmac/);
+  assert.match(authSource, /function signedAuthSessionToken\(session/);
+  assert.match(authSource, /function verifyAuthSessionToken\(token/);
+  assert.match(authSource, /function authSessionSignature\(payload/);
+  assert.match(authSource, /function userAuthVersion\(user/);
+  assert.match(authSource, /canonicalAuthUser\(user\)/);
+  assert.doesNotMatch(authSource, /canonicalAuthUsers/);
+  assert.doesNotMatch(authSource, /randomUUID/);
+  assert.match(authSource, /function authStatusResponse\(auth, user, \{ authenticated = Boolean\(user\) \} = \{\}\)/);
+  assert.match(authSource, /required: authRequired\(auth\)/);
+  assert.match(authSource, /user: user \? \{ role: user\.role, username: user\.username \} : null/);
+  assert.match(authSource, /permissions: permissionsForUser\(user, \{ authenticated \}\)/);
+  assert.match(serverSource, /authStatusResponse\(auth, null, \{ authenticated: true \}\)/);
+  assert.match(serverSource, /authStatusResponse\(auth, user, \{ authenticated: true \}\)/);
+  assert.match(serverSource, /authStatusResponse\(auth, null, \{ authenticated: !authRequired\(auth\) \}\)/);
+  assert.match(serverSource, /const INVALID_LOGIN_MESSAGE = "Invalid username or password";/);
+  assert.match(serverSource, /const RATING_WRITE_FORBIDDEN_MESSAGE = "Rating editing is not allowed for this viewer";/);
+  assert.match(serverSource, /const METADATA_WRITE_FORBIDDEN_MESSAGE = "Metadata editing is not allowed for this viewer";/);
+  assert.match(serverSource, /\{ error: INVALID_LOGIN_MESSAGE \}/);
+  assert.match(serverSource, /\{ error: RATING_WRITE_FORBIDDEN_MESSAGE \}/);
+  assert.match(serverSource, /\{ error: METADATA_WRITE_FORBIDDEN_MESSAGE \}/);
+  assert.doesNotMatch(serverSource, /Invalid password/);
+  assert.match(serverSource, /const auth = \{ authSessions, revokedAuthSessions, secureCookies: httpsEnabled, sessionSecret: resolvedSessionSecret, users: resolvedAuthUsers \};/);
+  assert.match(serverSource, /revokedAuthSessions\.add\(token\)/);
+  assert.match(authSource, /auth\.revokedAuthSessions\.has\(token\)/);
+  assert.match(authSource, /function authRequired\(\{ users = \[\] \}/);
+  assert.doesNotMatch(authSource, /username === auth\.basicAuthUsername/);
+  assert.doesNotMatch(authSource, /if \(!passwordHash\) return safeEqual/);
+  assert.match(authSource, /function safeDecodeCookieValue\(value\)/);
+  assert.match(authSource, /return decodeURIComponent\(value\);/);
+  assert.match(serverSource, /if \(req\.method !== "GET"\) \{/);
+  assert.match(serverSource, /function sendMethodNotAllowed\(res, methods\)/);
+  assert.match(serverSource, /"Allow": methods\.join\(", "\)/);
+  assert.match(serverSource, /sendMethodNotAllowed\(res, \["GET"\]\)/);
+  assert.match(serverSource, /if \(url\.pathname === "\/api\/items"\) \{\s*if \(req\.method !== "GET"\)/);
+  assert.match(serverSource, /if \(url\.pathname === "\/api\/tags"\) \{\s*if \(req\.method !== "GET"\)/);
+  assert.match(serverSource, /const metadataPatch = normalizeMetadataPatch\(body\);/);
+  assert.match(serverSource, /normalizeStringArray\(body\.tags, "tags"\)/);
+  assert.doesNotMatch(authSource, /function normalizeMetadataValues/);
+  assert.doesNotMatch(authSource, /function canRoleEditMetadata/);
+  assert.doesNotMatch(authSource, /const writeMetadata = Boolean\(user && canRoleEditMetadata\(user\.role\)\)/);
+  assert.doesNotMatch(authSource, /writeRating: roleAccess\.writeMetadata/);
+  assert.doesNotMatch(authSource, /const manageLibrary = user\?\.role === "admin"/);
 });
 
 test("plugin server serves text and markdown media as inline raw text", async () => {
-  const source = await readFile(new URL("viewerServer.cjs", generatedServiceUrl), "utf8");
+  const mediaSource = await readFile(new URL("media.cjs", generatedServiceUrl), "utf8");
+  const staticSource = await readFile(new URL("static.cjs", generatedServiceUrl), "utf8");
 
-  assert.match(source, /"\.txt": "text\/plain; charset=utf-8"/);
-  assert.match(source, /"\.md": "text\/plain; charset=utf-8"/);
-  assert.match(source, /"Content-Disposition": contentDisposition\(contentType, itemData, filePath\)/);
-  assert.match(source, /if \(contentType !== "application\/pdf"\)\s*return "inline";/);
+  assert.match(staticSource, /"\.txt": "text\/plain; charset=utf-8"/);
+  assert.match(staticSource, /"\.md": "text\/plain; charset=utf-8"/);
+  assert.match(mediaSource, /"Content-Disposition": contentDisposition\(contentType, itemData, filePath\)/);
+  assert.match(mediaSource, /if \(contentType !== "application\/pdf"\)\s*return "inline";/);
 });
 
 test("plugin app resolves CommonJS runtime from the plugin file location", async () => {

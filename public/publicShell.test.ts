@@ -485,7 +485,7 @@ test("public preview renders text-like files and PDFs from their thumbnails", as
   const html = await readAppSources();
   const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
-  const server = await readFile(new URL("../dist/.generated/plugin-service/viewerServer.cjs", import.meta.url), "utf8");
+  const staticSource = await readFile(new URL("../dist/.generated/plugin-service/static.cjs", import.meta.url), "utf8");
 
   assert.match(app, /const textPreviewExts = new Set\(\[/);
   assert.match(app, /"txt", "md", "js", "css", "html", "json"/);
@@ -507,12 +507,12 @@ test("public preview renders text-like files and PDFs from their thumbnails", as
   assert.match(html, /const textPreviewClassName =/);
   assert.doesNotMatch(css, /\.pdf-mode \.preview-body/);
   assert.doesNotMatch(css, /\.pdf-preview/);
-  assert.match(server, /"\.html": "text\/html; charset=utf-8"/);
-  assert.match(server, /"\.css": "text\/css; charset=utf-8"/);
-  assert.match(server, /"\.js": "text\/javascript; charset=utf-8"/);
-  assert.match(server, /"\.txt": "text\/plain; charset=utf-8"/);
-  assert.match(server, /"\.md": "text\/plain; charset=utf-8"/);
-  assert.match(server, /"\.pdf": "application\/pdf"/);
+  assert.match(staticSource, /"\.html": "text\/html; charset=utf-8"/);
+  assert.match(staticSource, /"\.css": "text\/css; charset=utf-8"/);
+  assert.match(staticSource, /"\.js": "text\/javascript; charset=utf-8"/);
+  assert.match(staticSource, /"\.txt": "text\/plain; charset=utf-8"/);
+  assert.match(staticSource, /"\.md": "text\/plain; charset=utf-8"/);
+  assert.match(staticSource, /"\.pdf": "application\/pdf"/);
 });
 
 test("public grid thumbnail hover icon uses play for video and audio", async () => {
