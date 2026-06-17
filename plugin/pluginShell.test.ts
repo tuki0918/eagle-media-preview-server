@@ -414,6 +414,99 @@ test("plugin port input persists after explicit settings save", async () => {
   assert.match(dom.window.document.body.textContent || "", /Saved/);
 });
 
+test("plugin asks before starting public network without password protection", async () => {
+  const bundle = await esbuild({
+    bundle: true,
+    define: {
+      "process.env.NODE_ENV": JSON.stringify("test"),
+    },
+    entryPoints: [new URL("./app.tsx", import.meta.url).pathname],
+    format: "iife",
+    platform: "browser",
+    write: false,
+  });
+  const appScript = bundle.outputFiles[0].text;
+  const domOptions = {
+    runScripts: "outside-only",
+    url: "file:///tmp/eagle-plugin/plugin/index.html",
+  } as unknown as ConstructorParameters<typeof JSDOM>[1];
+  const dom = new JSDOM("<!doctype html><html><body><div id=\"root\"></div></body></html>", domOptions);
+  const pluginWindow = dom.window as unknown as Window & {
+    eval: (source: string) => unknown;
+    require: (id: string) => unknown;
+  };
+  const confirmMessages: string[] = [];
+  const saveCalls: Record<string, unknown>[] = [];
+  let startCalls = 0;
+  let confirmResult = false;
+  let status = {
+    settings: {
+      authEnabled: false,
+      authUsers: [{ username: "eagle", role: "viewer", passwordHash: "hash" }],
+      autoStart: false,
+      host: "0.0.0.0",
+      port: 41532,
+    },
+    state: "stopped",
+    url: "http://192.168.1.20:41532",
+  };
+  pluginWindow.confirm = (message?: string) => {
+    confirmMessages.push(String(message || ""));
+    return confirmResult;
+  };
+  pluginWindow.require = (id: string) => {
+    if (id === "path") return path;
+    return {
+      createServerManager() {
+        return {
+          async init() {
+            return status;
+          },
+          async saveSettings(payload: Record<string, unknown>) {
+            saveCalls.push(payload);
+            return status;
+          },
+          async start() {
+            startCalls += 1;
+            status = { ...status, state: "running" };
+            return status;
+          },
+          async status() {
+            return status;
+          },
+          async stop() {
+            status = { ...status, state: "stopped" };
+            return status;
+          },
+        };
+      },
+    };
+  };
+
+  pluginWindow.eval(appScript);
+  await waitFor(() => {
+    const powerSwitch = dom.window.document.querySelector("label[aria-label=\"Start or stop server\"] input[type=\"checkbox\"]");
+    return powerSwitch instanceof dom.window.HTMLInputElement && !powerSwitch.disabled;
+  });
+
+  const powerSwitch = dom.window.document.querySelector("label[aria-label=\"Start or stop server\"] input[type=\"checkbox\"]");
+  assert.ok(powerSwitch instanceof dom.window.HTMLInputElement);
+  powerSwitch.click();
+  await waitFor(() => confirmMessages.length === 1);
+
+  assert.match(confirmMessages[0], /Public Network is enabled/);
+  assert.equal(saveCalls.length, 0);
+  assert.equal(startCalls, 0);
+
+  confirmResult = true;
+  powerSwitch.click();
+  await waitFor(() => startCalls === 1);
+
+  assert.equal(confirmMessages.length, 2);
+  assert.equal(saveCalls.length, 1);
+  assert.equal(saveCalls[0].host, "0.0.0.0");
+});
+
 test("plugin settings inputs are disabled while the server is running", async () => {
   const bundle = await esbuild({
     bundle: true,
