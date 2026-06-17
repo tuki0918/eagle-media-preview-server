@@ -97,18 +97,41 @@ rootCA-key.pem  -> keep this private on the Mac that created it
 
 For another Mac, copy `rootCA.pem` to that Mac, open it in Keychain Access, add it to the System keychain, and set it to Always Trust.
 
+For Windows, copy `rootCA.pem` to the Windows device. If the certificate picker does not show `.pem` files, rename the copy to `mkcert-rootCA.crt`; do not change the file contents. Open the certificate, choose `Install Certificate`, then install it for either the current user or local machine in:
+
+```text
+Trusted Root Certification Authorities
+```
+
+Restart the browser after installing the CA. If Windows, Chrome, or Edge still shows a warning, confirm the browser URL host exactly matches the IP address or hostname included in the `mkcert` command.
+
 For iPhone or iPad, send `rootCA.pem` to the device, install the downloaded profile, then enable full trust in:
 
 ```text
 Settings > General > About > Certificate Trust Settings
 ```
 
+For Android, copy `rootCA.pem` to the device. If the file picker does not show `.pem` files, rename the copy to `mkcert-rootCA.crt`; do not change the file contents. Install it as a CA certificate from the Android security settings. The exact path varies by device, but it is usually under:
+
+```text
+Settings > Security > Encryption & credentials > Install a certificate > CA certificate
+```
+
+or:
+
+```text
+Settings > Security & privacy > More security settings > Encryption & credentials > Install a certificate > CA certificate
+```
+
+Android may require a screen lock before installing a CA certificate, and it may show a warning that network traffic can be inspected by trusted certificates. This is expected for a user-installed local CA. Browser access should trust certificates created by that CA after installation, but some Android apps do not trust user-installed CAs.
+
 Without trusting the root CA, HTTPS still encrypts the connection, but browsers will show a certificate warning.
 
 ### Notes and cautions
 
 - Files you can copy to other devices:
-  - `rootCA.pem`: install this on another Mac, iPhone, or iPad so it trusts mkcert certificates.
+  - `rootCA.pem`: install this on another Mac, Windows PC, iPhone, iPad, or Android device so it trusts mkcert certificates.
+  - A renamed copy such as `mkcert-rootCA.crt`: use this only when Windows or Android does not show `.pem` files in the certificate picker.
 - Files you must not share:
   - `*-key.pem`: the private key for this plugin server's HTTPS certificate.
   - `rootCA-key.pem`: the private key for the mkcert root CA. If this leaks, anyone with the key can create certificates trusted by devices where `rootCA.pem` is installed.
