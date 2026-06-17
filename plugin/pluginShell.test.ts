@@ -64,6 +64,15 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(app, /<option value="viewer">Viewer<\/option>/);
   assert.match(app, /<option value="editor">Editor<\/option>/);
   assert.match(app, /<option value="admin">Admin<\/option>/);
+  assert.match(app, /type SettingsTab = "access" \| "general" \| "security";/);
+  assert.match(app, /const \[settingsTab, setSettingsTab\] = useState<SettingsTab>\("general"\);/);
+  assert.match(app, /role="tablist" aria-label="Settings sections"/);
+  assert.match(app, /<SettingsTabButton active=\{settingsTab === "general"\} controls="generalSettingsPanel" id="generalSettingsTab" onClick=\{\(\) => setSettingsTab\("general"\)\}>General<\/SettingsTabButton>/);
+  assert.match(app, /<SettingsTabButton active=\{settingsTab === "access"\} controls="accessSettingsPanel" id="accessSettingsTab" onClick=\{\(\) => setSettingsTab\("access"\)\}>Access<\/SettingsTabButton>/);
+  assert.match(app, /<SettingsTabButton active=\{settingsTab === "security"\} controls="securitySettingsPanel" id="securitySettingsTab" onClick=\{\(\) => setSettingsTab\("security"\)\}>Security<\/SettingsTabButton>/);
+  assert.match(app, /id="generalSettingsPanel" role="tabpanel" aria-labelledby="generalSettingsTab" hidden=\{settingsTab !== "general"\}/);
+  assert.match(app, /id="accessSettingsPanel" role="tabpanel" aria-labelledby="accessSettingsTab" hidden=\{settingsTab !== "access"\}/);
+  assert.match(app, /id="securitySettingsPanel" role="tabpanel" aria-labelledby="securitySettingsTab" hidden=\{settingsTab !== "security"\}/);
   assert.doesNotMatch(app, /id="authUsersStatus"/);
   assert.doesNotMatch(app, /const metadataEditingEnabled/);
   assert.doesNotMatch(app, /const authUsersStatusLabel/);
