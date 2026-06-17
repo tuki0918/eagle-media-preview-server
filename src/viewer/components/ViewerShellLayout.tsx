@@ -1,7 +1,7 @@
-import { useSyncExternalStore, type CSSProperties } from "react";
+import { useCallback, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { UNCATEGORIZED_FOLDER_ID } from "../constants";
+import { SIDEBAR_OPEN_STORAGE_KEY, UNCATEGORIZED_FOLDER_ID } from "../constants";
 import { getSearchControlsState, subscribeSearchControlsState } from "../searchControlsState";
 import { AccountSideMenu } from "./AccountSideMenu";
 import { CardTemplate } from "./CardTemplate";
@@ -18,12 +18,18 @@ interface ViewerShellLayoutProps {
 
 export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
   const searchState = useSyncExternalStore(subscribeSearchControlsState, getSearchControlsState, getSearchControlsState);
+  const [sidebarOpen, setSidebarOpenState] = useState(readSavedSidebarOpen);
   const folderName = selectedFolderName(searchState.selectedFolderId, searchState.folders);
+  const setSidebarOpen = useCallback((open: boolean) => {
+    setSidebarOpenState(open);
+    writeSavedSidebarOpen(open);
+  }, []);
 
   return (
     <div id="viewerShell" hidden={hidden}>
       <SidebarProvider
-        defaultOpen
+        open={sidebarOpen}
+        onOpenChange={setSidebarOpen}
         style={{
           "--sidebar-width": "14rem",
           "--sidebar-width-icon": "3rem",
@@ -67,4 +73,24 @@ function selectedFolderName(selectedFolderId: string, folders: readonly { id: st
   if (!selectedFolderId) return "All";
   if (selectedFolderId === UNCATEGORIZED_FOLDER_ID) return "Uncategorized";
   return folders.find((folder) => folder.id === selectedFolderId)?.name || "All";
+}
+
+function readSavedSidebarOpen() {
+  try {
+    if (typeof window === "undefined") return true;
+    const saved = window.localStorage.getItem(SIDEBAR_OPEN_STORAGE_KEY);
+    if (saved === "false") return false;
+    if (saved === "true") return true;
+  } catch {
+    // Keep the default when storage is unavailable.
+  }
+  return true;
+}
+
+function writeSavedSidebarOpen(open: boolean) {
+  try {
+    window.localStorage.setItem(SIDEBAR_OPEN_STORAGE_KEY, String(open));
+  } catch {
+    // Ignore unavailable storage; the in-memory sidebar state still updates.
+  }
 }

@@ -426,6 +426,62 @@ describe("ViewerAppShell", () => {
     }
   });
 
+  test("restores and stores the viewer sidebar open state", async () => {
+    const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
+    const testGlobal = globalThis as typeof globalThis & {
+      IS_REACT_ACT_ENVIRONMENT?: boolean;
+    };
+    const previousWindow = globalThis.window;
+    const previousDocument = globalThis.document;
+    const previousNode = globalThis.Node;
+    const previousHTMLElement = globalThis.HTMLElement;
+    const previousIS_REACT_ACT_ENVIRONMENT = testGlobal.IS_REACT_ACT_ENVIRONMENT;
+    globalThis.window = dom.window;
+    globalThis.document = dom.window.document;
+    globalThis.Node = dom.window.Node;
+    globalThis.HTMLElement = dom.window.HTMLElement;
+    testGlobal.IS_REACT_ACT_ENVIRONMENT = true;
+    dom.window.localStorage.setItem("eagleSidebarOpen", "false");
+
+    const { createRoot } = await import("react-dom/client");
+    let root: import("react-dom/client").Root | null = null;
+    try {
+      const container = dom.window.document.querySelector("#root");
+      if (!(container instanceof dom.window.HTMLElement)) throw new Error("Missing test root");
+      root = createRoot(container);
+
+      await act(async () => {
+        root?.render(
+          <TooltipProvider>
+            <ViewerShellLayout hidden={false} />
+          </TooltipProvider>,
+        );
+      });
+
+      expect(container.querySelector('[data-slot="sidebar"][data-state="collapsed"]')).not.toBeNull();
+      const trigger = container.querySelector("#accountMenuButton");
+      if (!(trigger instanceof dom.window.HTMLButtonElement)) throw new Error("Missing sidebar trigger");
+
+      await act(async () => {
+        trigger.click();
+      });
+
+      expect(dom.window.localStorage.getItem("eagleSidebarOpen")).toBe("true");
+      expect(container.querySelector('[data-slot="sidebar"][data-state="expanded"]')).not.toBeNull();
+    } finally {
+      if (root) {
+        await act(async () => {
+          root?.unmount();
+        });
+      }
+      globalThis.window = previousWindow;
+      globalThis.document = previousDocument;
+      globalThis.Node = previousNode;
+      globalThis.HTMLElement = previousHTMLElement;
+      testGlobal.IS_REACT_ACT_ENVIRONMENT = previousIS_REACT_ACT_ENVIRONMENT;
+    }
+  });
+
   test("renders advanced filters as a reusable component", () => {
     const html = renderToStaticMarkup(
       <AdvancedFilters
