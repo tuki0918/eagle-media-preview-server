@@ -5,6 +5,7 @@ export interface SearchControlsState {
   filtersOpen: boolean;
   folders: readonly EagleFolder[];
   hasActiveFilters: boolean;
+  hasResettableFilters: boolean;
   searchQuery: string;
   selectedExt: string;
   selectedFolderId: string;
@@ -18,6 +19,7 @@ let currentSearchControls: SearchControlsState = {
   filtersOpen: false,
   folders: [],
   hasActiveFilters: false,
+  hasResettableFilters: false,
   searchQuery: "",
   selectedExt: "",
   selectedFolderId: "",

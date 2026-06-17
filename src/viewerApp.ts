@@ -19,7 +19,7 @@ import {
   originalFileName,
   previewFileName,
 } from "./viewer/format";
-import { hasActiveFilters, resetFilterState } from "./viewer/filters";
+import { hasActiveFilters, hasResettableFilters, resetFilterState } from "./viewer/filters";
 import { itemQueryParams } from "./viewer/itemQuery";
 import { setLoginConnectState } from "./viewer/loginConnectState";
 import {
@@ -663,6 +663,7 @@ function renderSearchControlButtons() {
     filtersOpen: state.filtersOpen,
     folders: state.folders,
     hasActiveFilters: hasActiveFilters(state),
+    hasResettableFilters: hasResettableFilters(state),
     searchQuery: state.query,
     selectedExt: state.ext,
     selectedFolderId: state.folderId,
@@ -911,14 +912,15 @@ function renderEmptyState() {
   setResultSurfaceState({
     kind: "empty",
     hasActiveFilters: hasActiveFilters(state),
+    hasClearableFilters: hasResettableFilters(state),
     onClearFilters: resetFilters,
     viewMode: state.viewMode,
   });
 }
 
 function resetFilters() {
-  if (!hasActiveFilters(state)) return;
-  Object.assign(state, resetFilterState());
+  if (!hasResettableFilters(state)) return;
+  Object.assign(state, resetFilterState(state));
   renderTagChips();
   syncResetFiltersButton();
   syncUrlState();

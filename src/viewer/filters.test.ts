@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { hasActiveFilters, resetFilterState, type FilterState } from "./filters";
+import { hasActiveFilters, hasResettableFilters, resetFilterState, type FilterState } from "./filters";
 
 const emptyFilters = (overrides: Partial<FilterState> = {}): FilterState => ({
   query: "",
@@ -20,11 +20,20 @@ describe("filter state helpers", () => {
     expect(hasActiveFilters(emptyFilters({ rating: "0" }))).toBe(true);
   });
 
-  test("returns the canonical reset state", () => {
-    expect(resetFilterState()).toEqual({
+  test("detects resettable filters without treating category as clearable", () => {
+    expect(hasResettableFilters(emptyFilters())).toBe(false);
+    expect(hasResettableFilters(emptyFilters({ folderId: "folder" }))).toBe(false);
+    expect(hasResettableFilters(emptyFilters({ query: "cat" }))).toBe(true);
+    expect(hasResettableFilters(emptyFilters({ tags: ["tag"] }))).toBe(true);
+    expect(hasResettableFilters(emptyFilters({ ext: "png" }))).toBe(true);
+    expect(hasResettableFilters(emptyFilters({ rating: "0" }))).toBe(true);
+  });
+
+  test("returns the reset state while preserving the selected category", () => {
+    expect(resetFilterState({ folderId: "folder" })).toEqual({
       query: "",
       tags: [],
-      folderId: "",
+      folderId: "folder",
       ext: "",
       rating: "",
       offset: 0,

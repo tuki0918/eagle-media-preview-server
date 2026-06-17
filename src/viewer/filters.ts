@@ -8,11 +8,15 @@ export function hasActiveFilters({ query, tags, folderId, ext, rating }: FilterS
   return Boolean(query || tags.length || folderId || ext || rating !== "");
 }
 
-export function resetFilterState(): ResetFilterState {
+export function hasResettableFilters({ query, tags, ext, rating }: FilterState) {
+  return Boolean(query || tags.length || ext || rating !== "");
+}
+
+export function resetFilterState(current: Pick<FilterState, "folderId"> = { folderId: "" }): ResetFilterState {
   return {
     query: "",
     tags: [],
-    folderId: "",
+    folderId: current.folderId,
     ext: "",
     rating: "",
     offset: 0,

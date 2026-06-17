@@ -18,6 +18,7 @@ export type ResultSurfaceState =
   }
   | {
     hasActiveFilters: boolean;
+    hasClearableFilters?: boolean;
     kind: "empty";
     onClearFilters: () => void;
     viewMode: ViewerMode;

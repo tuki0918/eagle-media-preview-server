@@ -32,6 +32,7 @@ import { TagSuggestions } from "./TagSuggestions";
 interface SearchControlsProps {
   filtersOpen?: boolean;
   hasActiveFilters?: boolean;
+  hasResettableFilters?: boolean;
   searchQuery?: string;
   selectedExt?: string;
   selectedLimit?: number;
@@ -51,6 +52,7 @@ const selectArrowStyle: CSSProperties = {
 export function SearchControls({
   filtersOpen,
   hasActiveFilters,
+  hasResettableFilters,
   searchQuery,
   selectedExt,
   selectedLimit,
@@ -60,6 +62,7 @@ export function SearchControls({
   const resultsStatus = useSyncExternalStore(subscribeResultsStatusState, getResultsStatusState, getResultsStatusState);
   const displayFiltersOpen = filtersOpen ?? state.filtersOpen;
   const displayHasActiveFilters = hasActiveFilters ?? state.hasActiveFilters;
+  const displayHasResettableFilters = hasResettableFilters ?? (hasActiveFilters === undefined ? state.hasResettableFilters : displayHasActiveFilters);
   const displaySearchQuery = searchQuery ?? state.searchQuery;
   const displaySelectedExt = selectedExt ?? state.selectedExt;
   const displaySelectedLimit = selectedLimit ?? state.selectedLimit;
@@ -95,6 +98,7 @@ export function SearchControls({
       <AdvancedFilters
         filtersOpen={displayFiltersOpen}
         hasActiveFilters={displayHasActiveFilters}
+        hasResettableFilters={displayHasResettableFilters}
         selectedExt={displaySelectedExt}
         selectedLimit={displaySelectedLimit}
         selectedRating={displaySelectedRating}
@@ -132,10 +136,11 @@ export function SearchInput({ value = "" }: { value?: string }) {
 export function AdvancedFilters({
   filtersOpen = false,
   hasActiveFilters = false,
+  hasResettableFilters = hasActiveFilters,
   selectedExt = "",
   selectedLimit = 30,
   selectedRating = "",
-}: Pick<SearchControlsProps, "filtersOpen" | "hasActiveFilters" | "selectedExt" | "selectedLimit" | "selectedRating">) {
+}: Pick<SearchControlsProps, "filtersOpen" | "hasActiveFilters" | "hasResettableFilters" | "selectedExt" | "selectedLimit" | "selectedRating">) {
   return (
     <div id="advancedFilters" className="filter-row grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-4 max-[540px]:grid-cols-1" hidden={!filtersOpen}>
       <label className="grid gap-2">
@@ -169,13 +174,13 @@ export function AdvancedFilters({
         </select>
       </label>
       <div className="flex justify-end">
-        <ResetFiltersButton hasActiveFilters={hasActiveFilters} />
+        <ResetFiltersButton hasResettableFilters={hasResettableFilters} />
       </div>
     </div>
   );
 }
 
-function ResetFiltersButton({ hasActiveFilters = false }: Pick<SearchControlsProps, "hasActiveFilters">) {
+function ResetFiltersButton({ hasResettableFilters = false }: Pick<SearchControlsProps, "hasResettableFilters">) {
   return (
     <Button
       id="resetFiltersButton"
@@ -185,7 +190,7 @@ function ResetFiltersButton({ hasActiveFilters = false }: Pick<SearchControlsPro
       type="button"
       aria-label="Reset filters"
       title="Reset filters"
-      disabled={!hasActiveFilters}
+      disabled={!hasResettableFilters}
       onClick={resetFilters}
     >
       <FunnelXIcon data-icon="inline-start" />

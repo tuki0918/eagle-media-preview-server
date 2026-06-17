@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 
 export type ResultStateViewProps =
   | { kind: "message"; text: string; className?: string; detail?: string; title?: string }
-  | { kind: "empty"; hasActiveFilters: boolean; onClearFilters: () => void };
+  | { kind: "empty"; hasActiveFilters: boolean; hasClearableFilters?: boolean; onClearFilters: () => void };
 
 const emptyMessageClassName = "rounded-md border border-dashed border-border bg-card px-3.5 py-11 text-center text-muted-foreground";
 const errorMessageClassName = `${emptyMessageClassName} text-destructive`;
@@ -29,15 +29,17 @@ export function ResultStateView(props: ResultStateViewProps) {
     );
   }
 
+  const hasClearableFilters = props.hasClearableFilters ?? props.hasActiveFilters;
+
   return (
     <Card className={emptyStateClassName}>
       <strong className="text-[17px] font-[760] text-foreground">{props.hasActiveFilters ? "No items matched these filters" : "Library is empty"}</strong>
       <p className="m-0 max-w-[420px] text-sm leading-[1.55] text-muted-foreground">
         {props.hasActiveFilters
-          ? "Try changing the search text, folder, extension, or rating to widen the results."
+          ? "Try changing the search text, category, type, or rating to widen the results."
           : "Eagle returned no items for this library. Add media to the current Eagle library, or switch to another library in Eagle."}
       </p>
-      {props.hasActiveFilters ? (
+      {hasClearableFilters ? (
         <Button type="button" variant="outline" className={emptyStateButtonClassName} onClick={props.onClearFilters}>
           Clear filters
         </Button>
