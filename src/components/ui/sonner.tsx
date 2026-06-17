@@ -4,12 +4,13 @@ import { useIsMobile } from "@/hooks/use-mobile";
 
 const Toaster = ({ ...props }: ToasterProps) => {
   const isMobile = useIsMobile();
-  const { position = isMobile ? "top-center" : "bottom-right", style, ...toasterProps } = props;
+  const { position = isMobile ? "bottom-center" : "bottom-right", style, ...toasterProps } = props;
 
   return (
     <Sonner
       className="toaster group"
-      closeButton
+      closeButton={false}
+      duration={2200}
       position={position}
       style={
         {
