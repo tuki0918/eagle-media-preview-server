@@ -355,6 +355,8 @@ describe("ViewerAppShell", () => {
     expect(html).toContain('data-sidebar="menu-button"');
     expect(html).toContain("group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4)))]");
     expect(html).toContain("group-data-[collapsible=icon]:!size-8");
+    expect(html).toContain("min-h-0 flex-1 overflow-y-auto");
+    expect(html).toContain("shrink-0 px-2 pb-2 pt-1");
     expect(html).not.toContain("md:hidden");
     expect(html).not.toContain("fixed left-3");
 

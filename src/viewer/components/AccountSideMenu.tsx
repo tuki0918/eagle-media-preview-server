@@ -73,7 +73,7 @@ export function AccountSideMenu() {
           </SidebarMenu>
         </SidebarHeader>
 
-        <SidebarContent>
+        <SidebarContent className="overflow-hidden">
           <FolderSideNav
             folders={searchState.folders}
             selectedFolderId={searchState.selectedFolderId}
@@ -117,7 +117,7 @@ function FolderSideNav({
   };
 
   return (
-    <SidebarGroup className="px-2 pb-2 pt-1">
+    <SidebarGroup className="min-h-0 flex-1 overflow-y-auto px-2 pb-2 pt-1">
       <SidebarGroupLabel className="h-7 px-2 text-[11px] uppercase tracking-normal">
         Folders
       </SidebarGroupLabel>
@@ -171,7 +171,7 @@ function ThemeSideNav() {
   ];
 
   return (
-    <SidebarGroup className="px-2 pb-2 pt-1">
+    <SidebarGroup className="shrink-0 px-2 pb-2 pt-1">
       <SidebarGroupLabel className="h-7 px-2 text-[11px] uppercase tracking-normal">
         Theme
       </SidebarGroupLabel>
