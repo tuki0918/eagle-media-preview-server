@@ -124,6 +124,7 @@
     --font-sans: 'Geist Variable', sans-serif;
   }
   .dark {
+    color-scheme: dark;
     --background: #171717;
     --foreground: #fafafa;
     --card: #262626;

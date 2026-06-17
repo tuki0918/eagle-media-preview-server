@@ -18,6 +18,9 @@ interface PluginSettings {
   autoStart?: boolean;
   basicAuthUser?: string;
   host?: string;
+  httpsCertPath?: string;
+  httpsEnabled?: boolean;
+  httpsKeyPath?: string;
   passwordHash?: string;
   port?: number | string;
 }
@@ -55,6 +58,8 @@ declare global {
 
 const busyStoppedFrames = Object.freeze([".", "..", "...", "....", "....."]);
 const AUTH_PASSWORD_REQUIRED_MESSAGE = "Enter a password for every user before enabling password protection.";
+const HTTPS_CERTIFICATE_REQUIRED_MESSAGE = "Enter certificate and key paths before enabling HTTPS.";
+const HTTPS_DOCS_URL = "https://github.com/tuki0918/eagle-media-preview-server#use-https-with-mkcert";
 const settingInputClassName = "h-7 min-w-0 rounded-md border border-[#d7d9de] bg-white px-2 text-[11px] text-[#111] outline-0 focus:border-[rgba(31,116,255,0.58)] focus:shadow-[0_0_0_3px_rgba(31,116,255,0.12)] disabled:cursor-not-allowed disabled:bg-[#f4f5f7] disabled:text-[#8a8f99]";
 const authActionButtonClassName = "border border-[#d7d9de] bg-white text-[#555c66] hover:bg-[#f4f5f7] disabled:cursor-not-allowed disabled:opacity-45";
 
@@ -76,6 +81,9 @@ function App() {
       authEnabled: false,
       basicAuthUser: "eagle",
       host: "0.0.0.0",
+      httpsCertPath: "",
+      httpsEnabled: false,
+      httpsKeyPath: "",
       port: 41532,
     },
     state: "stopped",
@@ -90,6 +98,7 @@ function App() {
   const authEnabled = Boolean(settings.authEnabled);
   const authUsers = normalizedAuthUsers(settings);
   const metadataEditingEnabled = authEnabled && authUsersCanEditMetadata(authUsers);
+  const httpsEnabled = Boolean(settings.httpsEnabled);
   const authUsersStatusLabel = authEnabled ? "Active" : "Inactive";
   const authUsersStatusClassName = !authEnabled
     ? "border-[#d5d9df] bg-[#f3f4f6] text-[#626975]"
@@ -156,13 +165,23 @@ function App() {
       : authUsers;
     if (!validateAuthUsers(effectiveAuthUsers)) return false;
     const nextAuthEnabled = Boolean(patch.authEnabled ?? authEnabled);
+    const nextHttpsEnabled = Boolean(patch.httpsEnabled ?? httpsEnabled);
+    const nextHttpsCertPath = String(patch.httpsCertPath ?? settings.httpsCertPath ?? "").trim();
+    const nextHttpsKeyPath = String(patch.httpsKeyPath ?? settings.httpsKeyPath ?? "").trim();
     if (nextAuthEnabled && authUsersMissingPassword(effectiveAuthUsers, passwordDrafts)) {
       setMessage(AUTH_PASSWORD_REQUIRED_MESSAGE, true);
+      return false;
+    }
+    if (nextHttpsEnabled && (!nextHttpsCertPath || !nextHttpsKeyPath)) {
+      setMessage(HTTPS_CERTIFICATE_REQUIRED_MESSAGE, true);
       return false;
     }
     const payload: Record<string, unknown> = {
       autoStart: settings.autoStart,
       host: publicNetwork ? "0.0.0.0" : "127.0.0.1",
+      httpsCertPath: settings.httpsCertPath || "",
+      httpsEnabled: nextHttpsEnabled,
+      httpsKeyPath: settings.httpsKeyPath || "",
       port: settings.port || 41532,
       ...patch,
       authEnabled: nextAuthEnabled,
@@ -321,6 +340,18 @@ function App() {
     }
   }
 
+  async function openHttpsDocs() {
+    try {
+      if (globalThis.eagle?.shell?.openExternal) {
+        await globalThis.eagle.shell.openExternal(HTTPS_DOCS_URL);
+        return;
+      }
+      window.open(HTTPS_DOCS_URL, "_blank", "noopener");
+    } catch (error) {
+      setErrorMessage(error);
+    }
+  }
+
   function closeWindow() {
     try {
       if (globalThis.eagle?.window?.hide) {
@@ -408,6 +439,23 @@ function App() {
                   const host = checked ? "0.0.0.0" : "127.0.0.1";
                   updateSettings({ host });
                   saveSettings({ patch: { host } });
+                }}
+              />
+              <OptionRow
+                checked={httpsEnabled}
+                disabled={formDisabled}
+                icon={<ShieldIcon />}
+                title="HTTPS"
+                description="Use TLS when certificate paths are set."
+                actionLabel="Read docs"
+                onAction={openHttpsDocs}
+                onChange={(checked) => {
+                  if (checked && (!String(settings.httpsCertPath || "").trim() || !String(settings.httpsKeyPath || "").trim())) {
+                    setMessage(HTTPS_CERTIFICATE_REQUIRED_MESSAGE, true);
+                    return;
+                  }
+                  updateSettings({ httpsEnabled: checked });
+                  saveSettings({ patch: { httpsEnabled: checked } });
                 }}
               />
             </div>
@@ -539,6 +587,28 @@ function App() {
               </div>
             </div>
           </SettingRow>
+          <SettingRow label="TLS Cert" help="PEM certificate file used when HTTPS is enabled.">
+            <input
+              className={`${settingInputClassName} w-full`}
+              type="text"
+              disabled={formDisabled}
+              placeholder="/path/to/cert.pem"
+              value={settings.httpsCertPath || ""}
+              onChange={(event) => updateSettings({ httpsCertPath: event.currentTarget.value })}
+              onBlur={(event) => saveSettings({ patch: { httpsCertPath: event.currentTarget.value } })}
+            />
+          </SettingRow>
+          <SettingRow label="TLS Key" help="PEM private key file used when HTTPS is enabled.">
+            <input
+              className={`${settingInputClassName} w-full`}
+              type="text"
+              disabled={formDisabled}
+              placeholder="/path/to/key.pem"
+              value={settings.httpsKeyPath || ""}
+              onChange={(event) => updateSettings({ httpsKeyPath: event.currentTarget.value })}
+              onBlur={(event) => saveSettings({ patch: { httpsKeyPath: event.currentTarget.value } })}
+            />
+          </SettingRow>
         </div>
       </form>
       <p className="mx-[9px] mb-2.5 mt-0 px-0.5 text-center text-[10px] text-[#d92d20]" aria-live="polite" hidden={!message || !messageIsError}>
@@ -580,23 +650,35 @@ function PowerSwitch({ checked, disabled, onChange }: { checked: boolean; disabl
   );
 }
 
-function OptionRow({ checked, description, disabled, icon, onChange, title }: {
+function OptionRow({ actionLabel, checked, description, disabled, icon, onAction, onChange, title }: {
+  actionLabel?: string;
   checked: boolean;
   description: string;
   disabled: boolean;
   icon: React.ReactNode;
+  onAction?: () => void;
   onChange: (checked: boolean) => void;
   title: string;
 }) {
   return (
-    <label className="grid cursor-pointer grid-cols-[14px_24px_minmax(0,1fr)] items-center gap-x-[11px] gap-y-2 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60">
-      <input className="h-3.5 w-3.5 cursor-pointer accent-[#1463e8] disabled:cursor-not-allowed" type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.currentTarget.checked)} />
+    <div className="grid grid-cols-[14px_24px_minmax(0,1fr)] items-center gap-x-[11px] gap-y-2 has-[:disabled]:opacity-60">
+      <input className="h-3.5 w-3.5 cursor-pointer accent-[#1463e8] disabled:cursor-not-allowed" type="checkbox" aria-label={title} checked={checked} disabled={disabled} onChange={(event) => onChange(event.currentTarget.checked)} />
       <span className="grid h-6 w-6 place-items-center rounded-md border border-[#e1e3e7] bg-white text-[#565c66] [&_svg]:h-3 [&_svg]:w-3" aria-hidden="true">{icon}</span>
       <span>
         <strong className="block text-[11px] font-[620] text-[#111]">{title}</strong>
-        <small className="mt-0.5 block text-[10px] leading-tight text-[#8a8f99]">{description}</small>
+        <small className="mt-0.5 block text-[10px] leading-tight text-[#8a8f99]">
+          {description}
+          {actionLabel && onAction ? (
+            <>
+              {" "}
+              <button className="border-0 bg-transparent p-0 text-[10px] font-medium text-[#1463e8] underline underline-offset-2 disabled:cursor-not-allowed disabled:text-[#8a8f99]" type="button" disabled={disabled} onClick={onAction}>
+                {actionLabel}
+              </button>
+            </>
+          ) : null}
+        </small>
       </span>
-    </label>
+    </div>
   );
 }
 
@@ -640,6 +722,9 @@ function settingsPayloadChanged(current: PluginSettings | undefined, nextSetting
 
 function serverSettingsChanged(current: PluginSettings, nextSettings: Record<string, unknown>) {
   if ((nextSettings.host ?? current.host) !== current.host) return true;
+  if (Boolean(nextSettings.httpsEnabled ?? current.httpsEnabled) !== Boolean(current.httpsEnabled)) return true;
+  if ((nextSettings.httpsCertPath ?? current.httpsCertPath ?? "") !== (current.httpsCertPath ?? "")) return true;
+  if ((nextSettings.httpsKeyPath ?? current.httpsKeyPath ?? "") !== (current.httpsKeyPath ?? "")) return true;
   if (Number(nextSettings.port ?? current.port) !== Number(current.port)) return true;
   if (Boolean(nextSettings.authEnabled ?? current.authEnabled) !== Boolean(current.authEnabled)) return true;
   if (JSON.stringify(nextSettings.authUsers ?? current.authUsers ?? []) !== JSON.stringify(current.authUsers ?? [])) return true;
@@ -650,6 +735,9 @@ function serverRestartSettingsChanged(current: PluginSettings, nextSettings: Rec
   const currentAuthEnabled = Boolean(current.authEnabled);
   const nextAuthEnabled = Boolean(nextSettings.authEnabled ?? current.authEnabled);
   if ((nextSettings.host ?? current.host) !== current.host) return true;
+  if (Boolean(nextSettings.httpsEnabled ?? current.httpsEnabled) !== Boolean(current.httpsEnabled)) return true;
+  if ((nextSettings.httpsCertPath ?? current.httpsCertPath ?? "") !== (current.httpsCertPath ?? "")) return true;
+  if ((nextSettings.httpsKeyPath ?? current.httpsKeyPath ?? "") !== (current.httpsKeyPath ?? "")) return true;
   if (Number(nextSettings.port ?? current.port) !== Number(current.port)) return true;
   if (nextAuthEnabled !== currentAuthEnabled) return true;
   if (!currentAuthEnabled && !nextAuthEnabled) return false;

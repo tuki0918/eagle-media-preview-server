@@ -382,10 +382,12 @@ test("plugin server caches authenticated users per request", async () => {
   assert.match(source, /return rolePermissions\(user\?\.role\)\.writeRating;/);
   assert.match(source, /return rolePermissions\(user\?\.role\)\.manageLibrary;/);
   assert.match(source, /const roleAccess = rolePermissions\(user\?\.role\);/);
-  assert.match(source, /\^Basic\\s\+\/i/);
-  assert.match(source, /function authSessionCookie\(token, maxAge = AUTH_SESSION_MAX_AGE_SECONDS\)/);
-  assert.match(source, /"Set-Cookie": authSessionCookie\(token\)/);
-  assert.match(source, /"Set-Cookie": authSessionCookie\("", 0\)/);
+  assert.doesNotMatch(source, /\^Basic\\s\+\/i/);
+  assert.doesNotMatch(source, /WWW-Authenticate/);
+  assert.match(source, /function authSessionCookie\(token, maxAge = AUTH_SESSION_MAX_AGE_SECONDS, secure = false\)/);
+  assert.match(source, /"Set-Cookie": authSessionCookie\(token, AUTH_SESSION_MAX_AGE_SECONDS, auth\.secureCookies\)/);
+  assert.match(source, /"Set-Cookie": authSessionCookie\("", 0, auth\.secureCookies\)/);
+  assert.match(source, /secure \? "; Secure" : ""/);
   assert.match(source, /function authStatusResponse\(auth, user, \{ authenticated = Boolean\(user\) \} = \{\}\)/);
   assert.match(source, /required: authRequired\(auth\)/);
   assert.match(source, /user: user \? \{ role: user\.role, username: user\.username \} : null/);
@@ -400,7 +402,7 @@ test("plugin server caches authenticated users per request", async () => {
   assert.match(source, /\{ error: RATING_WRITE_FORBIDDEN_MESSAGE \}/);
   assert.match(source, /\{ error: METADATA_WRITE_FORBIDDEN_MESSAGE \}/);
   assert.doesNotMatch(source, /Invalid password/);
-  assert.match(source, /const auth = \{ authSessions, users: resolvedAuthUsers \};/);
+  assert.match(source, /const auth = \{ authSessions, secureCookies: httpsEnabled, users: resolvedAuthUsers \};/);
   assert.match(source, /function authRequired\(\{ users = \[\] \}/);
   assert.doesNotMatch(source, /username === auth\.basicAuthUsername/);
   assert.doesNotMatch(source, /if \(!passwordHash\) return safeEqual/);

@@ -44,6 +44,7 @@ import { setVideoOverlayControlsVisible } from "./videoOverlayState";
 import { MEDIA_TYPE_OPTIONS, PAGE_SIZE_OPTIONS, RATING_OPTIONS } from "./shellConfig";
 import { setLoginConnectState } from "./loginConnectState";
 import { setSearchControlsState } from "./searchControlsState";
+import { getThemeState, initializeThemeState, setThemePreference } from "./themeState";
 
 function renderAccountSideMenu() {
   return renderToStaticMarkup(
@@ -330,6 +331,18 @@ describe("ViewerAppShell", () => {
     expect(html).toContain('aria-haspopup="menu"');
     expect(html).toContain("lucide-user-round");
     expect(html).toContain("Folders");
+    expect(html).toContain("Theme");
+    expect(html).toContain('id="themeModeGroup"');
+    expect(html).toContain('aria-label="Theme color"');
+    expect(html).toContain("Light");
+    expect(html).toContain("Dark");
+    expect(html).not.toContain("Auto");
+    expect(html).not.toContain("lucide-monitor");
+    expect(html).toContain("lucide-sun");
+    expect(html).toContain("lucide-moon");
+    expect(html.indexOf("Theme")).toBeGreaterThan(html.indexOf("Folders"));
+    expect(html).toContain('data-slot="tabs-list"');
+    expect(html).toContain('data-slot="tabs-trigger"');
     expect(html).toContain('aria-label="Folder tree"');
     expect(html).toContain("All folders");
     expect(html).toContain("Uncategorized");
@@ -363,6 +376,45 @@ describe("ViewerAppShell", () => {
       selectedLimit: 30,
       selectedRating: "",
     });
+  });
+
+  test("applies and stores selected viewer theme", () => {
+    const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://localhost/" });
+    const previousWindow = globalThis.window;
+    const previousDocument = globalThis.document;
+    globalThis.window = dom.window;
+    globalThis.document = dom.window.document;
+    dom.window.matchMedia = (query: string) => ({
+      addEventListener: () => {},
+      addListener: () => {},
+      dispatchEvent: () => false,
+      matches: query === "(prefers-color-scheme: dark)",
+      media: query,
+      onchange: null,
+      removeEventListener: () => {},
+      removeListener: () => {},
+    });
+
+    try {
+      initializeThemeState();
+
+      expect(getThemeState()).toEqual({ preference: "dark", resolved: "dark" });
+      expect(dom.window.document.documentElement.classList.contains("dark")).toBe(true);
+      expect(dom.window.localStorage.getItem("eagle-media-preview-theme")).toBe("dark");
+
+      setThemePreference("light");
+      expect(getThemeState()).toEqual({ preference: "light", resolved: "light" });
+      expect(dom.window.document.documentElement.classList.contains("dark")).toBe(false);
+      expect(dom.window.localStorage.getItem("eagle-media-preview-theme")).toBe("light");
+
+      initializeThemeState();
+      expect(getThemeState()).toEqual({ preference: "light", resolved: "light" });
+      expect(dom.window.document.documentElement.classList.contains("dark")).toBe(false);
+    } finally {
+      setThemePreference("light");
+      globalThis.window = previousWindow;
+      globalThis.document = previousDocument;
+    }
   });
 
   test("renders advanced filters as a reusable component", () => {

@@ -1,4 +1,13 @@
-import { ChevronsUpDownIcon, FolderIcon, FolderOpenIcon, InboxIcon, LogOutIcon, UserRoundIcon } from "lucide-react";
+import {
+  ChevronsUpDownIcon,
+  FolderIcon,
+  FolderOpenIcon,
+  InboxIcon,
+  LogOutIcon,
+  MoonIcon,
+  SunIcon,
+  UserRoundIcon,
+} from "lucide-react";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -14,12 +23,14 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import iconOnUrl from "../../assets/icon_on.svg";
 import { UNCATEGORIZED_FOLDER_ID } from "../constants";
 import { getLibraryFooterName, subscribeLibraryFooterName } from "../libraryFooterState";
 import { getLoginConnectState, subscribeLoginConnectState } from "../loginConnectState";
 import { getSearchControlsState, subscribeSearchControlsState } from "../searchControlsState";
 import { changeFolder, submitLogout } from "../shellActions";
+import { getThemeState, setThemePreference, subscribeThemeState, type ThemePreference } from "../themeState";
 import type { EagleFolder } from "../types";
 
 export function AccountSideMenu() {
@@ -67,6 +78,7 @@ export function AccountSideMenu() {
             folders={searchState.folders}
             selectedFolderId={searchState.selectedFolderId}
           />
+          <ThemeSideNav />
         </SidebarContent>
 
         {loginState.authRequired && loginState.authenticated ? (
@@ -146,6 +158,47 @@ function FolderSideNav({
             </SidebarMenuItem>
           )}
         </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  );
+}
+
+function ThemeSideNav() {
+  const themeState = useSyncExternalStore(subscribeThemeState, getThemeState, getThemeState);
+  const themeOptions: { icon: typeof SunIcon; label: string; value: ThemePreference }[] = [
+    { icon: SunIcon, label: "Light", value: "light" },
+    { icon: MoonIcon, label: "Dark", value: "dark" },
+  ];
+
+  return (
+    <SidebarGroup className="px-2 pb-2 pt-1">
+      <SidebarGroupLabel className="h-7 px-2 text-[11px] uppercase tracking-normal">
+        Theme
+      </SidebarGroupLabel>
+      <SidebarGroupContent>
+        <Tabs
+          id="themeModeGroup"
+          value={themeState.preference}
+          className="w-full group-data-[collapsible=icon]:hidden"
+          aria-label="Theme color"
+          onValueChange={(value) => {
+            setThemePreference(value as ThemePreference);
+          }}
+        >
+          <TabsList className="grid w-full grid-cols-2 rounded-lg bg-muted shadow-none" aria-label="Theme color">
+            {themeOptions.map(({ icon: Icon, label, value }) => (
+              <TabsTrigger
+                key={value}
+                value={value}
+                className="min-h-[30px] rounded-md px-[9px] text-xs font-[680] text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:hover:text-foreground data-active:bg-background data-active:text-foreground data-active:shadow-sm data-active:hover:text-foreground"
+                aria-label={label}
+                title={label}
+              >
+                <Icon data-icon="inline-start" aria-hidden="true" />
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
       </SidebarGroupContent>
     </SidebarGroup>
   );
