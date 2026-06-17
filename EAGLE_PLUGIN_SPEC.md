@@ -356,11 +356,18 @@ Main status fields:
 
 ## Build and Verification
 
-Development and verification commands:
+Development command:
 
 ```sh
 npm install
 npm run dev
+```
+
+`npm run dev` starts the Vite development server for the React surfaces. It is for local UI development and does not replace the Eagle plugin runtime build.
+
+Build and verification commands:
+
+```sh
 npm run typecheck
 npm run build
 npm test
@@ -368,6 +375,8 @@ npm run verify
 ```
 
 `npm run build` compiles the plugin service `.cts` files into `dist/.generated/plugin-service` before Vite builds and packages the React surfaces. The Vite package step also copies `manifest.json`, plugin icons/assets, public assets, favicon, generated service `.cjs` files, and CSS into `dist`.
+
+Generated `dist/.generated/plugin-service/*.cjs` files and `dist` output are build artifacts.
 
 `npm run verify` runs TypeScript checks, the production build, and Vitest.
 

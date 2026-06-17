@@ -43,20 +43,12 @@ See [HTTPS and mkcert CA Operations](docs/https-mkcert.md) for setup, plugin HTT
 
 ## Development
 
-This project is managed as a TypeScript / React / Vite / Tailwind CSS / Vitest codebase.
-
-- Plugin management UI: `plugin/app.tsx`
-- Browser viewer React shell and components: `src/viewer/**/*.tsx`
-- Browser viewer controller/state helpers: `src/viewer/**/*.ts`
-- Eagle-compatible service sources: `plugin/service/*.cts`
-- Shared server wrapper for tests and local imports: `server/viewerServer.ts`
-
 ```sh
 npm install
 npm run dev
 ```
 
-`npm run dev` starts the Vite development server for the React surfaces. The Eagle plugin runtime itself loads CommonJS service files generated from `plugin/service/*.cts` during build.
+`npm run dev` starts the Vite development server for the React UI.
 
 ## Build
 
@@ -64,12 +56,7 @@ npm run dev
 npm run build
 ```
 
-The build performs two steps:
-
-- `tsc -p tsconfig.plugin-service.json` generates Eagle-compatible `dist/.generated/plugin-service/*.cjs` files from `.cts` sources.
-- `vite build` emits the browser viewer to `dist/public`, bundles the plugin window to `dist/plugin/app.js`, and copies `manifest.json`, plugin assets, public assets, favicon, and generated service files into `dist`.
-
-Generated `dist/.generated/plugin-service/*.cjs` files and `dist` output are build artifacts.
+Build output is written to `dist`.
 
 ## Verification
 
