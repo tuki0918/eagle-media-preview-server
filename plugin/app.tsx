@@ -597,16 +597,16 @@ function App() {
             </SettingRow>
           </div>
 
-          <div className="flex justify-end border-t border-[#e1e3e7] pt-2">
-            <button className={`inline-flex h-7 items-center rounded-md px-2 text-[11px] font-medium text-[#111] ${authActionButtonClassName}`} type="submit" disabled={settingsInputDisabled}>
+          <div className="flex min-h-8 items-center justify-between gap-3 border-t border-[#e1e3e7] pt-2">
+            <p className={`min-w-0 flex-1 truncate px-0.5 text-[10px] ${messageIsError ? "text-[#d92d20]" : "text-[#178c35]"}`} aria-live="polite" hidden={!message}>
+              {message}
+            </p>
+            <button className={`ml-auto inline-flex h-7 items-center rounded-md px-2 text-[11px] font-medium text-[#111] ${authActionButtonClassName}`} type="submit" disabled={settingsInputDisabled}>
               Save settings
             </button>
           </div>
         </div>
       </form>
-      <p className={`mx-[9px] mb-2.5 mt-0 px-0.5 text-center text-[10px] ${messageIsError ? "text-[#d92d20]" : "text-[#178c35]"}`} aria-live="polite" hidden={!message}>
-        {message}
-      </p>
     </main>
   );
 }

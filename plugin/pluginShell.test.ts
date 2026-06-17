@@ -174,14 +174,15 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.doesNotMatch(app, /Hide passwords/);
   assert.doesNotMatch(app, /const \[userPasswords, setUserPasswords\]/);
   assert.doesNotMatch(app, /value=\{userPasswords/);
-  assert.match(app, /<button className=\{`inline-flex h-7 items-center rounded-md px-2 text-\[11px\] font-medium text-\[#111\] \$\{authActionButtonClassName\}`\} type="submit" disabled=\{settingsInputDisabled\}>/);
+  assert.match(app, /<button className=\{`ml-auto inline-flex h-7 items-center rounded-md px-2 text-\[11px\] font-medium text-\[#111\] \$\{authActionButtonClassName\}`\} type="submit" disabled=\{settingsInputDisabled\}>/);
   assert.match(app, />\s*Save settings\s*<\/button>/);
   assert.match(app, /saveSettings\(\{ forceSave: true, successMessage: "Saved" \}\)/);
   assert.doesNotMatch(app, /onBlur=\{[^}]*saveSettings/);
   assert.doesNotMatch(app, /saveSettings\(\{ forceSave: true, patch: \{ port:/);
   assert.match(app, /<SettingRow label="Port" help=\{serverState === "running" \? "Stop the server before changing the port\." : "The port the server listens on\."\}>/);
   assert.match(app, /disabled=\{settingsInputDisabled\}/);
-  assert.match(app, /hidden=\{!message\}/);
+  assert.match(app, /flex min-h-8 items-center justify-between gap-3 border-t border-\[#e1e3e7\] pt-2/);
+  assert.match(app, /<p className=\{`min-w-0 flex-1 truncate px-0\.5 text-\[10px\] \$\{messageIsError \? "text-\[#d92d20\]" : "text-\[#178c35\]"\}`\} aria-live="polite" hidden=\{!message\}>/);
   assert.match(app, /messageIsError \? "text-\[#d92d20\]" : "text-\[#178c35\]"/);
   assert.doesNotMatch(app, /onBlur=\{\(\) => saveSettings\(\)\}\s*\/>\s*<button className=\{`grid h-7 w-7 place-items-center rounded-md \$\{authActionButtonClassName\}`\}/);
   assert.doesNotMatch(app, /passwordDrafts: nextUserPasswords/);
