@@ -117,8 +117,9 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.doesNotMatch(app, /setMessage\(error instanceof Error \? error\.message : String\(error\), true\);/);
   assert.match(app, /function updateAuthUsers\(nextUsers: AuthUser\[\]\)/);
   assert.doesNotMatch(app, /allowMetadataEditing: authEnabled && authUsersCanEditMetadata\(nextUsers\)/);
-  assert.match(app, /function saveAuthUser\(index: number, patch: AuthUser\)/);
-  assert.match(app, /saveAuthUser\(index, \{ role: event\.currentTarget\.value as UserRole \}\);/);
+  assert.doesNotMatch(app, /function saveAuthUser/);
+  assert.doesNotMatch(app, /saveAuthUser\(/);
+  assert.match(app, /onChange=\{\(event\) => updateAuthUser\(index, \{ role: event\.currentTarget\.value as UserRole \}\)\}/);
   assert.doesNotMatch(app, /saveSettings\(\{ patch: \{ authUsers: authUsers\.map/);
   assert.match(app, /const cleanUserPasswords = collectUserPasswords\(effectiveAuthUsers, passwordDrafts\);/);
   assert.match(app, /function collectUserPasswords\(users: AuthUser\[\], values: Record<string, string>\)/);
@@ -164,17 +165,17 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.doesNotMatch(app, /const \[userPasswords, setUserPasswords\]/);
   assert.doesNotMatch(app, /value=\{userPasswords/);
   assert.match(app, /<button className=\{`inline-flex h-7 items-center rounded-md px-2 text-\[11px\] font-medium text-\[#111\] \$\{authActionButtonClassName\}`\} type="submit" disabled=\{settingsInputDisabled\}>/);
-  assert.match(app, />\s*Save\s*<\/button>/);
+  assert.match(app, />\s*Save settings\s*<\/button>/);
   assert.match(app, /saveSettings\(\{ forceSave: true, successMessage: "Saved" \}\)/);
-  assert.match(app, /saveSettings\(\{ forceSave: true, patch: \{ port: event\.currentTarget\.value \}, successMessage: "Saved" \}\)/);
+  assert.doesNotMatch(app, /onBlur=\{[^}]*saveSettings/);
+  assert.doesNotMatch(app, /saveSettings\(\{ forceSave: true, patch: \{ port:/);
   assert.match(app, /<SettingRow label="Port" help=\{serverState === "running" \? "Stop the server before changing the port\." : "The port the server listens on\."\}>/);
   assert.match(app, /disabled=\{settingsInputDisabled\}/);
   assert.match(app, /hidden=\{!message\}/);
   assert.match(app, /messageIsError \? "text-\[#d92d20\]" : "text-\[#178c35\]"/);
-  assert.doesNotMatch(app, /Save settings/);
   assert.doesNotMatch(app, /onBlur=\{\(\) => saveSettings\(\)\}\s*\/>\s*<button className=\{`grid h-7 w-7 place-items-center rounded-md \$\{authActionButtonClassName\}`\}/);
+  assert.doesNotMatch(app, /passwordDrafts: nextUserPasswords/);
   assert.match(app, /const effectiveAuthUsers = Array\.isArray\(patch\.authUsers\)/);
-  assert.match(app, /passwordDrafts: nextUserPasswords/);
   assert.doesNotMatch(app, /userPasswordsRef\.current\[String\(user\.username/);
   assert.doesNotMatch(app, /key=\{`\$\{user\.username\}-\$\{index\}`\}/);
   assert.doesNotMatch(app, /basicAuthUser: settings\.basicAuthUser/);
@@ -308,7 +309,7 @@ test("plugin password drafts do not blank the management UI", async () => {
   assert.deepEqual(JSON.parse(JSON.stringify(saveCalls[0].userPasswords)), { eagle: "secret123" });
 });
 
-test("plugin port input persists after editing", async () => {
+test("plugin port input persists after explicit settings save", async () => {
   const bundle = await esbuild({
     bundle: true,
     define: {
@@ -391,6 +392,11 @@ test("plugin port input persists after editing", async () => {
   valueSetter?.call(portInput, "6123");
   portInput.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
   portInput.dispatchEvent(new dom.window.FocusEvent("focusout", { bubbles: true }));
+  assert.equal(saveCalls.length, 0);
+
+  const form = dom.window.document.querySelector("form");
+  assert.ok(form instanceof dom.window.HTMLFormElement);
+  form.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }));
   await waitFor(() => saveCalls.length > 0);
 
   assert.equal(saveCalls[0].port, "6123");
@@ -492,7 +498,7 @@ test("plugin settings inputs are disabled while the server is running", async ()
   const addUserButton = Array.from(dom.window.document.querySelectorAll("button")).find((button) => button.textContent?.includes("Add user"));
   assert.ok(addUserButton instanceof dom.window.HTMLButtonElement);
   assert.equal(addUserButton.disabled, true);
-  const saveButton = Array.from(dom.window.document.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Save");
+  const saveButton = Array.from(dom.window.document.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Save settings");
   assert.ok(saveButton instanceof dom.window.HTMLButtonElement);
   assert.equal(saveButton.disabled, true);
   const removeButton = dom.window.document.querySelector("button[title=\"Remove user\"]");

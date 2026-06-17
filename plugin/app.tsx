@@ -277,12 +277,6 @@ function App() {
     });
   }
 
-  function saveAuthUser(index: number, patch: AuthUser) {
-    const nextUsers = replaceAuthUser(authUsers, index, patch);
-    updateAuthUsers(nextUsers);
-    saveSettings({ patch: { authUsers: nextUsers } });
-  }
-
   function addAuthUser() {
     updateAuthUsers([...authUsers, nextDefaultUser(authUsers)]);
   }
@@ -294,7 +288,6 @@ function App() {
     setPasswordVisibleByIndex((current) => removeIndexedValue(current, index));
     replaceUserPasswordDrafts(nextUserPasswords);
     updateAuthUsers(nextUsers);
-    saveSettings({ patch: { authUsers: nextUsers }, passwordDrafts: nextUserPasswords });
   }
 
   function togglePasswordVisible(index: number) {
@@ -503,7 +496,6 @@ function App() {
               disabled={settingsInputDisabled}
               value={settings.port || 41532}
               onChange={(event) => updateSettings({ port: event.currentTarget.value })}
-              onBlur={(event) => saveSettings({ forceSave: true, patch: { port: event.currentTarget.value }, successMessage: "Saved" })}
             />
           </SettingRow>
           <SettingRow label="Users" help={authEnabled ? "Viewer can browse. Editor can edit metadata. Admin has all permissions." : "Saved users apply when password protection is enabled."}>
@@ -533,16 +525,13 @@ function App() {
                       disabled={settingsInputDisabled}
                       value={user.username}
                       onChange={(event) => updateAuthUser(index, { username: event.currentTarget.value })}
-                      onBlur={() => saveSettings({ forceSave: true })}
                     />
                     <select
                       className={`${settingInputClassName} px-1.5`}
                       aria-label={`Role for ${user.username || `user ${index + 1}`}`}
                       disabled={settingsInputDisabled}
                       value={user.role}
-                      onChange={(event) => {
-                        saveAuthUser(index, { role: event.currentTarget.value as UserRole });
-                      }}
+                      onChange={(event) => updateAuthUser(index, { role: event.currentTarget.value as UserRole })}
                     >
                       <option value="viewer">Viewer</option>
                       <option value="editor">Editor</option>
@@ -581,11 +570,6 @@ function App() {
                   <span>Add user</span>
                 </button>
               </div>
-              <div className="flex justify-end">
-                <button className={`inline-flex h-7 items-center rounded-md px-2 text-[11px] font-medium text-[#111] ${authActionButtonClassName}`} type="submit" disabled={settingsInputDisabled}>
-                  Save
-                </button>
-              </div>
             </div>
           </SettingRow>
           <SettingRow label="TLS Cert" help="PEM certificate file used when HTTPS is enabled.">
@@ -596,7 +580,6 @@ function App() {
               placeholder="/path/to/cert.pem"
               value={settings.httpsCertPath || ""}
               onChange={(event) => updateSettings({ httpsCertPath: event.currentTarget.value })}
-              onBlur={(event) => saveSettings({ patch: { httpsCertPath: event.currentTarget.value } })}
             />
           </SettingRow>
           <SettingRow label="TLS Key" help="PEM private key file used when HTTPS is enabled.">
@@ -607,9 +590,13 @@ function App() {
               placeholder="/path/to/key.pem"
               value={settings.httpsKeyPath || ""}
               onChange={(event) => updateSettings({ httpsKeyPath: event.currentTarget.value })}
-              onBlur={(event) => saveSettings({ patch: { httpsKeyPath: event.currentTarget.value } })}
             />
           </SettingRow>
+          <div className="flex justify-end border-t border-[#e1e3e7] pt-2">
+            <button className={`inline-flex h-7 items-center rounded-md px-2 text-[11px] font-medium text-[#111] ${authActionButtonClassName}`} type="submit" disabled={settingsInputDisabled}>
+              Save settings
+            </button>
+          </div>
         </div>
       </form>
       <p className={`mx-[9px] mb-2.5 mt-0 px-0.5 text-center text-[10px] ${messageIsError ? "text-[#d92d20]" : "text-[#178c35]"}`} aria-live="polite" hidden={!message}>
