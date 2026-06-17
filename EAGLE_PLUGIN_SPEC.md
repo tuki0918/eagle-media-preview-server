@@ -135,7 +135,7 @@ Build output is created under `dist`:
 
 ```ts
 type Settings = {
-  allowMetadataEditing: boolean;
+  settingsVersion: 2;
   authUsers: Array<{
     username: string;
     role: "viewer" | "editor" | "admin";
@@ -148,13 +148,12 @@ type Settings = {
   httpsKeyPath: string;
   port: number;
   authEnabled: boolean;
-  // Legacy single-user compatibility fields. New UI writes `authUsers`.
-  basicAuthUser: string;
-  passwordHash: string;
   sessionSecret: string;
   lastServerStatus: "running" | "stopped" | "error";
 };
 ```
+
+Legacy settings with `basicAuthUser`, `passwordHash`, and `allowMetadataEditing` are read for migration, converted into `authUsers`, and rewritten with `settingsVersion: 2`.
 
 Settings path:
 

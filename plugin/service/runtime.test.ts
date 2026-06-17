@@ -20,6 +20,7 @@ const SESSION_SECRET_PATTERN = /^[A-Za-z0-9_-]{32,}$/;
 test("generated CommonJS runtime loads with require for Eagle plugin windows", () => {
   assert.equal(normalizeSettings({}).port, DEFAULT_SETTINGS.port);
   assert.equal(normalizeSettings({}).httpsEnabled, false);
+  assert.equal(normalizeSettings({}).settingsVersion, 2);
   assert.equal("requestLogEnabled" in normalizeSettings({ requestLogEnabled: false }), false);
   assert.equal("preferredLanAddress" in normalizeSettings({ preferredLanAddress: "192.168.1.50" }), false);
 });
@@ -51,6 +52,13 @@ test("generated settings store hashes per-user passwords", async () => {
   assert.match(saved.authUsers[0].passwordHash, PASSWORD_HASH_PATTERN);
   assert.notEqual(saved.authUsers[0].passwordHash, hashPassword("secret"));
   assert.equal(saved.passwordHash, saved.authUsers[0].passwordHash);
+
+  const raw = JSON.parse(await readFile(join(dir, "settings.json"), "utf8"));
+  assert.equal(raw.settingsVersion, 2);
+  assert.equal("authUsers" in raw, true);
+  assert.equal("allowMetadataEditing" in raw, false);
+  assert.equal("basicAuthUser" in raw, false);
+  assert.equal("passwordHash" in raw, false);
 });
 
 test("generated settings store creates and persists a session secret", async () => {
@@ -62,6 +70,7 @@ test("generated settings store creates and persists a session secret", async () 
   assert.match(loaded.sessionSecret, SESSION_SECRET_PATTERN);
 
   const raw = JSON.parse(await readFile(filePath, "utf8"));
+  assert.equal(raw.settingsVersion, 2);
   assert.equal(raw.sessionSecret, loaded.sessionSecret);
 
   const saved = await store.save({ autoStart: true });
@@ -78,7 +87,38 @@ test("generated settings store migrates existing settings with a session secret"
   assert.match(loaded.sessionSecret, SESSION_SECRET_PATTERN);
 
   const raw = JSON.parse(await readFile(filePath, "utf8"));
+  assert.equal(raw.settingsVersion, 2);
   assert.equal(raw.sessionSecret, loaded.sessionSecret);
+  assert.equal("allowMetadataEditing" in raw, false);
+  assert.equal("basicAuthUser" in raw, false);
+  assert.equal("passwordHash" in raw, false);
+});
+
+test("generated settings store migrates legacy auth fields into canonical auth users on disk", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-runtime-"));
+  const filePath = join(dir, "settings.json");
+  const passwordHash = hashPassword("secret");
+  await writeFile(filePath, JSON.stringify({
+    authEnabled: true,
+    allowMetadataEditing: true,
+    basicAuthUser: "legacy",
+    passwordHash,
+    port: 41532,
+  }), "utf8");
+  const store = createSettingsStore({ filePath });
+
+  const loaded = await store.load();
+  assert.deepEqual(loaded.authUsers, [
+    { username: "legacy", role: "editor", passwordHash },
+  ]);
+  assert.equal(loaded.allowMetadataEditing, true);
+
+  const raw = JSON.parse(await readFile(filePath, "utf8"));
+  assert.equal(raw.settingsVersion, 2);
+  assert.deepEqual(raw.authUsers, loaded.authUsers);
+  assert.equal("allowMetadataEditing" in raw, false);
+  assert.equal("basicAuthUser" in raw, false);
+  assert.equal("passwordHash" in raw, false);
 });
 
 test("generated settings store saves multiple auth users with roles", async () => {
@@ -106,6 +146,13 @@ test("generated settings store saves multiple auth users with roles", async () =
   assert.match(saved.authUsers[1].passwordHash, PASSWORD_HASH_PATTERN);
   assert.equal(saved.allowMetadataEditing, true);
   assert.equal(saved.basicAuthUser, "reader");
+
+  const raw = JSON.parse(await readFile(join(dir, "settings.json"), "utf8"));
+  assert.equal(raw.settingsVersion, 2);
+  assert.deepEqual(raw.authUsers, saved.authUsers);
+  assert.equal("allowMetadataEditing" in raw, false);
+  assert.equal("basicAuthUser" in raw, false);
+  assert.equal("passwordHash" in raw, false);
 });
 
 test("generated settings store migrates legacy auth settings into a viewer user", () => {

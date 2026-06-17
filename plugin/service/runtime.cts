@@ -27,6 +27,7 @@ interface PluginSettings {
   passwordHash: string;
   port: number;
   sessionSecret: string;
+  settingsVersion: number;
 }
 
 type SettingsInput = Partial<Omit<PluginSettings, "port">> & {
@@ -92,7 +93,9 @@ const DEFAULT_SETTINGS: PluginSettings = {
   passwordHash: "",
   lastServerStatus: "stopped",
   sessionSecret: "",
+  settingsVersion: 2,
 };
+const CURRENT_SETTINGS_VERSION = 2;
 const PASSWORD_HASH_ALGORITHM = "sha256";
 const PASSWORD_HASH_ITERATIONS = 210000;
 const PASSWORD_HASH_KEY_LENGTH = 32;
@@ -108,8 +111,9 @@ function createSettingsStore({ filePath = defaultSettingsPath() }: { filePath?: 
     async load() {
       try {
         const raw = await readFile(filePath, "utf8");
-        const settings = normalizeSettings(JSON.parse(raw));
-        if (!settings.sessionSecret) {
+        const input = JSON.parse(raw);
+        const settings = normalizeSettings(input);
+        if (needsSettingsMigration(input, settings)) {
           const migrated = withSessionSecret(settings);
           await writeSettingsFile(filePath, migrated);
           return migrated;
@@ -165,7 +169,7 @@ function createSettingsStore({ filePath = defaultSettingsPath() }: { filePath?: 
 
 async function writeSettingsFile(filePath: string, settings: PluginSettings) {
   await mkdir(dirname(filePath), { recursive: true });
-  await writeFile(filePath, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
+  await writeFile(filePath, `${JSON.stringify(canonicalSettings(settings), null, 2)}\n`, "utf8");
 }
 
 function createDefaultSettings(): PluginSettings {
@@ -177,23 +181,53 @@ function normalizeSettings(input: SettingsInput = {}): PluginSettings {
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error("port must be an integer from 1-65535");
   }
+  const authUsers = normalizeAuthUsers(input.authUsers, input);
+  const authEnabled = Boolean(input.authEnabled ?? DEFAULT_SETTINGS.authEnabled);
+  const firstAuthUser = authUsers[0];
   return {
     autoStart: Boolean(input.autoStart ?? DEFAULT_SETTINGS.autoStart),
-    allowMetadataEditing: Boolean(input.allowMetadataEditing ?? DEFAULT_SETTINGS.allowMetadataEditing),
-    authUsers: normalizeAuthUsers(input.authUsers, input),
+    allowMetadataEditing: authEnabled && authUsersCanEditMetadata(authUsers),
+    authUsers,
     host: String(input.host || DEFAULT_SETTINGS.host).trim() || DEFAULT_SETTINGS.host,
     httpsCertPath: String(input.httpsCertPath || "").trim(),
     httpsEnabled: Boolean(input.httpsEnabled ?? DEFAULT_SETTINGS.httpsEnabled),
     httpsKeyPath: String(input.httpsKeyPath || "").trim(),
     port,
     sessionSecret: String(input.sessionSecret || "").trim(),
-    authEnabled: Boolean(input.authEnabled ?? DEFAULT_SETTINGS.authEnabled),
-    basicAuthUser: String(input.basicAuthUser || DEFAULT_SETTINGS.basicAuthUser).trim() || DEFAULT_SETTINGS.basicAuthUser,
-    passwordHash: String(input.passwordHash || ""),
+    settingsVersion: CURRENT_SETTINGS_VERSION,
+    authEnabled,
+    basicAuthUser: firstAuthUser?.username || String(input.basicAuthUser || DEFAULT_SETTINGS.basicAuthUser).trim() || DEFAULT_SETTINGS.basicAuthUser,
+    passwordHash: authEnabled ? firstAuthUser?.passwordHash || "" : "",
     lastServerStatus: isServerStatus(input.lastServerStatus)
       ? input.lastServerStatus
       : DEFAULT_SETTINGS.lastServerStatus,
   };
+}
+
+function canonicalSettings(settings: PluginSettings) {
+  return {
+    settingsVersion: CURRENT_SETTINGS_VERSION,
+    authUsers: settings.authUsers,
+    autoStart: settings.autoStart,
+    authEnabled: settings.authEnabled,
+    host: settings.host,
+    httpsCertPath: settings.httpsCertPath,
+    httpsEnabled: settings.httpsEnabled,
+    httpsKeyPath: settings.httpsKeyPath,
+    lastServerStatus: settings.lastServerStatus,
+    port: settings.port,
+    sessionSecret: settings.sessionSecret,
+  };
+}
+
+function needsSettingsMigration(input: unknown, settings: PluginSettings) {
+  if (!settings.sessionSecret) return true;
+  if (!input || typeof input !== "object") return true;
+  const raw = input as Record<string, unknown>;
+  return raw.settingsVersion !== CURRENT_SETTINGS_VERSION
+    || Object.prototype.hasOwnProperty.call(raw, "allowMetadataEditing")
+    || Object.prototype.hasOwnProperty.call(raw, "basicAuthUser")
+    || Object.prototype.hasOwnProperty.call(raw, "passwordHash");
 }
 
 function withSessionSecret(settings: PluginSettings) {
