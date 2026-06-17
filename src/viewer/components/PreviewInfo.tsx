@@ -17,6 +17,7 @@ export interface PreviewDetailRow {
 
 export interface PreviewInfoProps {
   canEditMetadata?: boolean;
+  canManageLibrary?: boolean;
   detailRows: readonly PreviewDetailRow[];
   folders: readonly EagleFolder[];
   item: EagleItem;
@@ -107,19 +108,23 @@ export function PreviewInfoActions() {
   const previewInfoState = useSyncExternalStore(subscribePreviewInfoState, getPreviewInfoState, getPreviewInfoState);
   return (
     <div id="previewActions" className="preview-info-actions border-t border-border px-2 pt-3">
-      {previewInfoState ? <PreviewActions item={previewInfoState.item} /> : null}
+      {previewInfoState ? <PreviewActions canManageLibrary={previewInfoState.canManageLibrary} item={previewInfoState.item} /> : null}
     </div>
   );
 }
 
-export function PreviewActions({ item }: { item: EagleItem }) {
+export function PreviewActions({ canManageLibrary = false, item }: { canManageLibrary?: boolean; item: EagleItem }) {
+  if (!canManageLibrary) return null;
+
   return (
-    <Button asChild className={directFileLinkClassName}>
-    <a href={directFileUrl(item)} target="_blank" rel="noopener" onClick={(event) => event.stopPropagation()}>
-      <ExternalLinkIcon />
-      Open file
-    </a>
-    </Button>
+    <section className="preview-admin-actions grid gap-2">
+      <Button asChild className={directFileLinkClassName}>
+        <a href={directFileUrl(item)} target="_blank" rel="noopener" onClick={(event) => event.stopPropagation()}>
+          <ExternalLinkIcon />
+          Open file
+        </a>
+      </Button>
+    </section>
   );
 }
 

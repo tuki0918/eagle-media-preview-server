@@ -243,6 +243,7 @@ async function loadAuthStatus() {
 
 function defaultPermissions(read = true): ViewerPermissions {
   return {
+    manageLibrary: false,
     read,
     writeMetadata: false,
     writeRating: false,
@@ -252,6 +253,7 @@ function defaultPermissions(read = true): ViewerPermissions {
 function normalizePermissions(value: AuthStatusResponse["permissions"], readFallback = true): ViewerPermissions {
   return {
     ...defaultPermissions(readFallback),
+    manageLibrary: Boolean(value?.manageLibrary),
     read: Boolean(value?.read ?? readFallback),
     writeMetadata: Boolean(value?.writeMetadata),
     writeRating: Boolean(value?.writeRating),
@@ -790,6 +792,7 @@ function renderPreviewDetails(item: EagleItem) {
     item,
     detailRows: previewDetailRows(item),
     canEditMetadata: state.permissions.writeMetadata,
+    canManageLibrary: state.permissions.manageLibrary,
     folders: state.folders,
     onTagSuggestions: tagSuggestionItems,
     onFolderSuggestions: folderSuggestionItems,

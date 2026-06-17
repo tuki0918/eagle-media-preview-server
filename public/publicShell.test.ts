@@ -231,9 +231,9 @@ test("public viewer exposes sign out when authenticated", async () => {
   assert.match(app, /async function savePreviewMetadata\([\s\S]*handleAuthError\(error\);/);
   assert.match(app, /showLogin\(\);/);
   assert.match(types, /export interface AuthStatusPermissions extends Partial<ViewerPermissions>/);
-  assert.match(types, /manageLibrary\?: boolean;/);
+  assert.match(types, /manageLibrary: boolean;/);
   assert.match(types, /permissions\?: AuthStatusPermissions;/);
-  assert.doesNotMatch(app, /manageLibrary/);
+  assert.match(app, /manageLibrary: Boolean\(value\?\.manageLibrary\)/);
 
   setLoginConnectState({
     authenticated: false,
@@ -440,15 +440,19 @@ test("public UI exposes direct original file URLs for each media item", async ()
   const html = await readAppSources();
   const app = await readViewerSources();
   const directFileUrlSource = app.match(/function directFileUrl\(item[^)]*\) \{[\s\S]*?\n\}/)?.[0] || "";
-  const actions = renderToStaticMarkup(createElement(PreviewActions, { item: { id: "item 1" } }));
+  const actions = renderToStaticMarkup(createElement(PreviewActions, { canManageLibrary: true, item: { id: "item 1" } }));
+  const nonAdminActions = renderToStaticMarkup(createElement(PreviewActions, { item: { id: "item 1" } }));
 
   assert.doesNotMatch(html, /class="direct-file-link"/);
   assert.match(app, /function directFileUrl\(item[^)]*\)/);
   assert.match(app, /function previewFileName\(item[^)]*\)/);
   assert.match(directFileUrlSource, /return new URL\(`\/file\/\$\{encodeURIComponent\(String\(item\.id \|\| ""\)\)\}`,\s*baseUrl\)\.href;/);
   assert.match(actions, /class="[^"]*\bdirect-file-link\b[^"]*\bpreview-info-cta\b/);
+  assert.match(actions, /preview-admin-actions/);
   assert.match(actions, /href="http:\/\/localhost\/file\/item%201"/);
   assert.match(actions, /Open file/);
+  assert.doesNotMatch(nonAdminActions, /Open file/);
+  assert.doesNotMatch(nonAdminActions, /direct-file-link/);
   assert.doesNotMatch(directFileUrlSource, /connectionId/);
   assert.doesNotMatch(app, /state\.connectionId/);
   assert.doesNotMatch(app, /function withConnection\(/);
@@ -689,7 +693,7 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(html, /<div id="previewDetails" className="preview-details grid gap-2\.5">/);
   assert.match(html, /\{previewInfoState \? <PreviewDetailsPanel \{\.\.\.previewInfoState\} \/> : null\}/);
   assert.match(html, /<div id="previewActions" className="preview-info-actions/);
-  assert.match(html, /\{previewInfoState \? <PreviewActions item=\{previewInfoState\.item\} \/> : null\}/);
+  assert.match(html, /\{previewInfoState \? <PreviewActions canManageLibrary=\{previewInfoState\.canManageLibrary\} item=\{previewInfoState\.item\} \/> : null\}/);
   assert.match(html, /const previewDetailsSectionClassName =[\s\S]*gap-1\.5/);
   assert.doesNotMatch(css, /\.preview-detail-row-divider\s*\{/);
   assert.match(html, /preview-rating-section grid min-h-8/);
@@ -701,6 +705,7 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(html, /const previewDetailValueClassName =[\s\S]*text-sm[\s\S]*max-\[540px\]:text-\[13px\]/);
   assert.doesNotMatch(css, /\.preview-chip-empty/);
   assert.match(html, /className="preview-info-actions border-t border-border px-2 pt-3"/);
+  assert.match(html, /className="preview-admin-actions grid gap-2"/);
   assert.match(html, /const previewEditFormClassName = "preview-edit-form/);
   assert.match(html, /const previewEditRowClassName =[\s\S]*"preview-edit-row grid min-h-8 gap-2"/);
   assert.match(html, /const previewChipEditorClassName = "preview-chip-editor/);

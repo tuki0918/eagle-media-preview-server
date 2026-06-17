@@ -591,14 +591,18 @@ describe("ViewerAppShell", () => {
         onSaveMetadata={async (_item, patch) => patch}
       />,
     );
-    const actions = renderToStaticMarkup(<PreviewActions item={{ id: "item-1" }} />);
+    const actions = renderToStaticMarkup(<PreviewActions canManageLibrary item={{ id: "item-1" }} />);
+    const nonAdminActions = renderToStaticMarkup(<PreviewActions item={{ id: "item-1" }} />);
 
     expect(details).toContain("preview-details-section");
     expect(details).toContain("preview-metadata-summary");
     expect(details).toContain("preview-edit-toggle");
     expect(details).not.toContain("preview-edit-form");
+    expect(actions).toContain("preview-admin-actions");
     expect(actions).toContain("direct-file-link");
     expect(actions).toContain("preview-info-cta");
+    expect(nonAdminActions).not.toContain("Open file");
+    expect(nonAdminActions).not.toContain("direct-file-link");
   });
 
   test("disables preview metadata save after successful save", async () => {
