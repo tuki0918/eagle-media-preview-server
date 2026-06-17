@@ -696,10 +696,10 @@ test("createViewerServer expires cookie sessions server side", async () => {
     });
     assert.equal(login.status, 200);
     const cookie = login.headers.get("set-cookie") || "";
-    assert.match(cookie, /Max-Age=2592000/);
+    assert.match(cookie, /Max-Age=604800/);
     assert.equal(viewer.status().activeSessions, 1);
 
-    Date.now = () => originalNow() + 31 * 24 * 60 * 60 * 1000;
+    Date.now = () => originalNow() + 8 * 24 * 60 * 60 * 1000;
     const expired = await fetch(`${origin}/api/auth/status`, {
       headers: { Cookie: cookie },
     });

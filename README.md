@@ -22,7 +22,7 @@ You can preview your media from other devices on the same network.
 
 ## Authentication
 
-Authentication is optional. When password protection is enabled, browser access uses the built-in login screen and cookie-based sessions.
+Authentication is optional. When password protection is enabled, browser access uses the built-in login screen and cookie-based sessions. Sessions expire after 7 days.
 
 - Viewer users can browse and preview media.
 - Editor users can edit rating, tags, and categories from the preview panel.

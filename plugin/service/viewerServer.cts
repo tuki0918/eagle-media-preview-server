@@ -38,7 +38,7 @@ interface AuthSession {
 
 const PASSWORD_HASH_ALGORITHM = "sha256";
 const PASSWORD_HASH_KEY_LENGTH = 32;
-const AUTH_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
+const AUTH_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 const AUTH_USER_CACHE = Symbol("authUser");
 const INVALID_LOGIN_MESSAGE = "Invalid username or password";
 const RATING_WRITE_FORBIDDEN_MESSAGE = "Rating editing is not allowed for this viewer";
