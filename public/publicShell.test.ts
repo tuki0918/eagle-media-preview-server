@@ -416,6 +416,10 @@ test("public image preview fit mode scales to the viewport and refreshes on resi
   assert.match(html, /transform: `translate\(-50%, -50%\) translate3d\(\$\{imageState\.transform\.x\}px, \$\{imageState\.transform\.y\}px, 0\) scale\(\$\{imageState\.transform\.scale\}\)`/);
   assert.match(html, /const previewLayoutClassName = \[/);
   assert.match(html, /const previewImageClassName =[\s\S]*"preview-image absolute left-1\/2 top-1\/2/);
+  const imageToolbarClass = html.match(/const imageToolbarClassName =\s*"([^"]*)"/)?.[1] || "";
+  assert.match(imageToolbarClass, /right-\[calc\(14px\+env\(safe-area-inset-right\)\)\]/);
+  assert.doesNotMatch(imageToolbarClass, /left-1\/2/);
+  assert.doesNotMatch(imageToolbarClass, /-translate-x-1\/2/);
   assert.match(html, /backdrop:bg-foreground\/30/);
   assert.match(html, /\[&:fullscreen\]:h-screen \[&:fullscreen\]:w-screen/);
 });

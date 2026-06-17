@@ -72,7 +72,7 @@ const imageViewportClassName = "image-viewport relative grid h-full min-h-0 w-fu
 const previewImageClassName =
   "preview-image absolute left-1/2 top-1/2 block max-h-none max-w-none select-none object-contain [transform-origin:center] [will-change:transform] [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:bg-[#05070a] [&:fullscreen]:object-contain";
 const imageToolbarClassName =
-  "image-toolbar absolute bottom-[calc(14px+env(safe-area-inset-bottom))] left-1/2 z-[2] inline-flex -translate-x-1/2 items-center gap-1.5 rounded-lg border border-border bg-card p-1.5 shadow-sm";
+  "image-toolbar absolute bottom-[calc(14px+env(safe-area-inset-bottom))] right-[calc(14px+env(safe-area-inset-right))] z-[2] inline-flex items-center gap-1.5 rounded-lg border border-border bg-card p-1.5 shadow-sm";
 const toolbarButtonClassName =
   "inline-grid min-h-[38px] w-[38px] touch-manipulation select-none place-items-center rounded-md border-0 bg-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground [&_svg]:h-[18px] [&_svg]:w-[18px] [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-linecap:round] [&_svg]:[stroke-linejoin:round] [&_svg]:[stroke-width:2]";
 
