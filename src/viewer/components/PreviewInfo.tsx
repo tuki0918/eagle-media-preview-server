@@ -137,7 +137,7 @@ function PreviewMetadataSummary({ folders, item }: { folders: readonly EagleFold
   return (
     <>
       {tags.length ? <PreviewDetail label="Tags" value={tags} chips /> : null}
-      {categories.length ? <PreviewDetail label="Categories" value={categories} chips /> : null}
+      {categories.length ? <PreviewDetail label="Folders" value={categories} chips /> : null}
     </>
   );
 }
@@ -205,7 +205,7 @@ function PreviewMetadataEditor({
           normalizeValue={(value) => String(value || "").trim()}
         />
       </PreviewEditField>
-      <PreviewEditField label="Categories">
+      <PreviewEditField label="Folders">
         <MetadataChipEditor
           disabled={saving}
           kind="category"

@@ -808,7 +808,7 @@ describe("ViewerAppShell", () => {
 
     expect(details).toContain("Tags");
     expect(details).toContain("alpha");
-    expect(details).toContain("Categories");
+    expect(details).toContain("Folders");
     expect(details).toContain("Folder 1");
     expect(details).not.toContain("preview-edit-form");
   });

@@ -633,7 +633,7 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(app, /setPreviewInfoState\(\{/);
   assert.match(html, /function PreviewMetadataEditor\(\{/);
   assert.match(html, /<PreviewEditField label="Tags">/);
-  assert.match(html, /<PreviewEditField label="Categories">/);
+  assert.match(html, /<PreviewEditField label="Folders">/);
   assert.match(html, /const saved = await onSaveMetadata\(item, \{ tags, folders: categories \}\);/);
   assert.match(html, /const \[savedTags, setSavedTags\] = useState\(\(\) => initialTags\);/);
   assert.match(html, /const \[savedCategories, setSavedCategories\] = useState\(\(\) => initialCategories\);/);
