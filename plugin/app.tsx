@@ -59,6 +59,7 @@ declare global {
 const busyStoppedFrames = Object.freeze([".", "..", "...", "....", "....."]);
 const AUTH_PASSWORD_REQUIRED_MESSAGE = "Enter a password for every user before enabling password protection.";
 const HTTPS_CERTIFICATE_REQUIRED_MESSAGE = "Enter certificate and key paths before enabling HTTPS.";
+const HTTPS_DOCS_URL = "https://github.com/tuki0918/eagle-media-preview-server#use-https-with-mkcert";
 const settingInputClassName = "h-7 min-w-0 rounded-md border border-[#d7d9de] bg-white px-2 text-[11px] text-[#111] outline-0 focus:border-[rgba(31,116,255,0.58)] focus:shadow-[0_0_0_3px_rgba(31,116,255,0.12)] disabled:cursor-not-allowed disabled:bg-[#f4f5f7] disabled:text-[#8a8f99]";
 const authActionButtonClassName = "border border-[#d7d9de] bg-white text-[#555c66] hover:bg-[#f4f5f7] disabled:cursor-not-allowed disabled:opacity-45";
 
@@ -339,6 +340,18 @@ function App() {
     }
   }
 
+  async function openHttpsDocs() {
+    try {
+      if (globalThis.eagle?.shell?.openExternal) {
+        await globalThis.eagle.shell.openExternal(HTTPS_DOCS_URL);
+        return;
+      }
+      window.open(HTTPS_DOCS_URL, "_blank", "noopener");
+    } catch (error) {
+      setErrorMessage(error);
+    }
+  }
+
   function closeWindow() {
     try {
       if (globalThis.eagle?.window?.hide) {
@@ -434,6 +447,8 @@ function App() {
                 icon={<ShieldIcon />}
                 title="HTTPS"
                 description="Use TLS when certificate paths are set."
+                actionLabel="Read docs"
+                onAction={openHttpsDocs}
                 onChange={(checked) => {
                   if (checked && (!String(settings.httpsCertPath || "").trim() || !String(settings.httpsKeyPath || "").trim())) {
                     setMessage(HTTPS_CERTIFICATE_REQUIRED_MESSAGE, true);
@@ -635,23 +650,35 @@ function PowerSwitch({ checked, disabled, onChange }: { checked: boolean; disabl
   );
 }
 
-function OptionRow({ checked, description, disabled, icon, onChange, title }: {
+function OptionRow({ actionLabel, checked, description, disabled, icon, onAction, onChange, title }: {
+  actionLabel?: string;
   checked: boolean;
   description: string;
   disabled: boolean;
   icon: React.ReactNode;
+  onAction?: () => void;
   onChange: (checked: boolean) => void;
   title: string;
 }) {
   return (
-    <label className="grid cursor-pointer grid-cols-[14px_24px_minmax(0,1fr)] items-center gap-x-[11px] gap-y-2 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60">
-      <input className="h-3.5 w-3.5 cursor-pointer accent-[#1463e8] disabled:cursor-not-allowed" type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.currentTarget.checked)} />
+    <div className="grid grid-cols-[14px_24px_minmax(0,1fr)] items-center gap-x-[11px] gap-y-2 has-[:disabled]:opacity-60">
+      <input className="h-3.5 w-3.5 cursor-pointer accent-[#1463e8] disabled:cursor-not-allowed" type="checkbox" aria-label={title} checked={checked} disabled={disabled} onChange={(event) => onChange(event.currentTarget.checked)} />
       <span className="grid h-6 w-6 place-items-center rounded-md border border-[#e1e3e7] bg-white text-[#565c66] [&_svg]:h-3 [&_svg]:w-3" aria-hidden="true">{icon}</span>
       <span>
         <strong className="block text-[11px] font-[620] text-[#111]">{title}</strong>
-        <small className="mt-0.5 block text-[10px] leading-tight text-[#8a8f99]">{description}</small>
+        <small className="mt-0.5 block text-[10px] leading-tight text-[#8a8f99]">
+          {description}
+          {actionLabel && onAction ? (
+            <>
+              {" "}
+              <button className="border-0 bg-transparent p-0 text-[10px] font-medium text-[#1463e8] underline underline-offset-2 disabled:cursor-not-allowed disabled:text-[#8a8f99]" type="button" disabled={disabled} onClick={onAction}>
+                {actionLabel}
+              </button>
+            </>
+          ) : null}
+        </small>
       </span>
-    </label>
+    </div>
   );
 }
 
