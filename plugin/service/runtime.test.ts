@@ -19,6 +19,7 @@ const SESSION_SECRET_PATTERN = /^[A-Za-z0-9_-]{32,}$/;
 
 test("generated CommonJS runtime loads with require for Eagle plugin windows", () => {
   assert.equal(normalizeSettings({}).port, DEFAULT_SETTINGS.port);
+  assert.equal(normalizeSettings({}).host, "127.0.0.1");
   assert.equal(normalizeSettings({}).httpsEnabled, false);
   assert.equal(normalizeSettings({}).settingsVersion, 2);
   assert.equal("requestLogEnabled" in normalizeSettings({ requestLogEnabled: false }), false);

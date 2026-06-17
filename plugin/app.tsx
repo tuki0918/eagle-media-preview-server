@@ -73,7 +73,7 @@ function App() {
   const [messageIsError, setMessageIsError] = useState(false);
   const [passwordVisibleByIndex, setPasswordVisibleByIndex] = useState<Record<string, boolean>>({});
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
-  const [settingsExpanded, setSettingsExpanded] = useState(false);
+  const [settingsExpanded, setSettingsExpanded] = useState(true);
   const [passwordDraftRevision, setPasswordDraftRevision] = useState(0);
   const userPasswordsRef = useRef<Record<string, string>>({});
   const [status, setStatus] = useState<PluginStatus>(() => ({
@@ -83,7 +83,7 @@ function App() {
       authUsers: [],
       authEnabled: false,
       basicAuthUser: "eagle",
-      host: "0.0.0.0",
+      host: "127.0.0.1",
       httpsCertPath: "",
       httpsEnabled: false,
       httpsKeyPath: "",
@@ -102,7 +102,7 @@ function App() {
   const authEnabled = Boolean(settings.authEnabled);
   const authUsers = normalizedAuthUsers(settings);
   const httpsEnabled = Boolean(settings.httpsEnabled);
-  const publicNetwork = (settings.host || "0.0.0.0") === "0.0.0.0";
+  const publicNetwork = (settings.host || "127.0.0.1") === "0.0.0.0";
   const qrSrc = useMemo(() => {
     if (!status.url || serverState !== "running") return "";
     return createQrDataUrl(status.url);

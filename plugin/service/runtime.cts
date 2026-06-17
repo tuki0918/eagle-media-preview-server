@@ -83,7 +83,7 @@ const DEFAULT_SETTINGS: PluginSettings = {
   allowMetadataEditing: false,
   authUsers: [],
   autoStart: false,
-  host: "0.0.0.0",
+  host: "127.0.0.1",
   port: 41532,
   authEnabled: false,
   basicAuthUser: "eagle",

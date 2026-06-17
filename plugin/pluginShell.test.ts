@@ -213,7 +213,7 @@ test("settings can collapse and endpoint opens externally", async () => {
   const app = await readPluginAppSource();
 
   assert.match(app, /<form/);
-  assert.match(app, /const \[settingsExpanded, setSettingsExpanded\] = useState\(false\);/);
+  assert.match(app, /const \[settingsExpanded, setSettingsExpanded\] = useState\(true\);/);
   assert.match(app, /id="settingsToggleButton"/);
   assert.match(app, /aria-label=\{settingsExpanded \? "Hide settings" : "Show settings"\}/);
   assert.match(app, /className=\{`\$\{settingsExpanded \? "mb-2\.5 border-b border-\[#e1e3e7\] pb-2\.5" : ""\} flex w-full items-center justify-between gap-3 border-0 bg-transparent p-0 text-left`\}/);
@@ -256,7 +256,7 @@ test("plugin password drafts do not blank the management UI", async () => {
       authEnabled: false,
       authUsers: [{ username: "eagle", role: "viewer", passwordHash: "" }],
       autoStart: false,
-      host: "0.0.0.0",
+      host: "127.0.0.1",
       port: 41532,
     },
     state: "stopped",
@@ -291,13 +291,12 @@ test("plugin password drafts do not blank the management UI", async () => {
   pluginWindow.eval(appScript);
   await waitFor(() => {
     const toggle = dom.window.document.querySelector("#settingsToggleButton");
-    return toggle instanceof dom.window.HTMLButtonElement;
+    const passwordInput = dom.window.document.querySelector("input[autocomplete=\"new-password\"]");
+    return toggle instanceof dom.window.HTMLButtonElement
+      && !dom.window.document.querySelector("#settingsPanel")?.hasAttribute("hidden")
+      && passwordInput instanceof dom.window.HTMLInputElement
+      && !passwordInput.disabled;
   });
-
-  const toggle = dom.window.document.querySelector("#settingsToggleButton");
-  assert.ok(toggle instanceof dom.window.HTMLButtonElement);
-  toggle.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
-  await waitFor(() => !dom.window.document.querySelector("#settingsPanel")?.hasAttribute("hidden"));
 
   const passwordInput = dom.window.document.querySelector("input[autocomplete=\"new-password\"]");
   assert.ok(passwordInput instanceof dom.window.HTMLInputElement);
@@ -347,7 +346,7 @@ test("plugin port input persists after explicit settings save", async () => {
       authEnabled: false,
       authUsers: [{ username: "eagle", role: "viewer", passwordHash: "hash" }],
       autoStart: false,
-      host: "0.0.0.0",
+      host: "127.0.0.1",
       port: 41532,
     },
     state: "stopped",
@@ -389,13 +388,12 @@ test("plugin port input persists after explicit settings save", async () => {
   pluginWindow.eval(appScript);
   await waitFor(() => {
     const toggle = dom.window.document.querySelector("#settingsToggleButton");
-    return toggle instanceof dom.window.HTMLButtonElement;
+    const portInput = dom.window.document.querySelector("input[type=\"number\"]");
+    return toggle instanceof dom.window.HTMLButtonElement
+      && !dom.window.document.querySelector("#settingsPanel")?.hasAttribute("hidden")
+      && portInput instanceof dom.window.HTMLInputElement
+      && !portInput.disabled;
   });
-
-  const toggle = dom.window.document.querySelector("#settingsToggleButton");
-  assert.ok(toggle instanceof dom.window.HTMLButtonElement);
-  toggle.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
-  await waitFor(() => !dom.window.document.querySelector("#settingsPanel")?.hasAttribute("hidden"));
 
   const portInput = dom.window.document.querySelector("input[type=\"number\"]");
   assert.ok(portInput instanceof dom.window.HTMLInputElement);
@@ -536,7 +534,7 @@ test("plugin settings inputs are disabled while the server is running", async ()
         { username: "admin", role: "admin", passwordHash: "hash" },
       ],
       autoStart: false,
-      host: "0.0.0.0",
+      host: "127.0.0.1",
       httpsCertPath: "/tmp/cert.pem",
       httpsEnabled: false,
       httpsKeyPath: "/tmp/key.pem",
@@ -573,13 +571,12 @@ test("plugin settings inputs are disabled while the server is running", async ()
   pluginWindow.eval(appScript);
   await waitFor(() => {
     const toggle = dom.window.document.querySelector("#settingsToggleButton");
-    return toggle instanceof dom.window.HTMLButtonElement;
+    const powerSwitch = dom.window.document.querySelector("label[aria-label=\"Start or stop server\"] input[type=\"checkbox\"]");
+    return toggle instanceof dom.window.HTMLButtonElement
+      && !dom.window.document.querySelector("#settingsPanel")?.hasAttribute("hidden")
+      && powerSwitch instanceof dom.window.HTMLInputElement
+      && !powerSwitch.disabled;
   });
-
-  const toggle = dom.window.document.querySelector("#settingsToggleButton");
-  assert.ok(toggle instanceof dom.window.HTMLButtonElement);
-  toggle.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
-  await waitFor(() => !dom.window.document.querySelector("#settingsPanel")?.hasAttribute("hidden"));
 
   const portInput = dom.window.document.querySelector("input[type=\"number\"]");
   assert.ok(portInput instanceof dom.window.HTMLInputElement);
