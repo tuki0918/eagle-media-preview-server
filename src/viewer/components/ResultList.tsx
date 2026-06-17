@@ -31,6 +31,7 @@ interface ThumbnailButtonProps {
   variant: "grid" | "row" | "tile";
   withBadges?: boolean;
   withFileBadge?: boolean;
+  withFileNameOverlay?: boolean;
   withOverlay?: boolean;
 }
 
@@ -58,6 +59,10 @@ const overlayClassName =
   "thumb-overlay pointer-events-none absolute inset-0 grid place-items-center opacity-0 transition-[opacity,background-color] duration-150 group-hover:opacity-100 group-focus-visible:opacity-100";
 const overlayIconClassName =
   "thumb-overlay-icon inline-grid h-[42px] w-[42px] place-items-center rounded-full bg-background text-foreground shadow-sm [&_svg]:h-[18px] [&_svg]:w-[18px] [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-linecap:round] [&_svg]:[stroke-linejoin:round] [&_svg]:[stroke-width:2]";
+const fileNameOverlayClassName =
+  "thumb-file-name-overlay pointer-events-none absolute inset-x-0 bottom-0 z-[3] flex min-h-12 items-end bg-[linear-gradient(180deg,transparent,rgba(15,23,42,0.78))] px-2 pb-2 pt-6 text-left opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100";
+const fileNameOverlayTextClassName =
+  "block min-w-0 truncate text-xs font-[720] leading-tight text-white drop-shadow-sm";
 const durationBadgeClassName =
   "duration-badge absolute bottom-1.5 right-1.5 rounded-md bg-[rgba(15,23,42,0.78)] px-1.5 py-[3px] text-[10px] font-bold leading-[1.2] text-white";
 const tableRowClassName =
@@ -196,7 +201,7 @@ function TileItem({ item, onOpenPreview }: { item: EagleItem; onOpenPreview: (it
       }}
       withBadges
       withFileBadge={false}
-      withOverlay
+      withFileNameOverlay
     />
   );
 }
@@ -267,7 +272,7 @@ function ExtensionPill({ item }: { item: EagleItem }) {
   );
 }
 
-function ThumbnailButton({ children, item, onOpenPreview, style, variant, withBadges = false, withFileBadge = true, withOverlay = false }: ThumbnailButtonProps) {
+function ThumbnailButton({ children, item, onOpenPreview, style, variant, withBadges = false, withFileBadge = true, withFileNameOverlay = false, withOverlay = false }: ThumbnailButtonProps) {
   const [loading, setLoading] = useState(true);
   const [missing, setMissing] = useState(false);
   const mediaType = thumbnailMediaType(item);
@@ -314,6 +319,11 @@ function ThumbnailButton({ children, item, onOpenPreview, style, variant, withBa
               {overlayIconPaths[thumbnailOverlayIcon(mediaType)]}
             </svg>
           </span>
+        </span>
+      ) : null}
+      {withFileNameOverlay ? (
+        <span className={fileNameOverlayClassName} aria-hidden="true">
+          <span className={fileNameOverlayTextClassName}>{originalFileName(item) || item.name || item.id || ""}</span>
         </span>
       ) : null}
       {withBadges ? (

@@ -517,9 +517,10 @@ test("public preview renders text-like files and PDFs from their thumbnails", as
   assert.match(staticSource, /"\.pdf": "application\/pdf"/);
 });
 
-test("public grid thumbnail hover icon uses play for video and audio", async () => {
+test("public grid hover icons remain while tiles hover shows file names", async () => {
+  const html = await readAppSources();
   const app = await readViewerSources();
-  const resultList = renderToStaticMarkup(createElement(ResultList, {
+  const gridList = renderToStaticMarkup(createElement(ResultList, {
     items: [
       { id: "video-1", name: "Video.mp4", ext: "mp4" },
       { id: "audio-1", name: "Audio.mp3", ext: "mp3" },
@@ -528,16 +529,29 @@ test("public grid thumbnail hover icon uses play for video and audio", async () 
     onOpenPreview: () => {},
     viewMode: "grid",
   }));
+  const tilesList = renderToStaticMarkup(createElement(ResultList, {
+    items: [
+      { id: "tile-1", name: "Tile.jpg", ext: "jpg", width: 120, height: 80 },
+    ],
+    onOpenPreview: () => {},
+    viewMode: "tiles",
+  }));
 
-  assert.match(resultList, /data-media-type="video"/);
-  assert.match(resultList, /data-media-type="audio"/);
-  assert.match(resultList, /data-media-type="image"/);
-  assert.match(resultList, /M8 5v14l11-7z/);
-  assert.match(resultList, /13 5 19 5 19 11/);
+  assert.match(gridList, /data-media-type="video"/);
+  assert.match(gridList, /data-media-type="audio"/);
+  assert.match(gridList, /data-media-type="image"/);
+  assert.match(gridList, /M8 5v14l11-7z/);
+  assert.match(gridList, /13 5 19 5 19 11/);
   assert.match(app, /function thumbnailOverlayIcon\(mediaType[^)]*\)/);
   assert.match(app, /return mediaType === "video" \|\| mediaType === "audio" \? "play" : "move-diagonal";/);
   assert.doesNotMatch(app, /mediaType === "document" \? "file-text"/);
   assert.doesNotMatch(app, /mediaType === "image" \? "maximize-2"/);
+  assert.match(tilesList, /thumb-file-name-overlay/);
+  assert.match(tilesList, /Tile\.jpg/);
+  assert.doesNotMatch(tilesList, /M8 5v14l11-7z/);
+  assert.doesNotMatch(tilesList, /13 5 19 5 19 11/);
+  assert.match(html, /<ThumbnailButton variant="grid" item=\{item\} onOpenPreview=\{onOpenPreview\} withBadges withOverlay>/);
+  assert.match(html, /<ThumbnailButton[\s\S]*variant="tile"[\s\S]*withFileNameOverlay/);
 });
 
 test("public status line no longer renders page count UI", async () => {
