@@ -356,6 +356,9 @@ describe("ViewerAppShell", () => {
     expect(html).toContain('data-slot="sidebar"');
     expect(html).toContain('data-variant="inset"');
     expect(html).toContain('data-sidebar="menu-button"');
+    expect(html).toContain("data-active:bg-transparent");
+    expect(html).toContain("data-active:text-sidebar-foreground");
+    expect(html).toContain("text-sidebar-primary");
     expect(html).toContain("group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4)))]");
     expect(html).toContain("group-data-[collapsible=icon]:!size-8");
     expect(html).toContain("min-h-0 flex-1 overflow-y-auto");

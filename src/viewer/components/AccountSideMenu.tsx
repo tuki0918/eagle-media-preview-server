@@ -221,7 +221,7 @@ function FolderNavItem({
   return (
     <SidebarMenuItem>
       <SidebarMenuButton
-        className="h-8 gap-2 text-[13px] font-normal data-active:font-[650] group-data-[collapsible=icon]:!pl-2"
+        className="h-8 gap-2 text-[13px] font-normal data-active:bg-transparent data-active:font-[650] data-active:text-sidebar-foreground group-data-[collapsible=icon]:!pl-2"
         isActive={active}
         style={{ paddingLeft: `calc(0.5rem + ${safeDepth} * 0.875rem)` }}
         tooltip={title}
@@ -230,7 +230,7 @@ function FolderNavItem({
         title={title}
         onClick={onSelect}
       >
-        <Icon className="text-muted-foreground" aria-hidden="true" />
+        <Icon className={active ? "text-sidebar-primary" : "text-muted-foreground"} aria-hidden="true" />
         <span className="min-w-0 truncate">{label}</span>
         {count === undefined ? null : (
           <span className="ml-auto shrink-0 text-[11px] font-normal text-muted-foreground [font-variant-numeric:tabular-nums] group-data-[collapsible=icon]:hidden">
