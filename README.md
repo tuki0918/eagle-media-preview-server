@@ -20,12 +20,6 @@ Optional:
 - HTTPS: use TLS when certificate paths are set.
 - Multiple users with Viewer, Editor, and Admin roles.
 
-Roles:
-
-- Viewer: browse and preview media
-- Editor: edit rating, tags, and folders
-- Admin: has all available permissions
-
 ## Settings
 
 ### General
@@ -40,35 +34,31 @@ Network access and user permission settings.
 
 ![](docs/server_panel_access.png)
 
+Use this panel to control whether other devices on the LAN can open the viewer and which users can access it. User roles define the available actions:
+
+- Viewer: browse and preview media
+- Editor: edit rating, tags, and categories from the preview panel
+- Admin: has all available permissions
+
 ### Security
 
 Authentication and HTTPS/TLS settings.
 
 ![](docs/server_panel_security.png)
 
-## Requirements
-
-- Eagle 4.0 Build 23 or later
-- Node.js 20 or later
-
-## Authentication
-
 Authentication is optional. When password protection is enabled, browser access uses the built-in login screen and cookie-based sessions. Sessions expire after 7 days.
 
-- Viewer users can browse and preview media.
-- Editor users can edit rating, tags, and categories from the preview panel.
-- Admin users have the highest available management permissions.
-
-See [Eagle | Media Preview Server Spec](docs/EAGLE_PLUGIN_SPEC.md#authentication) for cookie, password storage, role, and session behavior details.
-
-## Use HTTPS with mkcert
-
 HTTPS protects the login password and session cookie on the network. For local/LAN use, `mkcert` is the recommended way to create a trusted development certificate.
+
+See [HTTPS and mkcert CA Operations](docs/https-mkcert.md) for setup, plugin HTTPS settings, Windows/macOS/iOS/Android CA trust steps, and private-key cautions.
 
 - `TLS Cert`: the certificate file
 - `TLS Key`: the matching private key file
 
-See [HTTPS and mkcert CA Operations](docs/https-mkcert.md) for setup, plugin HTTPS settings, Windows/macOS/iOS/Android CA trust steps, and private-key cautions.
+## Requirements
+
+- Eagle 4.0 Build 23 or later
+- Node.js 20 or later
 
 ## Development
 
