@@ -355,6 +355,8 @@ test("public UI no longer shows connect lock icon or connection settings button"
   assert.doesNotMatch(html, /<LibraryFooter \/>/);
   assert.doesNotMatch(html, /id="libraryFooterNameHost"/);
   assert.match(app, /setLibraryFooterName\(libraryLabel\(data\)\);/);
+  assert.match(app, /document\.title = libraryTitle\(data\);/);
+  assert.match(app, /document\.title = DEFAULT_DOCUMENT_TITLE;/);
   assert.match(html, /useSyncExternalStore\(subscribeLibraryFooterName, getLibraryFooterName, getLibraryFooterName\)/);
   assert.doesNotMatch(app, /libraryFooterNameHost: document\.querySelector\("#libraryFooterNameHost"\),/);
   assert.doesNotMatch(html, /renderLibraryFooterView/);
@@ -568,10 +570,12 @@ test("public status line no longer renders page count UI", async () => {
 
 test("public shell uses Media Preview Server branding and serves a favicon", async () => {
   const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const app = await readViewerSources();
   const appComponent = await readAppSources();
   await access(new URL("./favicon.ico", import.meta.url));
 
-  assert.match(html, /<title>Media Preview Server - Eagle<\/title>/);
+  assert.match(html, /<title>Media Preview Server<\/title>/);
+  assert.match(app, /function libraryTitle\(data: ConnectResponse\) \{[\s\S]*return `\$\{name\} - Media Preview Server`;/);
   assert.match(appComponent, /<strong className="[^"]*">Media Preview Server<\/strong>/);
   assert.match(html, /<link rel="icon" href="\/favicon\.ico"/);
   assert.doesNotMatch(html, /Eagle Web UI/);

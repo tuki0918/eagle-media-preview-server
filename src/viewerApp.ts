@@ -100,6 +100,7 @@ let authRequired = false;
 let authUser: NonNullable<AuthStatusResponse["user"]> | null = null;
 let allFoldersTotal = 0;
 const pendingRatingItemIds = new Set<string>();
+const DEFAULT_DOCUMENT_TITLE = "Media Preview Server";
 
 export function initViewer() {
   init();
@@ -334,12 +335,14 @@ function isEagleConnectionError(error: unknown, message = errorMessage(error)) {
 }
 
 function showLogin() {
+  document.title = DEFAULT_DOCUMENT_TITLE;
   setShellView("login");
 }
 
 function showViewer(data: ConnectResponse) {
   setShellView("viewer");
   setLibraryFooterName(libraryLabel(data));
+  document.title = libraryTitle(data);
   resetViewerResults();
   renderSearchControlButtons();
   applyControlsFromState();
@@ -398,6 +401,11 @@ function libraryLabel(data: ConnectResponse) {
   const name = data.library?.name || LIBRARY_EMPTY_LABEL;
   const version = data.app?.version ? `Eagle ${data.app.version}` : EAGLE_UNAVAILABLE_LABEL;
   return `${name} - ${version}`;
+}
+
+function libraryTitle(data: ConnectResponse) {
+  const name = data.library?.name || LIBRARY_EMPTY_LABEL;
+  return `${name} - Media Preview Server`;
 }
 
 async function loadFolders() {
