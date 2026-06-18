@@ -7,7 +7,7 @@ const meta = {
   component: LibraryFooter,
   decorators: [(Story) => <div className={storyPanelClassName}><Story /></div>],
   args: {
-    name: "Yuta's Eagle Library",
+    name: "My Eagle Library",
   },
 } satisfies Meta<typeof LibraryFooter>;
 

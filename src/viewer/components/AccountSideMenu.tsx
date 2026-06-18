@@ -1,4 +1,5 @@
 import {
+  BookOpenTextIcon,
   ChevronsUpDownIcon,
   FolderIcon,
   FolderOpenIcon,
@@ -24,7 +25,6 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import iconOnUrl from "../../assets/icon_on.svg";
 import { UNCATEGORIZED_FOLDER_ID } from "../constants";
 import { getLibraryFooterName, subscribeLibraryFooterName } from "../libraryFooterState";
 import { getLoginConnectState, subscribeLoginConnectState } from "../loginConnectState";
@@ -62,7 +62,9 @@ export function AccountSideMenu() {
                 className="pointer-events-none h-12 px-2 hover:bg-transparent hover:text-sidebar-foreground active:bg-transparent active:text-sidebar-foreground"
               >
                 <div>
-                  <img className="size-8 rounded-lg object-cover shadow-sm" src={iconOnUrl} alt="" aria-hidden="true" />
+                  <span className="grid size-8 place-items-center rounded-lg bg-zinc-200 text-zinc-950 shadow-sm" aria-hidden="true">
+                    <BookOpenTextIcon className="size-5" />
+                  </span>
                   <span className="grid min-w-0 group-data-[collapsible=icon]:hidden">
                     <span className="truncate text-sm font-[720] leading-tight text-sidebar-foreground">Media Preview</span>
                     <span className="truncate text-[11px] leading-tight text-muted-foreground">{displayName}</span>

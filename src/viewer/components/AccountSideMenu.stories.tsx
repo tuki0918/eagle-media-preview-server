@@ -13,7 +13,7 @@ const meta = {
     layout: "fullscreen",
   },
   render: () => {
-    setLibraryFooterName("Yuta's Eagle Library");
+    setLibraryFooterName("My Eagle Library");
     setLoginConnectState({
       authenticated: true,
       authRequired: true,
