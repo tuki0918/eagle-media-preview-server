@@ -61,7 +61,7 @@ const busyStoppedFrames = Object.freeze([".", "..", "...", "....", "....."]);
 const AUTH_PASSWORD_REQUIRED_MESSAGE = "Enter a password for every user before enabling password protection.";
 const HTTPS_CERTIFICATE_REQUIRED_MESSAGE = "Enter certificate and key paths before enabling HTTPS.";
 const PUBLIC_NETWORK_WITHOUT_PASSWORD_MESSAGE = "Public Network is enabled and password protection is off. Anyone on this network may be able to access the viewer. Start the server anyway?";
-const HTTPS_DOCS_URL = "https://github.com/tuki0918/eagle-media-preview-server#use-https-with-mkcert";
+const HTTPS_DOCS_URL = "https://github.com/tuki0918/eagle-media-preview-server/blob/main/docs/https-mkcert.md";
 const settingInputClassName = "h-7 min-w-0 rounded-md border border-[#d7d9de] bg-white px-2 text-[11px] text-[#111] outline-0 focus:border-[rgba(31,116,255,0.58)] focus:shadow-[0_0_0_3px_rgba(31,116,255,0.12)] disabled:cursor-not-allowed disabled:bg-[#f4f5f7] disabled:text-[#8a8f99]";
 const authActionButtonClassName = "border border-[#d7d9de] bg-white text-[#555c66] hover:bg-[#f4f5f7] disabled:cursor-not-allowed disabled:opacity-45";
 
