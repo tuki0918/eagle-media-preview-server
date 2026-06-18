@@ -63,8 +63,7 @@ const mediaButtonClassName =
 const playButtonClassName = `${mediaButtonClassName} h-12 w-12 border-white/30 bg-white/20 text-white shadow-sm hover:border-white/40 hover:bg-white/25`;
 const mediaRangeClassName =
   "h-10 w-full min-w-0 touch-manipulation appearance-none bg-transparent accent-white [&::-webkit-slider-runnable-track]:h-1.5 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-[rgba(255,255,255,0.28)] [&::-webkit-slider-thumb]:mt-[-7px] [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-[0_4px_12px_rgba(0,0,0,0.32)]";
-const mediaSpeedButtonClassName =
-  "inline-flex h-9 min-w-14 touch-manipulation select-none items-center justify-center rounded-full border border-[rgba(255,255,255,0.16)] bg-[rgba(255,255,255,0.1)] px-3 text-xs font-[760] text-white hover:bg-[rgba(255,255,255,0.18)]";
+const mediaRepeatButtonClassName = mediaButtonClassName;
 const textPreviewClassName =
   "text-preview m-0 min-w-0 overflow-auto rounded-md border border-border bg-card p-[18px] font-mono text-[13px] leading-[1.55] text-card-foreground shadow-sm [overflow-wrap:anywhere] [white-space:pre-wrap]";
 const unsupportedThumbClassName = "unsupported-thumb max-h-[min(62dvh,640px)] w-[min(640px,calc(100vw_-_48px))] max-w-full object-contain";
@@ -173,7 +172,7 @@ function MediaControls({
   const [currentTime, setCurrentTime] = useState(0);
   const [paused, setPaused] = useState(true);
   const [muted, setMuted] = useState(false);
-  const [playbackRate, setPlaybackRate] = useState(1);
+  const [loop, setLoop] = useState(false);
   const firstVideoPlayRef = useRef(true);
   const videoOverlayControlsVisible = useSyncExternalStore(
     subscribeVideoOverlayControls,
@@ -190,7 +189,7 @@ function MediaControls({
       setCurrentTime(Number.isFinite(media.currentTime) ? media.currentTime : 0);
       setPaused(media.paused);
       setMuted(media.muted);
-      setPlaybackRate(media.playbackRate || 1);
+      setLoop(media.loop);
     };
     const syncVideoOverlayVisibility = () => {
       if (variant !== "video") return;
@@ -206,14 +205,14 @@ function MediaControls({
     };
     sync();
     syncVideoOverlayVisibility();
-    for (const eventName of ["durationchange", "loadedmetadata", "timeupdate", "play", "pause", "volumechange", "ratechange", "ended"]) {
+    for (const eventName of ["durationchange", "loadedmetadata", "timeupdate", "play", "pause", "volumechange", "ended"]) {
       media.addEventListener(eventName, sync);
     }
     for (const eventName of ["play", "pause", "ended"]) {
       media.addEventListener(eventName, syncVideoOverlayVisibility);
     }
     return () => {
-      for (const eventName of ["durationchange", "loadedmetadata", "timeupdate", "play", "pause", "volumechange", "ratechange", "ended"]) {
+      for (const eventName of ["durationchange", "loadedmetadata", "timeupdate", "play", "pause", "volumechange", "ended"]) {
         media.removeEventListener(eventName, sync);
       }
       for (const eventName of ["play", "pause", "ended"]) {
@@ -241,12 +240,11 @@ function MediaControls({
     if (!media) return;
     media.currentTime = Number(value);
   };
-  const cycleSpeed = () => {
+  const toggleLoop = () => {
     const media = mediaRef.current;
     if (!media) return;
-    const speeds = [1, 1.25, 1.5, 2];
-    const currentIndex = speeds.findIndex((speed) => speed === media.playbackRate);
-    media.playbackRate = speeds[(currentIndex + 1) % speeds.length];
+    media.loop = !media.loop;
+    setLoop(media.loop);
   };
   const toggleMuted = () => {
     const media = mediaRef.current;
@@ -293,8 +291,15 @@ function MediaControls({
           <button type="button" className={mediaButtonClassName} aria-label={muted ? "Unmute" : "Mute"} title={muted ? "Unmute" : "Mute"} onClick={toggleMuted}>
             {muted ? <VolumeXIcon /> : <Volume2Icon />}
           </button>
-          <button type="button" className={mediaSpeedButtonClassName} aria-label="Playback speed" title="Playback speed" onClick={cycleSpeed}>
-            {playbackRate}x
+          <button
+            type="button"
+            className={`${mediaRepeatButtonClassName} ${loop ? "border-white/40 bg-white/20" : ""}`}
+            aria-label="Repeat"
+            aria-pressed={loop}
+            title="Repeat"
+            onClick={toggleLoop}
+          >
+            <RepeatIcon />
           </button>
         </div>
       </div>
@@ -677,6 +682,17 @@ function VolumeXIcon() {
       <path d="M11 5 6 9H3v6h3l5 4z" />
       <path d="m22 9-6 6" />
       <path d="m16 9 6 6" />
+    </svg>
+  );
+}
+
+function RepeatIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="m17 2 4 4-4 4" />
+      <path d="M3 11V9a3 3 0 0 1 3-3h15" />
+      <path d="m7 22-4-4 4-4" />
+      <path d="M21 13v2a3 3 0 0 1-3 3H3" />
     </svg>
   );
 }

@@ -1222,7 +1222,7 @@ describe("ViewerAppShell", () => {
     expect(audio).toContain("audio-artwork");
     expect(audio).toContain("Sample");
     expect(audio).not.toContain("Sample.mp3");
-    expect(audio).toContain("Playback speed");
+    expect(audio).toContain("Repeat");
     expect(image).toContain("image-viewport");
     expect(image).toContain("image-toolbar");
     expect(text).toContain("text-preview");
