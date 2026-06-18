@@ -163,4 +163,9 @@
   html {
     @apply font-sans;
   }
+
+  .toaster [data-sonner-toast][data-styled="true"] [data-description] {
+    color: var(--popover-foreground) !important;
+    opacity: 0.9;
+  }
 }

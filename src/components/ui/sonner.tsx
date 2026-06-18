@@ -1,10 +1,11 @@
 import type { CSSProperties } from "react";
 import { Toaster as Sonner, type ToasterProps } from "sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 
 const Toaster = ({ ...props }: ToasterProps) => {
   const isMobile = useIsMobile();
-  const { position = isMobile ? "bottom-center" : "bottom-right", style, ...toasterProps } = props;
+  const { position = isMobile ? "bottom-center" : "bottom-right", style, toastOptions, ...toasterProps } = props;
 
   return (
     <Sonner
@@ -29,8 +30,11 @@ const Toaster = ({ ...props }: ToasterProps) => {
         left: "12px",
       }}
       toastOptions={{
+        ...toastOptions,
         classNames: {
-          toast: "cn-toast",
+          ...toastOptions?.classNames,
+          toast: cn("cn-toast", toastOptions?.classNames?.toast),
+          description: cn("!text-popover-foreground/90", toastOptions?.classNames?.description),
         },
       }}
       {...toasterProps}
