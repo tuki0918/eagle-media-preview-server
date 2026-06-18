@@ -26,6 +26,26 @@ Roles:
 - Editor: edit rating, tags, and folders
 - Admin: has all available permissions
 
+## Settings
+
+### General
+
+Basic server options such as auto start, host, and port.
+
+![](docs/server_panel_general.png)
+
+### Access
+
+Network access and user permission settings.
+
+![](docs/server_panel_access.png)
+
+### Security
+
+Authentication and HTTPS/TLS settings.
+
+![](docs/server_panel_security.png)
+
 ## Requirements
 
 - Eagle 4.0 Build 23 or later
