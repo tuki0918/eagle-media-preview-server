@@ -35,6 +35,7 @@ import type { EagleFolder } from "../types";
 
 export function AccountSideMenu() {
   const displayName = useSyncExternalStore(subscribeLibraryFooterName, getLibraryFooterName, getLibraryFooterName);
+  const libraryHeader = libraryHeaderLabels(displayName);
   const loginState = useSyncExternalStore(subscribeLoginConnectState, getLoginConnectState, getLoginConnectState);
   const searchState = useSyncExternalStore(subscribeSearchControlsState, getSearchControlsState, getSearchControlsState);
   const username = loginState.user?.username?.trim();
@@ -66,8 +67,10 @@ export function AccountSideMenu() {
                     <BookOpenTextIcon className="size-5" />
                   </span>
                   <span className="grid min-w-0 group-data-[collapsible=icon]:hidden">
-                    <span className="truncate text-sm font-[720] leading-tight text-sidebar-foreground">Media Preview</span>
-                    <span className="truncate text-[11px] leading-tight text-muted-foreground">{displayName}</span>
+                    <span className="truncate text-sm font-[720] leading-tight text-sidebar-foreground">{libraryHeader.name}</span>
+                    {libraryHeader.version ? (
+                      <span className="truncate text-[11px] leading-tight text-muted-foreground">{libraryHeader.version}</span>
+                    ) : null}
                   </span>
                 </div>
               </SidebarMenuButton>
@@ -103,6 +106,12 @@ export function AccountSideMenu() {
       </Sidebar>
     </>
   );
+}
+
+function libraryHeaderLabels(displayName: string) {
+  const match = displayName.match(/^(.*?)\s+-\s+(Eagle\s+.+)$/);
+  if (!match) return { name: displayName, version: "" };
+  return { name: match[1], version: match[2] };
 }
 
 function FolderSideNav({

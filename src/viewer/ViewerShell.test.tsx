@@ -43,6 +43,7 @@ import { setImageOverlayControlsVisible } from "./imageOverlayState";
 import { setVideoOverlayControlsVisible } from "./videoOverlayState";
 import { MEDIA_TYPE_OPTIONS, PAGE_SIZE_OPTIONS, RATING_OPTIONS } from "./shellConfig";
 import { setLoginConnectState } from "./loginConnectState";
+import { setLibraryFooterName } from "./libraryFooterState";
 import { setSearchControlsState } from "./searchControlsState";
 import { getThemeState, initializeThemeState, setThemePreference } from "./themeState";
 
@@ -327,9 +328,13 @@ describe("ViewerAppShell", () => {
       message: "",
       user: { role: "editor", username: "ed" },
     });
+    setLibraryFooterName("My Library - Eagle 4.0.0");
     const html = renderAccountSideMenu();
 
     expect(html).toContain('id="accountSideMenu"');
+    expect(html).toContain("My Library");
+    expect(html).toContain("Eagle 4.0.0");
+    expect(html).not.toContain("Media Preview");
     expect(html).toContain('id="authAccountLabel"');
     expect(html).toContain('id="authUserLabel"');
     expect(html).toContain('id="authRoleLabel"');
