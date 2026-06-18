@@ -95,4 +95,6 @@ See [EAGLE_PLUGIN_SPEC.md](docs/EAGLE_PLUGIN_SPEC.md) for plugin behavior, setti
 
 This plugin is intended for use on a local or trusted LAN, not for public internet access.
 
+The displayed content depends on the Eagle library opened by the Eagle app running on the server side.
+
 The author is not responsible for unintended access, data exposure, or any damage caused by misconfiguration, insecure network settings, weak passwords, disabled authentication, or public exposure of the server.
