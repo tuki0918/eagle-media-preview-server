@@ -34,11 +34,14 @@ export function Pager({
   const displayPreviousDisabled = previousDisabled ?? state.previousDisabled;
   const pageSummary = pageSummaryLabel(displayCurrent, displayPages);
 
+  if (displayHidden) {
+    return <div className="pager pager-spacer h-[82px] shrink-0" aria-hidden="true" />;
+  }
+
   return (
     <nav
       className="pager static mt-[18px] grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 bg-transparent pb-[calc(10px+env(safe-area-inset-bottom))] pt-2.5 shadow-none backdrop-blur-none max-[540px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] max-[540px]:gap-2"
       aria-label="Pagination"
-      hidden={displayHidden}
     >
       <Button id="prevButton" className={`${pagerButtonClassName} max-[540px]:col-[1]`} variant="outline" type="button" disabled={displayPreviousDisabled} onClick={goToPreviousPage}>
         <ChevronLeftIcon data-icon="inline-start" />

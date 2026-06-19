@@ -317,6 +317,16 @@ describe("ViewerAppShell", () => {
     expect(html).toContain("max-[540px]:row-start-2");
   });
 
+  test("keeps bottom spacing when pagination is hidden for tiles", () => {
+    const html = renderToStaticMarkup(<Pager hidden />);
+
+    expect(html).toContain("pager-spacer");
+    expect(html).toContain("h-[82px]");
+    expect(html).toContain('aria-hidden="true"');
+    expect(html).not.toContain('aria-label="Pagination"');
+    expect(html).not.toContain('id="prevButton"');
+  });
+
   test("renders tag chips as a reusable component", () => {
     const html = renderToStaticMarkup(<TagChips tags={["alpha"]} onRemove={() => {}} />);
 
