@@ -109,6 +109,8 @@ test("public login no longer renders advanced Eagle connection settings", async 
   assert.match(login, /src="[^"]*icon_on\.svg/);
   assert.match(login, /<h1 class="[^"]*">Media Preview Server<\/h1>/);
   assert.match(login, /A local media server for your Eagle library\./);
+  assert.doesNotMatch(login, /Start the server from the Eagle plugin panel/);
+  assert.doesNotMatch(login, /Use an account configured in the Eagle plugin panel\./);
   assert.doesNotMatch(login, /id="viewerPasswordField"/);
   assert.doesNotMatch(login, /id="viewerPasswordInput"/);
   assert.doesNotMatch(login, /id="togglePasswordButton"/);
@@ -149,6 +151,8 @@ test("public login renders credentials when server auth is required", async () =
   assert.match(login, /name="password"/);
   assert.match(login, /aria-label="Password"/);
   assert.match(login, /id="authPasswordInput"[\s\S]*required=""/);
+  assert.match(login, /Use an account configured in the Eagle plugin panel\./);
+  assert.doesNotMatch(login, /Use a viewer account/);
   assert.match(button, /Sign in/);
   assert.match(app, /postJson<AuthStatusResponse>\("\/api\/auth\/login", \{ username, password \}\)/);
   assert.match(app, /Sign-in succeeded, but the browser did not keep the session cookie/);

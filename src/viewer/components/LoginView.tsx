@@ -51,11 +51,11 @@ export function LoginView({ hidden = false }: LoginViewProps) {
             {showCredentials ? <LoginCredentials disabled={state.disabled} /> : null}
             {showInlineError ? <ConnectMessage /> : null}
             <ConnectButton />
-            <p className="m-0 text-center text-[11px] leading-[1.45] text-muted-foreground">
-              {showCredentials
-                ? "Use a viewer account configured in the Eagle plugin panel."
-                : "Start the server from the Eagle plugin panel, then connect from this browser."}
-            </p>
+            {showCredentials ? (
+              <p className="m-0 text-center text-[11px] leading-[1.45] text-muted-foreground">
+                Use an account configured in the Eagle plugin panel.
+              </p>
+            ) : null}
           </div>
         </div>
         {showInlineError ? null : <ConnectMessage />}
