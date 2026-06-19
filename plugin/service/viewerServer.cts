@@ -66,6 +66,7 @@ const INVALID_LOGIN_MESSAGE = "Invalid username or password";
 const LOGIN_RATE_LIMIT_MESSAGE = "Too many failed login attempts. Try again later.";
 const RATING_WRITE_FORBIDDEN_MESSAGE = "Rating editing is not allowed for this viewer";
 const METADATA_WRITE_FORBIDDEN_MESSAGE = "Metadata editing is not allowed for this viewer";
+const ADMIN_WRITE_FORBIDDEN_MESSAGE = "Admin actions are not allowed for this viewer";
 
 interface EagleLibraryInfo {
   path?: string;
@@ -78,6 +79,7 @@ interface EagleItem {
   fileURL?: string;
   folders?: unknown;
   id?: string;
+  isDeleted?: boolean;
   name?: string;
   star?: number;
   tags?: unknown;
@@ -107,6 +109,7 @@ interface EagleClient {
   switchLibrary(libraryPath: string): Promise<unknown>;
   updateItemMetadata(id: string, input: { folders?: unknown; tags?: unknown }): Promise<EagleItem>;
   updateItemStar(id: string, star: unknown): Promise<EagleItem>;
+  updateItemTrash(id: string, isDeleted: boolean): Promise<EagleItem>;
 }
 
 interface EagleSession {
@@ -456,6 +459,29 @@ async function handleApi(req, url, res, { auth, getSession, setSession }: ApiCon
       id: item.id || itemId,
       tags: Array.isArray(item.tags) ? item.tags : metadataPatch.tags,
       folders: Array.isArray(item.folders) ? item.folders : metadataPatch.folders,
+    });
+    return;
+  }
+
+  const trashMatch = url.pathname.match(/^\/api\/items\/([^/]+)\/trash$/);
+  if (trashMatch) {
+    if (req.method !== "POST") {
+      sendMethodNotAllowed(res, ["POST"]);
+      return;
+    }
+    if (!hasAdminAccess(req, auth)) {
+      sendJson(res, 403, { error: ADMIN_WRITE_FORBIDDEN_MESSAGE });
+      return;
+    }
+    const itemId = decodeURIComponent(trashMatch[1]);
+    const body = await readJson(req);
+    if (typeof body.isDeleted !== "boolean") {
+      throw new HttpError(400, "isDeleted must be a boolean");
+    }
+    const item = await session.client.updateItemTrash(itemId, body.isDeleted);
+    sendJson(res, 200, {
+      id: item.id || itemId,
+      isDeleted: typeof item.isDeleted === "boolean" ? item.isDeleted : body.isDeleted,
     });
     return;
   }

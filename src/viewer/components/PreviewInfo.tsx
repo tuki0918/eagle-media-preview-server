@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { ExternalLinkIcon as LucideExternalLinkIcon, FolderIcon, PlusIcon, TagIcon, XIcon } from "lucide-react";
+import { ExternalLinkIcon as LucideExternalLinkIcon, FolderIcon, PlusIcon, RotateCcwIcon, TagIcon, Trash2Icon, XIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { errorMessage } from "../api";
@@ -25,6 +25,7 @@ export interface PreviewInfoProps {
   onFolderSuggestions: (query: string, selectedValues: string[]) => Promise<MetadataSuggestion[]> | MetadataSuggestion[];
   onSaveMetadata: (item: EagleItem, patch: { tags: string[]; folders: string[] }) => Promise<{ tags: string[]; folders: string[] }>;
   onTagSuggestions: (query: string, selectedValues: string[]) => Promise<MetadataSuggestion[]> | MetadataSuggestion[];
+  onToggleTrash?: (item: EagleItem, isDeleted: boolean) => Promise<void>;
 }
 
 const previewLabelClassName = "preview-detail-label text-xs font-normal text-muted-foreground";
@@ -110,13 +111,16 @@ export function PreviewInfoActions() {
   const previewInfoState = useSyncExternalStore(subscribePreviewInfoState, getPreviewInfoState, getPreviewInfoState);
   return (
     <div id="previewActions" className="preview-info-actions mx-2 border-t border-border pt-3">
-      {previewInfoState ? <PreviewActions canManageLibrary={previewInfoState.canManageLibrary} item={previewInfoState.item} /> : null}
+      {previewInfoState ? <PreviewActions canManageLibrary={previewInfoState.canManageLibrary} item={previewInfoState.item} onToggleTrash={previewInfoState.onToggleTrash} /> : null}
     </div>
   );
 }
 
-export function PreviewActions({ canManageLibrary = false, item }: { canManageLibrary?: boolean; item: EagleItem }) {
+export function PreviewActions({ canManageLibrary = false, item, onToggleTrash }: { canManageLibrary?: boolean; item: EagleItem; onToggleTrash?: (item: EagleItem, isDeleted: boolean) => Promise<void> }) {
+  const [trashSaving, setTrashSaving] = useState(false);
   if (!canManageLibrary) return null;
+  const nextDeletedState = !Boolean(item.isDeleted);
+  const trashLabel = item.isDeleted ? "Restore from trash" : "Move to trash";
 
   return (
     <section className="preview-admin-actions grid gap-2">
@@ -126,6 +130,27 @@ export function PreviewActions({ canManageLibrary = false, item }: { canManageLi
           Open file
         </a>
       </Button>
+      {onToggleTrash ? (
+        <Button
+          type="button"
+          variant="destructive"
+          className="preview-trash-action min-h-11 w-full gap-2.5 rounded-md px-2 text-[14px] font-[720] leading-none"
+          disabled={trashSaving}
+          onClick={async (event) => {
+            event.stopPropagation();
+            if (trashSaving) return;
+            setTrashSaving(true);
+            try {
+              await onToggleTrash(item, nextDeletedState);
+            } finally {
+              setTrashSaving(false);
+            }
+          }}
+        >
+          {item.isDeleted ? <RotateCcwIcon aria-hidden="true" /> : <Trash2Icon aria-hidden="true" />}
+          {trashSaving ? "Saving" : trashLabel}
+        </Button>
+      ) : null}
     </section>
   );
 }

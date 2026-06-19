@@ -450,6 +450,64 @@ test("createViewerServer authorizes metadata writes by user role", async () => {
   }
 });
 
+test("createViewerServer allows trash updates only for admins", async () => {
+  const calls: unknown[] = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    authUsers: [
+      { username: "ed", passwordHash: sha256("edit"), role: "editor" },
+      { username: "admin", passwordHash: sha256("admin"), role: "admin" },
+    ],
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/tmp/Test.library", name: "Test Library" };
+      },
+      async updateItemTrash(id: string, isDeleted: boolean) {
+        calls.push({ id, isDeleted });
+        return { id, isDeleted };
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const origin = `http://127.0.0.1:${status.port}`;
+    const editorCookie = await loginCookie(origin, "ed", "edit");
+    const adminCookie = await loginCookie(origin, "admin", "admin");
+
+    const denied = await fetch(`${origin}/api/items/ITEM123/trash`, {
+      method: "POST",
+      headers: {
+        Cookie: editorCookie,
+        "Content-Type": "application/json",
+        Origin: origin,
+      },
+      body: JSON.stringify({ isDeleted: true }),
+    });
+    assert.equal(denied.status, 403);
+
+    const allowed = await fetch(`${origin}/api/items/ITEM123/trash`, {
+      method: "POST",
+      headers: {
+        Cookie: adminCookie,
+        "Content-Type": "application/json",
+        Origin: origin,
+      },
+      body: JSON.stringify({ isDeleted: true }),
+    });
+    assert.equal(allowed.status, 200);
+    assert.deepEqual(await allowed.json(), { id: "ITEM123", isDeleted: true });
+    assert.deepEqual(calls, [{ id: "ITEM123", isDeleted: true }]);
+  } finally {
+    await viewer.stop();
+  }
+});
+
 test("createViewerServer rejects cross-origin metadata writes before reaching Eagle", async () => {
   const calls: unknown[] = [];
   const viewer = createViewerServer({

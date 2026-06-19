@@ -627,7 +627,8 @@ describe("ViewerAppShell", () => {
         onSaveMetadata={async (_item, patch) => patch}
       />,
     );
-    const actions = renderToStaticMarkup(<PreviewActions canManageLibrary item={{ id: "item-1" }} />);
+    const actions = renderToStaticMarkup(<PreviewActions canManageLibrary item={{ id: "item-1" }} onToggleTrash={async () => {}} />);
+    const deletedActions = renderToStaticMarkup(<PreviewActions canManageLibrary item={{ id: "item-1", isDeleted: true }} onToggleTrash={async () => {}} />);
     const nonAdminActions = renderToStaticMarkup(<PreviewActions item={{ id: "item-1" }} />);
 
     expect(details).toContain("preview-details-section");
@@ -639,6 +640,9 @@ describe("ViewerAppShell", () => {
     expect(actions).toContain("preview-admin-actions");
     expect(actions).toContain("direct-file-link");
     expect(actions).toContain("preview-info-cta");
+    expect(actions).toContain("preview-trash-action");
+    expect(actions).toContain("Move to trash");
+    expect(deletedActions).toContain("Restore from trash");
     expect(nonAdminActions).not.toContain("Open file");
     expect(nonAdminActions).not.toContain("direct-file-link");
   });

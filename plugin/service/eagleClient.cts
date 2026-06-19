@@ -243,6 +243,17 @@ function createEagleClient({
         }),
       );
     },
+
+    async updateItemTrash(id, isDeleted) {
+      if (!id) throw new Error("id is required");
+      if (typeof isDeleted !== "boolean") throw new Error("isDeleted must be a boolean");
+      return unwrapData(
+        await request("/api/v2/item/update", {
+          method: "POST",
+          body: { id, isDeleted },
+        }),
+      );
+    },
   };
 }
 

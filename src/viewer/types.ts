@@ -12,6 +12,7 @@ export interface EagleItem {
   ext?: string;
   width?: number;
   height?: number;
+  isDeleted?: boolean;
   duration?: unknown;
   size?: number;
   annotation?: unknown;

@@ -310,6 +310,32 @@ test("updateItemMetadata uses V2 item/update with tags and folders", async () =>
   });
 });
 
+test("updateItemTrash uses V2 item/update with isDeleted", async () => {
+  const calls: RequestCall[] = [];
+  const client = createEagleClient({
+    baseUrl: "http://localhost:41595",
+    fetchImpl: async (url: string, init: { method?: string; body: string }) => {
+      calls.push({ url, init });
+      return jsonResponse({
+        status: "success",
+        data: { id: "abc", isDeleted: true },
+      });
+    },
+  });
+
+  const result = await client.updateItemTrash("abc", true);
+
+  assert.equal(result.isDeleted, true);
+  assert.equal(calls[0].url, "http://localhost:41595/api/v2/item/update");
+  assert.equal(calls[0].init.method, "POST");
+  assert.deepEqual(JSON.parse(calls[0].init.body), { id: "abc", isDeleted: true });
+});
+
+test("updateItemTrash rejects non-boolean values", async () => {
+  const client = createEagleClient();
+  await assert.rejects(() => client.updateItemTrash("abc", "true"), /isDeleted/);
+});
+
 test("client surfaces Eagle HTTP error messages", async () => {
   const client = createEagleClient({
     baseUrl: "http://localhost:41595",

@@ -875,7 +875,41 @@ function renderPreviewDetails(item: EagleItem) {
     onTagSuggestions: tagSuggestionItems,
     onFolderSuggestions: folderSuggestionItems,
     onSaveMetadata: savePreviewMetadata,
+    onToggleTrash: setItemTrash,
   });
+}
+
+async function setItemTrash(item: EagleItem, isDeleted: boolean) {
+  if (!state.permissions.manageLibrary) {
+    throw new Error("Admin actions are not allowed for this viewer");
+  }
+  const itemId = String(item.id || "");
+  if (!itemId) return;
+  const previous = Boolean(item.isDeleted);
+  item.isDeleted = isDeleted;
+  updateItemInState(itemId, { isDeleted });
+  render();
+  if (isPreviewDialogOpen()) renderPreviewDetails(item);
+  try {
+    const data = await postJson<{ isDeleted?: unknown }>(`/api/items/${encodeURIComponent(itemId)}/trash`, { isDeleted });
+    const savedIsDeleted = typeof data.isDeleted === "boolean" ? data.isDeleted : isDeleted;
+    item.isDeleted = savedIsDeleted;
+    updateItemInState(itemId, { isDeleted: savedIsDeleted });
+    showSuccessToast(savedIsDeleted ? "Moved to trash" : "Restored from trash", {
+      description: savedIsDeleted ? "Item was moved to trash." : "Item was restored from trash.",
+    });
+  } catch (error) {
+    item.isDeleted = previous;
+    updateItemInState(itemId, { isDeleted: previous });
+    if (handleAuthError(error)) return;
+    showErrorToast(isDeleted ? "Unable to move to trash" : "Unable to restore from trash", {
+      description: errorMessage(error),
+    });
+    throw error;
+  } finally {
+    render();
+    if (isPreviewDialogOpen()) renderPreviewDetails(item);
+  }
 }
 
 async function savePreviewMetadata(item: EagleItem, { tags, folders }: { tags: string[]; folders: string[] }) {
