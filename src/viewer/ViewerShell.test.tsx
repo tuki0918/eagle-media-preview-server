@@ -128,6 +128,8 @@ describe("ViewerAppShell", () => {
   test("renders selected view mode with shadcn active styling", () => {
     const html = renderToStaticMarkup(<ResultsStatus total={12} viewMode="grid" />);
 
+    expect(html).toContain("12 items");
+    expect(html).toContain('aria-label="Results status and view options"');
     expect(html).toContain('id="gridViewButton"');
     expect(html).toContain('data-slot="tabs"');
     expect(html).toContain('data-slot="tabs-list"');
