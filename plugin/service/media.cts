@@ -82,6 +82,10 @@ async function streamItemMedia(id: string, kind: MediaKind, req: IncomingMessage
   }
 
   const info = await stat(filePath);
+  if (!info.isFile()) {
+    sendJson(res, 404, { error: "Media file is unavailable" });
+    return;
+  }
   const contentType = mediaContentType(filePath, itemData);
   const range = parseRange(req.headers.range, info.size);
 
@@ -105,28 +109,55 @@ async function streamItemMedia(id: string, kind: MediaKind, req: IncomingMessage
   };
 
   if (range) {
-    res.writeHead(206, {
+    const headers = {
       ...commonHeaders,
       "Content-Length": range.end - range.start + 1,
       "Content-Range": `bytes ${range.start}-${range.end}/${info.size}`,
-    });
+    };
     if (req.method === "HEAD") {
+      res.writeHead(206, headers);
       res.end();
       return;
     }
-    createReadStream(filePath, range).pipe(res);
+    pipeMediaStream(filePath, range, res, 206, headers);
     return;
   }
 
-  res.writeHead(200, {
+  const headers = {
     ...commonHeaders,
     "Content-Length": info.size,
-  });
+  };
   if (req.method === "HEAD") {
+    res.writeHead(200, headers);
     res.end();
     return;
   }
-  createReadStream(filePath).pipe(res);
+  pipeMediaStream(filePath, undefined, res, 200, headers);
+}
+
+function pipeMediaStream(
+  filePath: string,
+  options: ByteRange | undefined,
+  res: ServerResponse,
+  status: number,
+  headers: Record<string, string | number>,
+) {
+  const stream = options ? createReadStream(filePath, options) : createReadStream(filePath);
+  let opened = false;
+
+  stream.once("open", () => {
+    opened = true;
+    res.writeHead(status, headers);
+    stream.pipe(res);
+  });
+
+  stream.once("error", (error: Error) => {
+    if (!opened && !res.headersSent) {
+      sendJson(res, 500, { error: "Unable to read media file" });
+      return;
+    }
+    res.destroy(error);
+  });
 }
 
 function contentDisposition(contentType: string, item: EagleItem | null | undefined, filePath: string) {

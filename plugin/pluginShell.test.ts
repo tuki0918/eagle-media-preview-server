@@ -772,6 +772,16 @@ test("plugin server serves text and markdown media as inline raw text", async ()
   assert.match(mediaSource, /if \(contentType !== "application\/pdf"\)\s*return "inline";/);
 });
 
+test("plugin server handles media read stream errors", async () => {
+  const mediaSource = await readFile(new URL("media.cjs", generatedServiceUrl), "utf8");
+
+  assert.match(mediaSource, /function pipeMediaStream\(/);
+  assert.match(mediaSource, /stream\.once\("open"/);
+  assert.match(mediaSource, /stream\.once\("error"/);
+  assert.match(mediaSource, /sendJson\(res, 500, \{ error: "Unable to read media file" \}\)/);
+  assert.match(mediaSource, /res\.destroy\(error\)/);
+});
+
 test("plugin app resolves CommonJS runtime from the plugin file location", async () => {
   const app = await readPluginAppSource();
 
