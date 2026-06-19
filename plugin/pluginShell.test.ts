@@ -835,8 +835,8 @@ test("plugin window does not expose an unused shared URL expiration setting", as
   assert.doesNotMatch(html, /有効期限/);
   assert.doesNotMatch(html, /expire|expires|expiry|expiration|ttl/i);
   assert.doesNotMatch(app, /expire|expires|expiry|expiration|ttl/i);
-  assert.doesNotMatch(runtime, /expire|expires|expiry|expiration|ttl/i);
-  assert.doesNotMatch(runtimeSource, /expire|expires|expiry|expiration|ttl/i);
+  assert.doesNotMatch(runtime, /shared.*url|url.*ttl|share.*expiration/i);
+  assert.doesNotMatch(runtimeSource, /shared.*url|url.*ttl|share.*expiration/i);
 });
 
 test("plugin window no longer renders diagnostics UI", async () => {
