@@ -250,10 +250,8 @@ function generateSessionSecret() {
 }
 
 async function validateHttpsCredentials(certPath: string, keyPath: string) {
-  const [certPem, keyPem] = await Promise.all([
-    readTlsFile(certPath, "certificate"),
-    readTlsFile(keyPath, "private key"),
-  ]);
+  const certPem = await readTlsFile(certPath, "certificate");
+  const keyPem = await readTlsFile(keyPath, "private key");
   let certificate: InstanceType<typeof X509Certificate>;
   try {
     certificate = new X509Certificate(certPem);
