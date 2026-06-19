@@ -52,20 +52,20 @@ describe("viewer metadata helpers", () => {
     ]);
   });
 
-  test("builds folder suggestions with labels, recent items, and counts", () => {
+  test("builds folder suggestions in folder order with selected folders disabled", () => {
     const folders = [
       { id: "root", name: "Root", depth: 0, imageCount: 10 },
       { id: "child", name: "Child", depth: 1, imageCount: 3 },
     ];
 
-    expect(folderLabel("child", folders)).toBe("  Child");
+    expect(folderLabel("child", folders)).toBe("Root / Child");
     expect(folderSuggestionItems({
       query: "chi",
       selectedValues: [],
       recentFolderIds: ["child"],
       folders,
     })).toEqual([
-      { value: "child", label: "  Child", meta: "Recent" },
+      { value: "child", label: "Child", meta: "3 items", depth: 1, disabled: false },
     ]);
 
     expect(folderSuggestionItems({
@@ -74,7 +74,8 @@ describe("viewer metadata helpers", () => {
       recentFolderIds: ["child"],
       folders,
     })).toEqual([
-      { value: "root", label: "Root", meta: "10 items" },
+      { value: "root", label: "Root", meta: "10 items", depth: 0, disabled: false },
+      { value: "child", label: "Child", meta: "Added", depth: 1, disabled: true },
     ]);
   });
 

@@ -6,6 +6,8 @@ export interface MetadataSuggestion {
   value: string;
   label: string;
   meta: string;
+  depth?: number;
+  disabled?: boolean;
 }
 
 export interface RemoteTag {
@@ -45,7 +47,7 @@ export function tagSuggestionItems({
 export function folderSuggestionItems({
   query,
   selectedValues,
-  recentFolderIds,
+  recentFolderIds: _recentFolderIds,
   folders,
 }: {
   query: string;
@@ -54,18 +56,22 @@ export function folderSuggestionItems({
   folders: readonly EagleFolder[];
 }) {
   const selected = new Set(selectedValues);
-  const labelForFolder = (id: string) => folderLabel(id, folders);
-  const recent = recentFolderIds
-    .filter((id) => !selected.has(id) && matchesQuery(labelForFolder(id), query))
-    .map((id) => ({ value: id, label: labelForFolder(id), meta: "Recent" }));
-  const folderItems = folders
-    .filter((folder) => !selected.has(folder.id) && matchesQuery(folder.name, query))
-    .map((folder) => ({
-      value: folder.id,
-      label: labelForFolder(folder.id),
-      meta: Number.isFinite(folder.imageCount) ? `${Number(folder.imageCount).toLocaleString()} items` : "",
-    }));
-  return dedupeSuggestions([...recent, ...folderItems]).slice(0, 20);
+  const folderById = new Map(folders.map((folder) => [folder.id, folder]));
+  const suggestionForFolder = (id: string) => {
+    const folder = folderById.get(id);
+    const disabled = selected.has(id);
+    const imageCount = folder?.imageCount;
+    return {
+      value: id,
+      label: folder?.name || id,
+      meta: disabled ? "Added" : Number.isFinite(imageCount) ? `${Number(imageCount).toLocaleString()} items` : "",
+      depth: Number(folder?.depth || 0),
+      disabled,
+    };
+  };
+  return folders
+    .filter((folder) => matchesQuery(folderLabel(folder.id, folders), query))
+    .map((folder) => suggestionForFolder(folder.id));
 }
 
 export function dedupeSuggestions(items: readonly MetadataSuggestion[]) {
@@ -86,9 +92,19 @@ export function matchesQuery(value: unknown, query: string) {
 }
 
 export function folderLabel(id: string, folders: readonly EagleFolder[]) {
-  const folder = folders.find((entry) => entry.id === id);
+  const index = folders.findIndex((entry) => entry.id === id);
+  const folder = folders[index];
   if (!folder) return id;
-  return `${folder.depth ? "  ".repeat(folder.depth) : ""}${folder.name}`;
+  const path = [folder.name];
+  let targetDepth = Number(folder.depth || 0);
+  for (let cursor = index - 1; cursor >= 0 && targetDepth > 0; cursor -= 1) {
+    const parent = folders[cursor];
+    const parentDepth = Number(parent?.depth || 0);
+    if (parentDepth >= targetDepth) continue;
+    path.unshift(parent.name);
+    targetDepth = parentDepth;
+  }
+  return path.join(" / ");
 }
 
 export function readRecentList(key: string, storage: Storage = localStorage) {

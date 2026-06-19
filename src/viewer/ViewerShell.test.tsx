@@ -632,7 +632,9 @@ describe("ViewerAppShell", () => {
 
     expect(details).toContain("preview-details-section");
     expect(details).toContain("preview-metadata-summary");
-    expect(details).toContain("preview-edit-toggle");
+    expect(details).toContain("preview-metadata-add");
+    expect(details).not.toContain("Metadata");
+    expect(details).not.toContain("preview-edit-toggle");
     expect(details).not.toContain("preview-edit-form");
     expect(actions).toContain("preview-admin-actions");
     expect(actions).toContain("direct-file-link");
@@ -641,7 +643,7 @@ describe("ViewerAppShell", () => {
     expect(nonAdminActions).not.toContain("direct-file-link");
   });
 
-  test("disables preview metadata save after successful save", async () => {
+  test("adds preview tags immediately from the inline input", async () => {
     const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
     const testGlobal = globalThis as typeof globalThis & {
       IS_REACT_ACT_ENVIRONMENT?: boolean;
@@ -682,48 +684,28 @@ describe("ViewerAppShell", () => {
         );
       });
 
-      const editButton = container.querySelector(".preview-edit-toggle");
-      if (!(editButton instanceof dom.window.HTMLButtonElement)) {
-        throw new Error("Missing metadata edit button");
-      }
+      const addTagButton = Array.from(container.querySelectorAll(".preview-metadata-add")).find((button) => button.getAttribute("aria-label") === "Add Tags");
+      if (!(addTagButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing tag add button");
 
       await act(async () => {
-        editButton.click();
+        addTagButton.click();
       });
-
       const tagInput = Array.from(container.querySelectorAll("input")).find((input) => input.placeholder === "Add tag");
-      const form = container.querySelector("form");
-      if (!(tagInput instanceof dom.window.HTMLInputElement) || !(form instanceof dom.window.HTMLFormElement)) {
-        throw new Error("Missing metadata editor controls");
-      }
+      if (!(tagInput instanceof dom.window.HTMLInputElement)) throw new Error("Missing tag input");
 
       expect(tagInput.className).toContain("pl-9");
       expect(tagInput.parentElement?.innerHTML).toContain("lucide-tag");
-      expect(container.querySelector(".preview-edit-done")).not.toBeNull();
-      const initialSaveButton = container.querySelector(".preview-edit-save");
-      const initialCancelButton = container.querySelector(".preview-edit-cancel");
-      expect(initialSaveButton).not.toBeNull();
-      expect(initialCancelButton).not.toBeNull();
-      expect(initialSaveButton).toHaveProperty("disabled", true);
+      expect(tagInput.parentElement?.innerHTML).toContain("aria-label=\"Close\"");
       await act(async () => {
         const valueSetter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")?.set;
         valueSetter?.call(tagInput, "beta");
-        tagInput.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
-      });
-
-      const saveButton = container.querySelector(".preview-edit-save");
-      if (!(saveButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing save button after editing");
-      expect(container.querySelector(".preview-edit-done")).toBeNull();
-      expect(saveButton.disabled).toBe(false);
-      expect(saveButton.getAttribute("aria-label")).toBe("Save metadata");
-      expect(container.querySelector(".preview-edit-status")?.textContent).toBe("1 change");
-      await act(async () => {
-        form.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }));
+        tagInput.onkeydown?.(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
+        await new Promise((resolve) => setTimeout(resolve, 0));
       });
 
       expect(savedPatches).toEqual([{ tags: ["alpha", "beta"], folders: ["folder-1"] }]);
       expect(container.textContent).toContain("beta-saved");
-      expect(container.querySelector(".preview-edit-form")).toBeNull();
+      expect(container.querySelector(".preview-metadata-input")).toBeNull();
     } finally {
       if (root) {
         await act(async () => {
@@ -738,7 +720,7 @@ describe("ViewerAppShell", () => {
     }
   });
 
-  test("hides already selected tags from metadata suggestions", async () => {
+  test("closes preview metadata input without saving", async () => {
     const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
     const testGlobal = globalThis as typeof globalThis & {
       IS_REACT_ACT_ENVIRONMENT?: boolean;
@@ -768,34 +750,33 @@ describe("ViewerAppShell", () => {
             item={{ id: "item-1", tags: ["alpha"], folders: [] }}
             folders={[]}
             detailRows={[{ label: "Type", value: "Image" }]}
-            onTagSuggestions={() => [
-              { value: "alpha", label: "alpha", meta: "Recent" },
-              { value: "beta", label: "beta", meta: "Recent" },
-            ]}
+            onTagSuggestions={() => []}
             onFolderSuggestions={() => []}
             onSaveMetadata={async (_item, patch) => patch}
           />,
         );
       });
 
-      const editButton = container.querySelector(".preview-edit-toggle");
-      if (!(editButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing metadata edit button");
+      const addTagButton = Array.from(container.querySelectorAll(".preview-metadata-add")).find((button) => button.getAttribute("aria-label") === "Add Tags");
+      if (!(addTagButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing tag add button");
 
       await act(async () => {
-        editButton.click();
+        addTagButton.click();
       });
 
       const tagInput = Array.from(container.querySelectorAll("input")).find((input) => input.placeholder === "Add tag");
       if (!(tagInput instanceof dom.window.HTMLInputElement)) throw new Error("Missing tag input");
+      const closeButton = container.querySelector(".preview-metadata-input button");
+      if (!(closeButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing close input button");
 
       await act(async () => {
-        tagInput.dispatchEvent(new dom.window.FocusEvent("focus", { bubbles: true }));
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        const valueSetter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")?.set;
+        valueSetter?.call(tagInput, "beta");
+        closeButton.click();
       });
 
-      const suggestionText = Array.from(container.querySelectorAll(".preview-chip-suggestion")).map((element) => element.textContent || "").join(" ");
-      expect(suggestionText).not.toContain("alpha");
-      expect(suggestionText).toContain("beta");
+      expect(container.querySelector(".preview-metadata-input")).toBeNull();
+      expect(container.textContent).not.toContain("beta");
     } finally {
       if (root) {
         await act(async () => {
@@ -810,7 +791,7 @@ describe("ViewerAppShell", () => {
     }
   });
 
-  test("locks preview metadata controls while saving", async () => {
+  test("locks preview metadata controls while saving an inline delete", async () => {
     const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
     const testGlobal = globalThis as typeof globalThis & {
       IS_REACT_ACT_ENVIRONMENT?: boolean;
@@ -850,51 +831,25 @@ describe("ViewerAppShell", () => {
         );
       });
 
-      const editButton = container.querySelector(".preview-edit-toggle");
-      if (!(editButton instanceof dom.window.HTMLButtonElement)) {
-        throw new Error("Missing metadata edit button");
-      }
-
-      await act(async () => {
-        editButton.click();
-      });
-
       const removeButton = container.querySelector(".preview-edit-chip button");
-      const tagInput = Array.from(container.querySelectorAll("input")).find((input) => input.placeholder === "Add tag");
-      const form = container.querySelector("form");
-      if (!(removeButton instanceof dom.window.HTMLButtonElement)
-        || !(tagInput instanceof dom.window.HTMLInputElement)
-        || !(form instanceof dom.window.HTMLFormElement)) {
-        throw new Error("Missing metadata editor controls");
-      }
+      if (!(removeButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing metadata delete button");
 
-      await act(async () => {
-        const valueSetter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")?.set;
-        valueSetter?.call(tagInput, "beta");
-        tagInput.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
-      });
-
-      const saveButton = container.querySelector(".preview-edit-save");
-      if (!(saveButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing save button after editing");
-      expect(saveButton.disabled).toBe(false);
       act(() => {
-        form.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }));
+        removeButton.click();
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
       });
 
-      expect(form.getAttribute("aria-busy")).toBe("true");
-      expect(saveButton.disabled).toBe(true);
-      expect(saveButton.textContent).toBe("Saving");
-      expect(saveButton.getAttribute("aria-label")).toBe("Saving metadata");
-      expect(saveButton.title).toBe("Saving metadata");
-      expect(tagInput.disabled).toBe(true);
-      expect(removeButton.disabled).toBe(true);
+      expect(container.querySelector(".preview-metadata-summary")?.getAttribute("aria-busy")).toBe("true");
+      const disabledRemoveButton = container.querySelector(".preview-edit-chip button");
+      expect(disabledRemoveButton).toHaveProperty("disabled", true);
 
       await act(async () => {
-        resolveSave?.({ tags: ["alpha", "beta"], folders: ["folder-1"] });
+        resolveSave?.({ tags: [], folders: ["folder-1"] });
       });
 
-      expect(container.querySelector(".preview-edit-form")).toBeNull();
-      expect(container.textContent).toContain("beta");
+      expect(container.textContent).not.toContain("alpha");
     } finally {
       if (root) {
         await act(async () => {
@@ -909,7 +864,7 @@ describe("ViewerAppShell", () => {
     }
   });
 
-  test("keeps category editing limited to existing folder suggestions", async () => {
+  test("keeps folder additions limited to existing folder suggestions", async () => {
     const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
     const testGlobal = globalThis as typeof globalThis & {
       IS_REACT_ACT_ENVIRONMENT?: boolean;
@@ -950,13 +905,11 @@ describe("ViewerAppShell", () => {
         );
       });
 
-      const editButton = container.querySelector(".preview-edit-toggle");
-      if (!(editButton instanceof dom.window.HTMLButtonElement)) {
-        throw new Error("Missing metadata edit button");
-      }
+      const addFolderButton = Array.from(container.querySelectorAll(".preview-metadata-add")).find((button) => button.getAttribute("aria-label") === "Add Folders");
+      if (!(addFolderButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing folder add button");
 
       await act(async () => {
-        editButton.click();
+        addFolderButton.click();
       });
 
       const folderInput = Array.from(container.querySelectorAll("input")).find((input) => input.placeholder === "Search folder");
@@ -967,19 +920,10 @@ describe("ViewerAppShell", () => {
       await act(async () => {
         const valueSetter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")?.set;
         valueSetter?.call(folderInput, "New folder");
-        folderInput.dispatchEvent(new dom.window.Event("input", { bubbles: true, cancelable: true }));
-        await new Promise((resolve) => setTimeout(resolve, 180));
+        folderInput.onkeydown?.(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
+        await new Promise((resolve) => setTimeout(resolve, 0));
       });
 
-      expect(container.textContent).toContain("No matching folder. Create folders in Eagle first.");
-
-      await act(async () => {
-        folderInput.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
-      });
-
-      const saveButton = container.querySelector(".preview-edit-save");
-      expect(saveButton).not.toBeNull();
-      expect(saveButton).toHaveProperty("disabled", true);
       expect(savedPatches).toEqual([]);
       expect(container.textContent).not.toContain("New folder");
     } finally {
@@ -996,7 +940,7 @@ describe("ViewerAppShell", () => {
     }
   });
 
-  test("cancels preview metadata edits and selects folders from the checklist", async () => {
+  test("adds folders immediately from suggestions", async () => {
     const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
     const testGlobal = globalThis as typeof globalThis & {
       IS_REACT_ACT_ENVIRONMENT?: boolean;
@@ -1039,35 +983,26 @@ describe("ViewerAppShell", () => {
         );
       });
 
-      const editButton = container.querySelector(".preview-edit-toggle");
-      if (!(editButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing metadata edit button");
+      const addFolderButton = Array.from(container.querySelectorAll(".preview-metadata-add")).find((button) => button.getAttribute("aria-label") === "Add Folders");
+      if (!(addFolderButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing folder add button");
 
       await act(async () => {
-        editButton.click();
+        addFolderButton.click();
+      });
+
+      const folderInput = Array.from(container.querySelectorAll("input")).find((input) => input.placeholder === "Search folder");
+      if (!(folderInput instanceof dom.window.HTMLInputElement)) throw new Error("Missing folder input");
+
+      await act(async () => {
+        const valueSetter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")?.set;
+        valueSetter?.call(folderInput, "Folder 2");
+        folderInput.onkeydown?.(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
 
-      const folder2Button = Array.from(container.querySelectorAll(".preview-folder-option")).find((button) => button.textContent?.includes("Folder 2"));
-      if (!(folder2Button instanceof dom.window.HTMLButtonElement)) throw new Error("Missing folder checklist controls");
-      expect(container.querySelector(".preview-edit-cancel")).not.toBeNull();
-
-      await act(async () => {
-        folder2Button.click();
-      });
-
-      const cancelButton = container.querySelector(".preview-edit-cancel");
-      if (!(cancelButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing cancel button after editing");
-      expect(container.querySelector(".preview-edit-status")?.textContent).toBe("1 change");
-      expect(container.textContent).toContain("Folder 2");
-
-      await act(async () => {
-        cancelButton.click();
-      });
-
-      expect(savedPatches).toEqual([]);
-      expect(container.querySelector(".preview-edit-form")).toBeNull();
+      expect(savedPatches).toEqual([{ tags: ["alpha"], folders: ["folder-1", "folder-2"] }]);
       expect(container.textContent).toContain("Folder 1");
-      expect(container.textContent).not.toContain("Folder 2");
+      expect(container.textContent).toContain("Folder 2");
     } finally {
       if (root) {
         await act(async () => {
@@ -1082,7 +1017,7 @@ describe("ViewerAppShell", () => {
     }
   });
 
-  test("keeps all folders ordered while recent folder checks sync to the matching row", async () => {
+  test("removes folders immediately from metadata chips", async () => {
     const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
     const testGlobal = globalThis as typeof globalThis & {
       IS_REACT_ACT_ENVIRONMENT?: boolean;
@@ -1123,48 +1058,15 @@ describe("ViewerAppShell", () => {
         );
       });
 
-      const editButton = container.querySelector(".preview-edit-toggle");
-      if (!(editButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing metadata edit button");
+      const folderChip = Array.from(container.querySelectorAll(".preview-edit-chip")).find((chip) => chip.textContent?.includes("Folder 1"));
+      const removeButton = folderChip?.querySelector("button");
+      if (!(removeButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing folder remove button");
 
       await act(async () => {
-        editButton.click();
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        removeButton.click();
       });
 
-      const sections = Array.from(container.querySelectorAll(".preview-folder-section"));
-      expect(sections.length).toBe(2);
-      expect(sections[0]?.textContent).toContain("Recent");
-      expect(sections[1]?.textContent).toContain("All folders");
-
-      const allFolderRowsBefore = Array.from(sections[1]?.querySelectorAll(".preview-folder-option") || []);
-      expect(allFolderRowsBefore.map((row) => row.textContent?.replace(/All folders|Recent/g, ""))).toEqual([
-        "Folder 1",
-        "Folder 2",
-        "Folder 3",
-      ]);
-      expect(allFolderRowsBefore.some((row) => row.textContent?.includes("All folders"))).toBe(false);
-      expect(allFolderRowsBefore.some((row) => row.textContent?.includes("Recent"))).toBe(false);
-      expect(container.textContent).not.toContain("Current");
-
-      const recentFolder3Button = Array.from(sections[0]?.querySelectorAll(".preview-folder-option") || []).find((button) => button.textContent?.includes("Folder 3"));
-      if (!(recentFolder3Button instanceof dom.window.HTMLButtonElement)) throw new Error("Missing recent folder option");
-      expect(recentFolder3Button.getAttribute("aria-selected")).toBe("false");
-
-      await act(async () => {
-        recentFolder3Button.click();
-      });
-
-      const sectionsAfter = Array.from(container.querySelectorAll(".preview-folder-section"));
-      const recentFolder3After = Array.from(sectionsAfter[0]?.querySelectorAll(".preview-folder-option") || []).find((button) => button.textContent?.includes("Folder 3"));
-      const allFolderRowsAfter = Array.from(sectionsAfter[1]?.querySelectorAll(".preview-folder-option") || []);
-      const allFolder3After = allFolderRowsAfter.find((button) => button.textContent?.includes("Folder 3"));
-      expect(recentFolder3After?.getAttribute("aria-selected")).toBe("true");
-      expect(allFolder3After?.getAttribute("aria-selected")).toBe("true");
-      expect(allFolderRowsAfter.map((row) => row.textContent?.replace(/All folders|Recent/g, ""))).toEqual([
-        "Folder 1",
-        "Folder 2",
-        "Folder 3",
-      ]);
+      expect(container.textContent).not.toContain("Folder 1");
     } finally {
       if (root) {
         await act(async () => {
