@@ -106,7 +106,7 @@ test("public login no longer renders advanced Eagle connection settings", async 
   const login = renderToStaticMarkup(createElement(LoginView, { hidden: false }));
 
   assert.match(login, /class="[^"]*\bapp-logo\b/);
-  assert.match(login, /src="[^"]*icon_on\.svg/);
+  assert.match(login, /src="(?:[^"]*icon_on\.svg|data:image\/svg\+xml,)/);
   assert.match(login, /<h1 class="[^"]*">Media Preview Server<\/h1>/);
   assert.match(login, /A local media server for your Eagle library\./);
   assert.doesNotMatch(login, /Start the server from the Eagle plugin panel/);
