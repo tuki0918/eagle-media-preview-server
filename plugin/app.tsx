@@ -156,13 +156,15 @@ function App() {
     }
   }
 
-  async function saveSettings({ forceSave = false, restartRunning = true, patch = {}, passwordDrafts = userPasswordsRef.current, successMessage = "" }: { forceSave?: boolean; passwordDrafts?: Record<string, string>; restartRunning?: boolean; patch?: Record<string, unknown>; successMessage?: string } = {}) {
+  async function saveSettings({ forceSave = false, restartRunning = true, patch = {}, passwordDrafts = userPasswordsRef.current, successMessage = "", unsafePublicConfirmed = false }: { forceSave?: boolean; passwordDrafts?: Record<string, string>; restartRunning?: boolean; patch?: Record<string, unknown>; successMessage?: string; unsafePublicConfirmed?: boolean } = {}) {
     const effectiveAuthUsers = Array.isArray(patch.authUsers)
       ? patch.authUsers.map((user) => normalizeAuthUser(user as AuthUser))
       : authUsers;
     if (!validateAuthUsers(effectiveAuthUsers)) return false;
     const nextAuthEnabled = Boolean(patch.authEnabled ?? authEnabled);
     const nextHttpsEnabled = Boolean(patch.httpsEnabled ?? httpsEnabled);
+    const nextHost = String(patch.host ?? settings.host ?? "127.0.0.1").trim() || "127.0.0.1";
+    const nextPublicNetwork = nextHost === "0.0.0.0";
     const nextHttpsCertPath = String(patch.httpsCertPath ?? settings.httpsCertPath ?? "").trim();
     const nextHttpsKeyPath = String(patch.httpsKeyPath ?? settings.httpsKeyPath ?? "").trim();
     if (nextAuthEnabled && authUsersMissingPassword(effectiveAuthUsers, passwordDrafts)) {
@@ -173,9 +175,12 @@ function App() {
       setMessage(HTTPS_CERTIFICATE_REQUIRED_MESSAGE, true);
       return false;
     }
+    if (!unsafePublicConfirmed && !publicNetwork && nextPublicNetwork && !nextAuthEnabled && !confirmUnsafePublicNetwork()) {
+      return false;
+    }
     const payload: Record<string, unknown> = {
       autoStart: settings.autoStart,
-      host: publicNetwork ? "0.0.0.0" : "127.0.0.1",
+      host: nextHost,
       httpsCertPath: settings.httpsCertPath || "",
       httpsEnabled: nextHttpsEnabled,
       httpsKeyPath: settings.httpsKeyPath || "",
@@ -307,6 +312,10 @@ function App() {
 
   function confirmUnsafePublicStart() {
     if (!publicNetwork || authEnabled) return true;
+    return confirmUnsafePublicNetwork();
+  }
+
+  function confirmUnsafePublicNetwork() {
     if (typeof window.confirm !== "function") {
       setMessage("Enable password protection or disable Public Network before starting the server.", true);
       return false;
@@ -436,9 +445,11 @@ function App() {
                 title="Public Network"
                 description="Allow access from other devices on the network."
                 onChange={(checked) => {
+                  const unsafePublicConfirmed = checked && !authEnabled ? confirmUnsafePublicNetwork() : false;
+                  if (checked && !authEnabled && !unsafePublicConfirmed) return;
                   const host = checked ? "0.0.0.0" : "127.0.0.1";
                   updateSettings({ host });
-                  saveSettings({ patch: { host } });
+                  saveSettings({ patch: { host }, unsafePublicConfirmed });
                 }}
               />
               <OptionRow

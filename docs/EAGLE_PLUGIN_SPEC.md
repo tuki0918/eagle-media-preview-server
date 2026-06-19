@@ -49,13 +49,13 @@ Eagle local Web API on 127.0.0.1:41595
 
 Defaults:
 
-- Viewer server host: `0.0.0.0`
+- Viewer server host: `127.0.0.1`
 - Viewer server port: `41532`
 - Eagle API host: `127.0.0.1`
 - Eagle API port: `41595`
 - Password protection: disabled
 - HTTPS: disabled
-- Public Network: enabled (`0.0.0.0`)
+- Public Network: disabled (`127.0.0.1`)
 - Auto start: disabled
 
 ## Codebase Model
