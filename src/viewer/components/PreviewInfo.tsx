@@ -43,7 +43,6 @@ const previewChipSuggestionsClassName = "preview-chip-suggestions mt-1 grid max-
 const previewChipSuggestionClassName = "preview-chip-suggestion flex min-h-9 cursor-pointer items-center justify-between gap-3 rounded-md border-0 bg-transparent px-2.5 text-left text-[13px] text-popover-foreground hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-popover-foreground";
 const previewMetadataRowClassName = "preview-metadata-row grid gap-2 border-b border-border pb-3 last:border-b-0 last:pb-0";
 const previewMetadataLabelClassName = "text-xs font-normal text-muted-foreground";
-const previewMetadataEmptyClassName = "text-[13px] leading-[1.35] text-muted-foreground";
 
 export function PreviewDetailsPanel({ canEditMetadata = false, detailRows, folders, item, onFolderSuggestions, onSaveMetadata, onTagSuggestions }: PreviewInfoProps) {
   return (
@@ -125,11 +124,10 @@ function PreviewChipList({ values }: { values: string | readonly string[] }) {
 function PreviewMetadataSummary({ folders, item }: { folders: readonly EagleFolder[]; item: EagleItem }) {
   const tags = tagValues(item.tags);
   const categories = categoryValues(item.folders).map((value) => folderLabel(value, folders));
-  if (!tags.length && !categories.length) return null;
   return (
     <section className="preview-metadata-summary grid gap-3 border-t border-border pt-3 min-[900px]:mx-0">
-      {tags.length ? <MetadataReadOnlyRow icon={<TagIcon aria-hidden="true" />} label="Tags" values={tags} emptyLabel="No tags" /> : null}
-      {categories.length ? <MetadataReadOnlyRow icon={<FolderIcon aria-hidden="true" />} label="Folders" values={categories} emptyLabel="No folders" /> : null}
+      <MetadataReadOnlyRow icon={<TagIcon aria-hidden="true" />} label="Tags" values={tags} />
+      <MetadataReadOnlyRow icon={<FolderIcon aria-hidden="true" />} label="Folders" values={categories} />
     </section>
   );
 }
@@ -222,7 +220,6 @@ function PreviewMetadataEditor({
         icon={<TagIcon aria-hidden="true" />}
         label="Tags"
         values={tags.map((value) => ({ label: value, value }))}
-        emptyLabel="No tags"
         disabled={saving}
         inputOpen={activeInput === "tags"}
         inputLabel="Add tag"
@@ -238,7 +235,6 @@ function PreviewMetadataEditor({
         icon={<FolderIcon aria-hidden="true" />}
         label="Folders"
         values={categories.map((value) => ({ label: folderLabel(value, folders), value }))}
-        emptyLabel="No folders"
         disabled={saving}
         inputOpen={activeInput === "folders"}
         inputLabel="Add folder"
@@ -254,18 +250,17 @@ function PreviewMetadataEditor({
   );
 }
 
-function MetadataReadOnlyRow({ emptyLabel, icon, label, values }: { emptyLabel: string; icon: ReactNode; label: string; values: string[] }) {
+function MetadataReadOnlyRow({ icon, label, values }: { icon: ReactNode; label: string; values: string[] }) {
   return (
     <div className={previewMetadataRowClassName}>
       <span className={previewMetadataLabelClassName}>{label}</span>
-      {values.length ? <MetadataChipList icon={icon} values={values.map((value) => ({ label: value, value }))} /> : <span className={previewMetadataEmptyClassName}>{emptyLabel}</span>}
+      {values.length ? <MetadataChipList icon={icon} values={values.map((value) => ({ label: value, value }))} /> : null}
     </div>
   );
 }
 
 function EditableMetadataRow({
   disabled,
-  emptyLabel,
   icon,
   inputLabel,
   inputOpen,
@@ -280,7 +275,6 @@ function EditableMetadataRow({
   values,
 }: {
   disabled?: boolean;
-  emptyLabel: string;
   icon: ReactNode;
   inputLabel: string;
   inputOpen: boolean;
@@ -298,7 +292,6 @@ function EditableMetadataRow({
     <div className={previewMetadataRowClassName}>
       <span className={previewMetadataLabelClassName}>{label}</span>
       <MetadataChipList editable disabled={disabled} icon={icon} values={values} onAdd={onAdd} onRemove={onRemove} addLabel={`Add ${label}`} />
-      {!values.length ? <span className={previewMetadataEmptyClassName}>{emptyLabel}</span> : null}
       {inputOpen ? (
         <MetadataInlineInput
           disabled={disabled}

@@ -1100,6 +1100,25 @@ describe("ViewerAppShell", () => {
     expect(details).not.toContain("preview-edit-form");
   });
 
+  test("keeps read-only metadata rows visible when tags and folders are empty", () => {
+    const details = renderToStaticMarkup(
+      <PreviewDetailsPanel
+        item={{ id: "item-1", tags: [], folders: [] }}
+        folders={[]}
+        detailRows={[{ label: "Type", value: "Image" }]}
+        onTagSuggestions={() => []}
+        onFolderSuggestions={() => []}
+        onSaveMetadata={async (_item, patch) => patch}
+      />,
+    );
+
+    expect(details).toContain("Tags");
+    expect(details).toContain("Folders");
+    expect(details).not.toContain("No tags");
+    expect(details).not.toContain("No folders");
+    expect(details).not.toContain("preview-metadata-add");
+  });
+
   test("deduplicates preview metadata chips from existing item values", () => {
     const readOnly = renderToStaticMarkup(
       <PreviewDetailsPanel
