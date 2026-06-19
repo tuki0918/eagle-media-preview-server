@@ -157,7 +157,7 @@ function App() {
     }
   }
 
-  async function saveSettings({ forceSave = false, insecurePublicHttpConfirmed = false, restartRunning = true, patch = {}, passwordDrafts = userPasswordsRef.current, successMessage = "", unsafePublicConfirmed = false }: { forceSave?: boolean; insecurePublicHttpConfirmed?: boolean; passwordDrafts?: Record<string, string>; restartRunning?: boolean; patch?: Record<string, unknown>; successMessage?: string; unsafePublicConfirmed?: boolean } = {}) {
+  async function saveSettings({ forceSave = false, restartRunning = true, patch = {}, passwordDrafts = userPasswordsRef.current, successMessage = "" }: { forceSave?: boolean; passwordDrafts?: Record<string, string>; restartRunning?: boolean; patch?: Record<string, unknown>; successMessage?: string } = {}) {
     const effectiveAuthUsers = Array.isArray(patch.authUsers)
       ? patch.authUsers.map((user) => normalizeAuthUser(user as AuthUser))
       : authUsers;
@@ -174,12 +174,6 @@ function App() {
     }
     if (nextHttpsEnabled && (!nextHttpsCertPath || !nextHttpsKeyPath)) {
       setMessage(HTTPS_CERTIFICATE_REQUIRED_MESSAGE, true);
-      return false;
-    }
-    if (!unsafePublicConfirmed && !publicNetwork && nextPublicNetwork && !nextAuthEnabled && !confirmUnsafePublicNetwork()) {
-      return false;
-    }
-    if (!insecurePublicHttpConfirmed && shouldConfirmInsecurePublicHttp({ nextAuthEnabled, nextHttpsEnabled, nextPublicNetwork }) && !confirmInsecurePublicHttp()) {
       return false;
     }
     const payload: Record<string, unknown> = {
@@ -339,11 +333,6 @@ function App() {
     return window.confirm(PUBLIC_NETWORK_HTTP_WITH_PASSWORD_MESSAGE);
   }
 
-  function shouldConfirmInsecurePublicHttp({ nextAuthEnabled, nextHttpsEnabled, nextPublicNetwork }: { nextAuthEnabled: boolean; nextHttpsEnabled: boolean; nextPublicNetwork: boolean }) {
-    if (!nextPublicNetwork || !nextAuthEnabled || nextHttpsEnabled) return false;
-    return !publicNetwork || !authEnabled || httpsEnabled;
-  }
-
   async function copyAccessUrl() {
     if (busy || !status.url) return;
     try {
@@ -466,13 +455,9 @@ function App() {
                 title="Public Network"
                 description="Allow access from other devices on the network."
                 onChange={(checked) => {
-                  const unsafePublicConfirmed = checked && !authEnabled ? confirmUnsafePublicNetwork() : false;
-                  if (checked && !authEnabled && !unsafePublicConfirmed) return;
-                  const insecurePublicHttpConfirmed = checked && authEnabled && !httpsEnabled ? confirmInsecurePublicHttp() : false;
-                  if (checked && authEnabled && !httpsEnabled && !insecurePublicHttpConfirmed) return;
                   const host = checked ? "0.0.0.0" : "127.0.0.1";
                   updateSettings({ host });
-                  saveSettings({ patch: { host }, insecurePublicHttpConfirmed, unsafePublicConfirmed });
+                  saveSettings({ patch: { host } });
                 }}
               />
               <OptionRow
