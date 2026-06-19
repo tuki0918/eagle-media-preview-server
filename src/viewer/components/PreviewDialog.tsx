@@ -150,20 +150,20 @@ export function PreviewDialog() {
       onPointerDown={handleDialogPointerDown}
       onPointerUp={endCloseSwipe}
     >
-      <header className="preview-header flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border bg-background px-2 min-[720px]:h-14 min-[720px]:px-3 min-[900px]:col-start-1 min-[900px]:row-start-1">
-        <div className="flex min-w-0 items-center gap-2">
-          <button id="closePreview" className="icon-button inline-grid size-9 touch-manipulation select-none place-items-center rounded-lg border border-transparent bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground" type="button" aria-label="Back to results" title="Back to results" onClick={closePreview}>
+      <header className="preview-header grid h-12 shrink-0 grid-cols-[minmax(0,1fr)_36px] items-center gap-2 border-b border-border bg-background px-2 min-[720px]:h-14 min-[720px]:px-3 min-[900px]:col-start-1 min-[900px]:row-start-1 min-[900px]:grid-cols-[minmax(0,1fr)]">
+        <div className="grid min-w-0 grid-cols-[36px_1px_minmax(0,1fr)] items-center gap-2">
+          <button id="closePreview" className="icon-button inline-grid size-9 shrink-0 touch-manipulation select-none place-items-center rounded-lg border border-transparent bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground" type="button" aria-label="Back to results" title="Back to results" onClick={closePreview}>
             <ChevronLeftIcon />
           </button>
           <Separator
             orientation="vertical"
-            className="mr-2 h-4 w-0 border-l border-border bg-transparent data-[orientation=vertical]:h-4 data-[orientation=vertical]:w-0"
+            className="h-4 w-0 border-l border-border bg-transparent data-[orientation=vertical]:h-4 data-[orientation=vertical]:w-0"
           />
           <div className="min-w-0 truncate text-sm font-normal text-foreground min-[720px]:text-base [&_.preview-original-name-value]:truncate [&_.preview-original-name-value]:whitespace-nowrap">
             <PreviewOriginalName />
           </div>
         </div>
-        <button id="toggleInfoPreview" className="icon-button inline-grid size-9 touch-manipulation select-none place-items-center rounded-lg border border-transparent bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground min-[900px]:hidden" type="button" aria-label="Media information" aria-expanded={previewDialogState.infoOpen} title="Media information" onClick={togglePreviewInfo}>
+        <button id="toggleInfoPreview" className="icon-button inline-grid size-9 shrink-0 touch-manipulation select-none place-items-center rounded-lg border border-transparent bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground min-[900px]:hidden" type="button" aria-label="Media information" aria-expanded={previewDialogState.infoOpen} title="Media information" onClick={togglePreviewInfo}>
           <PreviewInfoToggleIcon open={previewDialogState.infoOpen} />
         </button>
       </header>
