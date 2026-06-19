@@ -14,6 +14,8 @@ export interface EagleItem {
   height?: number;
   duration?: unknown;
   size?: number;
+  annotation?: unknown;
+  url?: unknown;
   tags?: unknown;
   folders?: unknown;
   [key: string]: unknown;

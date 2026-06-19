@@ -40,7 +40,7 @@ export function PreviewDialog() {
     previewDialogState.mode === "video" ? "bg-[#05070a]" : "",
   ].filter(Boolean).join(" ");
   const previewInfoClassName = [
-    "preview-info absolute inset-y-0 right-0 z-[6] grid w-[min(380px,calc(100vw-56px))] max-w-full content-start gap-3.5 overflow-auto border-0 border-l border-border bg-card p-3.5 text-card-foreground transition-[box-shadow,opacity,transform] duration-200 min-[900px]:pt-0",
+    "preview-info absolute inset-y-0 right-0 z-[6] grid w-[min(380px,calc(100vw-56px))] max-w-full content-start gap-1.5 overflow-auto border-0 border-l border-border bg-card p-3.5 text-card-foreground transition-[box-shadow,opacity,transform] duration-200 min-[900px]:pt-0",
     desktopInfoOpen
       ? "min-[900px]:pointer-events-auto min-[900px]:relative min-[900px]:inset-auto min-[900px]:z-auto min-[900px]:col-start-2 min-[900px]:row-span-2 min-[900px]:row-start-1 min-[900px]:h-full min-[900px]:w-[380px] min-[900px]:translate-x-0 min-[900px]:opacity-100 min-[900px]:shadow-none"
       : "min-[900px]:pointer-events-none min-[900px]:relative min-[900px]:inset-auto min-[900px]:z-auto min-[900px]:col-start-2 min-[900px]:row-span-2 min-[900px]:row-start-1 min-[900px]:h-full min-[900px]:w-[380px] min-[900px]:translate-x-3 min-[900px]:opacity-0 min-[900px]:shadow-none",

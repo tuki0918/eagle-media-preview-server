@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { FolderIcon, PlusIcon, TagIcon, XIcon } from "lucide-react";
+import { ExternalLinkIcon as LucideExternalLinkIcon, FolderIcon, PlusIcon, TagIcon, XIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { errorMessage } from "../api";
@@ -30,7 +30,7 @@ export interface PreviewInfoProps {
 const previewLabelClassName = "preview-detail-label text-xs font-normal text-muted-foreground";
 const directFileLinkClassName =
   "direct-file-link preview-info-cta min-h-11 w-full cursor-pointer gap-2.5 whitespace-nowrap rounded-md bg-primary px-2 text-[14px] font-[720] leading-none text-primary-foreground no-underline shadow-none hover:bg-primary hover:text-primary-foreground [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-width:2]";
-const previewDetailsSectionClassName = "preview-details-section grid gap-1.5 px-2 pt-1";
+const previewDetailsSectionClassName = "preview-details-section grid gap-1.5 px-2";
 const previewDetailRowClassName =
   "preview-detail-row grid min-h-7 grid-cols-[minmax(82px,104px)_minmax(0,1fr)] items-start gap-4 max-[540px]:gap-3";
 const previewDetailValueClassName = "preview-detail-value min-w-0 text-sm leading-[1.35] text-foreground [overflow-wrap:anywhere] max-[540px]:text-[13px]";
@@ -47,9 +47,12 @@ const previewMetadataLabelClassName = "text-xs font-normal text-muted-foreground
 export function PreviewDetailsPanel({ canEditMetadata = false, detailRows, folders, item, onFolderSuggestions, onSaveMetadata, onTagSuggestions }: PreviewInfoProps) {
   return (
     <section className={previewDetailsSectionClassName}>
-      {detailRows.map((row) => (
-        <PreviewDetail key={row.label} {...row} />
-      ))}
+      <PreviewItemText item={item} />
+      <section className="preview-detail-group grid gap-1.5 border-b border-border pb-3 pt-3 first:pt-0">
+        {detailRows.map((row) => (
+          <PreviewDetail key={row.label} {...row} />
+        ))}
+      </section>
       {canEditMetadata ? (
         <PreviewMetadataEditor
           key={String(item.id || item.name || "")}
@@ -62,6 +65,34 @@ export function PreviewDetailsPanel({ canEditMetadata = false, detailRows, folde
       ) : (
         <PreviewMetadataSummary folders={folders} item={item} />
       )}
+    </section>
+  );
+}
+
+function PreviewItemText({ item }: { item: EagleItem }) {
+  const annotation = itemTextValue(item.annotation);
+  const url = itemTextValue(item.url);
+  if (!annotation && !url) return null;
+  return (
+    <section className="preview-item-text grid gap-2 border-b border-border pb-3">
+      {annotation ? (
+        <p className="preview-item-annotation whitespace-pre-wrap text-sm leading-[1.45] text-foreground [overflow-wrap:anywhere] max-[540px]:text-[13px]">
+          {annotation}
+        </p>
+      ) : null}
+      {url ? (
+        <a
+          className="preview-item-url grid min-h-7 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md text-sm leading-[1.35] text-foreground no-underline hover:text-foreground max-[540px]:text-[13px]"
+          href={url}
+          target="_blank"
+          rel="noopener"
+          title={url}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{url}</span>
+          <LucideExternalLinkIcon className="size-4 flex-none text-muted-foreground" aria-hidden="true" />
+        </a>
+      ) : null}
     </section>
   );
 }
@@ -125,7 +156,7 @@ function PreviewMetadataSummary({ folders, item }: { folders: readonly EagleFold
   const tags = tagValues(item.tags);
   const categories = categoryValues(item.folders).map((value) => folderLabel(value, folders));
   return (
-    <section className="preview-metadata-summary grid gap-3 border-t border-border pt-3 min-[900px]:mx-0">
+    <section className="preview-metadata-summary grid gap-3 pb-3 pt-3 min-[900px]:mx-0">
       <MetadataReadOnlyRow icon={<TagIcon aria-hidden="true" />} label="Tags" values={tags} />
       <MetadataReadOnlyRow icon={<FolderIcon aria-hidden="true" />} label="Folders" values={categories} />
     </section>
@@ -229,7 +260,7 @@ function PreviewMetadataEditor({
   };
 
   return (
-    <section className="preview-metadata-summary grid gap-3 border-t border-border pt-3 min-[900px]:mx-0" aria-busy={saving}>
+    <section className="preview-metadata-summary grid gap-3 pb-3 pt-3 min-[900px]:mx-0" aria-busy={saving}>
       <EditableMetadataRow
         icon={<TagIcon aria-hidden="true" />}
         label="Tags"
@@ -504,6 +535,10 @@ function MetadataChipList({
       ) : null}
     </div>
   );
+}
+
+function itemTextValue(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function ExternalLinkIcon() {

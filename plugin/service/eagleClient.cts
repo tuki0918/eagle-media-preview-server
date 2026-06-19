@@ -47,6 +47,7 @@ const ITEM_FIELDS = [
   "tags",
   "folders",
   "annotation",
+  "url",
   "importedAt",
   "importTime",
   "importedTime",

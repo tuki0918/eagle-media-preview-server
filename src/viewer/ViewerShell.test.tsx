@@ -643,6 +643,35 @@ describe("ViewerAppShell", () => {
     expect(nonAdminActions).not.toContain("direct-file-link");
   });
 
+  test("renders preview annotation and url before typed detail rows", () => {
+    const details = renderToStaticMarkup(
+      <PreviewDetailsPanel
+        item={{
+          id: "item-1",
+          annotation: "Line one\nLine two",
+          url: "https://example.com/path/to/a/very/long/reference",
+          tags: [],
+          folders: [],
+        }}
+        folders={[]}
+        detailRows={[{ label: "Type", value: "Image" }]}
+        onTagSuggestions={() => []}
+        onFolderSuggestions={() => []}
+        onSaveMetadata={async (_item, patch) => patch}
+      />,
+    );
+
+    expect(details).toContain("preview-item-text");
+    expect(details).toContain("preview-item-annotation");
+    expect(details).toContain("Line one\nLine two");
+    expect(details).toContain("preview-item-url");
+    expect(details).toContain('title="https://example.com/path/to/a/very/long/reference"');
+    expect(details).toContain("lucide-external-link");
+    expect(details.indexOf("Line one")).toBeLessThan(details.indexOf("Type"));
+    expect(details).not.toContain(">annotation<");
+    expect(details).not.toContain(">url<");
+  });
+
   test("adds preview tags immediately from the inline input", async () => {
     const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
     const testGlobal = globalThis as typeof globalThis & {
