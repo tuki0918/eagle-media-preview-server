@@ -847,6 +847,18 @@ test("createViewerServer rate-limits repeated failed logins by client and userna
     assert.match(locked.headers.get("retry-after") || "", /^\d+$/);
     assert.deepEqual(await locked.json(), { error: "Too many failed login attempts. Try again later." });
 
+    const spoofedClient = await fetch(`${origin}/api/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: origin,
+        "X-Forwarded-For": "203.0.113.10",
+      },
+      body: JSON.stringify({ username: "eagle", password: "secret" }),
+    });
+    assert.equal(spoofedClient.status, 429);
+    assert.deepEqual(await spoofedClient.json(), { error: "Too many failed login attempts. Try again later." });
+
     const stillLocked = await fetch(`${origin}/api/auth/login`, {
       method: "POST",
       headers: {

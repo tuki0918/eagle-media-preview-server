@@ -616,8 +616,7 @@ function loginFailureKey(req: IncomingMessage, username: string) {
 }
 
 function clientAddress(req: IncomingMessage) {
-  const forwardedFor = String(req.headers["x-forwarded-for"] || "").split(",")[0]?.trim();
-  return forwardedFor || req.socket?.remoteAddress || "unknown";
+  return req.socket?.remoteAddress || "unknown";
 }
 
 function activeLoginLockSeconds(loginFailures: Map<string, LoginFailure>, key: string) {
