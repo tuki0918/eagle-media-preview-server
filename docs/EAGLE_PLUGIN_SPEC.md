@@ -233,10 +233,10 @@ Settings path:
   - Returns whether authentication is required, whether the current request is authenticated, the current user, and viewer permissions
 - `POST /api/auth/login`
   - Requires username and password
-  - Issues a `viewer_session` cookie
+  - Issues an HttpOnly session cookie: `viewer_session_http` for HTTP and `viewer_session` for HTTPS
   - When authentication is disabled, returns an authenticated response with anonymous read permissions and does not issue a cookie
 - `POST /api/auth/logout`
-  - Clears the `viewer_session` cookie and removes the server-side session token
+  - Clears viewer session cookies and removes the server-side session token
 - `POST /api/connect`
   - Connects to Eagle API and returns app/library information
 - `GET /api/health`
@@ -280,7 +280,7 @@ Static viewer routes stay available so unauthenticated browsers can load the log
 
 Supported authentication paths:
 
-- `viewer_session` cookie issued by the login API; cookie and server-side session tokens expire after 7 days
+- `viewer_session_http` or `viewer_session` cookie issued by the login API; cookie and server-side session tokens expire after 7 days
 - Browser authentication uses the HttpOnly cookie only; session tokens are not returned in JSON or accepted through `Authorization` headers
 - HTTPS mode requires certificate and private key paths, serves the endpoint with `https://`, and adds `Secure` to `viewer_session`
 - If a cookie session expires or is rejected, viewer API requests return `401`; the browser viewer treats that as an auth reset and prompts for login again
