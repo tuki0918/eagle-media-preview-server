@@ -185,7 +185,7 @@ export function PreviewDialog() {
             className="h-4 w-0 border-l border-border bg-transparent data-[orientation=vertical]:h-4 data-[orientation=vertical]:w-0"
           />
           <div className="min-w-0 truncate text-sm font-normal text-foreground min-[720px]:text-base [&_.preview-original-name-value]:truncate [&_.preview-original-name-value]:whitespace-nowrap">
-            <PreviewOriginalName />
+            <PreviewOriginalName source="display" />
           </div>
         </div>
         <button id="toggleInfoPreview" className="icon-button inline-grid size-9 shrink-0 touch-manipulation select-none place-items-center rounded-lg border border-transparent bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground" type="button" aria-label="Media information" aria-expanded={desktopViewport ? desktopInfoOpen : previewDialogState.infoOpen} title="Media information" onClick={handleTogglePreviewInfo}>

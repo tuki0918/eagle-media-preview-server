@@ -11,6 +11,7 @@ import {
 } from "./viewer/constants";
 import { ApiError, debounce, errorMessage, getJson, postJson, setAuthSessionToken } from "./viewer/api";
 import {
+  displayFileName,
   flattenFolders,
   isTimedMedia,
   itemMeta,
@@ -499,6 +500,7 @@ function render() {
 function openPreview(item: EagleItem, { skipHistory = false }: OpenPreviewOptions = {}) {
   state.previewItemId = String(item.id || "");
   setPreviewTextState({
+    displayName: displayFileName(item),
     meta: itemMeta(item),
     originalName: originalFileName(item),
   });
@@ -724,6 +726,7 @@ function clearPreviewContents() {
   clearPreviewBodyState();
   clearPreviewRatingState();
   setPreviewTextState({
+    displayName: "",
     meta: "",
     originalName: "",
   });

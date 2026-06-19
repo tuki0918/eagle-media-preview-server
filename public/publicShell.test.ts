@@ -645,7 +645,8 @@ test("public file names expose original names in truncated views and preview inf
   assert.doesNotMatch(app, /previewOriginalName: document\.querySelector\("#previewOriginalName"\),/);
   assert.doesNotMatch(app, /getViewerElements/);
   assert.doesNotMatch(app, /document\.querySelector/);
-  assert.match(app, /setPreviewTextState\(\{[\s\S]*originalName: originalFileName\(item\),[\s\S]*\}\);/);
+  assert.match(app, /setPreviewTextState\(\{[\s\S]*displayName: displayFileName\(item\),[\s\S]*originalName: originalFileName\(item\),[\s\S]*\}\);/);
+  assert.match(html, /<PreviewOriginalName source="display" \/>/);
   assert.doesNotMatch(app, /els\.previewOriginalName\.textContent/);
   assert.match(html, /preview-original-name-section grid min-h-8 grid-cols-\[minmax\(0,1fr\)\]/);
   assert.match(html, /max-\[540px\]:pb-3\.5 max-\[540px\]:pt-1\.5/);
