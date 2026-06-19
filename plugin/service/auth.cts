@@ -91,7 +91,7 @@ function authenticatedUser(req: AuthenticatedRequest, auth: AuthContext): AuthSe
 
 function resolveAuthenticatedUser(req: IncomingMessage, auth: AuthContext): AuthSession | null {
   if (!authRequired(auth)) return null;
-  const token = authSessionTokenFromRequest(req);
+  const token = authSessionTokenFromRequest(req, auth.secureCookies);
   if (!token) return null;
   if (auth.revokedAuthSessions.has(token)) return null;
   const session = verifyAuthSessionToken(token, auth);
@@ -103,8 +103,11 @@ function resolveAuthenticatedUser(req: IncomingMessage, auth: AuthContext): Auth
   return session;
 }
 
-function authSessionTokenFromRequest(req: IncomingMessage) {
-  return parseCookies(req.headers.cookie || "").viewer_session;
+function authSessionTokenFromRequest(req: IncomingMessage, secureCookies = false) {
+  const cookies = parseCookies(req.headers.cookie || "");
+  const primaryName = authSessionCookieName(secureCookies);
+  const fallbackName = secureCookies ? "viewer_session_http" : "viewer_session";
+  return cookies[primaryName] || cookies[fallbackName];
 }
 
 function pruneAuthSessions(authSessions: Map<string, AuthSession>) {
@@ -226,7 +229,29 @@ function normalizeRole(value: unknown): UserRole {
 }
 
 function authSessionCookie(token: string, maxAge = AUTH_SESSION_MAX_AGE_SECONDS, secure = false) {
-  return `viewer_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${secure ? "; Secure" : ""}`;
+  return authNamedSessionCookie(authSessionCookieName(secure), token, maxAge, secure);
+}
+
+function expiredAuthSessionCookies(secure = false) {
+  return [
+    authNamedSessionCookie(authSessionCookieName(secure), "", 0, secure),
+    authNamedSessionCookie(authSessionCookieName(!secure), "", 0, !secure),
+  ];
+}
+
+function loginAuthSessionCookies(token: string, secure = false) {
+  return [
+    authSessionCookie(token, AUTH_SESSION_MAX_AGE_SECONDS, secure),
+    authNamedSessionCookie(authSessionCookieName(!secure), "", 0, !secure),
+  ];
+}
+
+function authSessionCookieName(secure = false) {
+  return secure ? "viewer_session" : "viewer_session_http";
+}
+
+function authNamedSessionCookie(name: string, token: string, maxAge: number, secure = false) {
+  return `${name}=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${secure ? "; Secure" : ""}`;
 }
 
 function passwordMatches(value: string, passwordHash: string) {
@@ -278,6 +303,7 @@ function safeDecodeCookieValue(value: string) {
 module.exports = {
   AUTH_SESSION_MAX_AGE_SECONDS,
   authRequired,
+  expiredAuthSessionCookies,
   authSessionCookie,
   authSessionTokenFromRequest,
   authStatusResponse,
@@ -293,4 +319,5 @@ module.exports = {
   resolveAuthUsers,
   sha256,
   signedAuthSessionToken,
+  loginAuthSessionCookies,
 };

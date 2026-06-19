@@ -200,10 +200,12 @@ function App() {
     }
 
     if (restartRunning) {
+      const previousStatus = status;
       if (willRestartServer(status, payload)) {
         setStatus((current) => ({ ...current, state: "stopped" }));
       }
       const saved = await runCommand(() => managerRef.current?.saveSettings(payload), { quiet: true });
+      if (!saved) setStatus(previousStatus);
       if (saved && hasUserPasswords) clearUserPasswordDrafts();
       if (saved) setMessage(successMessage);
       return saved;

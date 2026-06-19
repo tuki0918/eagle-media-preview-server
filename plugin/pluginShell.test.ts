@@ -806,8 +806,10 @@ test("plugin server caches authenticated users per request", async () => {
   assert.doesNotMatch(authSource, /\^Basic\\s\+\/i/);
   assert.doesNotMatch(serverSource, /WWW-Authenticate/);
   assert.match(authSource, /function authSessionCookie\(token, maxAge = AUTH_SESSION_MAX_AGE_SECONDS, secure = false\)/);
-  assert.match(serverSource, /"Set-Cookie": authSessionCookie\(token, AUTH_SESSION_MAX_AGE_SECONDS, auth\.secureCookies\)/);
-  assert.match(serverSource, /"Set-Cookie": authSessionCookie\("", 0, auth\.secureCookies\)/);
+  assert.match(serverSource, /"Set-Cookie": loginAuthSessionCookies\(token, auth\.secureCookies\)/);
+  assert.match(serverSource, /"Set-Cookie": expiredAuthSessionCookies\(auth\.secureCookies\)/);
+  assert.match(authSource, /function authSessionCookieName\(secure = false\)/);
+  assert.match(authSource, /secure \? "viewer_session" : "viewer_session_http"/);
   assert.match(authSource, /secure \? "; Secure" : ""/);
   assert.match(authSource, /createHmac/);
   assert.match(authSource, /function signedAuthSessionToken\(session/);
@@ -895,6 +897,13 @@ test("plugin app animates the stopped status text while a restart is busy", asyn
   assert.match(app, /window\.setInterval\(\(\) => \{/);
   assert.match(app, /busyStoppedFrames\[busyFrame\]/);
   assert.doesNotMatch(app, /Stopped\.\.\./);
+});
+
+test("plugin app restores status when a restart settings save fails", async () => {
+  const app = await readPluginAppSource();
+
+  assert.match(app, /const previousStatus = status;/);
+  assert.match(app, /if \(!saved\) setStatus\(previousStatus\);/);
 });
 
 test("plugin app resolves Windows drive paths without a leading slash", async () => {

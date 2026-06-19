@@ -9,16 +9,17 @@ const { resolveDefaultPublicDir, serveStatic } = require("./static.cjs");
 const {
   AUTH_SESSION_MAX_AGE_SECONDS,
   authRequired,
-  authSessionCookie,
   authSessionTokenFromRequest,
   authStatusResponse,
   authenticatedUser,
+  expiredAuthSessionCookies,
   findPasswordUser,
   hasAdminAccess,
   hasMetadataWriteAccess,
   hasRatingWriteAccess,
   isAuthorized,
   isTrustedUnsafeRequest,
+  loginAuthSessionCookies,
   parseCookies,
   pruneAuthSessions,
   resolveAuthUsers,
@@ -582,7 +583,7 @@ async function handleAuthRoutes(req: IncomingMessage, url: URL, res: ServerRespo
     auth.authSessions.set(token, session);
     res.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
-      "Set-Cookie": authSessionCookie(token, AUTH_SESSION_MAX_AGE_SECONDS, auth.secureCookies),
+      "Set-Cookie": loginAuthSessionCookies(token, auth.secureCookies),
     });
     res.end(JSON.stringify(authStatusResponse(auth, user, { authenticated: true })));
     return true;
@@ -593,14 +594,14 @@ async function handleAuthRoutes(req: IncomingMessage, url: URL, res: ServerRespo
       sendMethodNotAllowed(res, ["POST"]);
       return true;
     }
-    const token = authSessionTokenFromRequest(req);
+    const token = authSessionTokenFromRequest(req, auth.secureCookies);
     if (token) {
       auth.authSessions.delete(token);
       auth.revokedAuthSessions.add(token);
     }
     res.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
-      "Set-Cookie": authSessionCookie("", 0, auth.secureCookies),
+      "Set-Cookie": expiredAuthSessionCookies(auth.secureCookies),
     });
     res.end(JSON.stringify(authStatusResponse(auth, null, { authenticated: !authRequired(auth) })));
     return true;

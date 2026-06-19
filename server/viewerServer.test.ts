@@ -777,7 +777,10 @@ test("createViewerServer logs out cookie sessions", async () => {
     });
     assert.equal(login.status, 200);
     const cookie = login.headers.get("set-cookie") || "";
+    assert.match(cookie, /viewer_session_http=/);
     assert.match(cookie, /viewer_session=/);
+    assert.match(cookie, /Max-Age=0/);
+    assert.match(cookie, /Secure/);
     const loginBody = await login.json();
     assert.deepEqual(loginBody, {
       required: true,
@@ -812,7 +815,7 @@ test("createViewerServer logs out cookie sessions", async () => {
       },
     });
 
-    const sessionToken = cookie.match(/viewer_session=([^;]+)/)?.[1] || "";
+    const sessionToken = cookie.match(/viewer_session_http=([^;]+)/)?.[1] || "";
     assert.ok(sessionToken);
     const bearerIgnored = await fetch(`${origin}/api/auth/status`, {
       headers: { Authorization: `Bearer ${sessionToken}` },
@@ -848,6 +851,8 @@ test("createViewerServer logs out cookie sessions", async () => {
         writeRating: false,
       },
     });
+    assert.match(logout.headers.get("set-cookie") || "", /viewer_session_http=/);
+    assert.match(logout.headers.get("set-cookie") || "", /viewer_session=/);
     assert.match(logout.headers.get("set-cookie") || "", /Max-Age=0/);
 
     const afterLogout = await fetch(`${origin}/api/auth/status`, {
@@ -956,7 +961,7 @@ test("createViewerServer rate-limits repeated failed logins by client and userna
       body: JSON.stringify({ username: "owner", password: "own" }),
     });
     assert.equal(otherUser.status, 200);
-    assert.match(otherUser.headers.get("set-cookie") || "", /viewer_session=/);
+    assert.match(otherUser.headers.get("set-cookie") || "", /viewer_session_http=/);
   } finally {
     await viewer.stop();
   }
@@ -990,7 +995,7 @@ test("createViewerServer accepts signed session cookies after restart and invali
     });
     assert.equal(login.status, 200);
     cookie = login.headers.get("set-cookie") || "";
-    assert.match(cookie, /viewer_session=[^.]+\.[^;]+/);
+    assert.match(cookie, /viewer_session_http=[^.]+\.[^;]+/);
     assert.equal(firstViewer.status().activeSessions, 1);
   } finally {
     await firstViewer.stop();
@@ -1269,11 +1274,13 @@ test("createViewerServer serves HTTPS and marks session cookies Secure", async (
 
     assert.equal(login.status, 200);
     const rawSetCookie = login.headers["set-cookie"];
-    const setCookie = Array.isArray(rawSetCookie) ? String(rawSetCookie[0] || "") : String(rawSetCookie || "");
+    const setCookies = Array.isArray(rawSetCookie) ? rawSetCookie.map(String) : [String(rawSetCookie || "")];
+    const setCookie = setCookies.find((cookie) => cookie.startsWith("viewer_session=")) || "";
     assert.match(setCookie, /viewer_session=/);
     assert.match(setCookie, /HttpOnly/);
     assert.match(setCookie, /SameSite=Lax/);
     assert.match(setCookie, /Secure/);
+    assert.ok(setCookies.some((cookie) => cookie.startsWith("viewer_session_http=") && cookie.includes("Max-Age=0")));
 
     const authenticated = await httpsJson(`${origin}/api/auth/status`, {
       headers: { Cookie: setCookie },
