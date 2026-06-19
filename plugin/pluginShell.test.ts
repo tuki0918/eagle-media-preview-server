@@ -828,11 +828,13 @@ test("plugin server caches authenticated users per request", async () => {
   assert.match(serverSource, /authStatusResponse\(auth, null, \{ authenticated: !authRequired\(auth\) \}\)/);
   assert.match(serverSource, /const INVALID_LOGIN_MESSAGE = "Invalid username or password";/);
   assert.match(serverSource, /const LOGIN_RATE_LIMIT_MESSAGE = "Too many failed login attempts\. Try again later\.";/);
+  assert.match(serverSource, /const LOGIN_FAILURE_MAX_ENTRIES = 500;/);
   assert.match(serverSource, /const RATING_WRITE_FORBIDDEN_MESSAGE = "Rating editing is not allowed for this viewer";/);
   assert.match(serverSource, /const METADATA_WRITE_FORBIDDEN_MESSAGE = "Metadata editing is not allowed for this viewer";/);
   assert.match(serverSource, /\{ error: INVALID_LOGIN_MESSAGE \}/);
   assert.match(serverSource, /sendLoginRateLimited\(res, activeLockSeconds\)/);
   assert.match(serverSource, /sendLoginRateLimited\(res, retryAfterSeconds\)/);
+  assert.match(serverSource, /function pruneLoginFailures\(loginFailures, now = Date\.now\(\)\)/);
   assert.match(serverSource, /"Retry-After": String\(Math\.max\(1, retryAfterSeconds\)\)/);
   assert.match(serverSource, /\{ error: RATING_WRITE_FORBIDDEN_MESSAGE \}/);
   assert.match(serverSource, /\{ error: METADATA_WRITE_FORBIDDEN_MESSAGE \}/);
