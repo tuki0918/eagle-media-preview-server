@@ -343,11 +343,11 @@ test("client surfaces Eagle HTTP error messages", async () => {
     fetchImpl: async () => ({
       ok: false,
       status: 401,
-      async json() {
-        return {
+      async text() {
+        return JSON.stringify({
           status: "error",
           message: "Unauthorized: Access is denied due to invalid token.",
-        };
+        });
       },
     }),
   });
@@ -355,6 +355,57 @@ test("client surfaces Eagle HTTP error messages", async () => {
   await assert.rejects(
     () => client.appInfo(),
     /Unauthorized: Access is denied due to invalid token/,
+  );
+});
+
+test("client includes non-json Eagle HTTP error bodies", async () => {
+  const client = createEagleClient({
+    baseUrl: "http://localhost:41595",
+    fetchImpl: async () => ({
+      ok: false,
+      status: 502,
+      async text() {
+        return "<html><body>Bad Gateway</body></html>";
+      },
+    }),
+  });
+
+  await assert.rejects(
+    () => client.appInfo(),
+    /Eagle HTTP 502: <html><body>Bad Gateway<\/body><\/html>/,
+  );
+});
+
+test("client reports empty Eagle HTTP error bodies with status", async () => {
+  const client = createEagleClient({
+    baseUrl: "http://localhost:41595",
+    fetchImpl: async () => ({
+      ok: false,
+      status: 500,
+      async text() {
+        return "";
+      },
+    }),
+  });
+
+  await assert.rejects(() => client.appInfo(), /Eagle HTTP 500/);
+});
+
+test("client reports invalid JSON from successful Eagle responses", async () => {
+  const client = createEagleClient({
+    baseUrl: "http://localhost:41595",
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      async text() {
+        return "<html><body>Eagle is starting</body></html>";
+      },
+    }),
+  });
+
+  await assert.rejects(
+    () => client.appInfo(),
+    /Invalid JSON from Eagle HTTP 200: <html><body>Eagle is starting<\/body><\/html>/,
   );
 });
 
@@ -402,8 +453,8 @@ function jsonResponse(body: unknown) {
   return {
     ok: true,
     status: 200,
-    async json() {
-      return body;
+    async text() {
+      return JSON.stringify(body);
     },
   };
 }

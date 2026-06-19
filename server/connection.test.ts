@@ -75,11 +75,11 @@ test("createConnectionContext returns a client and isolated library cache", asyn
     fetchImpl: async () => ({
       ok: true,
       status: 200,
-      async json() {
-        return {
+      async text() {
+        return JSON.stringify({
           status: "success",
           data: { path: "/tmp/Library.library", name: "Library" },
-        };
+        });
       },
     }),
   });

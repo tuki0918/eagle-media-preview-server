@@ -68,6 +68,8 @@ const ITEM_FIELDS = [
   "thumbnailPath",
 ];
 
+const MAX_ERROR_BODY_LENGTH = 240;
+
 function clampLimit(value, fallback = 60) {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
@@ -84,6 +86,23 @@ function clampTagLimit(value) {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) return 20;
   return Math.min(parsed, 100);
+}
+
+function parseJsonResponseText(text: string) {
+  try {
+    return { ok: true, payload: JSON.parse(text) };
+  } catch {
+    return { ok: false, payload: null };
+  }
+}
+
+function formatResponseBodySnippet(text: string) {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (!normalized) return "";
+  const snippet = normalized.length > MAX_ERROR_BODY_LENGTH
+    ? `${normalized.slice(0, MAX_ERROR_BODY_LENGTH)}...`
+    : normalized;
+  return `: ${snippet}`;
 }
 
 function createEagleClient({
@@ -111,12 +130,17 @@ function createEagleClient({
     };
     const response = await fetchImpl(url.toString(), requestInit);
 
-    const payload = await response.json();
+    const responseText = await response.text();
+    const parsed = parseJsonResponseText(responseText);
     if (!response.ok) {
-      throw new Error(payload?.message || `Eagle HTTP ${response.status}`);
+      const message = parsed.ok && parsed.payload?.message;
+      throw new Error(message || `Eagle HTTP ${response.status}${formatResponseBodySnippet(responseText)}`);
+    }
+    if (!parsed.ok) {
+      throw new Error(`Invalid JSON from Eagle HTTP ${response.status}${formatResponseBodySnippet(responseText)}`);
     }
 
-    return payload;
+    return parsed.payload;
   }
 
   return {
