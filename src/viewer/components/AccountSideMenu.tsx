@@ -63,9 +63,11 @@ export function AccountSideMenu() {
                 className="pointer-events-none h-12 px-2 hover:bg-transparent hover:text-sidebar-foreground active:bg-transparent active:text-sidebar-foreground"
               >
                 <div>
-                  <span className="grid size-8 place-items-center rounded-lg bg-zinc-200 text-zinc-950 shadow-sm" aria-hidden="true">
-                    <BookOpenTextIcon className="size-5" />
-                  </span>
+                  <Avatar className="size-8 rounded-lg" aria-hidden="true">
+                    <AvatarFallback className="rounded-lg">
+                      <BookOpenTextIcon className="size-5" />
+                    </AvatarFallback>
+                  </Avatar>
                   <span className="grid min-w-0 group-data-[collapsible=icon]:hidden">
                     <span className="truncate text-sm font-[720] leading-tight text-sidebar-foreground">{libraryHeader.name}</span>
                     {libraryHeader.version ? (
