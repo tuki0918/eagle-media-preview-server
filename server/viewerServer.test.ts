@@ -2,9 +2,12 @@ import { test } from "vitest";
 import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
 import { request as httpsRequest } from "node:https";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createViewerServer, resolveDefaultPublicDir, sha256 } from "./viewerServer.js";
+
+const require = createRequire(import.meta.url);
 
 type ItemListOptions = { keywords?: string; limit?: number | string; offset?: number | string; query?: string; tags?: string[] };
 type TagListOptions = { query?: string; limit?: string };
@@ -1182,6 +1185,33 @@ test("resolveDefaultPublicDir prefers Vite output when running from source", () 
   assert.equal(resolveDefaultPublicDir("/repo/plugin/service", existingDist), "/repo/dist/public");
   assert.equal(resolveDefaultPublicDir("/repo/dist/plugin/service", existingDist), "/repo/dist/public");
   assert.equal(resolveDefaultPublicDir("/repo/plugin/service", () => false), "/repo/public");
+});
+
+test("serveStatic rejects sibling paths that only share the public directory prefix", async () => {
+  const { serveStatic } = require("../dist/.generated/plugin-service/static.cjs");
+  const root = join(tmpdir(), `eagle-media-preview-server-static-${Date.now()}`);
+  const publicDir = join(root, "public");
+  const siblingDir = join(root, "public-evil");
+  await mkdir(publicDir, { recursive: true });
+  await mkdir(siblingDir, { recursive: true });
+  await writeFile(join(publicDir, "index.html"), "ok");
+  await writeFile(join(siblingDir, "secret.txt"), "secret");
+
+  let status = 0;
+  let body = "";
+  const res = {
+    writeHead(nextStatus: number) {
+      status = nextStatus;
+    },
+    end(nextBody = "") {
+      body = String(nextBody);
+    },
+  };
+
+  await serveStatic("/../public-evil/secret.txt", res, publicDir);
+
+  assert.equal(status, 403);
+  assert.deepEqual(JSON.parse(body), { error: "Forbidden" });
 });
 
 test("createViewerServer reports a port conflict as an error state", async () => {

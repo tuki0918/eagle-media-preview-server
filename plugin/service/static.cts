@@ -1,6 +1,6 @@
 const { createReadStream, existsSync } = require("fs");
 const { stat } = require("fs").promises;
-const { extname, join, normalize, resolve } = require("path");
+const { extname, isAbsolute, relative, resolve } = require("path");
 
 function resolveDefaultPublicDir(baseDir = __dirname, pathExists = existsSync) {
   const packagedPublicDir = resolve(baseDir, "..", "..", "public");
@@ -39,8 +39,11 @@ const mimeTypes = {
 
 async function serveStatic(pathname, res, publicDir) {
   const cleanPath = pathname === "/" ? "/index.html" : pathname;
-  const filePath = normalize(join(publicDir, cleanPath));
-  if (!filePath.startsWith(publicDir)) {
+  const publicRoot = resolve(publicDir);
+  const requestPath = cleanPath.startsWith("/") ? `.${cleanPath}` : `./${cleanPath}`;
+  const filePath = resolve(publicRoot, requestPath);
+  const relativePath = relative(publicRoot, filePath);
+  if (relativePath.startsWith("..") || isAbsolute(relativePath)) {
     sendJson(res, 403, { error: "Forbidden" });
     return;
   }
