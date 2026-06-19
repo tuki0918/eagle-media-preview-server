@@ -1,4 +1,5 @@
 const { createHash, createHmac, pbkdf2Sync, timingSafeEqual } = require("crypto");
+const { isIP } = require("net");
 
 import type { IncomingHttpHeaders, IncomingMessage } from "http";
 
@@ -48,7 +49,7 @@ function isTrustedUnsafeRequest(req: IncomingMessage, requestUrl: URL) {
   if (!isUnsafeMethod(req.method)) return true;
   const expectedOrigin = `${requestUrl.protocol}//${requestUrl.host}`;
   const origin = headerValue(req.headers.origin);
-  return Boolean(origin) && origin === expectedOrigin;
+  return Boolean(origin) && origin === expectedOrigin && isTrustedOriginHost(requestUrl.hostname);
 }
 
 function isUnsafeMethod(method: string | undefined) {
@@ -57,6 +58,11 @@ function isUnsafeMethod(method: string | undefined) {
 
 function headerValue(value: IncomingHttpHeaders[string]) {
   return Array.isArray(value) ? value[0] : String(value || "");
+}
+
+function isTrustedOriginHost(hostname: string) {
+  const normalized = hostname.toLowerCase();
+  return normalized === "localhost" || isIP(normalized) !== 0;
 }
 
 function hasMetadataWriteAccess(req: AuthenticatedRequest, auth: AuthContext) {

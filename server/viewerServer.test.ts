@@ -1,6 +1,7 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
+import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
@@ -94,6 +95,33 @@ async function httpsJson(url: string, options: { body?: unknown; headers?: Recor
     const request = httpsRequest(url, {
       method: options.method || "GET",
       rejectUnauthorized: false,
+      headers: {
+        ...(body ? { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) } : {}),
+        ...options.headers,
+      },
+    }, (response) => {
+      const chunks: Buffer[] = [];
+      response.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+      response.on("end", () => {
+        const text = Buffer.concat(chunks).toString("utf8");
+        resolve({
+          body: text ? JSON.parse(text) : null,
+          headers: response.headers,
+          status: response.statusCode || 0,
+        });
+      });
+    });
+    request.on("error", reject);
+    if (body) request.write(body);
+    request.end();
+  });
+}
+
+async function httpJson(url: string, options: { body?: unknown; headers?: Record<string, string>; method?: string } = {}) {
+  const body = options.body === undefined ? "" : JSON.stringify(options.body);
+  return new Promise<{ body: unknown; headers: Record<string, string | string[] | undefined>; status: number }>((resolve, reject) => {
+    const request = httpRequest(url, {
+      method: options.method || "GET",
       headers: {
         ...(body ? { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) } : {}),
         ...options.headers,
@@ -555,6 +583,51 @@ test("createViewerServer rejects cross-origin metadata writes before reaching Ea
 
     assert.equal(response.status, 403);
     assert.deepEqual(await response.json(), { error: "Cross-origin writes are not allowed" });
+    assert.deepEqual(calls, []);
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer rejects unsafe requests from non-localhost hostnames even when Origin matches Host", async () => {
+  const calls: unknown[] = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    allowMetadataEditing: true,
+    passwordHash: sha256("secret"),
+    basicAuthUsername: "eagle",
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/tmp/Test.library", name: "Test Library" };
+      },
+      async updateItemStar(id: string, star: unknown) {
+        calls.push({ id, star });
+        return { id, star };
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const origin = `http://127.0.0.1:${status.port}`;
+    const cookie = await loginCookie(origin, "eagle", "secret");
+    const response = await httpJson(`${origin}/api/items/ITEM123/star`, {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        Host: `evil.example:${status.port}`,
+        Origin: `http://evil.example:${status.port}`,
+      },
+      body: { star: 4 },
+    });
+
+    assert.equal(response.status, 403);
+    assert.deepEqual(response.body, { error: "Cross-origin writes are not allowed" });
     assert.deepEqual(calls, []);
   } finally {
     await viewer.stop();
