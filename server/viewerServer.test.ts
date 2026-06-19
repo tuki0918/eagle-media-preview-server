@@ -1507,6 +1507,41 @@ test("createViewerServer rejects direct file routes that resolve to a directory"
   }
 });
 
+test("createViewerServer rejects direct file routes that resolve to a missing file without leaking the path", async () => {
+  const root = join(tmpdir(), `eagle-media-preview-server-missing-${Date.now()}`);
+  await mkdir(root, { recursive: true });
+  const filePath = join(root, "missing.jpg");
+
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: root, name: "Test Library" };
+      },
+      async itemById(id: string) {
+        return {
+          data: [{ id, filePath }],
+        };
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const response = await fetch(`http://127.0.0.1:${status.port}/file/MISSING123`);
+
+    assert.equal(response.status, 404);
+    assert.deepEqual(await response.json(), { error: "Media file is unavailable" });
+  } finally {
+    await viewer.stop();
+  }
+});
+
 test("createViewerServer serves text and markdown direct file routes inline as raw text", async () => {
   const root = join(tmpdir(), `eagle-media-preview-server-text-${Date.now()}`);
   await mkdir(root, { recursive: true });

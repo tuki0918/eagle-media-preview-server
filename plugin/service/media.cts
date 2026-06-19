@@ -81,7 +81,11 @@ async function streamItemMedia(id: string, kind: MediaKind, req: IncomingMessage
     return;
   }
 
-  const info = await stat(filePath);
+  const info = await safeStat(filePath);
+  if (!info) {
+    sendJson(res, 404, { error: "Media file is unavailable" });
+    return;
+  }
   if (!info.isFile()) {
     sendJson(res, 404, { error: "Media file is unavailable" });
     return;
@@ -158,6 +162,14 @@ function pipeMediaStream(
     }
     res.destroy(error);
   });
+}
+
+async function safeStat(filePath: string) {
+  try {
+    return await stat(filePath);
+  } catch {
+    return null;
+  }
 }
 
 function contentDisposition(contentType: string, item: EagleItem | null | undefined, filePath: string) {
