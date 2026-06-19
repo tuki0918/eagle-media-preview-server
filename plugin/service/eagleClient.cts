@@ -364,7 +364,8 @@ async function resolveLibraryItemFile({ libraryPath, item, kind }: ResolveLibrar
     if (thumbnail) return join(itemDir, thumbnail);
   }
 
-  const ext = item.ext ? `.${String(item.ext).toLowerCase()}` : "";
+  const normalizedExt = String(item.ext || "").trim().replace(/^\./, "").toLowerCase();
+  const ext = normalizedExt ? `.${normalizedExt}` : "";
   const original = files.find((file) => {
     const lower = file.toLowerCase();
     return lower !== "metadata.json" && !/_thumbnail\.[a-z0-9]+$/i.test(lower) && (!ext || extname(lower) === ext);

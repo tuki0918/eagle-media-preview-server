@@ -449,6 +449,22 @@ test("resolveLibraryItemFile finds the original file inside an Eagle item folder
   );
 });
 
+test("resolveLibraryItemFile accepts item extensions with a leading dot", async () => {
+  const libraryPath = await mkdtemp(join(tmpdir(), "eagle-library-dot-ext-"));
+  const itemDir = join(libraryPath, "images", "ITEM123.info");
+  await mkdir(itemDir, { recursive: true });
+  await writeFile(join(itemDir, "sample.jpg"), "image");
+
+  assert.equal(
+    await resolveLibraryItemFile({
+      libraryPath,
+      item: { id: "ITEM123", name: "sample", ext: ".jpg" },
+      kind: "file",
+    }),
+    join(itemDir, "sample.jpg"),
+  );
+});
+
 function jsonResponse(body: unknown) {
   return {
     ok: true,
