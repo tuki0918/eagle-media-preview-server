@@ -39,7 +39,7 @@ const mimeTypes: Record<string, string> = {
   ".md": "text/plain; charset=utf-8",
 };
 
-const staticSecurityHeaders = {
+const securityHeaders = {
   "Content-Security-Policy": [
     "default-src 'self'",
     "base-uri 'self'",
@@ -74,7 +74,7 @@ async function serveStatic(pathname: string, res: ServerResponse, publicDir: str
     const info = await stat(filePath);
     if (!info.isFile()) throw new Error("Not a file");
     res.writeHead(200, {
-      ...staticSecurityHeaders,
+      ...securityHeaders,
       "Content-Type": mimeTypes[extname(filePath).toLowerCase()] || "application/octet-stream",
       "Cache-Control": "no-cache",
     });
@@ -92,7 +92,7 @@ function mediaContentType(filePath: string, item?: { ext?: unknown } | null) {
 
 function sendJson(res: ServerResponse, status: number, body: unknown) {
   res.writeHead(status, {
-    ...staticSecurityHeaders,
+    ...securityHeaders,
     "Content-Type": "application/json; charset=utf-8",
   });
   res.end(JSON.stringify(body));
@@ -101,5 +101,6 @@ function sendJson(res: ServerResponse, status: number, body: unknown) {
 module.exports = {
   mediaContentType,
   resolveDefaultPublicDir,
+  securityHeaders,
   serveStatic,
 };

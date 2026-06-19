@@ -2,7 +2,7 @@ const { createReadStream } = require("fs");
 const { stat } = require("fs").promises;
 const { extname } = require("path");
 const { pathFromFileValue, resolveLibraryItemFile } = require("./eagleClient.cjs");
-const { mediaContentType } = require("./static.cjs");
+const { mediaContentType, securityHeaders } = require("./static.cjs");
 
 import type { IncomingMessage, ServerResponse } from "http";
 
@@ -95,6 +95,7 @@ async function streamItemMedia(id: string, kind: MediaKind, req: IncomingMessage
 
   if (req.headers.range && !range) {
     res.writeHead(416, {
+      ...securityHeaders,
       "Content-Range": `bytes */${info.size}`,
       "Accept-Ranges": "bytes",
       "Cache-Control": "private, max-age=3600",
@@ -104,6 +105,7 @@ async function streamItemMedia(id: string, kind: MediaKind, req: IncomingMessage
   }
 
   const commonHeaders = {
+    ...securityHeaders,
     "Content-Type": contentType,
     "Accept-Ranges": "bytes",
     "Content-Disposition": contentDisposition(contentType, itemData, filePath),
@@ -194,12 +196,16 @@ function encodeRFC5987ValueChars(value: string) {
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown) {
-  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
+  res.writeHead(status, {
+    ...securityHeaders,
+    "Content-Type": "application/json; charset=utf-8",
+  });
   res.end(JSON.stringify(body));
 }
 
 function sendMethodNotAllowed(res: ServerResponse, methods: string[]) {
   res.writeHead(405, {
+    ...securityHeaders,
     "Allow": methods.join(", "),
     "Content-Type": "application/json; charset=utf-8",
   });

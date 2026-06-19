@@ -117,6 +117,19 @@ async function httpsJson(url: string, options: { body?: unknown; headers?: Recor
   });
 }
 
+function assertSecurityHeaders(headers: Headers | Record<string, string | string[] | undefined>) {
+  const headerValue = headers instanceof Headers
+    ? (name: string) => headers.get(name) || ""
+    : (name: string) => {
+        const value = headers[name.toLowerCase()];
+        return Array.isArray(value) ? value.join(", ") : value || "";
+      };
+  assert.match(headerValue("content-security-policy"), /default-src 'self'/);
+  assert.equal(headerValue("x-content-type-options"), "nosniff");
+  assert.equal(headerValue("x-frame-options"), "DENY");
+  assert.equal(headerValue("referrer-policy"), "no-referrer");
+}
+
 async function httpJson(url: string, options: { body?: unknown; headers?: Record<string, string>; method?: string } = {}) {
   const body = options.body === undefined ? "" : JSON.stringify(options.body);
   return new Promise<{ body: unknown; headers: Record<string, string | string[] | undefined>; status: number }>((resolve, reject) => {
@@ -582,6 +595,7 @@ test("createViewerServer rejects cross-origin metadata writes before reaching Ea
     });
 
     assert.equal(response.status, 403);
+    assertSecurityHeaders(response.headers);
     assert.deepEqual(await response.json(), { error: "Cross-origin writes are not allowed" });
     assert.deepEqual(calls, []);
   } finally {
@@ -1336,6 +1350,7 @@ test("createViewerServer returns 413 for oversized JSON request bodies", async (
     });
 
     assert.equal(response.status, 413);
+    assertSecurityHeaders(response.headers);
     assert.deepEqual(await response.json(), { error: "Request body is too large" });
   } finally {
     await viewer.stop();
@@ -1625,6 +1640,7 @@ test("createViewerServer rejects direct file routes that resolve to a directory"
     const response = await fetch(`http://127.0.0.1:${status.port}/file/DIR123`);
 
     assert.equal(response.status, 404);
+    assertSecurityHeaders(response.headers);
     assert.deepEqual(await response.json(), { error: "Media file is unavailable" });
   } finally {
     await viewer.stop();

@@ -5,7 +5,7 @@ const { randomBytes } = require("crypto");
 const { createEagleClient, normalizeStringArray } = require("./eagleClient.cjs");
 const { buildConnectionCandidates, createConnectionContext } = require("./connection.cjs");
 const { streamItemMedia } = require("./media.cjs");
-const { resolveDefaultPublicDir, serveStatic } = require("./static.cjs");
+const { resolveDefaultPublicDir, securityHeaders, serveStatic } = require("./static.cjs");
 const {
   AUTH_SESSION_MAX_AGE_SECONDS,
   authRequired,
@@ -583,6 +583,7 @@ async function handleAuthRoutes(req: IncomingMessage, url: URL, res: ServerRespo
     const token = signedAuthSessionToken(session, auth);
     auth.authSessions.set(token, session);
     res.writeHead(200, {
+      ...securityHeaders,
       "Content-Type": "application/json; charset=utf-8",
       "Set-Cookie": loginAuthSessionCookies(token, auth.secureCookies),
     });
@@ -601,6 +602,7 @@ async function handleAuthRoutes(req: IncomingMessage, url: URL, res: ServerRespo
       auth.revokedAuthSessions.add(token);
     }
     res.writeHead(200, {
+      ...securityHeaders,
       "Content-Type": "application/json; charset=utf-8",
       "Set-Cookie": expiredAuthSessionCookies(auth.secureCookies),
     });
@@ -666,6 +668,7 @@ function pruneLoginFailures(loginFailures: Map<string, LoginFailure>, now = Date
 
 function sendLoginRateLimited(res: ServerResponse, retryAfterSeconds: number) {
   res.writeHead(429, {
+    ...securityHeaders,
     "Content-Type": "application/json; charset=utf-8",
     "Retry-After": String(Math.max(1, retryAfterSeconds)),
   });
@@ -726,12 +729,16 @@ function isDefaultLocalEagleConnectionInput(input: JsonObject) {
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown) {
-  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
+  res.writeHead(status, {
+    ...securityHeaders,
+    "Content-Type": "application/json; charset=utf-8",
+  });
   res.end(JSON.stringify(body));
 }
 
 function sendMethodNotAllowed(res: ServerResponse, methods: string[]) {
   res.writeHead(405, {
+    ...securityHeaders,
     "Allow": methods.join(", "),
     "Content-Type": "application/json; charset=utf-8",
   });
@@ -755,6 +762,7 @@ function normalizeStar(value: unknown) {
 
 function sendAuthRequired(res: ServerResponse) {
   res.writeHead(401, {
+    ...securityHeaders,
     "Content-Type": "application/json; charset=utf-8",
   });
   res.end(JSON.stringify({ error: "Authentication required" }));
