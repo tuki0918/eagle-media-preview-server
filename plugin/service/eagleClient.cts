@@ -1,6 +1,6 @@
 const { fileURLToPath } = require("url");
 const { readdir } = require("fs").promises;
-const { extname, join } = require("path");
+const { extname, isAbsolute, join, relative, resolve } = require("path");
 
 import type { Dirent } from "fs";
 
@@ -355,7 +355,8 @@ function pathFromFileValue(value: unknown) {
 
 async function resolveLibraryItemFile({ libraryPath, item, kind }: ResolveLibraryItemFileInput) {
   if (!libraryPath || !item?.id) return "";
-  const itemDir = join(libraryPath, "images", `${item.id}.info`);
+  const itemDir = resolveLibraryItemDir(libraryPath, item.id);
+  if (!itemDir) return "";
   const entries = await readdir(itemDir, { withFileTypes: true }) as Dirent[];
   const files = entries.filter((entry) => entry.isFile()).map((entry) => entry.name);
 
@@ -372,5 +373,15 @@ async function resolveLibraryItemFile({ libraryPath, item, kind }: ResolveLibrar
   });
 
   return original ? join(itemDir, original) : "";
+}
+
+function resolveLibraryItemDir(libraryPath: string, itemId: unknown) {
+  const cleanId = String(itemId || "").trim();
+  if (!cleanId || /[\\/]/.test(cleanId) || cleanId === "." || cleanId === "..") return "";
+  const imagesRoot = resolve(libraryPath, "images");
+  const itemDir = resolve(imagesRoot, `${cleanId}.info`);
+  const relativePath = relative(imagesRoot, itemDir);
+  if (relativePath.startsWith("..") || isAbsolute(relativePath)) return "";
+  return itemDir;
 }
 module.exports = { ITEM_FIELDS, clampLimit, normalizeOffset, normalizeStringArray, createEagleClient, normalizePaginatedResponse, unwrapData, pathFromFileValue, resolveLibraryItemFile };

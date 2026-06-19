@@ -465,6 +465,30 @@ test("resolveLibraryItemFile accepts item extensions with a leading dot", async 
   );
 });
 
+test("resolveLibraryItemFile rejects item ids that escape the library image folder", async () => {
+  const libraryPath = await mkdtemp(join(tmpdir(), "eagle-library-escape-"));
+  const escapedDir = join(libraryPath, "ESCAPED.info");
+  await mkdir(escapedDir, { recursive: true });
+  await writeFile(join(escapedDir, "secret.jpg"), "secret");
+
+  assert.equal(
+    await resolveLibraryItemFile({
+      libraryPath,
+      item: { id: "../ESCAPED", ext: "jpg" },
+      kind: "file",
+    }),
+    "",
+  );
+  assert.equal(
+    await resolveLibraryItemFile({
+      libraryPath,
+      item: { id: "nested/ITEM123", ext: "jpg" },
+      kind: "file",
+    }),
+    "",
+  );
+});
+
 function jsonResponse(body: unknown) {
   return {
     ok: true,
