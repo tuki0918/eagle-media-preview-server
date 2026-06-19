@@ -688,7 +688,7 @@ test("plugin asks before saving public network with HTTP password protection", a
   publicNetwork.click();
   await waitFor(() => confirmMessages.length === 1);
 
-  assert.match(confirmMessages[0], /HTTPS is off/);
+  assert.match(confirmMessages[0], /HTTPS is disabled/);
   assert.equal(saveCalls.length, 0);
   assert.equal(publicNetwork.checked, false);
 
