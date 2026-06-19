@@ -199,16 +199,19 @@ describe("ViewerAppShell", () => {
     expect(html).not.toContain("Click to rate");
   });
 
-  test("renders preview drawer button with responsive panel icons", () => {
+  test("renders preview info button with mobile info and desktop panel icons", () => {
     const html = renderToStaticMarkup(<PreviewDialog />);
 
     expect(html).toContain('id="toggleInfoPreview"');
-    expect(html).toContain("hidden max-[540px]:block");
-    expect(html).toContain("block max-[540px]:hidden");
-    expect(html).toContain('d="M15 3v18"');
-    expect(html).toContain('d="m10 15-3-3 3-3"');
-    expect(html).toContain('d="M3 9h18"');
-    expect(html).toContain('d="m9 14 3-3 3 3"');
+    expect(html).toContain("min-[900px]:hidden");
+    expect(html).toContain("hidden min-[900px]:block");
+    expect(html).toContain('cx="12"');
+    expect(html).toContain('cy="12"');
+    expect(html).toContain('r="10"');
+    expect(html).toContain('d="M12 16v-4"');
+    expect(html).toContain('d="M12 8h.01"');
+    expect(html).toContain('d="M9 3v18"');
+    expect(html).toContain('d="m14 9 3 3-3 3"');
   });
 
   test("renders desktop preview info as a persistent right inspector", () => {

@@ -13,10 +13,9 @@ import { PREVIEW_TOASTER_ID } from "../toasts";
 import { PreviewBodyHost } from "./PreviewBody";
 import {
   ChevronLeftIcon,
+  InfoIcon,
   PanelLeftOpenIcon,
   PanelRightOpenIcon,
-  PanelTopCloseIcon,
-  PanelTopOpenIcon,
 } from "./Icons";
 import { PreviewInfoActions, PreviewInfoDetails } from "./PreviewInfo";
 import { PreviewRating } from "./RatingStars";
@@ -191,7 +190,7 @@ export function PreviewDialog() {
         </div>
         <button id="toggleInfoPreview" className="icon-button inline-grid size-9 shrink-0 touch-manipulation select-none place-items-center rounded-lg border border-transparent bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground" type="button" aria-label="Media information" aria-expanded={desktopViewport ? desktopInfoOpen : previewDialogState.infoOpen} title="Media information" onClick={handleTogglePreviewInfo}>
           <span className="min-[900px]:hidden">
-            <PreviewInfoToggleIcon open={previewDialogState.infoOpen} />
+            <InfoIcon />
           </span>
           <span className="hidden min-[900px]:block" aria-hidden="true">
             {desktopInfoOpen ? <PanelLeftOpenIcon /> : <PanelRightOpenIcon />}
@@ -214,19 +213,6 @@ export function PreviewDialog() {
       </aside>
       <Toaster id={PREVIEW_TOASTER_ID} />
     </dialog>
-  );
-}
-
-function PreviewInfoToggleIcon({ open }: { open: boolean }) {
-  return (
-    <>
-      <span className="hidden max-[540px]:block" aria-hidden="true">
-        {open ? <PanelTopOpenIcon /> : <PanelTopCloseIcon />}
-      </span>
-      <span className="block max-[540px]:hidden" aria-hidden="true">
-        {open ? <PanelLeftOpenIcon /> : <PanelRightOpenIcon />}
-      </span>
-    </>
   );
 }
 
