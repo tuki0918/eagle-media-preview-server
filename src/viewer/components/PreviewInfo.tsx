@@ -7,7 +7,7 @@ import { directFileUrl } from "../fileLinks";
 import { folderIds, itemTags } from "../format";
 import { uniqueValues, type MetadataSuggestion } from "../metadata";
 import { getPreviewInfoState, subscribePreviewInfoState } from "../previewInfoState";
-import { showErrorToast } from "../toasts";
+import { showErrorToast, showSuccessToast } from "../toasts";
 import type { EagleFolder, EagleItem } from "../types";
 
 export interface PreviewDetailRow {
@@ -157,7 +157,7 @@ function PreviewMetadataEditor({
     setActiveInput(null);
   };
 
-  const saveMetadata = async (nextTags: string[], nextCategories: string[]) => {
+  const saveMetadata = async (nextTags: string[], nextCategories: string[], successToast?: { description: string; title: string }) => {
     if (saving) return;
     const previousTags = tags;
     const previousCategories = categories;
@@ -169,6 +169,11 @@ function PreviewMetadataEditor({
       setTags(saved.tags);
       setCategories(saved.folders);
       closeInput();
+      if (successToast) {
+        showSuccessToast(successToast.title, {
+          description: successToast.description,
+        });
+      }
     } catch (error) {
       setTags(previousTags);
       setCategories(previousCategories);
@@ -183,11 +188,17 @@ function PreviewMetadataEditor({
   const addTag = async (rawValue: string) => {
     const values = rawValue.split(",").map((value) => value.trim()).filter(Boolean);
     const nextTags = [...tags];
+    const addedTags: string[] = [];
     for (const value of values) {
-      if (!nextTags.includes(value)) nextTags.push(value);
+      if (nextTags.includes(value)) continue;
+      nextTags.push(value);
+      addedTags.push(value);
     }
     if (sameStringValues(nextTags, tags)) return;
-    await saveMetadata(nextTags, categories);
+    await saveMetadata(nextTags, categories, {
+      title: "Tags saved",
+      description: addedTags.length === 1 ? `"${addedTags[0]}" was added.` : `${addedTags.length} tags were added.`,
+    });
   };
 
   const addFolder = async (rawValue: string) => {
@@ -206,7 +217,10 @@ function PreviewMetadataEditor({
       }
       return;
     }
-    await saveMetadata(tags, [...categories, folderId]);
+    await saveMetadata(tags, [...categories, folderId], {
+      title: "Folders saved",
+      description: `"${folderLabel(folderId, folders)}" was added.`,
+    });
   };
 
   const openInput = (kind: "tags" | "folders") => {
@@ -229,7 +243,10 @@ function PreviewMetadataEditor({
         onSuggestions={onTagSuggestions}
         selectedValues={tags}
         onSubmitValue={addTag}
-        onRemove={(value) => saveMetadata(tags.filter((entry) => entry !== value), categories)}
+        onRemove={(value) => saveMetadata(tags.filter((entry) => entry !== value), categories, {
+          title: "Tags saved",
+          description: `"${value}" was removed.`,
+        })}
       />
       <EditableMetadataRow
         icon={<FolderIcon aria-hidden="true" />}
@@ -244,7 +261,10 @@ function PreviewMetadataEditor({
         onSuggestions={onFolderSuggestions}
         selectedValues={categories}
         onSubmitValue={addFolder}
-        onRemove={(value) => saveMetadata(tags, categories.filter((entry) => entry !== value))}
+        onRemove={(value) => saveMetadata(tags, categories.filter((entry) => entry !== value), {
+          title: "Folders saved",
+          description: `"${folderLabel(value, folders)}" was removed.`,
+        })}
       />
     </section>
   );
