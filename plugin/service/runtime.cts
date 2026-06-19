@@ -1,4 +1,4 @@
-const { mkdir, readFile, writeFile } = require("fs").promises;
+const { chmod, mkdir, readFile, writeFile } = require("fs").promises;
 const { pbkdf2Sync, randomBytes } = require("crypto");
 const { dirname, join } = require("path");
 const { homedir, networkInterfaces } = require("os");
@@ -168,8 +168,11 @@ function createSettingsStore({ filePath = defaultSettingsPath() }: { filePath?: 
 }
 
 async function writeSettingsFile(filePath: string, settings: PluginSettings) {
-  await mkdir(dirname(filePath), { recursive: true });
-  await writeFile(filePath, `${JSON.stringify(canonicalSettings(settings), null, 2)}\n`, "utf8");
+  const settingsDir = dirname(filePath);
+  await mkdir(settingsDir, { recursive: true, mode: 0o700 });
+  await chmod(settingsDir, 0o700);
+  await writeFile(filePath, `${JSON.stringify(canonicalSettings(settings), null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+  await chmod(filePath, 0o600);
 }
 
 function createDefaultSettings(): PluginSettings {

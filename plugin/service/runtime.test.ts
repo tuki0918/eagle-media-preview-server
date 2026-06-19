@@ -1,6 +1,6 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -78,6 +78,8 @@ test("generated settings store creates and persists a session secret", async () 
   const raw = JSON.parse(await readFile(filePath, "utf8"));
   assert.equal(raw.settingsVersion, 2);
   assert.equal(raw.sessionSecret, loaded.sessionSecret);
+  assert.equal((await stat(dir)).mode & 0o777, 0o700);
+  assert.equal((await stat(filePath)).mode & 0o777, 0o600);
 
   const saved = await store.save({ autoStart: true });
   assert.equal(saved.sessionSecret, loaded.sessionSecret);
