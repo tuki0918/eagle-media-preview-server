@@ -15,7 +15,7 @@ interface PagerProps {
 }
 
 const pagerButtonClassName =
-  "min-h-11 w-auto rounded-lg px-[18px] text-sm font-[720] max-[540px]:w-full max-[540px]:px-3.5 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-linecap:round] [&_svg]:[stroke-linejoin:round] [&_svg]:[stroke-width:2]";
+  "min-h-11 w-auto rounded-lg px-[18px] text-sm font-[720] max-[540px]:row-start-2 max-[540px]:w-full max-[540px]:px-3.5 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-linecap:round] [&_svg]:[stroke-linejoin:round] [&_svg]:[stroke-width:2]";
 
 export function Pager({
   current,
@@ -32,6 +32,7 @@ export function Pager({
   const displayOnSelectPage = onSelectPage ?? state.onSelectPage;
   const displayPages = pages ?? state.pages;
   const displayPreviousDisabled = previousDisabled ?? state.previousDisabled;
+  const pageSummary = pageSummaryLabel(displayCurrent, displayPages);
 
   return (
     <nav
@@ -46,12 +47,21 @@ export function Pager({
       <div id="pageButtons" className="page-buttons inline-flex items-center justify-center gap-2.5 max-[540px]:hidden" aria-label="Page shortcuts">
         <PageButtons current={displayCurrent} pages={displayPages} onSelect={displayOnSelectPage} />
       </div>
+      <div id="pageSummary" className="hidden min-h-6 items-center justify-center text-xs text-muted-foreground [font-variant-numeric:tabular-nums] max-[540px]:col-span-2 max-[540px]:row-start-1 max-[540px]:flex" aria-live="polite">
+        {pageSummary}
+      </div>
       <Button id="nextButton" className={`${pagerButtonClassName} max-[540px]:col-[2]`} variant="outline" type="button" disabled={displayNextDisabled} onClick={goToNextPage}>
         <span>Next</span>
         <ChevronRightIcon data-icon="inline-end" />
       </Button>
     </nav>
   );
+}
+
+function pageSummaryLabel(current: number, pages: readonly PageButton[]) {
+  const lastPage = [...pages].reverse().find((page): page is number => typeof page === "number");
+  if (!lastPage) return `Page ${current.toLocaleString()}`;
+  return `Page ${current.toLocaleString()} of ${lastPage.toLocaleString()}`;
 }
 
 function ChevronLeftIcon(props: { "data-icon"?: "inline-start" | "inline-end" }) {

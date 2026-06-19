@@ -81,6 +81,7 @@ const REQUIRED_ELEMENT_IDS = [
   "prevButton",
   "nextButton",
   "pageButtons",
+  "pageSummary",
   "previewDialog",
   "previewBody",
   "previewOriginalName",
@@ -293,6 +294,24 @@ describe("ViewerAppShell", () => {
 
     expect(html).toContain('data-active="true"');
     expect(html).toContain("page-ellipsis");
+  });
+
+  test("renders mobile pagination position when page shortcuts are hidden", () => {
+    const html = renderToStaticMarkup(
+      <Pager
+        current={3}
+        hidden={false}
+        nextDisabled={false}
+        onSelectPage={() => {}}
+        pages={[1, 2, 3, 4, "...", 10]}
+        previousDisabled={false}
+      />,
+    );
+
+    expect(html).toContain('id="pageSummary"');
+    expect(html).toContain("Page 3 of 10");
+    expect(html).toContain("max-[540px]:row-start-1");
+    expect(html).toContain("max-[540px]:row-start-2");
   });
 
   test("renders tag chips as a reusable component", () => {
