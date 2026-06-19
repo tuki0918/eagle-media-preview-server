@@ -379,7 +379,8 @@ test("public UI no longer shows connect lock icon or connection settings button"
   assert.match(message, /empty:hidden/);
   assert.doesNotMatch(css, /\.login-panel\s*\{/);
   assert.doesNotMatch(css, /\.connect-message\s*\{/);
-  assert.match(html, /className="status-line flex justify-end py-1"/);
+  assert.match(html, /className="status-line flex items-center justify-between gap-3 py-1"/);
+  assert.match(html, /aria-label="Results status and view options"/);
   assert.match(html, /className="view-toggle w-fit"/);
   assert.doesNotMatch(css, /\.status-line\s*\{/);
   assert.doesNotMatch(css, /\.status-actions\s*\{/);
@@ -926,7 +927,7 @@ test("public UI supports tag filter chips", async () => {
   assert.match(app, /Object\.assign\(state, resetFilterState\(\)\);/);
   assert.match(controls, /data-slot="input-group"/);
   assert.match(controls, /data-slot="input-group-addon" data-align="inline-start"/);
-  assert.match(controls, /data-slot="input-group-addon" data-align="inline-end"/);
+  assert.doesNotMatch(controls, /data-slot="input-group-addon" data-align="inline-end"/);
   assert.match(controls, /search-row[^"]*grid items-stretch gap-3/);
   assert.match(controls, /tag-chips[^"]*flex flex-wrap gap-1\.5 empty:hidden/);
   assert.match(controls, /filter-reset-button[^"]*max-\[540px\]:size-11/);
