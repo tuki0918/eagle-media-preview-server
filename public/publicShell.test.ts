@@ -13,12 +13,14 @@ import {
   LibraryFooter,
   LoginView,
   PreviewActions,
-  PreviewDetailsPanel,
+  PreviewBody,
+  PreviewDialog,
   ResultList,
   SearchControls,
   SearchFiltersButton,
 } from "../src/viewer/ViewerShell";
 import { setLoginConnectState } from "../src/viewer/loginConnectState";
+import { setPreviewDialogState, resetPreviewDialogState } from "../src/viewer/previewDialogState";
 import { PAGE_SIZE_OPTIONS } from "../src/viewer/shellConfig";
 
 function accountSideMenuElement() {
@@ -409,6 +411,10 @@ test("public image preview fit mode scales to the viewport and refreshes on resi
   const html = await readAppSources();
   const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
+  const imagePreview = renderToStaticMarkup(createElement(PreviewBody, {
+    item: { id: "image-1", name: "Image.jpg", ext: "jpg" },
+    kind: "image",
+  }));
 
   assert.match(html, /window\.addEventListener\("resize", refreshLayout\);/);
   assert.match(app, /const IMAGE_FIT_MARGIN = 0\.96;/);
@@ -418,8 +424,8 @@ test("public image preview fit mode scales to the viewport and refreshes on resi
   assert.match(app, /const naturalScale = 1;/);
   assert.match(app, /const keepFitted = Math\.abs\(previousTransform\.scale - previousFitScale\) < 0\.01;/);
   assert.match(html, /transform: `translate\(-50%, -50%\) translate3d\(\$\{imageState\.transform\.x\}px, \$\{imageState\.transform\.y\}px, 0\) scale\(\$\{imageState\.transform\.scale\}\)`/);
-  assert.match(html, /const previewLayoutClassName = \[/);
-  assert.match(html, /const previewImageClassName =[\s\S]*"preview-image absolute left-1\/2 top-1\/2/);
+  assert.match(imagePreview, /class="image-viewport[^"]*\bplace-items-center\b/);
+  assert.match(imagePreview, /class="preview-image absolute left-1\/2 top-1\/2/);
   const imageToolbarClass = html.match(/const imageToolbarClassName =\s*"([^"]*)"/)?.[1] || "";
   assert.match(imageToolbarClass, /right-\[calc\(14px\+env\(safe-area-inset-right\)\)\]/);
   assert.doesNotMatch(imageToolbarClass, /left-1\/2/);
@@ -430,18 +436,31 @@ test("public image preview fit mode scales to the viewport and refreshes on resi
 
 test("public video preview reserves top space for floating action buttons", async () => {
   const html = await readAppSources();
+  const videoPreview = renderToStaticMarkup(createElement(PreviewBody, {
+    item: { id: "video-1", name: "Video.mp4", ext: "mp4" },
+    kind: "video",
+  }));
+  setPreviewDialogState({ infoOpen: false, mode: "video", open: true });
+  const dialog = renderToStaticMarkup(createElement(PreviewDialog));
+  resetPreviewDialogState();
 
-  assert.match(html, /previewDialogState\.mode === "video" \? "h-dvh max-h-dvh bg-\[#05070a\]"/);
+  assert.match(dialog, /id="previewDialog"[^>]*class="[^"]*bg-\[#05070a\]/);
+  assert.match(dialog, /class="preview-layout[^"]*bg-\[#05070a\]/);
   assert.doesNotMatch(html, /pt-\[calc\(60px\+env\(safe-area-inset-top\)\)\]/);
   assert.match(html, /if \(kind === "video"\) return `\$\{base\} bg-\[#05070a\] max-h-full`;/);
-  assert.match(html, /const previewVideoClassName =[\s\S]*"preview-video h-full w-full max-h-full cursor-pointer bg-\[#05070a\] object-contain/);
+  assert.match(videoPreview, /class="preview-video h-full w-full max-h-full cursor-pointer bg-\[#05070a\] object-contain/);
 });
 
 test("public audio preview uses video-style dark action buttons", async () => {
   const html = await readAppSources();
+  const audioPreview = renderToStaticMarkup(createElement(PreviewBody, {
+    item: { id: "audio-1", name: "Audio.mp3", ext: "mp3" },
+    kind: "audio",
+  }));
 
-  assert.match(html, /previewDialogState\.mode === "video" \|\| previewDialogState\.mode === "audio"/);
-  assert.match(html, /bg-\[rgba\(15,23,42,0\.48\)\][\s\S]*hover:bg-\[rgba\(15,23,42,0\.64\)\]/);
+  assert.match(html, /if \(kind === "audio"\) return `\$\{base\} place-items-center bg-\[#05070a\]`;/);
+  assert.match(audioPreview, /class="audio-player-shell[^"]*text-white/);
+  assert.match(audioPreview, /class="[^"]*bg-\[rgba\(255,255,255,0\.12\)\][^"]*hover:bg-\[rgba\(255,255,255,0\.2\)\]/);
 });
 
 test("public UI exposes direct original file URLs for each media item", async () => {
@@ -459,8 +478,9 @@ test("public UI exposes direct original file URLs for each media item", async ()
   assert.match(actions, /preview-admin-actions/);
   assert.match(actions, /href="http:\/\/localhost\/file\/item%201"/);
   assert.match(actions, /Open file/);
-  assert.doesNotMatch(nonAdminActions, /Open file/);
-  assert.doesNotMatch(nonAdminActions, /direct-file-link/);
+  assert.match(nonAdminActions, /Open file/);
+  assert.match(nonAdminActions, /direct-file-link/);
+  assert.doesNotMatch(nonAdminActions, /preview-admin-menu-trigger/);
   assert.doesNotMatch(directFileUrlSource, /connectionId/);
   assert.doesNotMatch(app, /state\.connectionId/);
   assert.doesNotMatch(app, /function withConnection\(/);
@@ -576,12 +596,12 @@ test("public status line no longer renders page count UI", async () => {
 test("public shell uses Media Preview Server branding and serves a favicon", async () => {
   const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
   const app = await readViewerSources();
-  const appComponent = await readAppSources();
+  const login = renderToStaticMarkup(createElement(LoginView, { hidden: false }));
   await access(new URL("./favicon.ico", import.meta.url));
 
   assert.match(html, /<title>Media Preview Server<\/title>/);
   assert.match(app, /function libraryTitle\(data: ConnectResponse\) \{[\s\S]*return `\$\{name\} - Media Preview Server`;/);
-  assert.match(appComponent, /<strong className="[^"]*">Media Preview Server<\/strong>/);
+  assert.match(login, />Media Preview Server<\/h1>/);
   assert.match(html, /<link rel="icon" href="\/favicon\.ico"/);
   assert.doesNotMatch(html, /Eagle Web UI/);
 });
@@ -638,7 +658,8 @@ test("public file names expose original names in truncated views and preview inf
   assert.match(html, /<strong title=\{originalFileName\(item\)\}>/);
   assert.match(html, /const rowFileNameClassName =[\s\S]*row-file-name/);
   assert.match(html, /<span className=\{rowFileNameClassName\} title=\{originalFileName\(item\)\}>/);
-  assert.match(html, /<section className="[^"]*\bpreview-original-name-section\b[^"]*">[\s\S]*<PreviewOriginalName \/>[\s\S]*<\/section>[\s\S]*<section className="[^"]*\bpreview-rating-section\b[^"]*">/);
+  assert.match(html, /<PreviewOriginalName source="display" \/>/);
+  assert.match(html, /className="preview-rating-section[^"]*"/);
   assert.doesNotMatch(html, /File Name/);
   assert.doesNotMatch(app, /previewOriginalNameHost: document\.querySelector\("#previewOriginalNameHost"\),/);
   assert.doesNotMatch(app, /previewMetaHost: document\.querySelector\("#previewMetaHost"\),/);
@@ -648,10 +669,8 @@ test("public file names expose original names in truncated views and preview inf
   assert.match(app, /setPreviewTextState\(\{[\s\S]*displayName: displayFileName\(item\),[\s\S]*originalName: originalFileName\(item\),[\s\S]*\}\);/);
   assert.match(html, /<PreviewOriginalName source="display" \/>/);
   assert.doesNotMatch(app, /els\.previewOriginalName\.textContent/);
-  assert.match(html, /preview-original-name-section grid min-h-8 grid-cols-\[minmax\(0,1fr\)\]/);
-  assert.match(html, /max-\[540px\]:pb-3\.5 max-\[540px\]:pt-1\.5/);
-  assert.match(html, /preview-rating-section grid min-h-8 grid-cols-\[minmax\(96px,112px\)_minmax\(0,1fr\)\]/);
-  assert.doesNotMatch(html, /preview-rating-section[^"]*border-b/);
+  assert.match(html, /<div className="min-w-0 truncate text-sm font-normal text-foreground/);
+  assert.match(html, /preview-rating-section mx-2 grid min-h-8 grid-cols-\[minmax\(82px,104px\)_minmax\(0,1fr\)\]/);
   assert.match(html, /preview-original-name-value w-full min-w-0 whitespace-normal/);
 });
 
@@ -673,25 +692,17 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.doesNotMatch(app, /renderPreviewInfoView\(els\.previewDetails, els\.previewActions, \{/);
   assert.match(app, /setPreviewInfoState\(\{/);
   assert.match(html, /function PreviewMetadataEditor\(\{/);
-  assert.match(html, /<PreviewEditField label="Tags">/);
-  assert.match(html, /<PreviewEditField label="Folders">/);
-  assert.match(html, /const saved = await onSaveMetadata\(item, \{ tags, folders: categories \}\);/);
-  assert.match(html, /const \[savedTags, setSavedTags\] = useState\(\(\) => initialTags\);/);
-  assert.match(html, /const \[savedCategories, setSavedCategories\] = useState\(\(\) => initialCategories\);/);
-  assert.match(html, /const hasMetadataChanges = !sameStringValues\(tags, savedTags\) \|\| !sameStringValues\(categories, savedCategories\);/);
-  assert.match(html, /const saveButtonLabel = saving \? "Saving metadata" : hasMetadataChanges \? "Save metadata" : "No metadata changes";/);
+  assert.match(html, /<EditableMetadataRow[\s\S]*label="Tags"/);
+  assert.match(html, /<EditableMetadataRow[\s\S]*label="Folders"/);
+  assert.match(html, /const saved = await onSaveMetadata\(item, \{ tags: nextTags, folders: nextCategories \}\);/);
   assert.match(html, /setTags\(saved\.tags\);/);
   assert.match(html, /setCategories\(saved\.folders\);/);
-  assert.match(html, /setSavedTags\(saved\.tags\);/);
-  assert.match(html, /setSavedCategories\(saved\.folders\);/);
-  assert.match(html, /showSuccessToast\("Metadata saved"/);
+  assert.match(html, /showSuccessToast\(successToast\.title/);
   assert.match(html, /showErrorToast\("Unable to save metadata"/);
-  assert.match(html, /if \(!hasMetadataChanges\) return;/);
-  assert.match(html, /disabled=\{saving \|\| !hasMetadataChanges\}/);
-  assert.match(html, /aria-label=\{saveButtonLabel\}/);
-  assert.match(html, /title=\{saveButtonLabel\}/);
+  assert.match(html, /const addTag = async \(rawValue: string\) => \{/);
+  assert.match(html, /const addFolder = async \(rawValue: string\) => \{/);
   assert.match(html, /function sameStringValues\(left: readonly string\[\], right: readonly string\[\]\) \{/);
-  assert.match(html, /onSubmit=\{submitMetadata\}/);
+  assert.match(html, /onSubmitValue=\{addTag\}/);
   assert.match(app, /postJson<\{[\s\S]*folders\?: unknown;[\s\S]*\}>\(`\/api\/items\/\$\{encodeURIComponent\(String\(item\.id \|\| ""\)\)\}\/metadata`, \{ tags, folders \}\)/);
   assert.match(app, /rememberRecentValues\(RECENT_TAGS_STORAGE_KEY, patch\.tags\);/);
   assert.match(app, /rememberRecentValues\(RECENT_FOLDERS_STORAGE_KEY, patch\.folders\);/);
@@ -702,21 +713,21 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(app, /showErrorToast\("Unable to save rating"/);
   assert.match(app, /const RECENT_TAGS_STORAGE_KEY = "eagleRecentTags";/);
   assert.match(app, /const RECENT_FOLDERS_STORAGE_KEY = "eagleRecentFolders";/);
-  assert.match(html, /function TagChipEditor\(\{/);
-  assert.match(html, /function FolderChecklistEditor\(\{/);
+  assert.match(html, /function MetadataChipList\(\{/);
+  assert.match(html, /function MetadataInlineInput\(\{/);
   assert.match(html, /function MetadataReadOnlyRow\(\{/);
   assert.doesNotMatch(html, /initialValues/);
   assert.match(html, /const clearDebounceTimer = \(\) => \{/);
   assert.match(html, /return \(\) => \{\s*requestId\.current \+= 1;\s*clearDebounceTimer\(\);\s*\};/);
-  assert.match(html, /onPointerDown=\{\(event\) => event\.stopPropagation\(\)\}/);
+  assert.match(html, /input\.addEventListener\("input", handleInput\);/);
+  assert.match(html, /input\.addEventListener\("keydown", handleKeyDown\);/);
+  assert.match(html, /input\.onkeydown = handleKeyDown;/);
   assert.doesNotMatch(html, /className="preview-add-tag/);
-  assert.match(html, /onPaste=\{handlePaste\}/);
-  assert.match(html, /function folderChecklistSections\(\{/);
   assert.match(app, /function readRecentList\(key[^)]*\) \{/);
   assert.match(app, /function writeRecentList\(key[^,]*,\s*values[^)]*\) \{/);
   assert.match(app, /function tagSuggestionItems\(\{/);
   assert.match(app, /function folderSuggestionItems\(\{/);
-  assert.match(html, /const previewEditRowClassName =[\s\S]*"preview-edit-row/);
+  assert.match(html, /const previewMetadataRowClassName = "preview-metadata-row/);
   assert.doesNotMatch(app, /const row = document\.createElement\("label"\);/);
   assert.doesNotMatch(app, /render\(\);\s*if \(els\.dialog\.open && state\.previewItemId === item\.id\) \{\s*renderPreviewDetails\(item\);/s);
   assert.match(app, /{ label: "Date Modified", value: formatItemDate\(item, DATE_KEYS_MODIFIED\) \|\| "-" }/);
@@ -727,40 +738,34 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(html, /<div id="previewDetails" className="preview-details grid gap-2\.5">/);
   assert.match(html, /\{previewInfoState \? <PreviewDetailsPanel \{\.\.\.previewInfoState\} \/> : null\}/);
   assert.match(html, /<div id="previewActions" className="preview-info-actions/);
-  assert.match(html, /\{previewInfoState \? <PreviewActions canManageLibrary=\{previewInfoState\.canManageLibrary\} item=\{previewInfoState\.item\} \/> : null\}/);
+  assert.match(html, /<PreviewActions canEditMetadata=\{previewInfoState\.canEditMetadata\} canManageLibrary=\{previewInfoState\.canManageLibrary\}/);
   assert.match(html, /const previewDetailsSectionClassName =[\s\S]*gap-1\.5/);
   assert.doesNotMatch(css, /\.preview-detail-row-divider\s*\{/);
-  assert.match(html, /preview-rating-section grid min-h-8/);
+  assert.match(html, /preview-rating-section mx-2 grid min-h-8/);
   assert.match(html, /const previewDetailRowClassName =[\s\S]*min-h-7/);
   assert.match(html, /const previewChipListClassName = "preview-chip-list/);
-  assert.match(html, /const previewChipClassName =[\s\S]*min-h-6[\s\S]*bg-secondary[\s\S]*text-\[11px\][\s\S]*font-medium/);
+  assert.match(html, /const previewChipClassName =[\s\S]*min-h-\[28px\][\s\S]*bg-secondary[\s\S]*text-\[12px\][\s\S]*font-medium/);
   assert.match(html, /className="rating-control inline-flex items-center gap-2\.5 \[&_\.rating-star\]:h-6 \[&_\.rating-star\]:w-6 \[&_\.rating-star\]:text-xl"/);
   assert.match(html, /const previewLabelClassName = "preview-detail-label text-xs font-normal text-muted-foreground"/);
   assert.match(html, /const previewDetailValueClassName =[\s\S]*text-sm[\s\S]*max-\[540px\]:text-\[13px\]/);
   assert.doesNotMatch(css, /\.preview-chip-empty/);
-  assert.match(html, /className="preview-info-actions border-t border-border px-2 pt-3"/);
-  assert.match(html, /className="preview-admin-actions grid gap-2"/);
-  assert.match(html, /const previewEditFormClassName = "preview-edit-form/);
-  assert.match(html, /const previewEditRowClassName =[\s\S]*"preview-edit-row grid min-h-8 gap-2"/);
-  assert.match(html, /const previewChipEditorClassName = "preview-chip-editor/);
+  assert.match(html, /className="preview-info-actions mx-2 border-t border-border pt-3"/);
+  assert.match(html, /preview-admin-actions relative grid gap-2/);
+  assert.match(html, /className="preview-metadata-input grid gap-0\.5"/);
+  assert.match(html, /const previewMetadataRowClassName = "preview-metadata-row grid gap-2/);
   assert.match(html, /const previewEditChipListClassName = "preview-edit-chip-list/);
-  assert.match(html, /preview-folder-list grid max-h-\[260px\]/);
-  assert.doesNotMatch(html, /preview-folder-list[^"]*max-\[540px\]:fixed/);
-  assert.match(html, /aria-label="Folder checklist"/);
-  assert.match(html, /preview-folder-section-label/);
+  assert.match(html, /preview-metadata-add size-\[30px\] rounded-md/);
+  assert.match(html, /aria-label=\{addLabel\}/);
   assert.doesNotMatch(html, /preview-folder-current-badge/);
   assert.doesNotMatch(html, /preview-folder-option-meta/);
-  assert.match(html, /No matching folder\. Create folders in Eagle first\./);
-  assert.match(html, /<TagIcon className="pointer-events-none absolute left-3 top-1\/2 size-4 -translate-y-1\/2 text-muted-foreground"/);
-  assert.match(html, /className=\{`\$\{previewChipInputClassName\} pl-9`\}/);
+  assert.match(html, /className=\{`\$\{previewChipInputClassName\} pl-9 pr-10`\}/);
   assert.match(html, /const previewChipInputClassName = "preview-chip-input/);
   assert.match(html, /const previewChipSuggestionsClassName = "preview-chip-suggestions/);
   assert.doesNotMatch(html, /preview-chip-suggestions[^"]*max-\[540px\]:fixed/);
   assert.match(html, /const previewChipSuggestionClassName = "preview-chip-suggestion/);
-  assert.match(html, /className="preview-edit-actions sticky bottom-0/);
-  assert.match(html, /preview-edit-cancel/);
-  assert.match(html, /Save changes/);
-  assert.match(html, /const directFileLinkClassName =[\s\S]*min-h-\[52px\] w-full[\s\S]*bg-primary[\s\S]*text-primary-foreground/);
+  assert.doesNotMatch(html, /preview-edit-cancel/);
+  assert.doesNotMatch(html, /Save changes/);
+  assert.match(html, /const directFileLinkClassName =[\s\S]*min-h-11 w-full[\s\S]*bg-primary[\s\S]*text-primary-foreground/);
   assert.match(html, /max-\[540px\]:max-h-\[min\(72dvh,560px\)\]/);
   assert.match(html, /max-\[540px\]:gap-3/);
   assert.match(html, /<div id="previewDetails" className="preview-details grid gap-2\.5">/);
@@ -776,16 +781,12 @@ test("public preview info closes when pressing outside the side menu", async () 
   assert.match(html, /handlePreviewPointerDown\(event\);/);
   assert.match(html, /useSyncExternalStore\(subscribePreviewDialogState, getPreviewDialogState, getPreviewDialogState\)/);
   assert.match(html, /previewDialogState\.mode \? `\$\{previewDialogState\.mode\}-mode` : ""/);
-  assert.match(html, /aria-expanded=\{previewDialogState\.infoOpen\}/);
+  assert.match(html, /aria-expanded=\{desktopViewport \? desktopInfoOpen : previewDialogState\.infoOpen\}/);
   assert.match(html, /document\.body\.classList\.toggle\("modal-open", previewDialogState\.open\)/);
   assert.match(html, /dialog\.showModal\(\)/);
   assert.match(html, /dialog\.close\(\)/);
   assert.match(html, /document\.addEventListener\(eventName, preventGestureWhileOpen, options\)/);
   assert.match(html, /document\.removeEventListener\(eventName, preventGestureWhileOpen\)/);
-  assert.match(html, /const toggleFullscreen = async \(\) => \{/);
-  assert.match(html, /previewBodyRef\.current/);
-  assert.match(html, /document\.fullscreenElement/);
-  assert.match(html, /target\.requestFullscreen/);
   assert.match(html, /document\.addEventListener\("pointerdown", handlePointerDown\)/);
   assert.match(html, /document\.removeEventListener\("pointerdown", handlePointerDown\)/);
   assert.match(app, /setPreviewDialogState\(\{/);
