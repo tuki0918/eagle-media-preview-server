@@ -146,6 +146,7 @@ describe("ViewerAppShell", () => {
   test("renders login connection controls as reusable components", () => {
     const button = renderToStaticMarkup(<ConnectButton disabled />);
     const message = renderToStaticMarkup(<ConnectMessage isError message="No Eagle" />);
+    const login = renderToStaticMarkup(<LoginView />);
 
     expect(button).toContain('id="connectButton"');
     expect(button).toContain("disabled");
@@ -156,6 +157,7 @@ describe("ViewerAppShell", () => {
     expect(message).toContain("lucide-circle-alert");
     expect(message).toContain('role="alert"');
     expect(message).not.toContain("fixed bottom-");
+    expect(login).toContain("Start the server from the Eagle plugin panel");
   });
 
   test("exports independently renderable shell components", () => {
