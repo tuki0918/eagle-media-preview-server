@@ -258,6 +258,7 @@ describe("ViewerAppShell", () => {
     expect(dialog).not.toContain("bg-[rgba(15,23,42,0.48)]");
     expect(body).toContain("image-toolbar");
     expect(body).toMatch(/image-toolbar[^"]*right-\[calc\(14px\+env\(safe-area-inset-right\)\)\]/);
+    expect(body).toContain("100%");
     expect(body).not.toMatch(/image-toolbar[^"]*left-1\/2/);
     expect(body).not.toMatch(/image-toolbar[^"]*-translate-x-1\/2/);
     expect(body).toContain("bg-card");

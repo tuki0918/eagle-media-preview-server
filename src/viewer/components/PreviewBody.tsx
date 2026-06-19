@@ -76,6 +76,8 @@ const imageToolbarClassName =
   "image-toolbar absolute bottom-[calc(14px+env(safe-area-inset-bottom))] right-[calc(14px+env(safe-area-inset-right))] z-[2] inline-flex items-center gap-1.5 rounded-lg border border-border bg-card p-1.5 shadow-sm";
 const toolbarButtonClassName =
   "inline-grid min-h-[38px] w-[38px] touch-manipulation select-none place-items-center rounded-md border-0 bg-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground [&_svg]:h-[18px] [&_svg]:w-[18px] [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-linecap:round] [&_svg]:[stroke-linejoin:round] [&_svg]:[stroke-width:2]";
+const imageZoomLabelClassName =
+  "min-w-[44px] rounded-md px-1.5 text-center text-[11px] font-[680] tabular-nums text-muted-foreground";
 
 export function PreviewBody({ item, kind, srcKind = "file" }: PreviewBodyProps) {
   if (kind === "video") return <VideoPreview item={item} />;
@@ -587,6 +589,7 @@ function ImagePreview({ item, srcKind }: { item: EagleItem; srcKind: "file" | "t
         onFit={() => setImageZoom(imageState.fitScale, { x: 0, y: 0 })}
         onZoomIn={() => zoomImage(1.18)}
         onZoomOut={() => zoomImage(0.85)}
+        zoomLabel={formatImageZoomLabel(imageState.transform.scale)}
       />
     </>
   );
@@ -598,19 +601,22 @@ function ImageToolbar({
   onZoomIn,
   onZoomOut,
   visible,
+  zoomLabel,
 }: {
   onActualSize: () => void;
   onFit: () => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
   visible: boolean;
+  zoomLabel: string;
 }) {
   return (
     <div className={`${imageToolbarClassName} ${visible ? "opacity-100" : "pointer-events-none opacity-0"} transition-opacity duration-150`}>
       <ToolbarButton label="Zoom out" icon={<MinusIcon />} onClick={onZoomOut} />
+      <span className={imageZoomLabelClassName} aria-live="polite">{zoomLabel}</span>
+      <ToolbarButton label="Zoom in" icon={<PlusIcon />} onClick={onZoomIn} />
       <ToolbarButton label="Fit" icon={<MaximizeIcon />} onClick={onFit} />
       <ToolbarButton label="Actual size" icon={<Maximize2Icon />} onClick={onActualSize} />
-      <ToolbarButton label="Zoom in" icon={<PlusIcon />} onClick={onZoomIn} />
     </div>
   );
 }
@@ -625,6 +631,11 @@ function ToolbarButton({ icon, label, onClick }: { icon: ReactNode; label: strin
 
 function PreviewNotice({ message }: { message: string }) {
   return <p className={previewNoticeClassName}>{message}</p>;
+}
+
+function formatImageZoomLabel(scale: number) {
+  if (!Number.isFinite(scale) || scale <= 0) return "100%";
+  return `${Math.round(scale * 100)}%`;
 }
 
 function previewBodyClassName(kind?: PreviewBodyKind) {
