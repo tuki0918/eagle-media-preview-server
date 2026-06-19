@@ -6,6 +6,7 @@ interface PreviewMetaProps {
 }
 
 interface PreviewOriginalNameProps {
+  id?: string;
   value?: string;
 }
 
@@ -14,13 +15,13 @@ export function PreviewMeta({ value }: PreviewMetaProps) {
   return <span id="previewMeta">{value ?? state.meta}</span>;
 }
 
-export function PreviewOriginalName({ value }: PreviewOriginalNameProps) {
+export function PreviewOriginalName({ id = "previewOriginalName", value }: PreviewOriginalNameProps) {
   const state = useSyncExternalStore(subscribePreviewTextState, getPreviewTextState, getPreviewTextState);
   const displayValue = value ?? state.originalName;
 
   return (
     <div
-      id="previewOriginalName"
+      id={id}
       className="preview-original-name-value w-full min-w-0 whitespace-normal text-sm leading-[1.4] text-foreground [overflow-wrap:anywhere]"
       title={displayValue || undefined}
     >

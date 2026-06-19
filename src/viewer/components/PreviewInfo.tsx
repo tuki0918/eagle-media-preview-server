@@ -39,23 +39,23 @@ interface MetadataChipEditorProps {
 }
 
 const textActionButtonClassName =
-  "rounded-lg px-3 text-[13px] font-[680]";
+  "rounded-md px-3 text-[13px] font-[680]";
 const previewLabelClassName = "preview-detail-label text-xs font-normal text-muted-foreground";
 const directFileLinkClassName =
-  "direct-file-link preview-info-cta min-h-[52px] w-full cursor-pointer gap-3 whitespace-nowrap rounded-lg bg-primary px-2 text-[15px] font-[760] leading-none text-primary-foreground no-underline shadow-none hover:bg-primary hover:text-primary-foreground [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-width:2]";
+  "direct-file-link preview-info-cta min-h-11 w-full cursor-pointer gap-2.5 whitespace-nowrap rounded-md bg-primary px-2 text-[14px] font-[720] leading-none text-primary-foreground no-underline shadow-none hover:bg-primary hover:text-primary-foreground [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-width:2]";
 const previewDetailsSectionClassName = "preview-details-section grid gap-1.5 px-2 pt-1";
 const previewDetailRowClassName =
-  "preview-detail-row grid min-h-7 grid-cols-[minmax(96px,112px)_minmax(0,1fr)] items-start gap-[18px] max-[540px]:gap-3";
+  "preview-detail-row grid min-h-7 grid-cols-[minmax(82px,104px)_minmax(0,1fr)] items-start gap-4 max-[540px]:gap-3";
 const previewDetailValueClassName = "preview-detail-value min-w-0 text-sm leading-[1.35] text-foreground [overflow-wrap:anywhere] max-[540px]:text-[13px]";
-const previewChipListClassName = "preview-chip-list flex flex-wrap gap-x-2.5 gap-y-2";
-const previewChipClassName = "preview-chip inline-flex h-auto min-h-6 items-center rounded-lg bg-secondary px-2 text-[11px] font-medium text-secondary-foreground";
+const previewChipListClassName = "preview-chip-list flex flex-wrap gap-x-2 gap-y-1.5";
+const previewChipClassName = "preview-chip inline-flex h-auto min-h-6 items-center rounded-md bg-secondary px-2 text-[11px] font-medium text-secondary-foreground";
 const previewEditFormClassName = "preview-edit-form grid gap-3 border-t border-border pt-3";
 const previewEditRowClassName =
-  "preview-edit-row grid min-h-8 gap-2";
+  "preview-edit-row grid min-h-8 gap-2.5";
 const previewChipEditorClassName = "preview-chip-editor relative grid w-full min-w-0 gap-2";
 const previewEditChipListClassName = "preview-edit-chip-list flex min-h-0 flex-wrap gap-1.5";
-const previewEditChipClassName = "preview-edit-chip inline-flex h-auto min-h-[28px] max-w-full items-center gap-1.5 rounded-full border border-border bg-secondary py-0 pl-[9px] pr-1.5 text-xs font-[560] text-secondary-foreground";
-const previewChipInputClassName = "preview-chip-input min-h-10 w-full min-w-0 rounded-lg border border-input bg-background px-3 text-base text-foreground min-[720px]:text-sm";
+const previewEditChipClassName = "preview-edit-chip inline-flex h-auto min-h-[28px] max-w-full items-center gap-1.5 rounded-md border border-border bg-secondary py-0 pl-[9px] pr-1.5 text-xs font-[560] text-secondary-foreground";
+const previewChipInputClassName = "preview-chip-input min-h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-base text-foreground min-[720px]:text-sm";
 const previewChipSuggestionsClassName = "preview-chip-suggestions absolute left-0 right-0 top-[calc(100%+4px)] z-[8] grid max-h-[260px] overflow-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-sm max-[540px]:max-h-[32dvh] max-[540px]:rounded-lg";
 const previewChipSuggestionClassName = "preview-chip-suggestion flex min-h-10 cursor-pointer items-center justify-between gap-3 rounded-md border-0 bg-transparent px-2.5 text-left text-[13px] text-popover-foreground hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground focus-visible:outline-none";
 const previewMetadataRowClassName = "preview-metadata-row grid gap-1.5";
@@ -273,19 +273,23 @@ function PreviewMetadataEditor({
           onSuggestions={onFolderSuggestions}
         />
       </PreviewEditField>
-      {hasMetadataChanges || saving ? (
-        <div className="preview-edit-actions sticky bottom-0 z-[7] -mx-2 mt-1 flex min-h-[48px] items-center justify-end gap-2.5 border-t border-border bg-card/95 px-2 py-2 backdrop-blur max-[540px]:bottom-[env(safe-area-inset-bottom)]">
+      <div className="preview-edit-actions sticky bottom-0 z-[7] -mx-2 mt-1 flex min-h-[48px] items-center justify-end gap-2.5 border-t border-border bg-card/95 px-2 py-2 backdrop-blur max-[540px]:bottom-[env(safe-area-inset-bottom)]">
+        {hasMetadataChanges || saving ? (
           <span className="preview-edit-status min-w-0 text-xs text-muted-foreground" role="status">
             {saving ? "Saving" : `${changeCount} ${changeCount === 1 ? "change" : "changes"}`}
           </span>
-          <Button type="button" variant="outline" className={`${textActionButtonClassName} preview-edit-cancel min-h-9 px-3`} disabled={saving} onClick={cancelMetadataChanges}>
-            Cancel
-          </Button>
-          <Button type="submit" className={`${textActionButtonClassName} preview-edit-save min-h-9 px-3`} aria-label={saveButtonLabel} title={saveButtonLabel} disabled={saving || !hasMetadataChanges}>
-            {saving ? "Saving" : "Save changes"}
-          </Button>
-        </div>
-      ) : null}
+        ) : (
+          <span className="preview-edit-status min-w-0 text-xs text-muted-foreground" role="status">
+            Editing metadata
+          </span>
+        )}
+        <Button type="button" variant="outline" className={`${textActionButtonClassName} preview-edit-cancel min-h-9 px-3`} disabled={saving} onClick={cancelMetadataChanges}>
+          Cancel
+        </Button>
+        <Button type="submit" className={`${textActionButtonClassName} preview-edit-save min-h-9 px-3`} aria-label={saveButtonLabel} title={saveButtonLabel} disabled={saving || !hasMetadataChanges}>
+          {saving ? "Saving" : "Save metadata"}
+        </Button>
+      </div>
     </form>
   );
 }
@@ -627,8 +631,8 @@ function FolderChecklistEditor({
           ref={inputRef}
           className={`${previewChipInputClassName} pl-9`}
           type="text"
-          placeholder="Search folders"
-          aria-label="Search folders"
+          placeholder="Search folder"
+          aria-label="Search folder"
           autoComplete="off"
           disabled={disabled}
           defaultValue=""

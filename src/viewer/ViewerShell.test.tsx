@@ -82,16 +82,13 @@ const REQUIRED_ELEMENT_IDS = [
   "nextButton",
   "pageButtons",
   "previewDialog",
-  "previewMeta",
   "previewBody",
   "previewOriginalName",
   "previewRating",
   "previewDetails",
   "previewActions",
   "toggleInfoPreview",
-  "fullscreenPreview",
   "closePreview",
-  "backPreview",
   "cardTemplate",
 ] as const;
 
@@ -179,18 +176,27 @@ describe("ViewerAppShell", () => {
     }
   });
 
-  test("renders preview close as a top-left back action without a visible swipe handle", () => {
+  test("renders preview header with back action, divider, filename, and mobile info toggle", () => {
     const html = renderToStaticMarkup(<PreviewDialog />);
 
     expect(html).toContain("fixed inset-0");
+    expect(html).toContain("grid-rows-[auto_minmax(0,1fr)]");
     expect(html).toContain("m-0");
     expect(html).toContain("max-h-none");
     expect(html).toContain("max-w-none");
     expect(html).not.toContain("preview-close-swipe-handle");
     expect(html).not.toContain("Swipe down to close preview");
+    expect(html).toContain("preview-header");
     expect(html).toContain('id="closePreview"');
-    expect(html).toContain("left-2.5");
+    expect(html).toContain('id="previewOriginalName"');
+    expect(html).not.toContain('id="previewHeaderOriginalName"');
+    expect(html).toContain("border-l border-border");
+    expect(html).toContain("min-[900px]:hidden");
+    expect(html).toContain("min-[900px]:col-start-1");
     expect(html).toContain("m15 18-6-6 6-6");
+    expect(html).not.toContain("preview-original-name-section");
+    expect(html).not.toContain("preview-original-meta");
+    expect(html).not.toContain("Click to rate");
   });
 
   test("renders preview drawer button with responsive panel icons", () => {
@@ -205,28 +211,31 @@ describe("ViewerAppShell", () => {
     expect(html).toContain('d="m9 14 3-3 3 3"');
   });
 
-  test("renders desktop preview info drawer from the right edge", () => {
+  test("renders desktop preview info as a persistent right inspector", () => {
     const html = renderToStaticMarkup(<PreviewDialog />);
 
     expect(html).toContain("preview-info");
     expect(html).toContain("right-0");
     expect(html).toContain("z-[6]");
     expect(html).toContain("border-l");
+    expect(html).toContain("min-[900px]:relative");
+    expect(html).toContain("min-[900px]:col-start-2");
+    expect(html).toContain("min-[900px]:row-span-2");
+    expect(html).toContain("min-[900px]:translate-x-0");
     expect(html).toContain("translate-x-full");
     expect(html).toContain("shadow-none");
   });
 
-  test("renders video preview layout edge to edge under overlay controls", () => {
+  test("renders video preview layout under the shared preview header", () => {
     setPreviewDialogState({ infoOpen: false, mode: "video", open: true });
     const html = renderToStaticMarkup(<PreviewDialog />);
     resetPreviewDialogState();
 
-    expect(html).toContain("h-dvh max-h-dvh bg-[#05070a]");
-    expect(html).not.toContain("pt-[calc(60px+env(safe-area-inset-top))]");
-    expect(html).toContain("fixed left-2.5 top-[calc(10px+env(safe-area-inset-top))]");
-    expect(html).toContain("rounded-full");
-    expect(html).toContain("bg-[rgba(15,23,42,0.48)]");
-    expect(html).toContain('id="fullscreenPreview"');
+    expect(html).toContain("bg-[#05070a]");
+    expect(html).toContain("preview-header");
+    expect(html).toContain('id="closePreview"');
+    expect(html).not.toContain('id="fullscreenPreview"');
+    expect(html).not.toContain("fixed left-2.5 top-[calc(10px+env(safe-area-inset-top))]");
   });
 
   test("renders image preview actions with media-style controls", () => {
@@ -235,8 +244,9 @@ describe("ViewerAppShell", () => {
     resetPreviewDialogState();
     const body = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", name: "Sample.jpg" }} kind="image" />);
 
-    expect(dialog).toContain("rounded-full");
-    expect(dialog).toContain("bg-[rgba(15,23,42,0.48)]");
+    expect(dialog).toContain("preview-header");
+    expect(dialog).toContain("rounded-lg");
+    expect(dialog).not.toContain("bg-[rgba(15,23,42,0.48)]");
     expect(body).toContain("image-toolbar");
     expect(body).toMatch(/image-toolbar[^"]*right-\[calc\(14px\+env\(safe-area-inset-right\)\)\]/);
     expect(body).not.toMatch(/image-toolbar[^"]*left-1\/2/);
@@ -253,24 +263,24 @@ describe("ViewerAppShell", () => {
     resetPreviewDialogState();
     setImageOverlayControlsVisible(true);
 
-    expect(dialog).toContain("pointer-events-none opacity-0");
     expect(dialog).toContain('id="closePreview"');
     expect(dialog).toContain('id="toggleInfoPreview"');
     expect(body).toContain("image-toolbar");
     expect(body).toContain("pointer-events-none opacity-0");
   });
 
-  test("hides video overlay buttons when video controls are toggled off", () => {
+  test("keeps preview header actions visible when video controls are toggled off", () => {
     setPreviewDialogState({ infoOpen: false, mode: "video", open: true });
     setVideoOverlayControlsVisible(false);
     const html = renderToStaticMarkup(<PreviewDialog />);
     resetPreviewDialogState();
     setVideoOverlayControlsVisible(true);
 
-    expect(html).toContain("pointer-events-none opacity-0");
     expect(html).toContain('id="closePreview"');
     expect(html).toContain('id="toggleInfoPreview"');
-    expect(html).toContain('id="fullscreenPreview"');
+    expect(html).toContain("preview-header");
+    expect(html).not.toContain("pointer-events-none opacity-0");
+    expect(html).not.toContain('id="fullscreenPreview"');
   });
 
   test("renders page buttons as a reusable component", () => {
@@ -687,8 +697,11 @@ describe("ViewerAppShell", () => {
       expect(tagInput.className).toContain("pl-9");
       expect(tagInput.parentElement?.innerHTML).toContain("lucide-tag");
       expect(container.querySelector(".preview-edit-done")).not.toBeNull();
-      expect(container.querySelector(".preview-edit-save")).toBeNull();
-      expect(container.querySelector(".preview-edit-cancel")).toBeNull();
+      const initialSaveButton = container.querySelector(".preview-edit-save");
+      const initialCancelButton = container.querySelector(".preview-edit-cancel");
+      expect(initialSaveButton).not.toBeNull();
+      expect(initialCancelButton).not.toBeNull();
+      expect(initialSaveButton).toHaveProperty("disabled", true);
       await act(async () => {
         const valueSetter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")?.set;
         valueSetter?.call(tagInput, "beta");
@@ -943,7 +956,7 @@ describe("ViewerAppShell", () => {
         editButton.click();
       });
 
-      const folderInput = Array.from(container.querySelectorAll("input")).find((input) => input.placeholder === "Search folders");
+      const folderInput = Array.from(container.querySelectorAll("input")).find((input) => input.placeholder === "Search folder");
       if (!(folderInput instanceof dom.window.HTMLInputElement)) {
         throw new Error("Missing category editor controls");
       }
@@ -961,7 +974,9 @@ describe("ViewerAppShell", () => {
         folderInput.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
       });
 
-      expect(container.querySelector(".preview-edit-save")).toBeNull();
+      const saveButton = container.querySelector(".preview-edit-save");
+      expect(saveButton).not.toBeNull();
+      expect(saveButton).toHaveProperty("disabled", true);
       expect(savedPatches).toEqual([]);
       expect(container.textContent).not.toContain("New folder");
     } finally {
@@ -1031,7 +1046,7 @@ describe("ViewerAppShell", () => {
 
       const folder2Button = Array.from(container.querySelectorAll(".preview-folder-option")).find((button) => button.textContent?.includes("Folder 2"));
       if (!(folder2Button instanceof dom.window.HTMLButtonElement)) throw new Error("Missing folder checklist controls");
-      expect(container.querySelector(".preview-edit-cancel")).toBeNull();
+      expect(container.querySelector(".preview-edit-cancel")).not.toBeNull();
 
       await act(async () => {
         folder2Button.click();

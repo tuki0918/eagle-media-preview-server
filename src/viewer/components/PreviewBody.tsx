@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent, type ReactNode, type TouchEvent, type WheelEvent } from "react";
+import { forwardRef, useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent, type ReactNode, type TouchEvent } from "react";
 import { errorMessage, mediaUrl } from "../api";
 import { displayFileName } from "../format";
 import { closePreview } from "../shellActions";
@@ -409,7 +409,7 @@ function ImagePreview({ item, srcKind }: { item: EagleItem; srcKind: "file" | "t
     }));
   };
 
-  const zoomImage = (multiplier: number) => {
+  const zoomImage = useCallback((multiplier: number) => {
     setImageState((current) => ({
       ...current,
       transform: setPreviewZoom(
@@ -417,7 +417,20 @@ function ImagePreview({ item, srcKind }: { item: EagleItem; srcKind: "file" | "t
         current.transform,
       ),
     }));
-  };
+  }, []);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const handleWheel = (event: globalThis.WheelEvent) => {
+      event.preventDefault();
+      zoomImage(event.deltaY > 0 ? 0.9 : 1.1);
+    };
+    viewport.addEventListener("wheel", handleWheel, { passive: false });
+    return () => {
+      viewport.removeEventListener("wheel", handleWheel);
+    };
+  }, [zoomImage]);
 
   const pointerDistanceFromState = () => pointerDistance(pointersRef.current.values());
 
@@ -525,10 +538,6 @@ function ImagePreview({ item, srcKind }: { item: EagleItem; srcKind: "file" | "t
         onPointerCancel={endImageDrag}
         onTouchMove={(event: TouchEvent<HTMLDivElement>) => {
           if (event.touches.length > 1) event.preventDefault();
-        }}
-        onWheel={(event: WheelEvent<HTMLDivElement>) => {
-          event.preventDefault();
-          zoomImage(event.deltaY > 0 ? 0.9 : 1.1);
         }}
       >
         <img
