@@ -25,7 +25,7 @@ import {
 } from "../videoOverlayState";
 import type { EagleItem, PreviewDrag, PreviewPinch, PreviewPoint, PreviewTransform } from "../types";
 
-export type PreviewBodyKind = "video" | "audio" | "text" | "image" | "unsupported";
+export type PreviewBodyKind = "video" | "audio" | "text" | "pdf" | "image" | "unsupported";
 
 export interface PreviewBodyProps {
   item: EagleItem;
@@ -66,6 +66,7 @@ const mediaRangeClassName =
 const mediaRepeatButtonClassName = mediaButtonClassName;
 const textPreviewClassName =
   "text-preview m-0 min-w-0 overflow-auto rounded-md border border-border bg-card p-[18px] font-mono text-[13px] leading-[1.55] text-card-foreground shadow-sm [overflow-wrap:anywhere] [white-space:pre-wrap]";
+const pdfPreviewClassName = "pdf-preview h-full min-h-0 w-full border-0 bg-background";
 const unsupportedThumbClassName = "unsupported-thumb max-h-[min(62dvh,640px)] w-[min(640px,calc(100vw_-_48px))] max-w-full object-contain";
 const previewNoticeClassName = "preview-notice m-0 max-w-[560px] text-center text-[13px] leading-normal text-muted-foreground";
 const imageViewportClassName = "image-viewport relative grid h-full min-h-0 w-full min-w-0 cursor-grab touch-none place-items-center overflow-hidden active:cursor-grabbing";
@@ -80,6 +81,7 @@ export function PreviewBody({ item, kind, srcKind = "file" }: PreviewBodyProps) 
   if (kind === "video") return <VideoPreview item={item} />;
   if (kind === "audio") return <AudioPreview item={item} />;
   if (kind === "text") return <TextPreview item={item} />;
+  if (kind === "pdf") return <PdfPreview item={item} />;
   if (kind === "unsupported") return <UnsupportedPreview item={item} />;
   return <ImagePreview item={item} srcKind={srcKind} />;
 }
@@ -332,6 +334,17 @@ function TextPreview({ item }: { item: EagleItem }) {
     <pre className={textPreviewClassName}>
       <code>{text}</code>
     </pre>
+  );
+}
+
+function PdfPreview({ item }: { item: EagleItem }) {
+  const title = item.name || item.id || "PDF preview";
+  return (
+    <iframe
+      className={pdfPreviewClassName}
+      src={mediaUrl(String(item.id || ""), "file")}
+      title={title}
+    />
   );
 }
 
@@ -619,6 +632,7 @@ function previewBodyClassName(kind?: PreviewBodyKind) {
   if (kind === "video") return `${base} bg-[#05070a] max-h-full`;
   if (kind === "audio") return `${base} place-items-center bg-[#05070a]`;
   if (kind === "text") return `${base} overflow-auto bg-muted p-[18px]`;
+  if (kind === "pdf") return `${base} bg-background`;
   if (kind === "unsupported") return `${base} content-center justify-items-center gap-4 bg-[#05070a] p-8 [&_.preview-notice]:text-white`;
   return `${base} ${checkerboardClassName}`;
 }

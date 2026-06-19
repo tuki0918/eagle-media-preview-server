@@ -1232,6 +1232,7 @@ describe("ViewerAppShell", () => {
     const audio = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", name: "Sample.mp3", ext: "mp3" }} kind="audio" />);
     const image = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", name: "Sample.jpg" }} kind="image" />);
     const text = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", name: "Sample.txt" }} kind="text" />);
+    const pdf = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", name: "Sample.pdf", ext: "pdf" }} kind="pdf" />);
     const unsupported = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", ext: "avi" }} kind="unsupported" />);
 
     expect(video).toContain("video-player");
@@ -1249,6 +1250,9 @@ describe("ViewerAppShell", () => {
     expect(image).toContain("image-viewport");
     expect(image).toContain("image-toolbar");
     expect(text).toContain("text-preview");
+    expect(pdf).toContain("pdf-preview");
+    expect(pdf).toContain('src="/file/item-1"');
+    expect(pdf).toContain('title="Sample.pdf"');
     expect(unsupported).toContain("unsupported-thumb");
   });
 

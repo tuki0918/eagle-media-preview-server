@@ -522,7 +522,7 @@ function previewBodyForItem(item: EagleItem): { kind: PreviewBodyKind; srcKind?:
   if (playableVideoExts.has(ext)) return { kind: "video" };
   if (playableAudioExts.has(ext)) return { kind: "audio" };
   if (textPreviewExts.has(ext)) return { kind: "text" };
-  if (pdfPreviewExts.has(ext)) return { kind: "image", srcKind: "thumb" };
+  if (pdfPreviewExts.has(ext)) return { kind: "pdf" };
   if (isTimedMedia(item)) return { kind: "unsupported" };
   return { kind: "image" };
 }

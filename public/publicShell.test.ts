@@ -485,7 +485,7 @@ test("public image modal no longer exposes metadata editing controls", async () 
   assert.doesNotMatch(css, /\.metadata-editor-message/);
 });
 
-test("public preview renders text-like files and PDFs from their thumbnails", async () => {
+test("public preview renders text-like files and PDFs inline", async () => {
   const html = await readAppSources();
   const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
@@ -499,18 +499,23 @@ test("public preview renders text-like files and PDFs from their thumbnails", as
   assert.match(html, /function TextPreview\(\{ item \}/);
   assert.match(html, /const response = await fetch\(mediaUrl\(String\(item\.id \|\| ""\), "file"\)\);/);
   assert.match(html, /setText\(nextText\);/);
-  assert.match(app, /if \(pdfPreviewExts\.has\(ext\)\) return \{ kind: "image", srcKind: "thumb" \};/);
+  assert.match(app, /if \(pdfPreviewExts\.has\(ext\)\) return \{ kind: "pdf" \};/);
+  assert.match(html, /function PdfPreview\(\{ item \}/);
+  assert.match(html, /<iframe/);
+  assert.match(html, /className=\{pdfPreviewClassName\}/);
+  assert.match(html, /src=\{mediaUrl\(String\(item\.id \|\| ""\), "file"\)\}/);
   assert.match(html, /function ImagePreview\(\{ item, srcKind \}/);
   assert.match(html, /src=\{mediaUrl\(String\(item\.id \|\| ""\), srcKind\)\}/);
   assert.doesNotMatch(app, /function renderPdfPreview\(item\) \{/);
   assert.doesNotMatch(app, /viewer\.src = directFileUrl\(item\);/);
   assert.match(app, /function previewFileName\(item[^)]*\) \{/);
-  assert.match(app, /PreviewDialogMode = "" \| "audio" \| "image" \| "text" \| "unsupported" \| "video"/);
-  assert.doesNotMatch(app, /pdf-mode/);
+  assert.match(app, /PreviewDialogMode = "" \| "audio" \| "image" \| "pdf" \| "text" \| "unsupported" \| "video"/);
+  assert.match(html, /previewDialogState\.mode \? `\$\{previewDialogState\.mode\}-mode` : ""/);
   assert.match(html, /if \(kind === "text"\) return `\$\{base\} overflow-auto bg-muted p-\[18px\]`;/);
+  assert.match(html, /if \(kind === "pdf"\) return `\$\{base\} bg-background`;/);
   assert.match(html, /const textPreviewClassName =/);
+  assert.match(html, /const pdfPreviewClassName =/);
   assert.doesNotMatch(css, /\.pdf-mode \.preview-body/);
-  assert.doesNotMatch(css, /\.pdf-preview/);
   assert.match(staticSource, /"\.html": "text\/html; charset=utf-8"/);
   assert.match(staticSource, /"\.css": "text\/css; charset=utf-8"/);
   assert.match(staticSource, /"\.js": "text\/javascript; charset=utf-8"/);
