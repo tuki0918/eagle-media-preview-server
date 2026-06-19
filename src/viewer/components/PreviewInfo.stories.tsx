@@ -29,7 +29,7 @@ type Story = StoryObj<typeof meta>;
 export const DetailsPanel: Story = {};
 
 export const Actions: Story = {
-  render: () => <PreviewActions canManageLibrary item={sampleItems[0]} />,
+  render: () => <PreviewActions canManageLibrary item={sampleItems[0]} onToggleTrash={async () => {}} />,
 };
 
 export const StoreBackedShells: Story = {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { ExternalLinkIcon as LucideExternalLinkIcon, FolderIcon, PlusIcon, RotateCcwIcon, TagIcon, Trash2Icon, XIcon } from "lucide-react";
+import { EllipsisIcon, ExternalLinkIcon as LucideExternalLinkIcon, FolderIcon, PlusIcon, RotateCcwIcon, TagIcon, Trash2Icon, XIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { errorMessage } from "../api";
@@ -31,6 +31,8 @@ export interface PreviewInfoProps {
 const previewLabelClassName = "preview-detail-label text-xs font-normal text-muted-foreground";
 const directFileLinkClassName =
   "direct-file-link preview-info-cta min-h-11 w-full cursor-pointer gap-2.5 whitespace-nowrap rounded-md bg-primary px-2 text-[14px] font-[720] leading-none text-primary-foreground no-underline shadow-none hover:bg-primary hover:text-primary-foreground [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-width:2]";
+const adminMenuTriggerClassName =
+  "preview-admin-menu-trigger size-11 rounded-md border-border bg-background text-foreground hover:bg-muted hover:text-foreground [&_svg]:size-5";
 const previewDetailsSectionClassName = "preview-details-section grid gap-1.5 px-2";
 const previewDetailRowClassName =
   "preview-detail-row grid min-h-7 grid-cols-[minmax(82px,104px)_minmax(0,1fr)] items-start gap-4 max-[540px]:gap-3";
@@ -118,12 +120,48 @@ export function PreviewInfoActions() {
 
 export function PreviewActions({ canManageLibrary = false, item, onToggleTrash }: { canManageLibrary?: boolean; item: EagleItem; onToggleTrash?: (item: EagleItem, isDeleted: boolean) => Promise<void> }) {
   const [trashSaving, setTrashSaving] = useState(false);
-  if (!canManageLibrary) return null;
+  const [menuOpen, setMenuOpen] = useState(false);
+  const actionsRef = useRef<HTMLElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
   const nextDeletedState = !Boolean(item.isDeleted);
   const trashLabel = item.isDeleted ? "Restore from trash" : "Move to trash";
 
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (actionsRef.current?.contains(target)) return;
+      if (menuRef.current?.contains(target)) return;
+      setMenuOpen(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenuOpen(false);
+    };
+
+    document.addEventListener("click", handleClick);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("click", handleClick);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [menuOpen]);
+
+  if (!canManageLibrary) return null;
+
+  const handleToggleTrash = async () => {
+    if (trashSaving || !onToggleTrash) return;
+    setMenuOpen(false);
+    setTrashSaving(true);
+    try {
+      await onToggleTrash(item, nextDeletedState);
+    } finally {
+      setTrashSaving(false);
+    }
+  };
+
   return (
-    <section className="preview-admin-actions grid gap-2">
+    <section ref={actionsRef} className="preview-admin-actions relative grid grid-cols-[minmax(0,1fr)_auto] gap-2">
       <Button asChild className={directFileLinkClassName}>
         <a href={directFileUrl(item)} target="_blank" rel="noopener" onClick={(event) => event.stopPropagation()}>
           <ExternalLinkIcon />
@@ -131,30 +169,52 @@ export function PreviewActions({ canManageLibrary = false, item, onToggleTrash }
         </a>
       </Button>
       {onToggleTrash ? (
-        <Button
-          type="button"
-          variant="destructive"
-          className="preview-trash-action min-h-11 w-full gap-2.5 rounded-md px-2 text-[14px] font-[720] leading-none"
-          disabled={trashSaving}
-          onClick={async (event) => {
-            event.stopPropagation();
-            if (trashSaving) return;
-            setTrashSaving(true);
-            try {
-              await onToggleTrash(item, nextDeletedState);
-            } finally {
-              setTrashSaving(false);
-            }
-          }}
-        >
-          {item.isDeleted ? <RotateCcwIcon aria-hidden="true" /> : <Trash2Icon aria-hidden="true" />}
-          {trashSaving ? "Saving" : trashLabel}
-        </Button>
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-lg"
+            className={adminMenuTriggerClassName}
+            aria-label="More admin actions"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            aria-controls="previewAdminMenu"
+            title="More admin actions"
+            disabled={trashSaving}
+            onClick={(event) => {
+              event.stopPropagation();
+              setMenuOpen((open) => !open);
+            }}
+          >
+            <EllipsisIcon aria-hidden="true" />
+          </Button>
+          {menuOpen ? (
+            <div
+              ref={menuRef}
+              id="previewAdminMenu"
+              role="menu"
+              className="absolute bottom-full right-0 z-50 mb-2 min-w-48 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-lg"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                role="menuitem"
+                className="preview-trash-action relative flex w-full cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm text-destructive outline-hidden select-none hover:bg-destructive/10 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0"
+                disabled={trashSaving}
+                onClick={() => {
+                  void handleToggleTrash();
+                }}
+              >
+                {item.isDeleted ? <RotateCcwIcon aria-hidden="true" /> : <Trash2Icon aria-hidden="true" />}
+                <span>{trashSaving ? "Saving" : trashLabel}</span>
+              </button>
+            </div>
+          ) : null}
+        </>
       ) : null}
     </section>
   );
 }
-
 function PreviewDetail({ chips = false, label, value }: PreviewDetailRow) {
   return (
     <div className={previewDetailRowClassName}>

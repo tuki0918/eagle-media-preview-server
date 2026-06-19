@@ -640,11 +640,64 @@ describe("ViewerAppShell", () => {
     expect(actions).toContain("preview-admin-actions");
     expect(actions).toContain("direct-file-link");
     expect(actions).toContain("preview-info-cta");
-    expect(actions).toContain("preview-trash-action");
-    expect(actions).toContain("Move to trash");
-    expect(deletedActions).toContain("Restore from trash");
+    expect(actions).toContain("preview-admin-menu-trigger");
+    expect(actions).toContain("More admin actions");
+    expect(actions).toContain("lucide-ellipsis");
+    expect(actions).not.toContain("Move to trash");
+    expect(deletedActions).toContain("preview-admin-menu-trigger");
     expect(nonAdminActions).not.toContain("Open file");
     expect(nonAdminActions).not.toContain("direct-file-link");
+  });
+
+  test("opens preview admin actions menu from the ellipsis button", async () => {
+    const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
+    const testGlobal = globalThis as typeof globalThis & {
+      IS_REACT_ACT_ENVIRONMENT?: boolean;
+    };
+    const previousWindow = globalThis.window;
+    const previousDocument = globalThis.document;
+    const previousNode = globalThis.Node;
+    const previousHTMLElement = globalThis.HTMLElement;
+    const previousIS_REACT_ACT_ENVIRONMENT = testGlobal.IS_REACT_ACT_ENVIRONMENT;
+    globalThis.window = dom.window;
+    globalThis.document = dom.window.document;
+    globalThis.Node = dom.window.Node;
+    globalThis.HTMLElement = dom.window.HTMLElement;
+    testGlobal.IS_REACT_ACT_ENVIRONMENT = true;
+
+    const { createRoot } = await import("react-dom/client");
+    let root: import("react-dom/client").Root | null = null;
+    try {
+      const container = dom.window.document.querySelector("#root");
+      if (!(container instanceof dom.window.HTMLElement)) throw new Error("Missing test root");
+      root = createRoot(container);
+
+      await act(async () => {
+        root?.render(<PreviewActions canManageLibrary item={{ id: "item-1" }} onToggleTrash={async () => {}} />);
+      });
+
+      const menuButton = container.querySelector(".preview-admin-menu-trigger");
+      if (!(menuButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing admin menu button");
+
+      await act(async () => {
+        menuButton.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+      });
+
+      const menu = container.querySelector("#previewAdminMenu");
+      expect(menu).not.toBeNull();
+      expect(menu?.getAttribute("role")).toBe("menu");
+      expect(menu?.textContent).toContain("Move to trash");
+    } finally {
+      await act(async () => {
+        root?.unmount();
+      });
+      globalThis.window = previousWindow;
+      globalThis.document = previousDocument;
+      globalThis.Node = previousNode;
+      globalThis.HTMLElement = previousHTMLElement;
+      testGlobal.IS_REACT_ACT_ENVIRONMENT = previousIS_REACT_ACT_ENVIRONMENT;
+      dom.window.close();
+    }
   });
 
   test("renders preview annotation and url before typed detail rows", () => {
