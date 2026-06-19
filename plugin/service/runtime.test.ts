@@ -26,6 +26,11 @@ test("generated CommonJS runtime loads with require for Eagle plugin windows", (
   assert.equal("preferredLanAddress" in normalizeSettings({ preferredLanAddress: "192.168.1.50" }), false);
 });
 
+test("generated settings reject malformed port strings", () => {
+  assert.throws(() => normalizeSettings({ port: "41532abc" }), /port must be an integer/);
+  assert.throws(() => normalizeSettings({ port: "41532.5" }), /port must be an integer/);
+});
+
 test("generated runtime builds HTTPS access URLs when enabled", () => {
   assert.equal(buildAccessUrl({
     host: "127.0.0.1",

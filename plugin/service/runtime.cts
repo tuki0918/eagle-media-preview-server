@@ -177,7 +177,8 @@ function createDefaultSettings(): PluginSettings {
 }
 
 function normalizeSettings(input: SettingsInput = {}): PluginSettings {
-  const port = Number.parseInt(String(input.port ?? DEFAULT_SETTINGS.port), 10);
+  const rawPort = String(input.port ?? DEFAULT_SETTINGS.port).trim();
+  const port = /^\d+$/.test(rawPort) ? Number(rawPort) : NaN;
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error("port must be an integer from 1-65535");
   }
