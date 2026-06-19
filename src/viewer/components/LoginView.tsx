@@ -43,7 +43,7 @@ export function LoginView({ hidden = false }: LoginViewProps) {
             aria-hidden="true"
           />
           <h1 className="m-0 whitespace-nowrap text-[19px] font-[760] leading-[1.15] tracking-[0]">Media Preview Server</h1>
-          <p className="m-0 whitespace-nowrap text-xs leading-[1.35] text-muted-foreground">A local media server for your Eagle library.</p>
+          <p className="m-0 text-xs leading-[1.35] text-muted-foreground">A local media server for your Eagle library.</p>
         </div>
 
         <div className="login-primary">
@@ -51,6 +51,11 @@ export function LoginView({ hidden = false }: LoginViewProps) {
             {showCredentials ? <LoginCredentials disabled={state.disabled} /> : null}
             {showInlineError ? <ConnectMessage /> : null}
             <ConnectButton />
+            <p className="m-0 text-center text-[11px] leading-[1.45] text-muted-foreground">
+              {showCredentials
+                ? "Use a viewer account configured in the Eagle plugin panel."
+                : "Start the server from the Eagle plugin panel, then connect from this browser."}
+            </p>
           </div>
         </div>
         {showInlineError ? null : <ConnectMessage />}

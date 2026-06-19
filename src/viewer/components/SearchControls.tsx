@@ -5,10 +5,8 @@ import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
-  InputGroupText,
 } from "@/components/ui/input-group";
 import { cn } from "@/lib/utils";
-import { getResultsStatusState, subscribeResultsStatusState } from "../resultsStatusState";
 import { MEDIA_TYPE_OPTIONS, PAGE_SIZE_OPTIONS, RATING_OPTIONS } from "../shellConfig";
 import {
   getSearchControlsState,
@@ -59,7 +57,6 @@ export function SearchControls({
   selectedRating,
 }: SearchControlsProps) {
   const state = useSyncExternalStore(subscribeSearchControlsState, getSearchControlsState, getSearchControlsState);
-  const resultsStatus = useSyncExternalStore(subscribeResultsStatusState, getResultsStatusState, getResultsStatusState);
   const displayFiltersOpen = filtersOpen ?? state.filtersOpen;
   const displayHasActiveFilters = hasActiveFilters ?? state.hasActiveFilters;
   const displayHasResettableFilters = hasResettableFilters ?? (hasActiveFilters === undefined ? state.hasResettableFilters : displayHasActiveFilters);
@@ -67,7 +64,6 @@ export function SearchControls({
   const displaySelectedExt = selectedExt ?? state.selectedExt;
   const displaySelectedLimit = selectedLimit ?? state.selectedLimit;
   const displaySelectedRating = selectedRating ?? state.selectedRating;
-  const displayTotal = resultsStatus.total;
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
@@ -84,11 +80,6 @@ export function SearchControls({
           <SearchInput value={displaySearchQuery} />
           <InputGroupAddon>
             <Search />
-          </InputGroupAddon>
-          <InputGroupAddon align="inline-end" className="max-w-[92px]">
-            <InputGroupText className="truncate [font-variant-numeric:tabular-nums]">
-              {displayTotal.toLocaleString()} items
-            </InputGroupText>
           </InputGroupAddon>
           <TagSuggestions />
         </InputGroup>
@@ -117,7 +108,7 @@ export function SearchInput({ value = "" }: { value?: string }) {
   return (
     <InputGroupInput
       id="searchInput"
-      className="unified-search-input min-w-0 pl-10 pr-24"
+      className="unified-search-input min-w-0 pl-10 pr-3"
       type="search"
       placeholder="Search title or tag"
       autoComplete="off"

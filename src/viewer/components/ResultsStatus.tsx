@@ -12,12 +12,14 @@ interface ResultsStatusProps {
 
 export function ResultsStatus({ total, viewMode }: ResultsStatusProps) {
   const storedStatus = useSyncExternalStore(subscribeResultsStatusState, getResultsStatusState, getResultsStatusState);
+  const displayTotal = total ?? storedStatus.total;
   const displayViewMode = viewMode ?? storedStatus.viewMode;
 
-  void total;
-
   return (
-    <section className="status-line flex justify-end py-1" aria-label="View options">
+    <section className="status-line flex items-center justify-between gap-3 py-1" aria-label="Results status and view options">
+      <p className="m-0 min-w-0 truncate text-xs text-muted-foreground [font-variant-numeric:tabular-nums]" aria-live="polite">
+        {displayTotal.toLocaleString()} items
+      </p>
       <ViewModeTabs viewMode={displayViewMode} />
     </section>
   );

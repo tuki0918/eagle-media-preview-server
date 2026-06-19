@@ -81,6 +81,7 @@ const REQUIRED_ELEMENT_IDS = [
   "prevButton",
   "nextButton",
   "pageButtons",
+  "pageSummary",
   "previewDialog",
   "previewBody",
   "previewOriginalName",
@@ -128,6 +129,8 @@ describe("ViewerAppShell", () => {
   test("renders selected view mode with shadcn active styling", () => {
     const html = renderToStaticMarkup(<ResultsStatus total={12} viewMode="grid" />);
 
+    expect(html).toContain("12 items");
+    expect(html).toContain('aria-label="Results status and view options"');
     expect(html).toContain('id="gridViewButton"');
     expect(html).toContain('data-slot="tabs"');
     expect(html).toContain('data-slot="tabs-list"');
@@ -143,6 +146,7 @@ describe("ViewerAppShell", () => {
   test("renders login connection controls as reusable components", () => {
     const button = renderToStaticMarkup(<ConnectButton disabled />);
     const message = renderToStaticMarkup(<ConnectMessage isError message="No Eagle" />);
+    const login = renderToStaticMarkup(<LoginView />);
 
     expect(button).toContain('id="connectButton"');
     expect(button).toContain("disabled");
@@ -153,6 +157,7 @@ describe("ViewerAppShell", () => {
     expect(message).toContain("lucide-circle-alert");
     expect(message).toContain('role="alert"');
     expect(message).not.toContain("fixed bottom-");
+    expect(login).toContain("Start the server from the Eagle plugin panel");
   });
 
   test("exports independently renderable shell components", () => {
@@ -291,6 +296,24 @@ describe("ViewerAppShell", () => {
 
     expect(html).toContain('data-active="true"');
     expect(html).toContain("page-ellipsis");
+  });
+
+  test("renders mobile pagination position when page shortcuts are hidden", () => {
+    const html = renderToStaticMarkup(
+      <Pager
+        current={3}
+        hidden={false}
+        nextDisabled={false}
+        onSelectPage={() => {}}
+        pages={[1, 2, 3, 4, "...", 10]}
+        previousDisabled={false}
+      />,
+    );
+
+    expect(html).toContain('id="pageSummary"');
+    expect(html).toContain("Page 3 of 10");
+    expect(html).toContain("max-[540px]:row-start-1");
+    expect(html).toContain("max-[540px]:row-start-2");
   });
 
   test("renders tag chips as a reusable component", () => {
