@@ -1,5 +1,7 @@
 const { createHash, createHmac, pbkdf2Sync, timingSafeEqual } = require("crypto");
 
+import type { IncomingHttpHeaders, IncomingMessage } from "http";
+
 type UserRole = "admin" | "editor" | "viewer";
 
 interface AuthUser {
@@ -25,59 +27,63 @@ interface AuthContext {
 const PASSWORD_HASH_ALGORITHM = "sha256";
 const PASSWORD_HASH_KEY_LENGTH = 32;
 const AUTH_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
-const AUTH_USER_CACHE = Symbol("authUser");
+const AUTH_USER_CACHE: unique symbol = Symbol("authUser");
 const MIN_PASSWORD_HASH_ITERATIONS = 100000;
 const MAX_PASSWORD_HASH_ITERATIONS = 1000000;
+
+interface AuthenticatedRequest extends IncomingMessage {
+  [AUTH_USER_CACHE]?: AuthSession | null;
+}
 
 function authRequired({ users = [] }: { users?: AuthUser[] }) {
   return Boolean(users.length);
 }
 
-function isAuthorized(req, auth) {
+function isAuthorized(req: AuthenticatedRequest, auth: AuthContext) {
   if (!authRequired(auth)) return true;
   return Boolean(authenticatedUser(req, auth));
 }
 
-function isTrustedUnsafeRequest(req, requestUrl) {
+function isTrustedUnsafeRequest(req: IncomingMessage, requestUrl: URL) {
   if (!isUnsafeMethod(req.method)) return true;
   const expectedOrigin = `${requestUrl.protocol}//${requestUrl.host}`;
   const origin = headerValue(req.headers.origin);
   return Boolean(origin) && origin === expectedOrigin;
 }
 
-function isUnsafeMethod(method) {
+function isUnsafeMethod(method: string | undefined) {
   return !["GET", "HEAD", "OPTIONS"].includes(String(method || "GET").toUpperCase());
 }
 
-function headerValue(value) {
+function headerValue(value: IncomingHttpHeaders[string]) {
   return Array.isArray(value) ? value[0] : String(value || "");
 }
 
-function hasMetadataWriteAccess(req, auth: AuthContext) {
+function hasMetadataWriteAccess(req: AuthenticatedRequest, auth: AuthContext) {
   const user = authenticatedUser(req, auth);
   return rolePermissions(user?.role).writeMetadata;
 }
 
-function hasRatingWriteAccess(req, auth: AuthContext) {
+function hasRatingWriteAccess(req: AuthenticatedRequest, auth: AuthContext) {
   const user = authenticatedUser(req, auth);
   return rolePermissions(user?.role).writeRating;
 }
 
-function hasAdminAccess(req, auth: AuthContext) {
+function hasAdminAccess(req: AuthenticatedRequest, auth: AuthContext) {
   const user = authenticatedUser(req, auth);
   return rolePermissions(user?.role).manageLibrary;
 }
 
-function authenticatedUser(req, auth: AuthContext): AuthSession | null {
+function authenticatedUser(req: AuthenticatedRequest, auth: AuthContext): AuthSession | null {
   if (Object.prototype.hasOwnProperty.call(req, AUTH_USER_CACHE)) {
-    return req[AUTH_USER_CACHE];
+    return req[AUTH_USER_CACHE] ?? null;
   }
   const user = resolveAuthenticatedUser(req, auth);
   req[AUTH_USER_CACHE] = user;
   return user;
 }
 
-function resolveAuthenticatedUser(req, auth: AuthContext): AuthSession | null {
+function resolveAuthenticatedUser(req: IncomingMessage, auth: AuthContext): AuthSession | null {
   if (!authRequired(auth)) return null;
   const token = authSessionTokenFromRequest(req);
   if (!token) return null;
@@ -91,11 +97,11 @@ function resolveAuthenticatedUser(req, auth: AuthContext): AuthSession | null {
   return session;
 }
 
-function authSessionTokenFromRequest(req) {
+function authSessionTokenFromRequest(req: IncomingMessage) {
   return bearerAuthToken(req.headers.authorization) || parseCookies(req.headers.cookie || "").viewer_session;
 }
 
-function bearerAuthToken(value) {
+function bearerAuthToken(value: IncomingHttpHeaders[string]) {
   const header = headerValue(value);
   const match = header.match(/^Bearer\s+(.+)$/i);
   return match ? match[1].trim() : "";
@@ -108,7 +114,7 @@ function pruneAuthSessions(authSessions: Map<string, AuthSession>) {
   }
 }
 
-function findPasswordUser(username, password, auth: AuthContext): AuthUser | null {
+function findPasswordUser(username: string, password: string, auth: AuthContext): AuthUser | null {
   const user = auth.users.find((entry) => entry.username === username);
   if (user?.passwordHash && passwordMatches(password, user.passwordHash)) return user;
   return null;
@@ -215,7 +221,7 @@ function resolveAuthUsers({ allowMetadataEditing, authUsers, basicAuthUsername, 
   }] : [];
 }
 
-function normalizeRole(value): UserRole {
+function normalizeRole(value: unknown): UserRole {
   return value === "admin" || value === "editor" ? value : "viewer";
 }
 
@@ -228,7 +234,7 @@ function passwordMatches(value: string, passwordHash: string) {
   return safeEqual(sha256(value), passwordHash);
 }
 
-function pbkdf2PasswordMatches(value, passwordHash: string) {
+function pbkdf2PasswordMatches(value: string, passwordHash: string) {
   const [scheme, algorithm, rawIterations, salt, expectedDigest] = passwordHash.split("$");
   if (scheme !== "pbkdf2" || algorithm !== PASSWORD_HASH_ALGORITHM || !salt || !expectedDigest) return false;
   const iterations = Number.parseInt(rawIterations, 10);
@@ -239,13 +245,13 @@ function pbkdf2PasswordMatches(value, passwordHash: string) {
   return safeEqual(actualDigest, expectedDigest);
 }
 
-function safeEqual(actualValue, expectedValue) {
+function safeEqual(actualValue: unknown, expectedValue: unknown) {
   const expected = Buffer.from(String(expectedValue));
   const actual = Buffer.from(String(actualValue));
   return expected.length === actual.length && timingSafeEqual(expected, actual);
 }
 
-function sha256(value) {
+function sha256(value: unknown) {
   return createHash("sha256").update(String(value)).digest("hex");
 }
 

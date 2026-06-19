@@ -120,7 +120,7 @@ function createSettingsStore({ filePath = defaultSettingsPath() }: { filePath?: 
         }
         return settings;
       } catch (error) {
-        if (error.code === "ENOENT") {
+        if (isNodeError(error) && error.code === "ENOENT") {
           const created = createDefaultSettings();
           await writeSettingsFile(filePath, created);
           return created;
@@ -339,6 +339,14 @@ function authUsersMissingPassword(users: AuthUser[]) {
   return !users.length || users.some((user) => !user.passwordHash);
 }
 
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error;
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function getLanAddresses() {
   const output: LanAddress[] = [];
   for (const [label, entries] of Object.entries(networkInterfaces()) as Array<[string, NetworkEntry[]]>) {
@@ -440,7 +448,7 @@ function createServerManager({
         lastError = "";
       } catch (error) {
         stateOverride = "error";
-        lastError = error.message || String(error);
+        lastError = errorMessage(error);
       }
       return snapshot(settings);
     },

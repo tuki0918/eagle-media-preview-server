@@ -2,13 +2,15 @@ const { createReadStream, existsSync } = require("fs");
 const { stat } = require("fs").promises;
 const { extname, isAbsolute, relative, resolve } = require("path");
 
-function resolveDefaultPublicDir(baseDir = __dirname, pathExists = existsSync) {
+import type { ServerResponse } from "http";
+
+function resolveDefaultPublicDir(baseDir = __dirname, pathExists: (path: string) => boolean = existsSync) {
   const packagedPublicDir = resolve(baseDir, "..", "..", "public");
   const workspaceDistPublicDir = resolve(baseDir, "..", "..", "dist", "public");
   return pathExists(workspaceDistPublicDir) ? workspaceDistPublicDir : packagedPublicDir;
 }
 
-const mimeTypes = {
+const mimeTypes: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -37,7 +39,7 @@ const mimeTypes = {
   ".md": "text/plain; charset=utf-8",
 };
 
-async function serveStatic(pathname, res, publicDir) {
+async function serveStatic(pathname: string, res: ServerResponse, publicDir: string) {
   const cleanPath = pathname === "/" ? "/index.html" : pathname;
   const publicRoot = resolve(publicDir);
   const requestPath = cleanPath.startsWith("/") ? `.${cleanPath}` : `./${cleanPath}`;
@@ -61,13 +63,13 @@ async function serveStatic(pathname, res, publicDir) {
   }
 }
 
-function mediaContentType(filePath, item) {
+function mediaContentType(filePath: string, item?: { ext?: unknown } | null) {
   const pathExt = extname(filePath).toLowerCase();
   const itemExt = item?.ext ? `.${String(item.ext).toLowerCase().replace(/^\./, "")}` : "";
   return mimeTypes[pathExt] || mimeTypes[itemExt] || "application/octet-stream";
 }
 
-function sendJson(res, status, body) {
+function sendJson(res: ServerResponse, status: number, body: unknown) {
   res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
   res.end(JSON.stringify(body));
 }

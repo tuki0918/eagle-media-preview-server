@@ -2,6 +2,8 @@ const { fileURLToPath } = require("url");
 const { readdir } = require("fs").promises;
 const { extname, join } = require("path");
 
+import type { Dirent } from "fs";
+
 type SearchParams = Record<string, unknown>;
 
 interface RequestOptions {
@@ -33,6 +35,31 @@ interface ListItemsOptions extends PageOptions {
 interface UpdateMetadataInput {
   folders?: unknown;
   tags?: unknown;
+}
+
+interface SearchItemsOptions extends PageOptions {
+  query: string;
+}
+
+interface ListTagsOptions extends PageOptions {
+  query?: unknown;
+}
+
+interface EagleApiEnvelope {
+  data?: unknown;
+  message?: unknown;
+  status?: unknown;
+}
+
+interface EagleItemFileInput {
+  ext?: unknown;
+  id?: unknown;
+}
+
+interface ResolveLibraryItemFileInput {
+  item?: EagleItemFileInput | null;
+  kind: "file" | "thumb";
+  libraryPath?: string;
 }
 
 const ITEM_FIELDS = [
@@ -70,20 +97,20 @@ const ITEM_FIELDS = [
 
 const MAX_ERROR_BODY_LENGTH = 240;
 
-function clampLimit(value, fallback = 60) {
-  const parsed = Number.parseInt(value, 10);
+function clampLimit(value: unknown, fallback = 60) {
+  const parsed = Number.parseInt(String(value), 10);
   if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
   return Math.min(Math.max(parsed, 30), 1000);
 }
 
-function normalizeOffset(value) {
-  const parsed = Number.parseInt(value, 10);
+function normalizeOffset(value: unknown) {
+  const parsed = Number.parseInt(String(value), 10);
   if (!Number.isFinite(parsed) || parsed < 0) return 0;
   return parsed;
 }
 
-function clampTagLimit(value) {
-  const parsed = Number.parseInt(value, 10);
+function clampTagLimit(value: unknown) {
+  const parsed = Number.parseInt(String(value), 10);
   if (!Number.isFinite(parsed) || parsed <= 0) return 20;
   return Math.min(parsed, 100);
 }
@@ -103,6 +130,10 @@ function formatResponseBodySnippet(text: string) {
     ? `${normalized.slice(0, MAX_ERROR_BODY_LENGTH)}...`
     : normalized;
   return `: ${snippet}`;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object";
 }
 
 function createEagleClient({
@@ -133,7 +164,9 @@ function createEagleClient({
     const responseText = await response.text();
     const parsed = parseJsonResponseText(responseText);
     if (!response.ok) {
-      const message = parsed.ok && parsed.payload?.message;
+      const message = parsed.ok && isRecord(parsed.payload) && typeof parsed.payload.message === "string"
+        ? parsed.payload.message
+        : "";
       throw new Error(message || `Eagle HTTP ${response.status}${formatResponseBodySnippet(responseText)}`);
     }
     if (!parsed.ok) {
@@ -156,7 +189,7 @@ function createEagleClient({
       return unwrapData(await request("/api/library/history"));
     },
 
-    async switchLibrary(libraryPath) {
+    async switchLibrary(libraryPath: string) {
       return unwrapData(
         await request("/api/library/switch", {
           method: "POST",
@@ -205,7 +238,7 @@ function createEagleClient({
       );
     },
 
-    async searchItems({ query, offset = 0, limit = 30 }) {
+    async searchItems({ query, offset = 0, limit = 30 }: SearchItemsOptions) {
       return normalizePaginatedResponse(
         await request("/api/v2/item/query", {
           method: "POST",
@@ -214,7 +247,7 @@ function createEagleClient({
       );
     },
 
-    async listTags({ query = "", offset = 0, limit = 20 } = {}) {
+    async listTags({ query = "", offset = 0, limit = 20 }: ListTagsOptions = {}) {
       return normalizePaginatedResponse(
         await request("/api/v2/tag/get", {
           searchParams: {
@@ -226,7 +259,7 @@ function createEagleClient({
       );
     },
 
-    async itemById(id) {
+    async itemById(id: string) {
       return unwrapData(
         await request("/api/v2/item/get", {
           method: "POST",
@@ -235,11 +268,11 @@ function createEagleClient({
       );
     },
 
-    async legacyThumbnailPath(id) {
+    async legacyThumbnailPath(id: string) {
       return unwrapData(await request("/api/item/thumbnail", { searchParams: { id } }));
     },
 
-    async updateItemStar(id, star) {
+    async updateItemStar(id: string, star: unknown) {
       const parsedStar = Number(star);
       if (!Number.isInteger(parsedStar) || parsedStar < 0 || parsedStar > 5) {
         throw new Error("star must be an integer from 0-5");
@@ -252,7 +285,7 @@ function createEagleClient({
       );
     },
 
-    async updateItemMetadata(id, { tags, folders }: UpdateMetadataInput = {}) {
+    async updateItemMetadata(id: string, { tags, folders }: UpdateMetadataInput = {}) {
       const body: { folders?: string[]; id: unknown; tags?: string[] } = { id };
       if (tags !== undefined) body.tags = normalizeStringArray(tags, "tags");
       if (folders !== undefined) body.folders = normalizeStringArray(folders, "folders");
@@ -268,7 +301,7 @@ function createEagleClient({
       );
     },
 
-    async updateItemTrash(id, isDeleted) {
+    async updateItemTrash(id: string, isDeleted: boolean) {
       if (!id) throw new Error("id is required");
       if (typeof isDeleted !== "boolean") throw new Error("isDeleted must be a boolean");
       return unwrapData(
@@ -281,32 +314,34 @@ function createEagleClient({
   };
 }
 
-function normalizeStringArray(value, fieldName) {
+function normalizeStringArray(value: unknown, fieldName: string) {
   if (!Array.isArray(value)) {
     throw new Error(`${fieldName} must be an array`);
   }
   return [...new Set(value.map((item) => String(item).trim()).filter(Boolean))];
 }
 
-function normalizePaginatedResponse(payload) {
+function normalizePaginatedResponse(payload: unknown) {
   const data = unwrapData(payload);
   if (Array.isArray(data)) {
     return { items: data, total: data.length, offset: 0, limit: data.length };
   }
+  const page = isRecord(data) ? data : {};
   return {
-    items: Array.isArray(data?.data) ? data.data : [],
-    total: Number.isFinite(data?.total) ? data.total : 0,
-    offset: Number.isFinite(data?.offset) ? data.offset : 0,
-    limit: Number.isFinite(data?.limit) ? data.limit : 0,
+    items: Array.isArray(page.data) ? page.data : [],
+    total: Number.isFinite(page.total) ? page.total : 0,
+    offset: Number.isFinite(page.offset) ? page.offset : 0,
+    limit: Number.isFinite(page.limit) ? page.limit : 0,
   };
 }
 
-function unwrapData(payload) {
-  if (payload?.status === "success") return payload.data;
-  throw new Error(payload?.message || "Unexpected Eagle API response");
+function unwrapData(payload: unknown) {
+  const envelope = isRecord(payload) ? payload as EagleApiEnvelope : {};
+  if (envelope.status === "success") return envelope.data;
+  throw new Error(typeof envelope.message === "string" && envelope.message ? envelope.message : "Unexpected Eagle API response");
 }
 
-function pathFromFileValue(value) {
+function pathFromFileValue(value: unknown) {
   if (!value || typeof value !== "string") return "";
   if (value.startsWith("file://")) {
     return fileURLToPath(value);
@@ -318,10 +353,10 @@ function pathFromFileValue(value) {
   }
 }
 
-async function resolveLibraryItemFile({ libraryPath, item, kind }) {
+async function resolveLibraryItemFile({ libraryPath, item, kind }: ResolveLibraryItemFileInput) {
   if (!libraryPath || !item?.id) return "";
   const itemDir = join(libraryPath, "images", `${item.id}.info`);
-  const entries = await readdir(itemDir, { withFileTypes: true });
+  const entries = await readdir(itemDir, { withFileTypes: true }) as Dirent[];
   const files = entries.filter((entry) => entry.isFile()).map((entry) => entry.name);
 
   if (kind === "thumb") {

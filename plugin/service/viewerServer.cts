@@ -26,6 +26,9 @@ const {
   signedAuthSessionToken,
 } = require("./auth.cjs");
 
+import type { IncomingMessage, RequestListener, ServerResponse } from "http";
+import type { Server as NetServer } from "net";
+
 interface ViewerServerOptions {
   allowMetadataEditing?: boolean;
   authUsers?: AuthUser[];
@@ -60,6 +63,17 @@ interface LoginFailure {
   count: number;
   firstFailedAt: number;
   lockedUntil: number;
+}
+
+interface JsonObject {
+  [key: string]: unknown;
+}
+
+interface ConnectionCandidate {
+  baseUrl: string;
+  host: string;
+  port: number;
+  token: string;
 }
 
 const INVALID_LOGIN_MESSAGE = "Invalid username or password";
@@ -161,7 +175,7 @@ function createViewerServer({
   sessionSecret = "",
   eagleClient = createEagleClient(),
 }: ViewerServerOptions = {}) {
-  let serverInstance = null;
+  let serverInstance: NetServer | null = null;
   let state = "stopped";
   let boundAddress = "";
   let boundPort = 0;
@@ -182,7 +196,7 @@ function createViewerServer({
     client: eagleClient,
   });
 
-  const server = createProtocolServer({ httpsCertPath, httpsEnabled, httpsKeyPath }, async (req, res) => {
+  const server = createProtocolServer({ httpsCertPath, httpsEnabled, httpsKeyPath }, async (req: IncomingMessage, res: ServerResponse) => {
     try {
       const url = new URL(req.url || "/", `${httpsEnabled ? "https" : "http"}://${req.headers.host}`);
       const auth = { authSessions, loginFailures, revokedAuthSessions, secureCookies: httpsEnabled, sessionSecret: resolvedSessionSecret, users: resolvedAuthUsers };
@@ -202,7 +216,7 @@ function createViewerServer({
         await handleApi(req, url, res, {
           auth,
           getSession: () => currentSession,
-          setSession: (nextSession) => {
+          setSession: (nextSession: EagleSession) => {
             currentSession = nextSession;
           },
         });
@@ -224,7 +238,7 @@ function createViewerServer({
       await serveStatic(url.pathname, res, publicDir);
     } catch (error) {
       const status = error instanceof HttpError ? error.status : 500;
-      sendJson(res, status, { error: error.message || "Internal server error" });
+      sendJson(res, status, { error: errorMessage(error) || "Internal server error" });
     }
   });
 
@@ -249,7 +263,7 @@ function createViewerServer({
         return this.status();
       } catch (error) {
         state = "error";
-        lastError = error.message || String(error);
+        lastError = errorMessage(error);
         throw error;
       }
     },
@@ -260,8 +274,9 @@ function createViewerServer({
         return this.status();
       }
       state = "stopping";
+      const closingServer = serverInstance;
       await new Promise<void>((resolveStop, rejectStop) => {
-        serverInstance.close((error) => {
+        closingServer.close((error?: Error) => {
           if (error) rejectStop(error);
           else resolveStop();
         });
@@ -291,7 +306,11 @@ function createViewerServer({
   };
 }
 
-function createProtocolServer({ httpsCertPath = "", httpsEnabled = false, httpsKeyPath = "" }, handler) {
+function createProtocolServer({ httpsCertPath = "", httpsEnabled = false, httpsKeyPath = "" }: {
+  httpsCertPath?: string;
+  httpsEnabled?: boolean;
+  httpsKeyPath?: string;
+}, handler: RequestListener): NetServer {
   if (!httpsEnabled) return createHttpServer(handler);
   const keyPath = String(httpsKeyPath || "").trim();
   const certPath = String(httpsCertPath || "").trim();
@@ -304,7 +323,7 @@ function createProtocolServer({ httpsCertPath = "", httpsEnabled = false, httpsK
   }, handler);
 }
 
-async function handleApi(req, url, res, { auth, getSession, setSession }: ApiContext & { auth: AuthContext }) {
+async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { auth, getSession, setSession }: ApiContext & { auth: AuthContext }) {
   if (url.pathname === "/api/connect") {
     if (req.method !== "POST") {
       sendMethodNotAllowed(res, ["POST"]);
@@ -351,7 +370,7 @@ async function handleApi(req, url, res, { auth, getSession, setSession }: ApiCon
       session.libraryInfo(),
       session.client.libraryHistory(),
     ]);
-    const paths = uniquePaths([library?.path, ...(Array.isArray(history) ? history : [])]);
+    const paths = uniquePaths([library?.path, ...(Array.isArray(history) ? history.filter((path): path is string => typeof path === "string") : [])]);
     sendJson(res, 200, {
       current: library?.path || "",
       items: paths.map((path) => ({ path, name: libraryNameFromPath(path) })),
@@ -495,7 +514,7 @@ async function handleApi(req, url, res, { auth, getSession, setSession }: ApiCon
   sendJson(res, 404, { error: "Not found" });
 }
 
-function boundedInteger(value, fallback, min, max) {
+function boundedInteger(value: unknown, fallback: number, min: number, max: number) {
   const parsed = Number.parseInt(String(value ?? ""), 10);
   if (!Number.isInteger(parsed)) return fallback;
   return Math.min(max, Math.max(min, parsed));
@@ -510,7 +529,7 @@ interface AuthContext {
   users: AuthUser[];
 }
 
-async function handleAuthRoutes(req, url, res, auth: AuthContext) {
+async function handleAuthRoutes(req: IncomingMessage, url: URL, res: ServerResponse, auth: AuthContext) {
   if (url.pathname === "/api/auth/status") {
     if (req.method !== "GET") {
       sendMethodNotAllowed(res, ["GET"]);
@@ -592,11 +611,11 @@ async function handleAuthRoutes(req, url, res, auth: AuthContext) {
   return false;
 }
 
-function loginFailureKey(req, username: string) {
+function loginFailureKey(req: IncomingMessage, username: string) {
   return `${clientAddress(req)}:${username.toLowerCase()}`;
 }
 
-function clientAddress(req) {
+function clientAddress(req: IncomingMessage) {
   const forwardedFor = String(req.headers["x-forwarded-for"] || "").split(",")[0]?.trim();
   return forwardedFor || req.socket?.remoteAddress || "unknown";
 }
@@ -626,7 +645,7 @@ function recordFailedLogin(loginFailures: Map<string, LoginFailure>, key: string
   return entry.lockedUntil > now ? Math.ceil((entry.lockedUntil - now) / 1000) : 0;
 }
 
-function sendLoginRateLimited(res, retryAfterSeconds: number) {
+function sendLoginRateLimited(res: ServerResponse, retryAfterSeconds: number) {
   res.writeHead(429, {
     "Content-Type": "application/json; charset=utf-8",
     "Retry-After": String(Math.max(1, retryAfterSeconds)),
@@ -634,28 +653,28 @@ function sendLoginRateLimited(res, retryAfterSeconds: number) {
   res.end(JSON.stringify({ error: LOGIN_RATE_LIMIT_MESSAGE }));
 }
 
-async function handleConnect(req, res, setSession, auth: AuthContext) {
+async function handleConnect(req: IncomingMessage, res: ServerResponse, setSession: (nextSession: EagleSession) => void, auth: AuthContext) {
   const input = await readJson(req);
   if (!hasAdminAccess(req, auth) && !isDefaultLocalEagleConnectionInput(input)) {
     sendJson(res, 403, { error: "Admin permission is required to change the Eagle API connection" });
     return;
   }
-  let candidates = [];
+  let candidates: ConnectionCandidate[] = [];
   try {
     candidates = buildConnectionCandidates({
       input,
       requestHost: req.headers.host || "",
-    });
+    }) as ConnectionCandidate[];
   } catch (error) {
-    sendJson(res, 400, { error: error.message });
+    sendJson(res, 400, { error: errorMessage(error) });
     return;
   }
-  const errors = [];
+  const errors: string[] = [];
   const requestedHost = String(input.host || "127.0.0.1").trim() || "127.0.0.1";
 
   for (const connection of candidates) {
     try {
-      const session = createConnectionContext({ connection });
+      const session = createConnectionContext({ connection }) as EagleSession;
       const [app, library] = await Promise.all([
         session.client.appInfo(),
         session.libraryInfo(),
@@ -673,26 +692,26 @@ async function handleConnect(req, res, setSession, auth: AuthContext) {
       });
       return;
     } catch (error) {
-      errors.push(`${connection.baseUrl}: ${error.message}`);
+      errors.push(`${connection.baseUrl}: ${errorMessage(error)}`);
     }
   }
 
   sendJson(res, 502, { error: `Unable to connect to Eagle API: ${errors.join(" / ")}` });
 }
 
-function isDefaultLocalEagleConnectionInput(input) {
+function isDefaultLocalEagleConnectionInput(input: JsonObject) {
   const host = String(input.host || "127.0.0.1").trim() || "127.0.0.1";
   const port = String(input.port || "41595").trim() || "41595";
   const token = String(input.token || "").trim();
   return ["127.0.0.1", "localhost", "::1"].includes(host) && port === "41595" && !token;
 }
 
-function sendJson(res, status, body) {
+function sendJson(res: ServerResponse, status: number, body: unknown) {
   res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
   res.end(JSON.stringify(body));
 }
 
-function sendMethodNotAllowed(res, methods) {
+function sendMethodNotAllowed(res: ServerResponse, methods: string[]) {
   res.writeHead(405, {
     "Allow": methods.join(", "),
     "Content-Type": "application/json; charset=utf-8",
@@ -700,7 +719,7 @@ function sendMethodNotAllowed(res, methods) {
   res.end(JSON.stringify({ error: "Method not allowed" }));
 }
 
-function normalizeMetadataPatch(body) {
+function normalizeMetadataPatch(body: JsonObject) {
   return {
     tags: body.tags === undefined ? undefined : normalizeStringArray(body.tags, "tags"),
     folders: body.folders === undefined ? undefined : normalizeStringArray(body.folders, "folders"),
@@ -715,14 +734,14 @@ function normalizeStar(value: unknown) {
   return star;
 }
 
-function sendAuthRequired(res) {
+function sendAuthRequired(res: ServerResponse) {
   res.writeHead(401, {
     "Content-Type": "application/json; charset=utf-8",
   });
   res.end(JSON.stringify({ error: "Authentication required" }));
 }
 
-function attachRequestCounter(res, onFinish) {
+function attachRequestCounter(res: ServerResponse, onFinish: (stats: { durationMs: number; status: number }) => void) {
   const startedAt = Date.now();
   res.on("finish", () => {
     onFinish?.({
@@ -732,22 +751,23 @@ function attachRequestCounter(res, onFinish) {
   });
 }
 
-function getSession(session) {
+function getSession(session: EagleSession | null) {
   if (!session) {
     throw new Error("No Eagle connection is configured. Please connect again.");
   }
   return session;
 }
 
-async function readJson(req) {
-  const chunks = [];
+async function readJson(req: IncomingMessage): Promise<JsonObject> {
+  const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {
-    size += chunk.length;
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += buffer.length;
     if (size > MAX_JSON_BODY_BYTES) {
       throw new HttpError(413, "Request body is too large");
     }
-    chunks.push(chunk);
+    chunks.push(buffer);
   }
   if (!chunks.length) return {};
   try {
@@ -757,15 +777,15 @@ async function readJson(req) {
   }
 }
 
-function uniquePaths(paths) {
-  return [...new Set(paths.filter(Boolean).map((path) => path.replace(/\/+$/, "")))];
+function uniquePaths(paths: Array<string | undefined | null>) {
+  return [...new Set(paths.filter((path): path is string => Boolean(path)).map((path) => path.replace(/\/+$/, "")))];
 }
 
-function libraryNameFromPath(path) {
+function libraryNameFromPath(path: string) {
   return path.split(/[\\/]/).filter(Boolean).at(-1)?.replace(/\.library$/i, "") || path;
 }
 
-async function waitForLibrarySwitch(session, expectedPath) {
+async function waitForLibrarySwitch(session: EagleSession, expectedPath: string) {
   const expected = expectedPath.replace(/\/+$/, "");
   for (let attempt = 0; attempt < 20; attempt += 1) {
     session.clearLibraryInfo?.();
@@ -777,5 +797,9 @@ async function waitForLibrarySwitch(session, expectedPath) {
   }
   session.clearLibraryInfo?.();
   return session.libraryInfo();
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
 }
 module.exports = { createViewerServer, resolveDefaultPublicDir, sha256 };

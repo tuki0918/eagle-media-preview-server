@@ -4,7 +4,38 @@ const { extname } = require("path");
 const { pathFromFileValue, resolveLibraryItemFile } = require("./eagleClient.cjs");
 const { mediaContentType } = require("./static.cjs");
 
-async function streamItemMedia(id, kind, req, res, session) {
+import type { IncomingMessage, ServerResponse } from "http";
+
+type MediaKind = "file" | "thumb";
+
+interface EagleItem {
+  data?: EagleItem[];
+  ext?: unknown;
+  filePath?: unknown;
+  fileURL?: unknown;
+  id?: string;
+  name?: unknown;
+  thumbnailPath?: unknown;
+  thumbnailURL?: unknown;
+  title?: unknown;
+}
+
+interface EagleMediaClient {
+  itemById(id: string): Promise<EagleItem>;
+  legacyThumbnailPath(id: string): Promise<unknown>;
+}
+
+interface EagleMediaSession {
+  client: EagleMediaClient;
+  libraryInfo(): Promise<{ path?: string } | null>;
+}
+
+interface ByteRange {
+  end: number;
+  start: number;
+}
+
+async function streamItemMedia(id: string, kind: MediaKind, req: IncomingMessage, res: ServerResponse, session: EagleMediaSession) {
   if (!["GET", "HEAD"].includes(req.method || "GET")) {
     sendMethodNotAllowed(res, ["GET", "HEAD"]);
     return;
@@ -98,14 +129,14 @@ async function streamItemMedia(id, kind, req, res, session) {
   createReadStream(filePath).pipe(res);
 }
 
-function contentDisposition(contentType, item, filePath) {
+function contentDisposition(contentType: string, item: EagleItem | null | undefined, filePath: string) {
   if (contentType !== "application/pdf") return "inline";
   const name = mediaFileName(item, filePath);
   const asciiName = name.replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "_");
   return `inline; filename="${asciiName}"; filename*=UTF-8''${encodeRFC5987ValueChars(name)}`;
 }
 
-function mediaFileName(item, filePath) {
+function mediaFileName(item: EagleItem | null | undefined, filePath: string) {
   const rawName = String(item?.name || item?.title || "").trim();
   const ext = String(item?.ext || extname(filePath).replace(/^\./, "") || "").trim().replace(/^\./, "");
   const fallbackName = rawName || `file${ext ? `.${ext}` : ""}`;
@@ -113,18 +144,18 @@ function mediaFileName(item, filePath) {
   return `${fallbackName}.${ext}`;
 }
 
-function encodeRFC5987ValueChars(value) {
+function encodeRFC5987ValueChars(value: string) {
   return encodeURIComponent(value)
     .replace(/['()]/g, escape)
     .replace(/\*/g, "%2A");
 }
 
-function sendJson(res, status, body) {
+function sendJson(res: ServerResponse, status: number, body: unknown) {
   res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
   res.end(JSON.stringify(body));
 }
 
-function sendMethodNotAllowed(res, methods) {
+function sendMethodNotAllowed(res: ServerResponse, methods: string[]) {
   res.writeHead(405, {
     "Allow": methods.join(", "),
     "Content-Type": "application/json; charset=utf-8",
@@ -132,7 +163,7 @@ function sendMethodNotAllowed(res, methods) {
   res.end(JSON.stringify({ error: "Method not allowed" }));
 }
 
-function parseRange(header, size) {
+function parseRange(header: string | undefined, size: number): ByteRange | null {
   if (!header?.startsWith("bytes=")) return null;
   const range = header.slice(6).split(",", 1)[0]?.trim();
   const match = range?.match(/^(\d*)-(\d*)$/);
@@ -141,8 +172,8 @@ function parseRange(header, size) {
   const [, rawStart, rawEnd] = match;
   if (!rawStart && !rawEnd) return null;
 
-  let start;
-  let end;
+  let start: number;
+  let end: number;
   if (!rawStart) {
     const suffixLength = Number.parseInt(rawEnd, 10);
     if (!Number.isFinite(suffixLength) || suffixLength <= 0) return null;
@@ -159,7 +190,7 @@ function parseRange(header, size) {
   return { start, end: Math.min(end, size - 1) };
 }
 
-async function getLibraryPath(session) {
+async function getLibraryPath(session: EagleMediaSession) {
   const library = await session.libraryInfo();
   return library?.path || "";
 }
