@@ -515,7 +515,8 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
 }
 
 function boundedInteger(value: unknown, fallback: number, min: number, max: number) {
-  const parsed = Number.parseInt(String(value ?? ""), 10);
+  const rawValue = String(value ?? "").trim();
+  const parsed = /^-?\d+$/.test(rawValue) ? Number(rawValue) : NaN;
   if (!Number.isInteger(parsed)) return fallback;
   return Math.min(max, Math.max(min, parsed));
 }

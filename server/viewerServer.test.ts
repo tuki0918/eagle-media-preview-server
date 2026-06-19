@@ -1767,6 +1767,8 @@ test("createViewerServer bounds item list limit and offset before forwarding to 
     await fetch(`${origin}/api/items?limit=999999&offset=999999999`);
     await fetch(`${origin}/api/items?limit=-20&offset=-10`);
     await fetch(`${origin}/api/items?limit=abc&offset=abc`);
+    await fetch(`${origin}/api/items?limit=30abc&offset=10abc`);
+    await fetch(`${origin}/api/items?limit=30.5&offset=10.5`);
 
     assert.equal(calls[0].limit, 1000);
     assert.equal(calls[0].offset, 1000000);
@@ -1774,6 +1776,10 @@ test("createViewerServer bounds item list limit and offset before forwarding to 
     assert.equal(calls[1].offset, 0);
     assert.equal(calls[2].limit, 30);
     assert.equal(calls[2].offset, 0);
+    assert.equal(calls[3].limit, 30);
+    assert.equal(calls[3].offset, 0);
+    assert.equal(calls[4].limit, 30);
+    assert.equal(calls[4].offset, 0);
   } finally {
     await viewer.stop();
   }
