@@ -24,8 +24,8 @@ export const Tiles: Story = {
   },
 };
 
-export const Table: Story = {
+export const List: Story = {
   args: {
-    viewMode: "table",
+    viewMode: "list",
   },
 };

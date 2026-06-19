@@ -35,7 +35,7 @@ describe("tile loading helpers", () => {
 
   test("loads more only when tiles mode is ready and has more items", () => {
     expect(canLoadMoreTiles(tileState())).toBe(true);
-    expect(canLoadMoreTiles(tileState({ viewMode: "table" }))).toBe(false);
+    expect(canLoadMoreTiles(tileState({ viewMode: "list" }))).toBe(false);
     expect(canLoadMoreTiles(tileState({ tilesLoadingMore: true }))).toBe(false);
     expect(canLoadMoreTiles(tileState({ itemCount: 90 }))).toBe(false);
   });

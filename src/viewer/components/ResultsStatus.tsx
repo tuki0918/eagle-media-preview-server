@@ -39,7 +39,7 @@ export function ViewModeTabs({ viewMode }: { viewMode?: ViewerMode }) {
       <TabsList className="rounded-lg bg-muted shadow-none" aria-label="View mode">
         <ViewModeButton id="tilesViewButton" mode="tiles" label="Tiles" icon={LayoutDashboard} />
         <ViewModeButton id="gridViewButton" mode="grid" label="Grid" icon={LayoutGrid} />
-        <ViewModeButton id="tableViewButton" mode="table" label="Table" icon={List} />
+        <ViewModeButton id="listViewButton" mode="list" label="List" icon={List} />
       </TabsList>
     </Tabs>
   );

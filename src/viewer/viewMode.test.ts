@@ -9,34 +9,34 @@ describe("isViewerMode", () => {
   test("accepts supported viewer modes", () => {
     expect(isViewerMode("grid")).toBe(true);
     expect(isViewerMode("tiles")).toBe(true);
-    expect(isViewerMode("table")).toBe(true);
+    expect(isViewerMode("list")).toBe(true);
   });
 
   test("rejects unsupported values", () => {
-    expect(isViewerMode("list")).toBe(false);
+    expect(isViewerMode("table")).toBe(false);
     expect(isViewerMode("")).toBe(false);
   });
 });
 
 describe("savedViewerMode", () => {
   test("restores a valid saved mode", () => {
-    expect(savedViewerMode("table")).toBe("table");
+    expect(savedViewerMode("list")).toBe("list");
   });
 
   test("falls back to the default mode for missing or invalid values", () => {
     expect(savedViewerMode(null)).toBe("tiles");
-    expect(savedViewerMode("list")).toBe("tiles");
+    expect(savedViewerMode("table")).toBe("tiles");
   });
 });
 
 describe("needsViewModeReload", () => {
   test("reloads when entering or leaving tiles mode", () => {
     expect(needsViewModeReload("grid", "tiles")).toBe(true);
-    expect(needsViewModeReload("tiles", "table")).toBe(true);
+    expect(needsViewModeReload("tiles", "list")).toBe(true);
   });
 
   test("does not reload when switching between paged modes", () => {
-    expect(needsViewModeReload("grid", "table")).toBe(false);
-    expect(needsViewModeReload("table", "grid")).toBe(false);
+    expect(needsViewModeReload("grid", "list")).toBe(false);
+    expect(needsViewModeReload("list", "grid")).toBe(false);
   });
 });

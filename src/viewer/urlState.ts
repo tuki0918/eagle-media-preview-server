@@ -20,7 +20,8 @@ export type ViewerUrlState = Pick<
 export function parseViewerUrlState(search: string): ViewerUrlState {
   const params = new URLSearchParams(search);
   const limit = clampPageSize(params.get("limit"));
-  const viewMode = params.get("view") === "tiles" ? "tiles" : params.get("view") === "table" ? "table" : DEFAULT_VIEW_MODE;
+  const viewModeParam = params.get("view");
+  const viewMode = viewModeParam === "tiles" ? "tiles" : viewModeParam === "list" ? "list" : DEFAULT_VIEW_MODE;
   return {
     query: params.get("q") || "",
     tags: uniqueTags(params.getAll("tag")),

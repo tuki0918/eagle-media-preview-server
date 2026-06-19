@@ -2,7 +2,7 @@ import { DEFAULT_VIEW_MODE } from "./constants";
 import type { ViewerMode } from "./types";
 
 export function isViewerMode(value: string): value is ViewerMode {
-  return value === "grid" || value === "tiles" || value === "table";
+  return value === "grid" || value === "tiles" || value === "list";
 }
 
 export function savedViewerMode(value: string | null): ViewerMode {

@@ -593,7 +593,7 @@ test("public audio preview attempts autoplay when the modal opens", async () => 
   assert.match(html, /audioRef\.current\?\.play\(\)\.catch\(\(\) => \{\}\)/);
 });
 
-test("public ratings are static in grid and table but editable in the preview modal", async () => {
+test("public ratings are static in grid and list but editable in the preview modal", async () => {
   const html = await readAppSources();
   const app = await readViewerSources();
   const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
@@ -948,7 +948,7 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   assert.match(html, /import \{ LayoutDashboard, LayoutGrid, List, type LucideIcon \} from "lucide-react";/);
   assert.match(html, /<ViewModeButton id="tilesViewButton" mode="tiles" label="Tiles" icon=\{LayoutDashboard\} \/>/);
   assert.match(html, /<ViewModeButton id="gridViewButton" mode="grid" label="Grid" icon=\{LayoutGrid\} \/>/);
-  assert.match(html, /<ViewModeButton id="tableViewButton" mode="table" label="Table" icon=\{List\} \/>/);
+  assert.match(html, /<ViewModeButton id="listViewButton" mode="list" label="List" icon=\{List\} \/>/);
   assert.match(html, /<Icon data-icon="inline-start" aria-hidden="true" \/>/);
   assert.match(html, /data-\[state=active\]:bg-background/);
   assert.match(html, /data-active:bg-background/);
@@ -988,7 +988,7 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   assert.match(app, /function currentFetchLimit\(\) \{/);
   assert.match(app, /if \(viewMode !== "tiles" \|\| tags\.length\) return limit;/);
   assert.match(app, /return Math\.min\(limit \* TILE_PREFETCH_PAGES, MAX_PAGE_SIZE\);/);
-  assert.match(app, /params\.get\("view"\) === "tiles"/);
+  assert.match(app, /viewModeParam === "tiles"/);
   assert.match(html, /media-tiles grid content-start gap-1 \[grid-auto-flow:dense\] \[grid-auto-rows:4px\] \[grid-template-columns:repeat\(auto-fill,minmax\(180px,1fr\)\)\]/);
   assert.match(html, /const tileButtonClassName =[\s\S]*tile-item[\s\S]*\[contain:layout_paint\]/);
   assert.match(html, /animate-pulse rounded-none bg-muted/);
@@ -1014,13 +1014,13 @@ test("public extension pills use varied colors for common text formats", async (
   assert.match(html, /txt: "bg-\[#f1f5f9\] text-\[#334155\]"/);
 });
 
-test("public table rows left align filenames and ratings", async () => {
+test("public list rows left align filenames and ratings", async () => {
   const html = await readAppSources();
 
-  assert.match(html, /const tableRowClassName =[\s\S]*\[&>span:not\(\.row-name-cell\)\]:justify-self-center/);
-  assert.match(html, /const tableHeaderClassName =[\s\S]*!min-h-8 !py-1/);
+  assert.match(html, /const listTableRowClassName =[\s\S]*\[&>span:not\(\.row-name-cell\)\]:justify-self-center/);
+  assert.match(html, /const listTableHeaderClassName =[\s\S]*!min-h-8 !py-1/);
   assert.match(html, /const rowNameCellClassName =[\s\S]*text-left justify-self-stretch/);
-  assert.match(html, /const tableRatingClassName = "rating-control inline-flex items-center justify-self-start gap-px text-left"/);
+  assert.match(html, /const listTableRatingClassName = "rating-control inline-flex items-center justify-self-start gap-px text-left"/);
 });
 
 test("public UI syncs filters, pagination, and preview state into the URL history", async () => {
@@ -1056,9 +1056,9 @@ test("public results status and empty states stay concise and consistent across 
   assert.doesNotMatch(app, /els\.grid\.classList\.toggle/);
   assert.match(html, /function resultSurfaceClassName\(viewMode:[\s\S]*isEmpty/);
   assert.match(html, /media-grid grid content-start gap-3/);
-  assert.match(html, /media-table grid content-start gap-0/);
+  assert.match(html, /media-list grid content-start gap-0/);
   assert.doesNotMatch(css, /\.media-grid\s*\{[^}]*min-height:\s*320px;/s);
-  assert.doesNotMatch(css, /\.media-table\s*\{[^}]*min-height:\s*320px;/s);
+  assert.doesNotMatch(css, /\.media-list\s*\{[^}]*min-height:\s*320px;/s);
   assert.match(html, /is-empty block overflow-visible !rounded-none !border-0 !bg-transparent !shadow-none/);
   assert.match(html, /min-h-\[320px\]/);
 });

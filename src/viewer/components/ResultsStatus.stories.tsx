@@ -17,8 +17,8 @@ type Story = StoryObj<typeof meta>;
 
 export const Grid: Story = {};
 
-export const Table: Story = {
+export const List: Story = {
   args: {
-    viewMode: "table",
+    viewMode: "list",
   },
 };

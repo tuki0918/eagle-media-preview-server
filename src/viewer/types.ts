@@ -19,7 +19,7 @@ export interface EagleItem {
   [key: string]: unknown;
 }
 
-export type ViewerMode = "grid" | "tiles" | "table";
+export type ViewerMode = "grid" | "tiles" | "list";
 
 export interface PreviewTransform {
   scale: number;

@@ -11,7 +11,7 @@ The product has two user-facing surfaces:
   - Manages server start, stop, settings, Endpoint URL, and QR code
 - `Browser viewer`
   - Opens in a phone, tablet, or another computer's browser
-  - Handles library search, filters, tag chips, paged/grid/table/tiles views, and previews
+  - Handles library search, filters, tag chips, paged/grid/list/tiles views, and previews
 
 External devices connect to the plugin server, not directly to Eagle's Web API.
 
@@ -169,7 +169,7 @@ Settings path:
 - Display the library name and Eagle version
 - Fetch items page by page
 - Filter by folder, uncategorized state, extension/type, rating, keyword, and tag chips
-- Switch between tiles, grid, and table views
+- Switch between tiles, grid, and list views
 - Preview images, videos, audio, text-like files, PDFs, and unsupported media
 - Change rating, tags, and categories from the preview panel when authenticated metadata editing is enabled
 - Open the original file in a new tab
@@ -187,7 +187,7 @@ Settings path:
 - Page size: `30`, `60`, `120`, `240`
 - Tiles view
 - Grid view
-- Table view
+- List view
 - Infinite loading in tiles view
 - URL history restore
 

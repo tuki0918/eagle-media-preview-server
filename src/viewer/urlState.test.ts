@@ -28,7 +28,7 @@ function urlState(overrides: Partial<ViewerUrlState> = {}): ViewerUrlState {
 
 describe("viewer URL state", () => {
   test("parses filters, pagination, and preview state from a query string", () => {
-    expect(parseViewerUrlState("?q=cat&tag= alpha &tag=alpha&tag=beta&folder=f1&ext=jpg&rating=4&filters=1&limit=60&view=table&page=3&item=i1&info=1")).toEqual({
+    expect(parseViewerUrlState("?q=cat&tag= alpha &tag=alpha&tag=beta&folder=f1&ext=jpg&rating=4&filters=1&limit=60&view=list&page=3&item=i1&info=1")).toEqual({
       query: "cat",
       tags: ["alpha", "beta"],
       folderId: "f1",
@@ -36,7 +36,7 @@ describe("viewer URL state", () => {
       rating: "4",
       filtersOpen: true,
       limit: 60,
-      viewMode: "table",
+      viewMode: "list",
       offset: 120,
       previewItemId: "i1",
       previewInfoOpen: true,
@@ -49,6 +49,10 @@ describe("viewer URL state", () => {
     expect(parseViewerUrlState("?view=tiles&page=9&limit=60").offset).toBe(0);
   });
 
+  test("ignores unsupported view modes", () => {
+    expect(parseViewerUrlState("?view=table&page=2").viewMode).toBe("tiles");
+  });
+
   test("builds compact query strings from non-default state", () => {
     const search = buildViewerSearch(urlState({
       query: "cat",
@@ -58,12 +62,12 @@ describe("viewer URL state", () => {
       rating: "4",
       filtersOpen: true,
       limit: 60,
-      viewMode: "table",
+      viewMode: "list",
       offset: 120,
       previewItemId: "i1",
       previewInfoOpen: true,
     }));
-    expect(search).toBe("q=cat&tag=alpha&tag=beta&folder=f1&ext=jpg&rating=4&filters=1&limit=60&view=table&page=3&item=i1&info=1");
+    expect(search).toBe("q=cat&tag=alpha&tag=beta&folder=f1&ext=jpg&rating=4&filters=1&limit=60&view=list&page=3&item=i1&info=1");
     expect(buildViewerUrl("/viewer", urlState({ query: "cat" }))).toBe("/viewer?q=cat");
   });
 

@@ -66,20 +66,20 @@ const fileNameOverlayTextClassName =
   "block min-w-0 truncate text-xs font-[720] leading-tight text-white drop-shadow-sm";
 const durationBadgeClassName =
   "duration-badge absolute bottom-1.5 right-1.5 rounded-md bg-[rgba(15,23,42,0.78)] px-1.5 py-[3px] text-[10px] font-bold leading-[1.2] text-white";
-const tableRowClassName =
+const listTableRowClassName =
   "media-row grid min-h-[70px] grid-cols-[78px_minmax(160px,1.8fr)_90px_90px_minmax(120px,1fr)_90px_130px] items-center gap-3 border-b border-border px-3 py-2 text-[13px] text-muted-foreground last:border-b-0 max-[540px]:grid-cols-[56px_minmax(0,1fr)] [&>span:not(.row-name-cell)]:justify-self-center [&>span:not(.row-name-cell)]:text-center";
-const tableHeaderClassName =
-  `${tableRowClassName} media-row-header !min-h-8 !py-1 bg-muted text-xs font-[760] text-muted-foreground [&>span:nth-child(2)]:justify-self-stretch [&>span:nth-child(2)]:text-left max-[540px]:[&>span:nth-child(2)]:pl-3.5 max-[540px]:[&>span:nth-child(n+3)]:hidden`;
+const listTableHeaderClassName =
+  `${listTableRowClassName} media-row-header !min-h-8 !py-1 bg-muted text-xs font-[760] text-muted-foreground [&>span:nth-child(2)]:justify-self-stretch [&>span:nth-child(2)]:text-left max-[540px]:[&>span:nth-child(2)]:pl-3.5 max-[540px]:[&>span:nth-child(n+3)]:hidden`;
 const rowNameCellClassName =
   "row-name-cell grid min-w-0 content-center justify-items-start gap-1.5 overflow-hidden text-left justify-self-stretch max-[540px]:grid-cols-[minmax(0,1fr)_auto] max-[540px]:items-center max-[540px]:pl-3.5 [&_.rating-control]:justify-self-start max-[540px]:[&_.rating-control]:col-span-2 max-[540px]:[&_.rating-control]:row-start-2";
 const rowFileNameClassName =
   "row-file-name block w-full min-w-0 overflow-hidden text-ellipsis whitespace-nowrap justify-self-start text-left max-[540px]:col-start-1 max-[540px]:row-start-1";
-const tableMobileMetaClassName =
-  "table-mobile-meta hidden text-[11px] leading-[1.3] text-muted-foreground max-[540px]:col-start-2 max-[540px]:row-start-1 max-[540px]:block max-[540px]:justify-self-end max-[540px]:whitespace-nowrap max-[540px]:text-right";
-const tableHiddenOnMobileClassName = "max-[540px]:hidden";
+const listTableMobileMetaClassName =
+  "list-table-mobile-meta hidden text-[11px] leading-[1.3] text-muted-foreground max-[540px]:col-start-2 max-[540px]:row-start-1 max-[540px]:block max-[540px]:justify-self-end max-[540px]:whitespace-nowrap max-[540px]:text-right";
+const listTableHiddenOnMobileClassName = "max-[540px]:hidden";
 const cardRatingClassName =
   "rating-control absolute bottom-1.5 left-1.5 z-[2] inline-flex items-center gap-0 rounded-md bg-[rgba(15,23,42,0.78)] px-1 py-[3px] leading-[1.2] text-white [&_.rating-star]:h-3 [&_.rating-star]:w-3 [&_.rating-star]:text-[10px] [&_.rating-star]:text-[rgba(255,255,255,0.34)] [&_.rating-star[data-active=true]]:text-yellow-300";
-const tableRatingClassName = "rating-control inline-flex items-center justify-self-start gap-px text-left";
+const listTableRatingClassName = "rating-control inline-flex items-center justify-self-start gap-px text-left";
 const tileMasonryBaseWidth = 168;
 const tileMasonryGap = 4;
 const tileMasonryRowHeight = 4;
@@ -160,7 +160,7 @@ const fileBadgeColorClassNames: Record<string, string> = {
 export function ResultList({ items, viewMode, onOpenPreview }: ResultListProps) {
   return (
     <>
-      {viewMode === "table" && items.length ? <TableHeader /> : null}
+      {viewMode === "list" && items.length ? <ListTableHeader /> : null}
       {items.map((item, index) => (
         <ResultItem key={String(item.id || item.name || index)} item={item} viewMode={viewMode} onOpenPreview={onOpenPreview} />
       ))}
@@ -169,7 +169,7 @@ export function ResultList({ items, viewMode, onOpenPreview }: ResultListProps) 
 }
 
 function ResultItem({ item, viewMode, onOpenPreview }: { item: EagleItem; viewMode: ViewerMode; onOpenPreview: (item: EagleItem) => void }) {
-  if (viewMode === "table") return <TableRow item={item} onOpenPreview={onOpenPreview} />;
+  if (viewMode === "list") return <ListTableRow item={item} onOpenPreview={onOpenPreview} />;
   if (viewMode === "tiles") return <TileItem item={item} onOpenPreview={onOpenPreview} />;
   return <GridCard item={item} onOpenPreview={onOpenPreview} />;
 }
@@ -214,9 +214,9 @@ function tileMasonrySpan(width: number, height: number) {
   return Math.min(96, Math.max(12, span));
 }
 
-function TableHeader() {
+function ListTableHeader() {
   return (
-    <div className={tableHeaderClassName}>
+    <div className={listTableHeaderClassName}>
       <span>Item</span>
       <span>Name</span>
       <span>Type</span>
@@ -228,35 +228,35 @@ function TableHeader() {
   );
 }
 
-function TableRow({ item, onOpenPreview }: { item: EagleItem; onOpenPreview: (item: EagleItem) => void }) {
+function ListTableRow({ item, onOpenPreview }: { item: EagleItem; onOpenPreview: (item: EagleItem) => void }) {
   return (
-    <article className={tableRowClassName}>
+    <article className={listTableRowClassName}>
       <ThumbnailButton variant="row" item={item} onOpenPreview={onOpenPreview} />
-      <TableNameCell item={item} />
+      <ListTableNameCell item={item} />
       <ExtensionPill item={item} />
-      <TableCell value={formatBytes(item.size) || "-"} className={tableHiddenOnMobileClassName} />
-      <TableCell value={formatDimensions(item) || "-"} className={`dimensions-cell ${tableHiddenOnMobileClassName}`} />
-      <TableCell value={formatDurationCell(item) || "-"} className={`duration-cell ${tableHiddenOnMobileClassName}`} />
-      <TableCell value={formatDateShort(item.modificationTime) || "-"} className={`modified-cell ${tableHiddenOnMobileClassName}`} title={formatDate(item.modificationTime) || ""} />
+      <ListTableCell value={formatBytes(item.size) || "-"} className={listTableHiddenOnMobileClassName} />
+      <ListTableCell value={formatDimensions(item) || "-"} className={`dimensions-cell ${listTableHiddenOnMobileClassName}`} />
+      <ListTableCell value={formatDurationCell(item) || "-"} className={`duration-cell ${listTableHiddenOnMobileClassName}`} />
+      <ListTableCell value={formatDateShort(item.modificationTime) || "-"} className={`modified-cell ${listTableHiddenOnMobileClassName}`} title={formatDate(item.modificationTime) || ""} />
     </article>
   );
 }
 
-function TableNameCell({ item }: { item: EagleItem }) {
+function ListTableNameCell({ item }: { item: EagleItem }) {
   return (
     <span className={rowNameCellClassName}>
       <span className={rowFileNameClassName} title={originalFileName(item)}>
         {item.name || item.id || ""}
       </span>
-      <span className={tableMobileMetaClassName}>
+      <span className={listTableMobileMetaClassName}>
         {[((item.ext || "").toUpperCase() || "FILE"), formatBytes(item.size)].filter(Boolean).join(" · ")}
       </span>
-      <RatingStars item={item} className={tableRatingClassName} />
+      <RatingStars item={item} className={listTableRatingClassName} />
     </span>
   );
 }
 
-function TableCell({ className = "", title = "", value }: { className?: string; title?: string; value: string }) {
+function ListTableCell({ className = "", title = "", value }: { className?: string; title?: string; value: string }) {
   return (
     <span className={className} title={title || undefined}>
       {value}

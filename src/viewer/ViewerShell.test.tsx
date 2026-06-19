@@ -77,7 +77,7 @@ const REQUIRED_ELEMENT_IDS = [
   "tilesSentinel",
   "tilesViewButton",
   "gridViewButton",
-  "tableViewButton",
+  "listViewButton",
   "prevButton",
   "nextButton",
   "pageButtons",
