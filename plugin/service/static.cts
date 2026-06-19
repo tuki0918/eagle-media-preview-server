@@ -51,7 +51,7 @@ const securityHeaders = {
     "media-src 'self' blob:",
     "object-src 'none'",
     "script-src 'self'",
-    "style-src 'self'",
+    "style-src 'self' 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=' 'sha256-CIxDM5jnsGiKqXs2v7NKCY5MzdR9gu6TtiMJrDw29AY='",
   ].join("; "),
   "Permissions-Policy": "camera=(), geolocation=(), microphone=()",
   "Referrer-Policy": "no-referrer",

@@ -1409,6 +1409,8 @@ test("createViewerServer serves static shell with browser hardening headers", as
 
     assert.equal(response.status, 200);
     assert.match(response.headers.get("content-security-policy") || "", /default-src 'self'/);
+    assert.match(response.headers.get("content-security-policy") || "", /style-src 'self' 'sha256-47DEQpj8HBSa\+\/TImW\+5JCeuQeRkm5NMpJWZG3hSuFU=' 'sha256-CIxDM5jnsGiKqXs2v7NKCY5MzdR9gu6TtiMJrDw29AY='/);
+    assert.doesNotMatch(response.headers.get("content-security-policy") || "", /style-src[^;]*'unsafe-inline'/);
     assert.match(response.headers.get("content-security-policy") || "", /frame-ancestors 'none'/);
     assert.equal(response.headers.get("x-content-type-options"), "nosniff");
     assert.equal(response.headers.get("x-frame-options"), "DENY");
