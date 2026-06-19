@@ -31,7 +31,8 @@ interface ConnectionContextOptions {
 
 function normalizeConnectionInput(input: ConnectionInput = {}, { requestHost = "", requireRemoteToken = false }: NormalizeConnectionOptions = {}) {
   const host = String(input.host || "127.0.0.1").trim() || "127.0.0.1";
-  const parsedPort = Number.parseInt(String(input.port || "41595"), 10);
+  const rawPort = String(input.port || "41595").trim();
+  const parsedPort = /^\d+$/.test(rawPort) ? Number(rawPort) : NaN;
 
   if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
     throw new Error("Invalid port");
@@ -46,7 +47,7 @@ function normalizeConnectionInput(input: ConnectionInput = {}, { requestHost = "
     host,
     port: parsedPort,
     token,
-    baseUrl: `http://${host}:${parsedPort}`,
+    baseUrl: `http://${formatHostForUrl(host)}:${parsedPort}`,
   };
 }
 
@@ -106,5 +107,9 @@ function extractHostname(hostHeader: string) {
     return hostHeader.slice(1, hostHeader.indexOf("]"));
   }
   return hostHeader.split(":")[0];
+}
+
+function formatHostForUrl(host: string) {
+  return host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
 }
 module.exports = { normalizeConnectionInput, buildConnectionCandidates, requiresToken, createConnectionContext };

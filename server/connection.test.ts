@@ -30,7 +30,21 @@ test("normalizeConnectionInput uses localhost and Eagle default port", () => {
 
 test("normalizeConnectionInput rejects invalid ports", () => {
   assert.throws(() => normalizeConnectionInput({ port: "abc" }), /Invalid port/);
+  assert.throws(() => normalizeConnectionInput({ port: "41595abc" }), /Invalid port/);
+  assert.throws(() => normalizeConnectionInput({ port: "41595.5" }), /Invalid port/);
   assert.throws(() => normalizeConnectionInput({ port: "70000" }), /Invalid port/);
+});
+
+test("normalizeConnectionInput brackets IPv6 hosts in base URLs", () => {
+  assert.deepEqual(
+    normalizeConnectionInput({ host: "::1", port: "41595" }),
+    {
+      host: "::1",
+      port: 41595,
+      token: "",
+      baseUrl: "http://[::1]:41595",
+    },
+  );
 });
 
 test("normalizeConnectionInput requires token for remote Eagle hosts", () => {
