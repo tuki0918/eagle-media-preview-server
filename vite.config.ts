@@ -60,7 +60,7 @@ export default defineConfig({
   build: {
     outDir: "dist/public",
     emptyOutDir: true,
-    minify: false,
+    minify: true,
     rollupOptions: {
       output: {
         entryFileNames: "app.js",
