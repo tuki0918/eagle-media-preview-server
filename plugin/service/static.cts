@@ -46,7 +46,7 @@ const securityHeaders = {
     "connect-src 'self'",
     "font-src 'self'",
     "form-action 'self'",
-    "frame-ancestors 'none'",
+    "frame-ancestors 'self'",
     "img-src 'self' data: blob:",
     "media-src 'self' blob:",
     "object-src 'none'",
@@ -56,7 +56,7 @@ const securityHeaders = {
   "Permissions-Policy": "camera=(), geolocation=(), microphone=()",
   "Referrer-Policy": "no-referrer",
   "X-Content-Type-Options": "nosniff",
-  "X-Frame-Options": "DENY",
+  "X-Frame-Options": "SAMEORIGIN",
 };
 
 async function serveStatic(pathname: string, res: ServerResponse, publicDir: string) {
