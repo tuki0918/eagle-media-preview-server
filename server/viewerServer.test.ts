@@ -146,8 +146,10 @@ test("createViewerServer starts and stops without the CLI entrypoint", async () 
     },
   });
 
+  const origin = `http://127.0.0.1:${status.port}`;
   const invalidStatusMethod = await fetch(`http://127.0.0.1:${status.port}/api/auth/status`, {
     method: "POST",
+    headers: { Origin: origin },
   });
   assert.equal(invalidStatusMethod.status, 405);
   assert.equal(invalidStatusMethod.headers.get("allow"), "GET");
@@ -155,6 +157,7 @@ test("createViewerServer starts and stops without the CLI entrypoint", async () 
 
   const invalidItemsMethod = await fetch(`http://127.0.0.1:${status.port}/api/items`, {
     method: "POST",
+    headers: { Origin: origin },
   });
   assert.equal(invalidItemsMethod.status, 405);
   assert.equal(invalidItemsMethod.headers.get("allow"), "GET");
@@ -162,6 +165,7 @@ test("createViewerServer starts and stops without the CLI entrypoint", async () 
 
   const login = await fetch(`http://127.0.0.1:${status.port}/api/auth/login`, {
     method: "POST",
+    headers: { Origin: origin },
   });
   assert.equal(login.status, 200);
   assert.deepEqual(await login.json(), {
@@ -178,6 +182,7 @@ test("createViewerServer starts and stops without the CLI entrypoint", async () 
 
   const logout = await fetch(`http://127.0.0.1:${status.port}/api/auth/logout`, {
     method: "POST",
+    headers: { Origin: origin },
   });
   assert.equal(logout.status, 200);
   assert.deepEqual(await logout.json(), {
@@ -550,6 +555,61 @@ test("createViewerServer rejects cross-origin metadata writes before reaching Ea
 
     assert.equal(response.status, 403);
     assert.deepEqual(await response.json(), { error: "Cross-origin writes are not allowed" });
+    assert.deepEqual(calls, []);
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer requires Origin for unsafe requests", async () => {
+  const calls: unknown[] = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    allowMetadataEditing: true,
+    passwordHash: sha256("secret"),
+    basicAuthUsername: "eagle",
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/tmp/Test.library", name: "Test Library" };
+      },
+      async updateItemStar(id: string, star: unknown) {
+        calls.push({ id, star });
+        return { id, star };
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const origin = `http://127.0.0.1:${status.port}`;
+    const cookie = await loginCookie(origin, "eagle", "secret");
+    const missingOrigin = await fetch(`${origin}/api/items/ITEM123/star`, {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ star: 4 }),
+    });
+    const refererOnly = await fetch(`${origin}/api/items/ITEM123/star`, {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        "Content-Type": "application/json",
+        Referer: `${origin}/`,
+      },
+      body: JSON.stringify({ star: 4 }),
+    });
+
+    assert.equal(missingOrigin.status, 403);
+    assert.deepEqual(await missingOrigin.json(), { error: "Cross-origin writes are not allowed" });
+    assert.equal(refererOnly.status, 403);
+    assert.deepEqual(await refererOnly.json(), { error: "Cross-origin writes are not allowed" });
     assert.deepEqual(calls, []);
   } finally {
     await viewer.stop();
@@ -1147,7 +1207,10 @@ test("createViewerServer returns 400 for invalid JSON request bodies", async () 
     const status = viewer.status();
     const response = await fetch(`http://127.0.0.1:${status.port}/api/connect`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Origin: `http://127.0.0.1:${status.port}`,
+      },
       body: "{",
     });
 
@@ -1169,7 +1232,10 @@ test("createViewerServer returns 413 for oversized JSON request bodies", async (
     const status = viewer.status();
     const response = await fetch(`http://127.0.0.1:${status.port}/api/connect`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Origin: `http://127.0.0.1:${status.port}`,
+      },
       body: JSON.stringify({ payload: "x".repeat(1024 * 1024) }),
     });
 

@@ -42,15 +42,7 @@ function isTrustedUnsafeRequest(req, requestUrl) {
   if (!isUnsafeMethod(req.method)) return true;
   const expectedOrigin = `${requestUrl.protocol}//${requestUrl.host}`;
   const origin = headerValue(req.headers.origin);
-  if (origin) return origin === expectedOrigin;
-  const referer = headerValue(req.headers.referer);
-  if (!referer) return true;
-  try {
-    const refererUrl = new URL(referer);
-    return `${refererUrl.protocol}//${refererUrl.host}` === expectedOrigin;
-  } catch {
-    return false;
-  }
+  return Boolean(origin) && origin === expectedOrigin;
 }
 
 function isUnsafeMethod(method) {
