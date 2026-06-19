@@ -39,6 +39,26 @@ const mimeTypes: Record<string, string> = {
   ".md": "text/plain; charset=utf-8",
 };
 
+const staticSecurityHeaders = {
+  "Content-Security-Policy": [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "connect-src 'self'",
+    "font-src 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+    "img-src 'self' data: blob:",
+    "media-src 'self' blob:",
+    "object-src 'none'",
+    "script-src 'self'",
+    "style-src 'self'",
+  ].join("; "),
+  "Permissions-Policy": "camera=(), geolocation=(), microphone=()",
+  "Referrer-Policy": "no-referrer",
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+};
+
 async function serveStatic(pathname: string, res: ServerResponse, publicDir: string) {
   const cleanPath = pathname === "/" ? "/index.html" : pathname;
   const publicRoot = resolve(publicDir);
@@ -54,6 +74,7 @@ async function serveStatic(pathname: string, res: ServerResponse, publicDir: str
     const info = await stat(filePath);
     if (!info.isFile()) throw new Error("Not a file");
     res.writeHead(200, {
+      ...staticSecurityHeaders,
       "Content-Type": mimeTypes[extname(filePath).toLowerCase()] || "application/octet-stream",
       "Cache-Control": "no-cache",
     });
@@ -70,7 +91,10 @@ function mediaContentType(filePath: string, item?: { ext?: unknown } | null) {
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown) {
-  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
+  res.writeHead(status, {
+    ...staticSecurityHeaders,
+    "Content-Type": "application/json; charset=utf-8",
+  });
   res.end(JSON.stringify(body));
 }
 

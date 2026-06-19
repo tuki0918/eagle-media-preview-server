@@ -1376,6 +1376,34 @@ test("serveStatic rejects sibling paths that only share the public directory pre
   assert.deepEqual(JSON.parse(body), { error: "Forbidden" });
 });
 
+test("createViewerServer serves static shell with browser hardening headers", async () => {
+  const publicDir = join(tmpdir(), `eagle-media-preview-server-public-${Date.now()}`);
+  await mkdir(publicDir, { recursive: true });
+  await writeFile(join(publicDir, "index.html"), "<!doctype html><html><body>viewer</body></html>");
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    publicDir,
+    viewerPassword: "",
+  });
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const response = await fetch(`http://127.0.0.1:${status.port}/`);
+
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get("content-security-policy") || "", /default-src 'self'/);
+    assert.match(response.headers.get("content-security-policy") || "", /frame-ancestors 'none'/);
+    assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+    assert.equal(response.headers.get("x-frame-options"), "DENY");
+    assert.equal(response.headers.get("referrer-policy"), "no-referrer");
+    assert.equal(response.headers.get("permissions-policy"), "camera=(), geolocation=(), microphone=()");
+  } finally {
+    await viewer.stop();
+  }
+});
+
 test("createViewerServer reports a port conflict as an error state", async () => {
   const first = createViewerServer({
     host: "127.0.0.1",
