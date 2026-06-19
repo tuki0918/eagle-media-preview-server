@@ -36,7 +36,7 @@ export function ResultStateView(props: ResultStateViewProps) {
       <strong className="text-[17px] font-[760] text-foreground">{props.hasActiveFilters ? "No items matched these filters" : "Library is empty"}</strong>
       <p className="m-0 max-w-[420px] text-sm leading-[1.55] text-muted-foreground">
         {props.hasActiveFilters
-          ? "Try changing the search text, category, type, or rating to widen the results."
+          ? "Try changing the search text, folder, type, or rating to widen the results."
           : "Eagle returned no items for this library. Add media to the current Eagle library, or switch to another library in Eagle."}
       </p>
       {hasClearableFilters ? (
