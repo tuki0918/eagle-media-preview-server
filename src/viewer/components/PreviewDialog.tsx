@@ -1,4 +1,4 @@
-import { useEffect, useRef, useSyncExternalStore, type PointerEvent } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type PointerEvent } from "react";
 import { Separator } from "@/components/ui/separator";
 import { Toaster } from "@/components/ui/sonner";
 import {
@@ -25,9 +25,12 @@ import { PreviewOriginalName } from "./PreviewText";
 export function PreviewDialog() {
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const closeSwipeRef = useRef<{ pointerId: number; startX: number; startY: number } | null>(null);
+  const [desktopInfoOpen, setDesktopInfoOpen] = useState(true);
+  const [desktopViewport, setDesktopViewport] = useState(false);
   const previewDialogState = useSyncExternalStore(subscribePreviewDialogState, getPreviewDialogState, getPreviewDialogState);
   const dialogClassName = [
-    "fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none touch-none grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] overscroll-none rounded-none border-0 bg-background p-0 text-foreground open:grid min-[900px]:grid-cols-[minmax(0,1fr)_380px]",
+    "fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none touch-none grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] overscroll-none rounded-none border-0 bg-background p-0 text-foreground open:grid min-[900px]:transition-[grid-template-columns] min-[900px]:duration-200 min-[900px]:ease-out",
+    desktopInfoOpen ? "min-[900px]:grid-cols-[minmax(0,1fr)_380px]" : "min-[900px]:grid-cols-[minmax(0,1fr)_0px]",
     "backdrop:bg-foreground/30",
     previewDialogState.mode ? `${previewDialogState.mode}-mode` : "",
     previewDialogState.infoOpen ? "info-open" : "",
@@ -38,7 +41,10 @@ export function PreviewDialog() {
     previewDialogState.mode === "video" ? "bg-[#05070a]" : "",
   ].filter(Boolean).join(" ");
   const previewInfoClassName = [
-    "preview-info absolute inset-y-0 right-0 z-[6] grid w-[min(380px,calc(100vw-56px))] max-w-full content-start gap-3.5 overflow-auto border-0 border-l border-border bg-card p-3.5 text-card-foreground transition-[box-shadow,transform] duration-200 min-[900px]:relative min-[900px]:inset-auto min-[900px]:z-auto min-[900px]:col-start-2 min-[900px]:row-span-2 min-[900px]:row-start-1 min-[900px]:h-full min-[900px]:w-auto min-[900px]:translate-x-0 min-[900px]:shadow-none",
+    "preview-info absolute inset-y-0 right-0 z-[6] grid w-[min(380px,calc(100vw-56px))] max-w-full content-start gap-3.5 overflow-auto border-0 border-l border-border bg-card p-3.5 text-card-foreground transition-[box-shadow,opacity,transform] duration-200",
+    desktopInfoOpen
+      ? "min-[900px]:pointer-events-auto min-[900px]:relative min-[900px]:inset-auto min-[900px]:z-auto min-[900px]:col-start-2 min-[900px]:row-span-2 min-[900px]:row-start-1 min-[900px]:h-full min-[900px]:w-[380px] min-[900px]:translate-x-0 min-[900px]:opacity-100 min-[900px]:shadow-none"
+      : "min-[900px]:pointer-events-none min-[900px]:relative min-[900px]:inset-auto min-[900px]:z-auto min-[900px]:col-start-2 min-[900px]:row-span-2 min-[900px]:row-start-1 min-[900px]:h-full min-[900px]:w-[380px] min-[900px]:translate-x-3 min-[900px]:opacity-0 min-[900px]:shadow-none",
     previewDialogState.infoOpen
       ? "translate-x-0 shadow-[-18px_0_44px_rgba(15,23,42,0.14)] max-[540px]:translate-y-0 max-[540px]:shadow-[0_-18px_44px_rgba(15,23,42,0.14)]"
       : "translate-x-full shadow-none max-[540px]:translate-x-0 max-[540px]:translate-y-full",
@@ -110,6 +116,19 @@ export function PreviewDialog() {
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const mediaQuery = window.matchMedia("(min-width: 900px)");
+    const syncDesktopViewport = () => {
+      setDesktopViewport(mediaQuery.matches);
+    };
+    syncDesktopViewport();
+    mediaQuery.addEventListener("change", syncDesktopViewport);
+    return () => {
+      mediaQuery.removeEventListener("change", syncDesktopViewport);
+    };
+  }, []);
+
   const startCloseSwipe = (event: PointerEvent<HTMLDialogElement>) => {
     if (event.pointerType !== "touch") return;
     const target = event.target;
@@ -136,6 +155,13 @@ export function PreviewDialog() {
     handlePreviewPointerDown(event);
     startCloseSwipe(event);
   };
+  const handleTogglePreviewInfo = () => {
+    if (desktopViewport) {
+      setDesktopInfoOpen((open) => !open);
+      return;
+    }
+    togglePreviewInfo();
+  };
 
   return (
     <dialog
@@ -150,7 +176,7 @@ export function PreviewDialog() {
       onPointerDown={handleDialogPointerDown}
       onPointerUp={endCloseSwipe}
     >
-      <header className="preview-header grid h-12 shrink-0 grid-cols-[minmax(0,1fr)_36px] items-center gap-2 border-b border-border bg-background px-2 min-[720px]:h-14 min-[720px]:px-3 min-[900px]:col-start-1 min-[900px]:row-start-1 min-[900px]:grid-cols-[minmax(0,1fr)]">
+      <header className="preview-header grid h-12 shrink-0 grid-cols-[minmax(0,1fr)_36px] items-center gap-2 border-b border-border bg-background px-2 min-[720px]:h-14 min-[720px]:px-3 min-[900px]:col-start-1 min-[900px]:row-start-1">
         <div className="grid min-w-0 grid-cols-[36px_1px_minmax(0,1fr)] items-center gap-2">
           <button id="closePreview" className="icon-button inline-grid size-9 shrink-0 touch-manipulation select-none place-items-center rounded-lg border border-transparent bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground" type="button" aria-label="Back to results" title="Back to results" onClick={closePreview}>
             <ChevronLeftIcon />
@@ -163,8 +189,13 @@ export function PreviewDialog() {
             <PreviewOriginalName />
           </div>
         </div>
-        <button id="toggleInfoPreview" className="icon-button inline-grid size-9 shrink-0 touch-manipulation select-none place-items-center rounded-lg border border-transparent bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground min-[900px]:hidden" type="button" aria-label="Media information" aria-expanded={previewDialogState.infoOpen} title="Media information" onClick={togglePreviewInfo}>
-          <PreviewInfoToggleIcon open={previewDialogState.infoOpen} />
+        <button id="toggleInfoPreview" className="icon-button inline-grid size-9 shrink-0 touch-manipulation select-none place-items-center rounded-lg border border-transparent bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground" type="button" aria-label="Media information" aria-expanded={desktopViewport ? desktopInfoOpen : previewDialogState.infoOpen} title="Media information" onClick={handleTogglePreviewInfo}>
+          <span className="min-[900px]:hidden">
+            <PreviewInfoToggleIcon open={previewDialogState.infoOpen} />
+          </span>
+          <span className="hidden min-[900px]:block" aria-hidden="true">
+            {desktopInfoOpen ? <PanelLeftOpenIcon /> : <PanelRightOpenIcon />}
+          </span>
         </button>
       </header>
       <div className={previewBodyColumnClassName}>
