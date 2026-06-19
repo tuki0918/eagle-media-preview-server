@@ -104,13 +104,7 @@ function resolveAuthenticatedUser(req: IncomingMessage, auth: AuthContext): Auth
 }
 
 function authSessionTokenFromRequest(req: IncomingMessage) {
-  return bearerAuthToken(req.headers.authorization) || parseCookies(req.headers.cookie || "").viewer_session;
-}
-
-function bearerAuthToken(value: IncomingHttpHeaders[string]) {
-  const header = headerValue(value);
-  const match = header.match(/^Bearer\s+(.+)$/i);
-  return match ? match[1].trim() : "";
+  return parseCookies(req.headers.cookie || "").viewer_session;
 }
 
 function pruneAuthSessions(authSessions: Map<string, AuthSession>) {

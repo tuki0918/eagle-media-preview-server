@@ -779,11 +779,9 @@ test("createViewerServer logs out cookie sessions", async () => {
     const cookie = login.headers.get("set-cookie") || "";
     assert.match(cookie, /viewer_session=/);
     const loginBody = await login.json();
-    assert.match(loginBody.sessionToken, /^[^.]+\.[^;]+/);
     assert.deepEqual(loginBody, {
       required: true,
       authenticated: true,
-      sessionToken: loginBody.sessionToken,
       user: {
         role: "viewer",
         username: "eagle",
@@ -814,16 +812,27 @@ test("createViewerServer logs out cookie sessions", async () => {
       },
     });
 
-    const authenticatedWithBearer = await fetch(`${origin}/api/auth/status`, {
-      headers: { Authorization: `Bearer ${loginBody.sessionToken}` },
+    const sessionToken = cookie.match(/viewer_session=([^;]+)/)?.[1] || "";
+    assert.ok(sessionToken);
+    const bearerIgnored = await fetch(`${origin}/api/auth/status`, {
+      headers: { Authorization: `Bearer ${sessionToken}` },
     });
-    assert.equal(authenticatedWithBearer.status, 200);
-    assert.equal((await authenticatedWithBearer.json()).authenticated, true);
+    assert.deepEqual(await bearerIgnored.json(), {
+      required: true,
+      authenticated: false,
+      user: null,
+      permissions: {
+        manageLibrary: false,
+        read: false,
+        writeMetadata: false,
+        writeRating: false,
+      },
+    });
 
     const logout = await fetch(`${origin}/api/auth/logout`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${loginBody.sessionToken}`,
+        Cookie: cookie,
         Origin: origin,
       },
     });
@@ -855,11 +864,6 @@ test("createViewerServer logs out cookie sessions", async () => {
         writeRating: false,
       },
     });
-
-    const revokedBearer = await fetch(`${origin}/api/auth/status`, {
-      headers: { Authorization: `Bearer ${loginBody.sessionToken}` },
-    });
-    assert.equal((await revokedBearer.json()).authenticated, false);
 
     const malformedCookie = await fetch(`${origin}/api/auth/status`, {
       headers: { Cookie: "viewer_session=%E0%A4%A" },

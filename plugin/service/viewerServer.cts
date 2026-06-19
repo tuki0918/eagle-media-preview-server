@@ -584,10 +584,7 @@ async function handleAuthRoutes(req: IncomingMessage, url: URL, res: ServerRespo
       "Content-Type": "application/json; charset=utf-8",
       "Set-Cookie": authSessionCookie(token, AUTH_SESSION_MAX_AGE_SECONDS, auth.secureCookies),
     });
-    res.end(JSON.stringify({
-      ...authStatusResponse(auth, user, { authenticated: true }),
-      sessionToken: token,
-    }));
+    res.end(JSON.stringify(authStatusResponse(auth, user, { authenticated: true })));
     return true;
   }
 

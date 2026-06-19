@@ -9,7 +9,7 @@ import {
   playableVideoExts,
   textPreviewExts,
 } from "./viewer/constants";
-import { ApiError, debounce, errorMessage, getJson, postJson, setAuthSessionToken } from "./viewer/api";
+import { ApiError, debounce, errorMessage, getJson, postJson } from "./viewer/api";
 import {
   displayFileName,
   flattenFolders,
@@ -198,7 +198,6 @@ async function connect(credentials?: { password: string; username: string }) {
       authAuthenticated = Boolean(login.authenticated);
       authUser = login.user ?? null;
       state.permissions = normalizePermissions(login.permissions, authAuthenticated);
-      setAuthSessionToken(login.sessionToken || "");
       signedInThisAttempt = authAuthenticated;
       renderLoginConnect();
       setConnectMessage("Connecting", false);
@@ -223,7 +222,6 @@ async function logout() {
   try {
     const logoutStatus = await postJson<AuthStatusResponse>("/api/auth/logout", {});
     const nextAuthRequired = Boolean(logoutStatus.required);
-    setAuthSessionToken("");
     clearAuthState(nextAuthRequired);
     state.permissions = normalizePermissions(logoutStatus.permissions, !nextAuthRequired);
     clearViewerSessionState();
@@ -269,7 +267,6 @@ function normalizePermissions(value: AuthStatusResponse["permissions"], readFall
 }
 
 function clearAuthState(nextAuthRequired: boolean) {
-  setAuthSessionToken("");
   authAuthenticated = false;
   authRequired = nextAuthRequired;
   authUser = null;

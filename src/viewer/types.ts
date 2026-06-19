@@ -70,7 +70,6 @@ export interface AuthStatusResponse {
   authenticated?: boolean;
   permissions?: AuthStatusPermissions;
   required?: boolean;
-  sessionToken?: string;
   user?: {
     role?: string;
     username?: string;

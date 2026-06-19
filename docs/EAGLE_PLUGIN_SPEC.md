@@ -281,6 +281,7 @@ Static viewer routes stay available so unauthenticated browsers can load the log
 Supported authentication paths:
 
 - `viewer_session` cookie issued by the login API; cookie and server-side session tokens expire after 7 days
+- Browser authentication uses the HttpOnly cookie only; session tokens are not returned in JSON or accepted through `Authorization` headers
 - HTTPS mode requires certificate and private key paths, serves the endpoint with `https://`, and adds `Secure` to `viewer_session`
 - If a cookie session expires or is rejected, viewer API requests return `401`; the browser viewer treats that as an auth reset and prompts for login again
 
