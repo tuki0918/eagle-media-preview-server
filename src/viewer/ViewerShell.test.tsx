@@ -629,6 +629,7 @@ describe("ViewerAppShell", () => {
     );
     const actions = renderToStaticMarkup(<PreviewActions canManageLibrary item={{ id: "item-1" }} onToggleTrash={async () => {}} />);
     const deletedActions = renderToStaticMarkup(<PreviewActions canManageLibrary item={{ id: "item-1", isDeleted: true }} onToggleTrash={async () => {}} />);
+    const editorActions = renderToStaticMarkup(<PreviewActions canEditMetadata item={{ id: "item-1" }} onToggleTrash={async () => {}} />);
     const nonAdminActions = renderToStaticMarkup(<PreviewActions item={{ id: "item-1" }} />);
 
     expect(details).toContain("preview-details-section");
@@ -645,8 +646,14 @@ describe("ViewerAppShell", () => {
     expect(actions).toContain("lucide-ellipsis");
     expect(actions).not.toContain("Move to trash");
     expect(deletedActions).toContain("preview-admin-menu-trigger");
-    expect(nonAdminActions).not.toContain("Open file");
-    expect(nonAdminActions).not.toContain("direct-file-link");
+    expect(editorActions).toContain("Open file");
+    expect(editorActions).toContain("direct-file-link");
+    expect(editorActions).not.toContain("preview-admin-menu-trigger");
+    expect(editorActions).not.toContain("Move to trash");
+    expect(nonAdminActions).toContain("Open file");
+    expect(nonAdminActions).toContain("direct-file-link");
+    expect(nonAdminActions).not.toContain("preview-admin-menu-trigger");
+    expect(nonAdminActions).not.toContain("previewAdminMenu");
   });
 
   test("opens preview admin actions menu from the ellipsis button", async () => {

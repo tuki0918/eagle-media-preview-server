@@ -113,12 +113,12 @@ export function PreviewInfoActions() {
   const previewInfoState = useSyncExternalStore(subscribePreviewInfoState, getPreviewInfoState, getPreviewInfoState);
   return (
     <div id="previewActions" className="preview-info-actions mx-2 border-t border-border pt-3">
-      {previewInfoState ? <PreviewActions canManageLibrary={previewInfoState.canManageLibrary} item={previewInfoState.item} onToggleTrash={previewInfoState.onToggleTrash} /> : null}
+      {previewInfoState ? <PreviewActions canEditMetadata={previewInfoState.canEditMetadata} canManageLibrary={previewInfoState.canManageLibrary} item={previewInfoState.item} onToggleTrash={previewInfoState.onToggleTrash} /> : null}
     </div>
   );
 }
 
-export function PreviewActions({ canManageLibrary = false, item, onToggleTrash }: { canManageLibrary?: boolean; item: EagleItem; onToggleTrash?: (item: EagleItem, isDeleted: boolean) => Promise<void> }) {
+export function PreviewActions({ canEditMetadata = false, canManageLibrary = false, item, onToggleTrash }: { canEditMetadata?: boolean; canManageLibrary?: boolean; item: EagleItem; onToggleTrash?: (item: EagleItem, isDeleted: boolean) => Promise<void> }) {
   const [trashSaving, setTrashSaving] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const actionsRef = useRef<HTMLElement | null>(null);
@@ -147,8 +147,6 @@ export function PreviewActions({ canManageLibrary = false, item, onToggleTrash }
     };
   }, [menuOpen]);
 
-  if (!canManageLibrary) return null;
-
   const handleToggleTrash = async () => {
     if (trashSaving || !onToggleTrash) return;
     setMenuOpen(false);
@@ -159,16 +157,18 @@ export function PreviewActions({ canManageLibrary = false, item, onToggleTrash }
       setTrashSaving(false);
     }
   };
+  const canShowAdminMenu = canManageLibrary;
+  const canToggleTrash = canManageLibrary && Boolean(onToggleTrash);
 
   return (
-    <section ref={actionsRef} className="preview-admin-actions relative grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+    <section ref={actionsRef} className={`preview-admin-actions relative grid gap-2 ${canShowAdminMenu ? "grid-cols-[minmax(0,1fr)_auto]" : "grid-cols-1"}`}>
       <Button asChild className={directFileLinkClassName}>
         <a href={directFileUrl(item)} target="_blank" rel="noopener" onClick={(event) => event.stopPropagation()}>
           <ExternalLinkIcon />
           Open file
         </a>
       </Button>
-      {onToggleTrash ? (
+      {canShowAdminMenu ? (
         <>
           <Button
             type="button"
@@ -196,18 +196,20 @@ export function PreviewActions({ canManageLibrary = false, item, onToggleTrash }
               className="absolute bottom-full right-0 z-50 mb-2 min-w-48 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-lg"
               onClick={(event) => event.stopPropagation()}
             >
-              <button
-                type="button"
-                role="menuitem"
-                className="preview-trash-action relative flex w-full cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm text-destructive outline-hidden select-none hover:bg-destructive/10 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0"
-                disabled={trashSaving}
-                onClick={() => {
-                  void handleToggleTrash();
-                }}
-              >
-                {item.isDeleted ? <RotateCcwIcon aria-hidden="true" /> : <Trash2Icon aria-hidden="true" />}
-                <span>{trashSaving ? "Saving" : trashLabel}</span>
-              </button>
+              {canToggleTrash ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="preview-trash-action relative flex w-full cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm text-destructive outline-hidden select-none hover:bg-destructive/10 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0"
+                  disabled={trashSaving}
+                  onClick={() => {
+                    void handleToggleTrash();
+                  }}
+                >
+                  {item.isDeleted ? <RotateCcwIcon aria-hidden="true" /> : <Trash2Icon aria-hidden="true" />}
+                  <span>{trashSaving ? "Saving" : trashLabel}</span>
+                </button>
+              ) : null}
             </div>
           ) : null}
         </>
