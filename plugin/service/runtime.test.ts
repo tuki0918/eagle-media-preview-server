@@ -237,6 +237,25 @@ test("generated settings store requires certificate paths before HTTPS can be en
   );
 });
 
+test("generated settings store validates HTTPS certificate files before enabling HTTPS", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-runtime-"));
+  const store = createSettingsStore({ filePath: join(dir, "settings.json") });
+  const certPath = join(dir, "cert.pem");
+  const keyPath = join(dir, "key.pem");
+
+  await assert.rejects(
+    () => store.save({ httpsCertPath: certPath, httpsEnabled: true, httpsKeyPath: keyPath }),
+    /HTTPS certificate file is not readable/i,
+  );
+
+  await writeFile(certPath, "not a certificate", "utf8");
+  await writeFile(keyPath, "not a private key", "utf8");
+  await assert.rejects(
+    () => store.save({ httpsCertPath: certPath, httpsEnabled: true, httpsKeyPath: keyPath }),
+    /valid TLS certificate/i,
+  );
+});
+
 test("generated settings store clears metadata editing when password protection is disabled", async () => {
   const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-runtime-"));
   const store = createSettingsStore({ filePath: join(dir, "settings.json") });

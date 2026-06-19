@@ -1,5 +1,5 @@
 const { chmod, mkdir, readFile, writeFile } = require("fs").promises;
-const { pbkdf2Sync, randomBytes } = require("crypto");
+const { createPrivateKey, createPublicKey, pbkdf2Sync, randomBytes, X509Certificate } = require("crypto");
 const { dirname, join } = require("path");
 const { homedir, networkInterfaces } = require("os");
 const { createViewerServer } = require("./viewerServer.cjs");
@@ -148,6 +148,9 @@ function createSettingsStore({ filePath = defaultSettingsPath() }: { filePath?: 
       if (next.httpsEnabled && (!next.httpsCertPath || !next.httpsKeyPath)) {
         throw new Error("HTTPS requires certificate and key paths");
       }
+      if (next.httpsEnabled) {
+        await validateHttpsCredentials(next.httpsCertPath, next.httpsKeyPath);
+      }
       if (!next.authEnabled) {
         if (input.allowMetadataEditing === true) {
           throw new Error("Password protection is required when metadata editing is enabled");
@@ -244,6 +247,45 @@ function withSessionSecret(settings: PluginSettings) {
 
 function generateSessionSecret() {
   return randomBytes(32).toString("base64url");
+}
+
+async function validateHttpsCredentials(certPath: string, keyPath: string) {
+  const [certPem, keyPem] = await Promise.all([
+    readTlsFile(certPath, "certificate"),
+    readTlsFile(keyPath, "private key"),
+  ]);
+  let certificate: InstanceType<typeof X509Certificate>;
+  try {
+    certificate = new X509Certificate(certPem);
+  } catch {
+    throw new Error("HTTPS certificate file must contain a valid TLS certificate");
+  }
+  let privateKey: ReturnType<typeof createPrivateKey>;
+  try {
+    privateKey = createPrivateKey(keyPem);
+  } catch {
+    throw new Error("HTTPS key file must contain a valid private key");
+  }
+  const now = Date.now();
+  if (Date.parse(certificate.validFrom) > now) {
+    throw new Error("HTTPS certificate is not valid yet");
+  }
+  if (Date.parse(certificate.validTo) <= now) {
+    throw new Error("HTTPS certificate has expired");
+  }
+  const certPublicKey = certificate.publicKey.export({ type: "spki", format: "pem" });
+  const keyPublicKey = createPublicKey(privateKey).export({ type: "spki", format: "pem" });
+  if (certPublicKey !== keyPublicKey) {
+    throw new Error("HTTPS certificate and key do not match");
+  }
+}
+
+async function readTlsFile(filePath: string, label: string) {
+  try {
+    return await readFile(filePath, "utf8");
+  } catch {
+    throw new Error(`HTTPS ${label} file is not readable: ${filePath}`);
+  }
 }
 
 function isServerStatus(value: unknown): value is ServerStatus {
