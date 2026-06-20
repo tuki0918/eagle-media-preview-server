@@ -130,6 +130,7 @@ Build output is created under `dist`:
   - TLS key path
   - Users
   - Per-user role and password
+  - Session duration
 
 ### Persisted Settings
 
@@ -150,6 +151,7 @@ type Settings = {
   authEnabled: boolean;
   sessionSecret: string;
   lastServerStatus: "running" | "stopped" | "error";
+  sessionDurationDays: number;
 };
 ```
 
@@ -280,7 +282,7 @@ Static viewer routes stay available so unauthenticated browsers can load the log
 
 Supported authentication paths:
 
-- `viewer_session_http` or `viewer_session` cookie issued by the login API; cookie and server-side session tokens expire after 7 days
+- `viewer_session_http` or `viewer_session` cookie issued by the login API; cookie and server-side session tokens expire after the configured session duration, 7 days by default
 - Browser authentication uses the HttpOnly cookie only; session tokens are not returned in JSON or accepted through `Authorization` headers
 - HTTPS mode requires certificate and private key paths, serves the endpoint with `https://`, and adds `Secure` to `viewer_session`
 - If a cookie session expires or is rejected, viewer API requests return `401`; the browser viewer treats that as an auth reset and prompts for login again
