@@ -100,6 +100,7 @@ let authAuthenticated = false;
 let authRequired = false;
 let authUser: NonNullable<AuthStatusResponse["user"]> | null = null;
 let allFoldersTotal = 0;
+let allFoldersTotalRequestId = 0;
 const pendingRatingItemIds = new Set<string>();
 const DEFAULT_DOCUMENT_TITLE = "Media Preview Server";
 
@@ -205,7 +206,7 @@ async function connect(credentials?: { password: string; username: string }) {
     const connection = { ...DEFAULT_EAGLE_CONNECTION };
     const data = await postJson<ConnectResponse>("/api/connect", connection);
     showViewer(data);
-    await Promise.all([loadFolders(), loadItems()]);
+    await Promise.all([loadFolders(), loadItems(), loadAllFoldersTotal()]);
   } catch (error) {
     if (signedInThisAttempt && handlePostLoginAuthError(error)) return;
     if (handleAuthError(error)) return;
@@ -350,6 +351,7 @@ function showViewer(data: ConnectResponse) {
 
 function clearViewerSessionState() {
   state.requestId += 1;
+  allFoldersTotalRequestId += 1;
   allFoldersTotal = 0;
   resetViewerResults({ resetOffset: true });
   Object.assign(state, resetFilterState());
@@ -444,6 +446,8 @@ async function loadItems({ append = false }: LoadItemsOptions = {}) {
       const previousAllFoldersTotal = allFoldersTotal;
       allFoldersTotal = state.total;
       if (previousAllFoldersTotal !== allFoldersTotal) renderSearchControlButtons();
+    } else if (!append) {
+      loadAllFoldersTotal();
     }
     state.items = append ? [...state.items, ...items] : items;
     state.tilesLoadingMore = false;
@@ -471,6 +475,21 @@ async function loadItems({ append = false }: LoadItemsOptions = {}) {
     updateStatus();
     updatePager();
     setupTileAutoLoading();
+  }
+}
+
+async function loadAllFoldersTotal() {
+  if (allFoldersTotal > 0 || !hasActiveFilters(state)) return;
+  const requestId = ++allFoldersTotalRequestId;
+  try {
+    const params = new URLSearchParams({ offset: "0", limit: "1" });
+    const data = await getJson<LoadItemsResponse>(`/api/items?${params.toString()}`);
+    if (requestId !== allFoldersTotalRequestId) return;
+    const previousAllFoldersTotal = allFoldersTotal;
+    allFoldersTotal = Number(data.total || 0);
+    if (previousAllFoldersTotal !== allFoldersTotal) renderSearchControlButtons();
+  } catch (error) {
+    if (requestId === allFoldersTotalRequestId) handleAuthError(error);
   }
 }
 
