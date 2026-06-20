@@ -984,7 +984,8 @@ test("plugin server caches authenticated users per request", async () => {
   assert.doesNotMatch(authSource, /\^Basic\\s\+\/i/);
   assert.doesNotMatch(serverSource, /WWW-Authenticate/);
   assert.match(authSource, /function authSessionCookie\(token, maxAge = AUTH_SESSION_MAX_AGE_SECONDS, secure = false\)/);
-  assert.match(serverSource, /"Set-Cookie": loginAuthSessionCookies\(token, auth\.secureCookies\)/);
+  assert.match(authSource, /function loginAuthSessionCookies\(token, secure = false, maxAge = AUTH_SESSION_MAX_AGE_SECONDS\)/);
+  assert.match(serverSource, /"Set-Cookie": loginAuthSessionCookies\(token, auth\.secureCookies, auth\.sessionMaxAgeSeconds\)/);
   assert.match(serverSource, /"Set-Cookie": expiredAuthSessionCookies\(auth\.secureCookies\)/);
   assert.match(authSource, /function authSessionCookieName\(secure = false\)/);
   assert.match(authSource, /secure \? "viewer_session" : "viewer_session_http"/);
@@ -1017,7 +1018,7 @@ test("plugin server caches authenticated users per request", async () => {
   assert.match(serverSource, /\{ error: RATING_WRITE_FORBIDDEN_MESSAGE \}/);
   assert.match(serverSource, /\{ error: METADATA_WRITE_FORBIDDEN_MESSAGE \}/);
   assert.doesNotMatch(serverSource, /Invalid password/);
-  assert.match(serverSource, /const auth = \{ authSessions, loginFailures, revokedAuthSessions, secureCookies: httpsEnabled, sessionSecret: resolvedSessionSecret, users: resolvedAuthUsers \};/);
+  assert.match(serverSource, /const auth = \{ authSessions, loginFailures, revokedAuthSessions, secureCookies: httpsEnabled, sessionMaxAgeSeconds, sessionSecret: resolvedSessionSecret, users: resolvedAuthUsers \};/);
   assert.match(serverSource, /const loginFailures = new Map\(\);/);
   assert.match(serverSource, /revokedAuthSessions\.add\(token\)/);
   assert.match(authSource, /auth\.revokedAuthSessions\.has\(token\)/);

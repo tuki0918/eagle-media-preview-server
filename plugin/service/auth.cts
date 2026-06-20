@@ -21,6 +21,7 @@ interface AuthContext {
   authSessions: Map<string, AuthSession>;
   revokedAuthSessions: Set<string>;
   secureCookies?: boolean;
+  sessionMaxAgeSeconds?: number;
   sessionSecret: string;
   users: AuthUser[];
 }
@@ -144,6 +145,7 @@ function verifyAuthSessionToken(token: string, auth: AuthContext): AuthSession |
     const role = normalizeRole(session.r);
     const expiresAt = Number(session.e);
     if (!username || !Number.isFinite(expiresAt)) return null;
+    if (auth.sessionMaxAgeSeconds && expiresAt > Date.now() + auth.sessionMaxAgeSeconds * 1000) return null;
     const user = auth.users.find((entry) => entry.username === username && entry.role === role);
     if (!user) return null;
     if (String(session.v || "") !== userAuthVersion(user)) return null;
@@ -239,9 +241,9 @@ function expiredAuthSessionCookies(secure = false) {
   ];
 }
 
-function loginAuthSessionCookies(token: string, secure = false) {
+function loginAuthSessionCookies(token: string, secure = false, maxAge = AUTH_SESSION_MAX_AGE_SECONDS) {
   return [
-    authSessionCookie(token, AUTH_SESSION_MAX_AGE_SECONDS, secure),
+    authSessionCookie(token, maxAge, secure),
     authNamedSessionCookie(authSessionCookieName(!secure), "", 0, !secure),
   ];
 }

@@ -26,6 +26,7 @@ interface PluginSettings {
   lastServerStatus: ServerStatus;
   passwordHash: string;
   port: number;
+  sessionDurationDays: number;
   sessionSecret: string;
   settingsVersion: number;
 }
@@ -69,6 +70,7 @@ interface ServerManagerOptions {
     httpsEnabled: boolean;
     httpsKeyPath: string;
     port: number;
+    sessionMaxAgeSeconds: number;
     sessionSecret: string;
   }) => ManagedViewer;
 }
@@ -92,10 +94,13 @@ const DEFAULT_SETTINGS: PluginSettings = {
   httpsKeyPath: "",
   passwordHash: "",
   lastServerStatus: "stopped",
+  sessionDurationDays: 7,
   sessionSecret: "",
   settingsVersion: 2,
 };
 const CURRENT_SETTINGS_VERSION = 2;
+const MIN_SESSION_DURATION_DAYS = 1;
+const MAX_SESSION_DURATION_DAYS = 365;
 const PASSWORD_HASH_ALGORITHM = "sha256";
 const PASSWORD_HASH_ITERATIONS = 210000;
 const PASSWORD_HASH_KEY_LENGTH = 32;
@@ -191,6 +196,7 @@ function normalizeSettings(input: SettingsInput = {}): PluginSettings {
   const authUsers = normalizeAuthUsers(input.authUsers, input);
   const authEnabled = Boolean(input.authEnabled ?? DEFAULT_SETTINGS.authEnabled);
   const firstAuthUser = authUsers[0];
+  const sessionDurationDays = normalizeSessionDurationDays(input.sessionDurationDays);
   return {
     autoStart: Boolean(input.autoStart ?? DEFAULT_SETTINGS.autoStart),
     allowMetadataEditing: authEnabled && authUsersCanEditMetadata(authUsers),
@@ -200,6 +206,7 @@ function normalizeSettings(input: SettingsInput = {}): PluginSettings {
     httpsEnabled: Boolean(input.httpsEnabled ?? DEFAULT_SETTINGS.httpsEnabled),
     httpsKeyPath: String(input.httpsKeyPath || "").trim(),
     port,
+    sessionDurationDays,
     sessionSecret: String(input.sessionSecret || "").trim(),
     settingsVersion: CURRENT_SETTINGS_VERSION,
     authEnabled,
@@ -223,6 +230,7 @@ function canonicalSettings(settings: PluginSettings) {
     httpsKeyPath: settings.httpsKeyPath,
     lastServerStatus: settings.lastServerStatus,
     port: settings.port,
+    sessionDurationDays: settings.sessionDurationDays,
     sessionSecret: settings.sessionSecret,
   };
 }
@@ -333,6 +341,15 @@ function normalizeAuthUser(value: unknown): AuthUser | null {
 
 function normalizeRole(value: unknown): UserRole {
   return value === "admin" || value === "editor" ? value : "viewer";
+}
+
+function normalizeSessionDurationDays(value: unknown) {
+  const raw = value ?? DEFAULT_SETTINGS.sessionDurationDays;
+  const days = typeof raw === "number" ? raw : Number(String(raw).trim());
+  if (!Number.isInteger(days) || days < MIN_SESSION_DURATION_DAYS || days > MAX_SESSION_DURATION_DAYS) {
+    throw new Error(`sessionDurationDays must be an integer from ${MIN_SESSION_DURATION_DAYS}-${MAX_SESSION_DURATION_DAYS}`);
+  }
+  return days;
 }
 
 function uniqueAuthUsers(users: AuthUser[]) {
@@ -460,6 +477,7 @@ function createServerManager({
       httpsEnabled: settings.httpsEnabled,
       httpsKeyPath: settings.httpsKeyPath,
       port: settings.port,
+      sessionMaxAgeSeconds: settings.sessionDurationDays * 24 * 60 * 60,
       sessionSecret: settings.sessionSecret,
       authUsers: settings.authEnabled ? settings.authUsers : [],
     });
@@ -471,6 +489,7 @@ function createServerManager({
     if (prev.httpsCertPath !== next.httpsCertPath) return true;
     if (prev.httpsKeyPath !== next.httpsKeyPath) return true;
     if (prev.port !== next.port) return true;
+    if (prev.sessionDurationDays !== next.sessionDurationDays) return true;
     if (prev.authEnabled !== next.authEnabled) return true;
     if (!prev.authEnabled && !next.authEnabled) return false;
     return JSON.stringify(prev.authUsers) !== JSON.stringify(next.authUsers);

@@ -42,6 +42,7 @@ interface ViewerServerOptions {
   passwordHash?: string;
   port?: number;
   publicDir?: string;
+  sessionMaxAgeSeconds?: number;
   sessionSecret?: string;
   viewerPassword?: string;
 }
@@ -174,6 +175,7 @@ function createViewerServer({
   httpsEnabled = false,
   httpsCertPath = "",
   httpsKeyPath = "",
+  sessionMaxAgeSeconds = AUTH_SESSION_MAX_AGE_SECONDS,
   sessionSecret = "",
   eagleClient = createEagleClient(),
 }: ViewerServerOptions = {}) {
@@ -201,7 +203,7 @@ function createViewerServer({
   const server = createProtocolServer({ httpsCertPath, httpsEnabled, httpsKeyPath }, async (req: IncomingMessage, res: ServerResponse) => {
     try {
       const url = new URL(req.url || "/", `${httpsEnabled ? "https" : "http"}://${req.headers.host}`);
-      const auth = { authSessions, loginFailures, revokedAuthSessions, secureCookies: httpsEnabled, sessionSecret: resolvedSessionSecret, users: resolvedAuthUsers };
+      const auth = { authSessions, loginFailures, revokedAuthSessions, secureCookies: httpsEnabled, sessionMaxAgeSeconds, sessionSecret: resolvedSessionSecret, users: resolvedAuthUsers };
       if (!isTrustedUnsafeRequest(req, url)) {
         sendJson(res, 403, { error: "Cross-origin writes are not allowed" });
         return;
@@ -528,6 +530,7 @@ interface AuthContext {
   loginFailures: Map<string, LoginFailure>;
   revokedAuthSessions: Set<string>;
   secureCookies?: boolean;
+  sessionMaxAgeSeconds: number;
   sessionSecret: string;
   users: AuthUser[];
 }
@@ -576,7 +579,7 @@ async function handleAuthRoutes(req: IncomingMessage, url: URL, res: ServerRespo
     auth.loginFailures.delete(loginKey);
     pruneAuthSessions(auth.authSessions);
     const session = {
-      expiresAt: Date.now() + AUTH_SESSION_MAX_AGE_SECONDS * 1000,
+      expiresAt: Date.now() + auth.sessionMaxAgeSeconds * 1000,
       role: user.role,
       username: user.username,
     };
@@ -585,7 +588,7 @@ async function handleAuthRoutes(req: IncomingMessage, url: URL, res: ServerRespo
     res.writeHead(200, {
       ...securityHeaders,
       "Content-Type": "application/json; charset=utf-8",
-      "Set-Cookie": loginAuthSessionCookies(token, auth.secureCookies),
+      "Set-Cookie": loginAuthSessionCookies(token, auth.secureCookies, auth.sessionMaxAgeSeconds),
     });
     res.end(JSON.stringify(authStatusResponse(auth, user, { authenticated: true })));
     return true;

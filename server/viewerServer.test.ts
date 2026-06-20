@@ -1203,6 +1203,48 @@ test("createViewerServer rejects signed session cookies when the session secret 
   }
 });
 
+test("createViewerServer rejects signed session cookies longer than the configured max age", async () => {
+  const sessionSecret = "test-session-secret";
+  const authUsers = [
+    { username: "eagle", passwordHash: sha256("secret"), role: "viewer" as const },
+  ];
+  const firstViewer = createViewerServer({
+    authUsers,
+    host: "127.0.0.1",
+    port: 0,
+    sessionMaxAgeSeconds: 7 * 24 * 60 * 60,
+    sessionSecret,
+  });
+
+  await firstViewer.start();
+  let cookie = "";
+  try {
+    const status = firstViewer.status();
+    const origin = `http://127.0.0.1:${status.port}`;
+    cookie = await loginCookie(origin, "eagle", "secret");
+  } finally {
+    await firstViewer.stop();
+  }
+
+  const shortenedViewer = createViewerServer({
+    authUsers,
+    host: "127.0.0.1",
+    port: 0,
+    sessionMaxAgeSeconds: 24 * 60 * 60,
+    sessionSecret,
+  });
+  await shortenedViewer.start();
+  try {
+    const status = shortenedViewer.status();
+    const response = await fetch(`http://127.0.0.1:${status.port}/api/auth/status`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal((await response.json()).authenticated, false);
+  } finally {
+    await shortenedViewer.stop();
+  }
+});
+
 test("createViewerServer expires cookie sessions server side", async () => {
   const viewer = createViewerServer({
     host: "127.0.0.1",
@@ -1260,6 +1302,35 @@ test("createViewerServer expires cookie sessions server side", async () => {
     assert.equal(viewer.status().activeSessions, 1);
   } finally {
     Date.now = originalNow;
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer uses configured session max age for login cookies", async () => {
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    passwordHash: sha256("secret"),
+    basicAuthUsername: "eagle",
+    sessionMaxAgeSeconds: 2 * 24 * 60 * 60,
+  });
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const origin = `http://127.0.0.1:${status.port}`;
+    const login = await fetch(`${origin}/api/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: origin,
+      },
+      body: JSON.stringify({ username: "eagle", password: "secret" }),
+    });
+
+    assert.equal(login.status, 200);
+    assert.match(login.headers.get("set-cookie") || "", /Max-Age=172800/);
+  } finally {
     await viewer.stop();
   }
 });

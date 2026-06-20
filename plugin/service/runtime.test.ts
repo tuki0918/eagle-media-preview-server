@@ -21,6 +21,7 @@ test("generated CommonJS runtime loads with require for Eagle plugin windows", (
   assert.equal(normalizeSettings({}).port, DEFAULT_SETTINGS.port);
   assert.equal(normalizeSettings({}).host, "127.0.0.1");
   assert.equal(normalizeSettings({}).httpsEnabled, false);
+  assert.equal(normalizeSettings({}).sessionDurationDays, 7);
   assert.equal(normalizeSettings({}).settingsVersion, 2);
   assert.equal("requestLogEnabled" in normalizeSettings({ requestLogEnabled: false }), false);
   assert.equal("preferredLanAddress" in normalizeSettings({ preferredLanAddress: "192.168.1.50" }), false);
@@ -29,6 +30,13 @@ test("generated CommonJS runtime loads with require for Eagle plugin windows", (
 test("generated settings reject malformed port strings", () => {
   assert.throws(() => normalizeSettings({ port: "41532abc" }), /port must be an integer/);
   assert.throws(() => normalizeSettings({ port: "41532.5" }), /port must be an integer/);
+});
+
+test("generated settings reject invalid session duration values", () => {
+  assert.equal(normalizeSettings({ sessionDurationDays: "14" }).sessionDurationDays, 14);
+  assert.throws(() => normalizeSettings({ sessionDurationDays: "0" }), /sessionDurationDays must be an integer/);
+  assert.throws(() => normalizeSettings({ sessionDurationDays: "1.5" }), /sessionDurationDays must be an integer/);
+  assert.throws(() => normalizeSettings({ sessionDurationDays: "366" }), /sessionDurationDays must be an integer/);
 });
 
 test("generated runtime builds HTTPS access URLs when enabled", () => {
@@ -77,6 +85,7 @@ test("generated settings store creates and persists a session secret", async () 
 
   const raw = JSON.parse(await readFile(filePath, "utf8"));
   assert.equal(raw.settingsVersion, 2);
+  assert.equal(raw.sessionDurationDays, 7);
   assert.equal(raw.sessionSecret, loaded.sessionSecret);
   assert.equal((await stat(dir)).mode & 0o777, 0o700);
   assert.equal((await stat(filePath)).mode & 0o777, 0o600);
@@ -329,6 +338,59 @@ test("generated server manager restarts after auth user roles change while runni
     ["stop", false],
     ["create", true],
     ["start", true],
+  ]);
+});
+
+test("generated server manager passes session duration and restarts when it changes", async () => {
+  const calls: unknown[] = [];
+  let settings = {
+    ...DEFAULT_SETTINGS,
+    authEnabled: true,
+    authUsers: [{ username: "reader", role: "viewer", passwordHash: hashPassword("secret") }],
+    host: "127.0.0.1",
+    port: 41532,
+    sessionDurationDays: 7,
+  };
+  const manager = createServerManager({
+    settingsStore: {
+      async load() {
+        return settings;
+      },
+      async save(input: Record<string, unknown>) {
+        settings = { ...settings, ...input };
+        calls.push(["save", settings.sessionDurationDays]);
+        return settings;
+      },
+    },
+    viewerServerFactory(options: { sessionMaxAgeSeconds: number }) {
+      calls.push(["create", options.sessionMaxAgeSeconds]);
+      return {
+        async start() {
+          calls.push(["start", options.sessionMaxAgeSeconds]);
+        },
+        async stop() {
+          calls.push(["stop", options.sessionMaxAgeSeconds]);
+        },
+        status() {
+          return { state: "running", host: "127.0.0.1", port: 41532 };
+        },
+      };
+    },
+    lanAddressProvider() {
+      return [{ label: "lo0", address: "127.0.0.1" }];
+    },
+  });
+
+  await manager.start();
+  await manager.saveSettings({ sessionDurationDays: 14 });
+
+  assert.deepEqual(calls, [
+    ["create", 7 * 24 * 60 * 60],
+    ["start", 7 * 24 * 60 * 60],
+    ["save", 14],
+    ["stop", 7 * 24 * 60 * 60],
+    ["create", 14 * 24 * 60 * 60],
+    ["start", 14 * 24 * 60 * 60],
   ]);
 });
 

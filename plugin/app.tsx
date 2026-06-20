@@ -24,6 +24,7 @@ interface PluginSettings {
   httpsKeyPath?: string;
   passwordHash?: string;
   port?: number | string;
+  sessionDurationDays?: number | string;
 }
 
 interface PluginStatus {
@@ -63,6 +64,8 @@ const HTTPS_CERTIFICATE_REQUIRED_MESSAGE = "Enter certificate and key paths befo
 const PUBLIC_NETWORK_WITHOUT_PASSWORD_MESSAGE = "Public Network is enabled and password protection is off. Anyone on this network may be able to access the viewer. Start the server anyway?";
 const PUBLIC_NETWORK_HTTP_WITH_PASSWORD_MESSAGE = "HTTPS is disabled, so the connection is not protected. Start the server?";
 const HTTPS_DOCS_URL = "https://github.com/tuki0918/eagle-media-preview-server/blob/main/docs/https-mkcert.md";
+const MIN_SESSION_DURATION_DAYS = 1;
+const MAX_SESSION_DURATION_DAYS = 365;
 const settingInputClassName = "h-7 min-w-0 rounded-md border border-[#d7d9de] bg-white px-2 text-[11px] text-[#111] outline-0 focus:border-[rgba(31,116,255,0.58)] focus:shadow-[0_0_0_3px_rgba(31,116,255,0.12)] disabled:cursor-not-allowed disabled:bg-[#f4f5f7] disabled:text-[#8a8f99]";
 const authActionButtonClassName = "border border-[#d7d9de] bg-white text-[#555c66] hover:bg-[#f4f5f7] disabled:cursor-not-allowed disabled:opacity-45";
 
@@ -89,6 +92,7 @@ function App() {
       httpsEnabled: false,
       httpsKeyPath: "",
       port: 41532,
+      sessionDurationDays: 7,
     },
     state: "stopped",
     url: "",
@@ -183,6 +187,7 @@ function App() {
       httpsEnabled: nextHttpsEnabled,
       httpsKeyPath: settings.httpsKeyPath || "",
       port: settings.port || 41532,
+      sessionDurationDays: settings.sessionDurationDays || 7,
       ...patch,
       authEnabled: nextAuthEnabled,
       authUsers: effectiveAuthUsers,
@@ -602,6 +607,21 @@ function App() {
                 </div>
               </div>
             </SettingRow>
+            <SettingRow label="Session" help="How long browser sign-ins stay active. Shorter durations can require signing in again.">
+              <div className="grid grid-cols-[minmax(0,96px)_1fr] items-center gap-2">
+                <input
+                  className={`${settingInputClassName} w-full`}
+                  type="number"
+                  min={MIN_SESSION_DURATION_DAYS}
+                  max={MAX_SESSION_DURATION_DAYS}
+                  disabled={settingsInputDisabled}
+                  aria-label="Session duration in days"
+                  value={settings.sessionDurationDays || 7}
+                  onChange={(event) => updateSettings({ sessionDurationDays: event.currentTarget.value })}
+                />
+                <span className="min-w-0 text-[11px] leading-tight text-[#676c75]">days</span>
+              </div>
+            </SettingRow>
           </div>
 
           <div id="securitySettingsPanel" role="tabpanel" aria-labelledby="securitySettingsTab" hidden={settingsTab !== "security"}>
@@ -765,6 +785,7 @@ function serverSettingsChanged(current: PluginSettings, nextSettings: Record<str
   if ((nextSettings.httpsCertPath ?? current.httpsCertPath ?? "") !== (current.httpsCertPath ?? "")) return true;
   if ((nextSettings.httpsKeyPath ?? current.httpsKeyPath ?? "") !== (current.httpsKeyPath ?? "")) return true;
   if (Number(nextSettings.port ?? current.port) !== Number(current.port)) return true;
+  if (Number(nextSettings.sessionDurationDays ?? current.sessionDurationDays ?? 7) !== Number(current.sessionDurationDays ?? 7)) return true;
   if (Boolean(nextSettings.authEnabled ?? current.authEnabled) !== Boolean(current.authEnabled)) return true;
   if (JSON.stringify(nextSettings.authUsers ?? current.authUsers ?? []) !== JSON.stringify(current.authUsers ?? [])) return true;
   return false;
@@ -778,6 +799,7 @@ function serverRestartSettingsChanged(current: PluginSettings, nextSettings: Rec
   if ((nextSettings.httpsCertPath ?? current.httpsCertPath ?? "") !== (current.httpsCertPath ?? "")) return true;
   if ((nextSettings.httpsKeyPath ?? current.httpsKeyPath ?? "") !== (current.httpsKeyPath ?? "")) return true;
   if (Number(nextSettings.port ?? current.port) !== Number(current.port)) return true;
+  if (Number(nextSettings.sessionDurationDays ?? current.sessionDurationDays ?? 7) !== Number(current.sessionDurationDays ?? 7)) return true;
   if (nextAuthEnabled !== currentAuthEnabled) return true;
   if (!currentAuthEnabled && !nextAuthEnabled) return false;
   if (hasPasswordUpdates(nextSettings.userPasswords)) return true;
