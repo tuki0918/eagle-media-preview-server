@@ -466,6 +466,9 @@ async function loadItems({ append = false }: LoadItemsOptions = {}) {
     } else if (!append) {
       loadAllFoldersTotal();
     }
+    if (append && !items.length) {
+      state.total = state.items.length;
+    }
     state.items = append ? [...state.items, ...items] : items;
     state.tilesLoadingMore = false;
     if (append) {

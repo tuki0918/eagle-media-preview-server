@@ -260,11 +260,13 @@ function createEagleClient({
       if (!id) throw new Error("smartFolderId is required");
       const pageOffset = normalizeOffset(offset);
       const pageLimit = clampLimit(limit);
-      const smartFolder = unwrapSmartFolder(await request("/api/v2/smartFolder/get", { searchParams: { id } }));
+      const smartFolder = await resolveSmartFolder(id);
       const sourceIds = smartFolderGroupLeafIds(smartFolder);
       const result = sourceIds.length
         ? mergePaginatedItemResponses(await Promise.all(sourceIds.map((sourceId) => smartFolderItemsResponse(sourceId))))
-        : await smartFolderItemsResponse(id);
+        : isZeroCountSmartFolder(smartFolder)
+          ? emptyPaginatedResponse()
+          : await smartFolderItemsResponse(id);
       return {
         ...result,
         items: result.items.slice(pageOffset, pageOffset + pageLimit),
@@ -279,6 +281,13 @@ function createEagleClient({
             searchParams: { smartFolderId: sourceId },
           }),
         );
+      }
+
+      async function resolveSmartFolder(sourceId: string) {
+        const detail = unwrapSmartFolderById(await request("/api/v2/smartFolder/get", { searchParams: { id: sourceId } }), sourceId);
+        if (hasSmartFolderResolutionData(detail)) return detail;
+        const tree = unwrapSmartFolderList(await request("/api/v2/smartFolder/get"));
+        return findSmartFolderById(tree, sourceId) || detail;
       }
     },
 
@@ -384,6 +393,10 @@ function mergePaginatedItemResponses(responses: Array<{ items: unknown[]; limit:
   return { items, total: items.length, offset: 0, limit: items.length };
 }
 
+function emptyPaginatedResponse() {
+  return { items: [], total: 0, offset: 0, limit: 0 };
+}
+
 function itemKey(item: unknown) {
   if (isRecord(item) && typeof item.id === "string" && item.id) return item.id;
   return "";
@@ -395,8 +408,35 @@ function unwrapSmartFolder(payload: unknown) {
   return isRecord(data) ? data : {};
 }
 
+function unwrapSmartFolderById(payload: unknown, id: string) {
+  const data = unwrapData(payload);
+  if (Array.isArray(data)) return findSmartFolderById(data, id) || (isRecord(data[0]) ? data[0] : {});
+  return isRecord(data) ? data : {};
+}
+
+function unwrapSmartFolderList(payload: unknown) {
+  const data = unwrapData(payload);
+  if (Array.isArray(data)) return data;
+  if (isRecord(data) && Array.isArray(data.data)) return data.data;
+  return [];
+}
+
+function hasSmartFolderResolutionData(folder: Record<string, unknown>) {
+  return Array.isArray(folder.children) || typeof folder.imageCount === "number";
+}
+
+function findSmartFolderById(folders: unknown[], id: string): Record<string, unknown> | null {
+  for (const folder of folders) {
+    if (!isRecord(folder)) continue;
+    if (folder.id === id) return folder;
+    const children = Array.isArray(folder.children) ? folder.children : [];
+    const match = findSmartFolderById(children, id);
+    if (match) return match;
+  }
+  return null;
+}
+
 function smartFolderGroupLeafIds(folder: Record<string, unknown>) {
-  if (!isSmartFolderGroup(folder)) return [];
   const children = Array.isArray(folder.children) ? folder.children : [];
   if (!children.length) return [];
   const ids: string[] = [];
@@ -408,17 +448,18 @@ function collectSmartFolderLeafIds(folders: unknown[], ids: string[]) {
   for (const folder of folders) {
     if (!isRecord(folder)) continue;
     const children = Array.isArray(folder.children) ? folder.children : [];
-    if (isSmartFolderGroup(folder)) {
+    if (children.length) {
       collectSmartFolderLeafIds(children, ids);
       continue;
     }
+    if (isZeroCountSmartFolder(folder)) continue;
     const id = typeof folder.id === "string" ? folder.id.trim() : "";
     if (id) ids.push(id);
   }
 }
 
-function isSmartFolderGroup(folder: Record<string, unknown>) {
-  return folder.icon === "grid";
+function isZeroCountSmartFolder(folder: Record<string, unknown>) {
+  return typeof folder.imageCount === "number" && folder.imageCount <= 0;
 }
 
 function unwrapData(payload: unknown) {

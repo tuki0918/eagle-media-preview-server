@@ -256,7 +256,7 @@ test("smartFolderItems fetches matching items with requested fields", async () =
             id: "smart-1",
             name: "Hero PNG",
             conditions: [],
-            children: [{ id: "ignored-child", name: "Ignored" }],
+            children: [],
           },
         });
       }
@@ -293,8 +293,8 @@ test("smartFolderItems aggregates child smart folders for groups", async () => {
             conditions: [{ key: "type", value: "group-marker" }],
             icon: "grid",
             children: [
-              { id: "smart-a", name: "Wide", conditions: [{ key: "width", value: 1200 }] },
-              { id: "nested", name: "Nested", conditions: [{ key: "type", value: "nested-group" }], icon: "grid", children: [{ id: "smart-b", name: "Tall", conditions: [{ key: "height", value: 1200 }] }] },
+              { id: "smart-a", name: "Wide", conditions: [{ key: "width", value: 1200 }], imageCount: 2 },
+              { id: "nested", name: "Nested", conditions: [{ key: "type", value: "nested-group" }], icon: "grid", children: [{ id: "smart-b", name: "Tall", conditions: [{ key: "height", value: 1200 }], imageCount: 2 }] },
             ],
           },
         });
@@ -317,6 +317,177 @@ test("smartFolderItems aggregates child smart folders for groups", async () => {
     "http://localhost:41595/api/v2/smartFolder/get?id=group-1",
     "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=smart-a",
     "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=smart-b",
+  ]);
+});
+
+test("smartFolderItems treats child containers as groups and skips zero-count leaves", async () => {
+  const calls: RequestCall[] = [];
+  const client = createEagleClient({
+    baseUrl: "http://localhost:41595",
+    fetchImpl: async (url: string, init: { method?: string; body: string }) => {
+      calls.push({ url, init });
+      if (url === "http://localhost:41595/api/v2/smartFolder/get?id=container-1") {
+        return jsonResponse({
+          status: "success",
+          data: {
+            id: "container-1",
+            name: "abc",
+            conditions: [{ key: "name", value: "a" }],
+            imageCount: 0,
+            children: [
+              { id: "group-leaf", name: "Untitled", icon: "grid", conditions: [{ key: "name", value: "b" }], imageCount: 1, children: [] },
+              { id: "empty-leaf", name: "Empty", conditions: [{ key: "name", value: "c" }], imageCount: 0, children: [] },
+            ],
+          },
+        });
+      }
+      if (url === "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=group-leaf") {
+        return jsonResponse({ status: "success", data: [{ id: "only-item" }] });
+      }
+      if (url === "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=empty-leaf") {
+        return jsonResponse({ status: "success", data: [{ id: "should-not-fetch" }] });
+      }
+      return jsonResponse({ status: "success", data: [{ id: "all-items-fallback" }] });
+    },
+  });
+
+  const result = await client.smartFolderItems({ smartFolderId: "container-1", offset: 0, limit: 30 });
+
+  assert.deepEqual(result.items, [{ id: "only-item" }]);
+  assert.equal(result.total, 1);
+  assert.deepEqual(calls.map((call) => call.url), [
+    "http://localhost:41595/api/v2/smartFolder/get?id=container-1",
+    "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=group-leaf",
+  ]);
+});
+
+test("smartFolderItems returns empty for zero-count smart folders without querying items", async () => {
+  const calls: RequestCall[] = [];
+  const client = createEagleClient({
+    baseUrl: "http://localhost:41595",
+    fetchImpl: async (url: string, init: { method?: string; body: string }) => {
+      calls.push({ url, init });
+      if (url === "http://localhost:41595/api/v2/smartFolder/get?id=empty-1") {
+        return jsonResponse({
+          status: "success",
+          data: { id: "empty-1", name: "Empty", conditions: [{ key: "name", value: "none" }], imageCount: 0, children: [] },
+        });
+      }
+      return jsonResponse({ status: "success", data: [{ id: "all-items-fallback" }] });
+    },
+  });
+
+  const result = await client.smartFolderItems({ smartFolderId: "empty-1", offset: 0, limit: 30 });
+
+  assert.deepEqual(result.items, []);
+  assert.equal(result.total, 0);
+  assert.deepEqual(calls.map((call) => call.url), [
+    "http://localhost:41595/api/v2/smartFolder/get?id=empty-1",
+  ]);
+});
+
+test("smartFolderItems resolves nested groups from the smart folder tree when detail omits children", async () => {
+  const calls: RequestCall[] = [];
+  const client = createEagleClient({
+    baseUrl: "http://localhost:41595",
+    fetchImpl: async (url: string, init: { method?: string; body: string }) => {
+      calls.push({ url, init });
+      if (url === "http://localhost:41595/api/v2/smartFolder/get?id=MQNQUGZMZ6KDU") {
+        return jsonResponse({
+          status: "success",
+          data: { id: "MQNQUGZMZ6KDU", name: "group" },
+        });
+      }
+      if (url === "http://localhost:41595/api/v2/smartFolder/get") {
+        return jsonResponse({
+          status: "success",
+          data: [
+            {
+              id: "MQNQUGZMZ6KDU",
+              name: "group",
+              icon: "grid",
+              imageCount: 0,
+              children: [
+                {
+                  id: "MQNQV7J68TLN7",
+                  name: "abc",
+                  imageCount: 1,
+                  children: [
+                    { id: "MQNR1QIEIS2VI", name: "Untitled", icon: "grid", imageCount: 1, children: [] },
+                    { id: "MQNR1HSUDLH7E", name: "Empty A", imageCount: 0, children: [] },
+                    { id: "MQNR1MEHIAFFE", name: "Empty B", imageCount: 0, children: [] },
+                  ],
+                },
+              ],
+            },
+          ],
+        });
+      }
+      if (url === "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=MQNR1QIEIS2VI") {
+        return jsonResponse({ status: "success", data: [{ id: "only-group-item" }] });
+      }
+      return jsonResponse({ status: "success", data: [{ id: "all-items-fallback" }] });
+    },
+  });
+
+  const result = await client.smartFolderItems({ smartFolderId: "MQNQUGZMZ6KDU", offset: 0, limit: 90 });
+
+  assert.deepEqual(result.items, [{ id: "only-group-item" }]);
+  assert.equal(result.total, 1);
+  assert.deepEqual(calls.map((call) => call.url), [
+    "http://localhost:41595/api/v2/smartFolder/get?id=MQNQUGZMZ6KDU",
+    "http://localhost:41595/api/v2/smartFolder/get",
+    "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=MQNR1QIEIS2VI",
+  ]);
+});
+
+test("smartFolderItems uses the requested nested smart folder when the detail endpoint returns a tree", async () => {
+  const calls: RequestCall[] = [];
+  const client = createEagleClient({
+    baseUrl: "http://localhost:41595",
+    fetchImpl: async (url: string, init: { method?: string; body: string }) => {
+      calls.push({ url, init });
+      if (url === "http://localhost:41595/api/v2/smartFolder/get?id=MQNQV7J68TLN7") {
+        return jsonResponse({
+          status: "success",
+          data: [
+            {
+              id: "MQNQUGZMZ6KDU",
+              name: "group",
+              icon: "grid",
+              imageCount: 0,
+              children: [
+                {
+                  id: "MQNQV7J68TLN7",
+                  name: "abc",
+                  imageCount: 1,
+                  children: [
+                    { id: "MQNR1QIEIS2VI", name: "Untitled", icon: "grid", imageCount: 1, children: [] },
+                  ],
+                },
+                { id: "MQNSIBLING0001", name: "Sibling", imageCount: 1, children: [] },
+              ],
+            },
+          ],
+        });
+      }
+      if (url === "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=MQNR1QIEIS2VI") {
+        return jsonResponse({ status: "success", data: [{ id: "nested-item" }] });
+      }
+      if (url === "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=MQNSIBLING0001") {
+        return jsonResponse({ status: "success", data: [{ id: "sibling-item" }] });
+      }
+      return jsonResponse({ status: "success", data: [{ id: "wrong-folder-item" }] });
+    },
+  });
+
+  const result = await client.smartFolderItems({ smartFolderId: "MQNQV7J68TLN7", offset: 0, limit: 90 });
+
+  assert.deepEqual(result.items, [{ id: "nested-item" }]);
+  assert.equal(result.total, 1);
+  assert.deepEqual(calls.map((call) => call.url), [
+    "http://localhost:41595/api/v2/smartFolder/get?id=MQNQV7J68TLN7",
+    "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=MQNR1QIEIS2VI",
   ]);
 });
 
