@@ -282,7 +282,8 @@ function FolderNavItem({
 }) {
   const Icon = folderNavIcon(icon);
   const safeDepth = Math.max(0, Math.min(depth, 8));
-  const title = count === undefined ? label : `${label} (${Number(count).toLocaleString()})`;
+  const displayCount = displayFolderCount(count);
+  const title = displayCount === undefined ? label : `${label} (${displayCount.toLocaleString()})`;
 
   return (
     <SidebarMenuItem>
@@ -298,14 +299,21 @@ function FolderNavItem({
       >
         <Icon className={active ? "text-sidebar-primary" : "text-muted-foreground"} aria-hidden="true" />
         <span className="min-w-0 truncate">{label}</span>
-        {count === undefined ? null : (
+        {displayCount === undefined ? null : (
           <span className="ml-auto shrink-0 text-[11px] font-normal text-muted-foreground [font-variant-numeric:tabular-nums] group-data-[collapsible=icon]:hidden">
-            {Number(count).toLocaleString()}
+            {displayCount.toLocaleString()}
           </span>
         )}
       </SidebarMenuButton>
     </SidebarMenuItem>
   );
+}
+
+function displayFolderCount(count: number | undefined) {
+  if (count === undefined) return undefined;
+  const normalized = Number(count);
+  if (!Number.isFinite(normalized) || normalized <= 0) return undefined;
+  return normalized;
 }
 
 function folderNavIcon(icon: "folder" | "inbox" | "open" | "smart" | "smartGroup") {

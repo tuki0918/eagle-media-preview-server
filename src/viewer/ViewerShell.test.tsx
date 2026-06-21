@@ -358,6 +358,7 @@ describe("ViewerAppShell", () => {
       filtersOpen: false,
       folders: [
         { id: "parent", name: "Parent", imageCount: 10, depth: 0 },
+        { id: "zero-folder", name: "Zero Folder", imageCount: 0, depth: 0 },
         { id: "child", name: "Child", imageCount: 4, depth: 1 },
       ],
       hasActiveFilters: true,
@@ -370,6 +371,7 @@ describe("ViewerAppShell", () => {
       selectedSmartFolderId: "",
       smartFolders: [
         { id: "smart-parent", name: "Large Images", imageCount: 42, depth: 0, conditions: [{ key: "type", value: "group-marker" }], icon: "grid" },
+        { id: "smart-zero", name: "Zero Smart", imageCount: 0, depth: 0, conditions: [{ key: "type", value: "empty" }] },
         { id: "smart-child", name: "Needs Review", imageCount: 7, depth: 1, conditions: [], children: [{ id: "ignored-child", name: "Ignored" }] },
       ],
     });
@@ -414,11 +416,15 @@ describe("ViewerAppShell", () => {
     expect(html).toContain("Uncategorized");
     expect(html).toContain("Large Images");
     expect(html).toContain("Large Images (42)");
+    expect(html).toContain("Zero Smart");
+    expect(html).not.toContain("Zero Smart (0)");
     expect(html).toContain("Needs Review");
     expect(html).toContain("lucide-folder-cog");
     expect(html).toContain("lucide-layout-grid");
     expect(html).not.toContain("No folders loaded");
     expect(html).toContain("Parent");
+    expect(html).toContain("Zero Folder");
+    expect(html).not.toContain("Zero Folder (0)");
     expect(html).toContain("Child");
     expect(html).toContain('aria-current="page"');
     expect(html).toContain("calc(0.5rem + 1 * 0.875rem)");
