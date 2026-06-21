@@ -1,9 +1,11 @@
 import {
   BookOpenTextIcon,
   ChevronsUpDownIcon,
+  FolderCogIcon,
   FolderIcon,
   FolderOpenIcon,
   InboxIcon,
+  LayoutGridIcon,
   LogOutIcon,
   MoonIcon,
   SunIcon,
@@ -29,9 +31,9 @@ import { UNCATEGORIZED_FOLDER_ID } from "../constants";
 import { getLibraryFooterName, subscribeLibraryFooterName } from "../libraryFooterState";
 import { getLoginConnectState, subscribeLoginConnectState } from "../loginConnectState";
 import { getSearchControlsState, subscribeSearchControlsState } from "../searchControlsState";
-import { changeFolder, submitLogout } from "../shellActions";
+import { changeFolder, changeSmartFolder, submitLogout } from "../shellActions";
 import { getThemeState, setThemePreference, subscribeThemeState, type ThemePreference } from "../themeState";
-import type { EagleFolder } from "../types";
+import type { EagleFolder, EagleSmartFolder } from "../types";
 
 export function AccountSideMenu() {
   const displayName = useSyncExternalStore(subscribeLibraryFooterName, getLibraryFooterName, getLibraryFooterName);
@@ -81,10 +83,15 @@ export function AccountSideMenu() {
         </SidebarHeader>
 
         <SidebarContent className="overflow-hidden">
+          <SmartFolderSideNav
+            selectedSmartFolderId={searchState.selectedSmartFolderId}
+            smartFolders={searchState.smartFolders}
+          />
           <FolderSideNav
             allFoldersTotal={searchState.allFoldersTotal}
             folders={searchState.folders}
             selectedFolderId={searchState.selectedFolderId}
+            selectedSmartFolderId={searchState.selectedSmartFolderId}
           />
           <ThemeSideNav />
         </SidebarContent>
@@ -120,10 +127,12 @@ function FolderSideNav({
   allFoldersTotal,
   folders,
   selectedFolderId,
+  selectedSmartFolderId,
 }: {
   allFoldersTotal: number;
   folders: readonly EagleFolder[];
   selectedFolderId: string;
+  selectedSmartFolderId: string;
 }) {
   const { isMobile, setOpenMobile } = useSidebar();
 
@@ -140,7 +149,7 @@ function FolderSideNav({
       <SidebarGroupContent>
         <SidebarMenu className="gap-0.5" aria-label="Folder tree">
           <FolderNavItem
-            active={!selectedFolderId}
+            active={!selectedFolderId && !selectedSmartFolderId}
             count={allFoldersTotal}
             depth={0}
             icon="open"
@@ -169,6 +178,50 @@ function FolderSideNav({
       </SidebarGroupContent>
     </SidebarGroup>
   );
+}
+
+function SmartFolderSideNav({
+  selectedSmartFolderId,
+  smartFolders,
+}: {
+  selectedSmartFolderId: string;
+  smartFolders: readonly EagleSmartFolder[];
+}) {
+  const { isMobile, setOpenMobile } = useSidebar();
+
+  if (!smartFolders.length) return null;
+
+  const selectSmartFolder = (smartFolderId: string) => {
+    changeSmartFolder({ currentTarget: { value: smartFolderId } });
+    if (isMobile) setOpenMobile(false);
+  };
+
+  return (
+    <SidebarGroup className="shrink-0 px-2 pb-1 pt-1">
+      <SidebarGroupLabel className="h-7 px-2 text-[11px] uppercase tracking-normal">
+        Smart Folders
+      </SidebarGroupLabel>
+      <SidebarGroupContent>
+        <SidebarMenu className="gap-0.5" aria-label="Smart folder tree">
+          {smartFolders.map((folder) => (
+            <FolderNavItem
+              key={folder.id}
+              active={selectedSmartFolderId === folder.id}
+              count={folder.imageCount}
+              depth={folder.depth || 0}
+              icon={isSmartFolderGroup(folder) ? "smartGroup" : "smart"}
+              label={folder.name}
+              onSelect={() => selectSmartFolder(folder.id)}
+            />
+          ))}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  );
+}
+
+function isSmartFolderGroup(folder: EagleSmartFolder) {
+  return folder.icon === "grid";
 }
 
 function ThemeSideNav() {
@@ -223,11 +276,11 @@ function FolderNavItem({
   active: boolean;
   count?: number;
   depth: number;
-  icon: "folder" | "inbox" | "open";
+  icon: "folder" | "inbox" | "open" | "smart" | "smartGroup";
   label: string;
   onSelect: () => void;
 }) {
-  const Icon = icon === "inbox" ? InboxIcon : icon === "open" ? FolderOpenIcon : FolderIcon;
+  const Icon = folderNavIcon(icon);
   const safeDepth = Math.max(0, Math.min(depth, 8));
   const title = count === undefined ? label : `${label} (${Number(count).toLocaleString()})`;
 
@@ -253,6 +306,14 @@ function FolderNavItem({
       </SidebarMenuButton>
     </SidebarMenuItem>
   );
+}
+
+function folderNavIcon(icon: "folder" | "inbox" | "open" | "smart" | "smartGroup") {
+  if (icon === "inbox") return InboxIcon;
+  if (icon === "open") return FolderOpenIcon;
+  if (icon === "smart") return FolderCogIcon;
+  if (icon === "smartGroup") return LayoutGridIcon;
+  return FolderIcon;
 }
 
 function AccountDropdown({

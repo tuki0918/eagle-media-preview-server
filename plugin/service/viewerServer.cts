@@ -122,6 +122,8 @@ interface EagleClient {
   }): Promise<unknown>;
   listTags(options: { limit?: string | number; query?: string }): Promise<unknown>;
   searchItems(options: { limit?: string | number; offset?: string | number; query: string }): Promise<unknown>;
+  smartFolderItems(options: { limit?: string | number; offset?: string | number; smartFolderId: string }): Promise<unknown>;
+  smartFolders(): Promise<unknown>;
   switchLibrary(libraryPath: string): Promise<unknown>;
   updateItemMetadata(id: string, input: { folders?: unknown; tags?: unknown }): Promise<EagleItem>;
   updateItemStar(id: string, star: unknown): Promise<EagleItem>;
@@ -365,6 +367,15 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
     return;
   }
 
+  if (url.pathname === "/api/smart-folders") {
+    if (req.method !== "GET") {
+      sendMethodNotAllowed(res, ["GET"]);
+      return;
+    }
+    sendJson(res, 200, await session.client.smartFolders());
+    return;
+  }
+
   if (url.pathname === "/api/libraries") {
     if (req.method !== "GET") {
       sendMethodNotAllowed(res, ["GET"]);
@@ -412,13 +423,16 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
     const query = url.searchParams.get("q")?.trim();
     const offset = boundedInteger(url.searchParams.get("offset"), 0, 0, MAX_ITEMS_OFFSET);
     const limit = boundedInteger(url.searchParams.get("limit"), DEFAULT_ITEMS_LIMIT, 1, MAX_ITEMS_LIMIT);
+    const smartFolderId = url.searchParams.get("smartFolderId")?.trim();
     const tags = [...url.searchParams.getAll("tags"), ...url.searchParams.getAll("tag")]
       .map((tag) => tag.trim())
       .filter(Boolean);
     const hasStructuredFilters = Boolean(
       url.searchParams.get("folderId") || url.searchParams.get("ext") || url.searchParams.get("rating") || tags.length,
     );
-    const result = query && !hasStructuredFilters
+    const result = smartFolderId
+      ? await session.client.smartFolderItems({ smartFolderId, offset, limit })
+      : query && !hasStructuredFilters
       ? await session.client.searchItems({ query, offset, limit })
       : await session.client.listItems({
           offset,

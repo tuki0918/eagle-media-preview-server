@@ -9,6 +9,7 @@ const queryState = (overrides: Partial<ItemQueryState> = {}): ItemQueryState => 
   folderId: "",
   ext: "",
   rating: "",
+  smartFolderId: "",
   ...overrides,
 });
 
@@ -33,5 +34,12 @@ describe("itemQueryParams", () => {
   test("keeps zero rating but omits an empty rating", () => {
     expect(itemQueryParams(queryState({ rating: "0" })).get("rating")).toBe("0");
     expect(itemQueryParams(queryState({ rating: "" })).has("rating")).toBe(false);
+  });
+
+  test("uses smart folder id instead of regular folder id", () => {
+    const params = itemQueryParams(queryState({ folderId: "folder-1", smartFolderId: "smart-1" }));
+
+    expect(params.get("smartFolderId")).toBe("smart-1");
+    expect(params.has("folderId")).toBe(false);
   });
 });

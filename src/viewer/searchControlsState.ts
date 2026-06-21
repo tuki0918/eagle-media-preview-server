@@ -1,4 +1,4 @@
-import type { EagleFolder } from "./types";
+import type { EagleFolder, EagleSmartFolder } from "./types";
 
 export interface SearchControlsState {
   allFoldersTotal: number;
@@ -11,6 +11,8 @@ export interface SearchControlsState {
   selectedFolderId: string;
   selectedLimit: number;
   selectedRating: string;
+  selectedSmartFolderId: string;
+  smartFolders: readonly EagleSmartFolder[];
 }
 
 const listeners = new Set<() => void>();
@@ -25,6 +27,8 @@ let currentSearchControls: SearchControlsState = {
   selectedFolderId: "",
   selectedLimit: 30,
   selectedRating: "",
+  selectedSmartFolderId: "",
+  smartFolders: [],
 };
 
 export function getSearchControlsState() {

@@ -221,6 +221,105 @@ test("listTags uses V2 tag/get with a bounded name query", async () => {
   assert.equal(calls[0].init.method, "GET");
 });
 
+test("smartFolders lists V2 smart folders", async () => {
+  const calls: RequestCall[] = [];
+  const client = createEagleClient({
+    baseUrl: "http://localhost:41595",
+    fetchImpl: async (url: string, init: { method?: string; body: string }) => {
+      calls.push({ url, init });
+      return jsonResponse({
+        status: "success",
+        data: [
+          { id: "smart-1", name: "Large Images", imageCount: 42, children: [] },
+        ],
+      });
+    },
+  });
+
+  const result = await client.smartFolders();
+
+  assert.deepEqual(result.items, [{ id: "smart-1", name: "Large Images", imageCount: 42, children: [] }]);
+  assert.equal(calls[0].url, "http://localhost:41595/api/v2/smartFolder/get");
+  assert.equal(calls[0].init.method, "GET");
+});
+
+test("smartFolderItems fetches matching items with requested fields", async () => {
+  const calls: RequestCall[] = [];
+  const client = createEagleClient({
+    baseUrl: "http://localhost:41595",
+    fetchImpl: async (url: string, init: { method?: string; body: string }) => {
+      calls.push({ url, init });
+      if (url === "http://localhost:41595/api/v2/smartFolder/get?id=smart-1") {
+        return jsonResponse({
+          status: "success",
+          data: {
+            id: "smart-1",
+            name: "Hero PNG",
+            conditions: [],
+            children: [{ id: "ignored-child", name: "Ignored" }],
+          },
+        });
+      }
+      return jsonResponse({
+        status: "success",
+        data: [{ id: "item-1", name: "Hero", ext: "png" }],
+      });
+    },
+  });
+
+  const result = await client.smartFolderItems({ smartFolderId: "smart-1", offset: 0, limit: 60 });
+
+  assert.deepEqual(result.items, [{ id: "item-1", name: "Hero", ext: "png" }]);
+  assert.equal(result.total, 1);
+  assert.deepEqual(calls.map((call) => call.url), [
+    "http://localhost:41595/api/v2/smartFolder/get?id=smart-1",
+    "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=smart-1",
+  ]);
+  assert.equal(calls[1].init.method, "GET");
+});
+
+test("smartFolderItems aggregates child smart folders for groups", async () => {
+  const calls: RequestCall[] = [];
+  const client = createEagleClient({
+    baseUrl: "http://localhost:41595",
+    fetchImpl: async (url: string, init: { method?: string; body: string }) => {
+      calls.push({ url, init });
+      if (url === "http://localhost:41595/api/v2/smartFolder/get?id=group-1") {
+        return jsonResponse({
+          status: "success",
+          data: {
+            id: "group-1",
+            name: "Review",
+            conditions: [{ key: "type", value: "group-marker" }],
+            icon: "grid",
+            children: [
+              { id: "smart-a", name: "Wide", conditions: [{ key: "width", value: 1200 }] },
+              { id: "nested", name: "Nested", conditions: [{ key: "type", value: "nested-group" }], icon: "grid", children: [{ id: "smart-b", name: "Tall", conditions: [{ key: "height", value: 1200 }] }] },
+            ],
+          },
+        });
+      }
+      if (url === "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=smart-a") {
+        return jsonResponse({ status: "success", data: [{ id: "shared" }, { id: "wide" }] });
+      }
+      if (url === "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=smart-b") {
+        return jsonResponse({ status: "success", data: [{ id: "shared" }, { id: "tall" }] });
+      }
+      return jsonResponse({ status: "success", data: [] });
+    },
+  });
+
+  const result = await client.smartFolderItems({ smartFolderId: "group-1", offset: 0, limit: 30 });
+
+  assert.deepEqual(result.items, [{ id: "shared" }, { id: "wide" }, { id: "tall" }]);
+  assert.equal(result.total, 3);
+  assert.deepEqual(calls.map((call) => call.url), [
+    "http://localhost:41595/api/v2/smartFolder/get?id=group-1",
+    "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=smart-a",
+    "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=smart-b",
+  ]);
+});
+
 test("libraryHistory uses the legacy library history endpoint", async () => {
   const calls: RequestCall[] = [];
   const client = createEagleClient({

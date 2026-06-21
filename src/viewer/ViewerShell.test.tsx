@@ -367,6 +367,11 @@ describe("ViewerAppShell", () => {
       selectedFolderId: "child",
       selectedLimit: 30,
       selectedRating: "",
+      selectedSmartFolderId: "",
+      smartFolders: [
+        { id: "smart-parent", name: "Large Images", imageCount: 42, depth: 0, conditions: [{ key: "type", value: "group-marker" }], icon: "grid" },
+        { id: "smart-child", name: "Needs Review", imageCount: 7, depth: 1, conditions: [], children: [{ id: "ignored-child", name: "Ignored" }] },
+      ],
     });
     setLoginConnectState({
       authenticated: true,
@@ -388,8 +393,10 @@ describe("ViewerAppShell", () => {
     expect(html).toContain('id="authRoleLabel"');
     expect(html).toContain('aria-haspopup="menu"');
     expect(html).toContain("lucide-user-round");
+    expect(html).toContain("Smart Folders");
     expect(html).toContain("Folders");
     expect(html).toContain("Theme");
+    expect(html.indexOf("Smart Folders")).toBeLessThan(html.indexOf("Folders"));
     expect(html).toContain('id="themeModeGroup"');
     expect(html).toContain('aria-label="Theme color"');
     expect(html).toContain("Light");
@@ -405,6 +412,11 @@ describe("ViewerAppShell", () => {
     expect(html).toContain("All folders");
     expect(html).toContain("All folders (99)");
     expect(html).toContain("Uncategorized");
+    expect(html).toContain("Large Images");
+    expect(html).toContain("Large Images (42)");
+    expect(html).toContain("Needs Review");
+    expect(html).toContain("lucide-folder-cog");
+    expect(html).toContain("lucide-layout-grid");
     expect(html).not.toContain("No folders loaded");
     expect(html).toContain("Parent");
     expect(html).toContain("Child");
@@ -442,6 +454,8 @@ describe("ViewerAppShell", () => {
       selectedFolderId: "",
       selectedLimit: 30,
       selectedRating: "",
+      selectedSmartFolderId: "",
+      smartFolders: [],
     });
   });
 

@@ -19,7 +19,12 @@ interface ViewerShellLayoutProps {
 export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
   const searchState = useSyncExternalStore(subscribeSearchControlsState, getSearchControlsState, getSearchControlsState);
   const [sidebarOpen, setSidebarOpenState] = useState(readSavedSidebarOpen);
-  const folderName = selectedFolderName(searchState.selectedFolderId, searchState.folders);
+  const folderName = selectedFolderName(
+    searchState.selectedFolderId,
+    searchState.folders,
+    searchState.selectedSmartFolderId,
+    searchState.smartFolders,
+  );
   const setSidebarOpen = useCallback((open: boolean) => {
     setSidebarOpenState(open);
     writeSavedSidebarOpen(open);
@@ -69,7 +74,13 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
   );
 }
 
-function selectedFolderName(selectedFolderId: string, folders: readonly { id: string; name: string }[]) {
+function selectedFolderName(
+  selectedFolderId: string,
+  folders: readonly { id: string; name: string }[],
+  selectedSmartFolderId: string,
+  smartFolders: readonly { id: string; name: string }[],
+) {
+  if (selectedSmartFolderId) return smartFolders.find((folder) => folder.id === selectedSmartFolderId)?.name || "Smart Folder";
   if (!selectedFolderId) return "All";
   if (selectedFolderId === UNCATEGORIZED_FOLDER_ID) return "Uncategorized";
   return folders.find((folder) => folder.id === selectedFolderId)?.name || "All";

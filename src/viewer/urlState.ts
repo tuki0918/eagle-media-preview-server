@@ -7,6 +7,7 @@ export type ViewerUrlState = Pick<
   | "query"
   | "tags"
   | "folderId"
+  | "smartFolderId"
   | "ext"
   | "rating"
   | "filtersOpen"
@@ -26,6 +27,7 @@ export function parseViewerUrlState(search: string): ViewerUrlState {
     query: params.get("q") || "",
     tags: uniqueTags(params.getAll("tag")),
     folderId: params.get("folder") || "",
+    smartFolderId: params.get("smartFolder") || "",
     ext: params.get("ext") || "",
     rating: params.get("rating") || "",
     filtersOpen: params.get("filters") === "1",
@@ -42,6 +44,7 @@ export function buildViewerSearch(state: ViewerUrlState) {
   if (state.query) params.set("q", state.query);
   for (const tag of state.tags) params.append("tag", tag);
   if (state.folderId) params.set("folder", state.folderId);
+  if (state.smartFolderId) params.set("smartFolder", state.smartFolderId);
   if (state.ext) params.set("ext", state.ext);
   if (state.rating !== "") params.set("rating", state.rating);
   if (state.filtersOpen) params.set("filters", "1");

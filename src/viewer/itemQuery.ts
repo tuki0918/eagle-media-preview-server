@@ -2,6 +2,7 @@ import type { ViewerState } from "./types";
 
 export type ItemQueryState = Pick<ViewerState, "offset" | "query" | "tags" | "folderId" | "ext" | "rating"> & {
   limit: number;
+  smartFolderId: string;
 };
 
 export function itemQueryParams(state: ItemQueryState) {
@@ -11,7 +12,11 @@ export function itemQueryParams(state: ItemQueryState) {
   });
   if (state.query) params.set("q", state.query);
   for (const tag of state.tags) params.append("tags", tag);
-  if (state.folderId) params.set("folderId", state.folderId);
+  if (state.smartFolderId) {
+    params.set("smartFolderId", state.smartFolderId);
+  } else if (state.folderId) {
+    params.set("folderId", state.folderId);
+  }
   if (state.ext) params.set("ext", state.ext);
   if (state.rating !== "") params.set("rating", state.rating);
   return params;

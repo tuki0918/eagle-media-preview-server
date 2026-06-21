@@ -5,6 +5,7 @@ const emptyFilters = (overrides: Partial<FilterState> = {}): FilterState => ({
   query: "",
   tags: [],
   folderId: "",
+  smartFolderId: "",
   ext: "",
   rating: "",
   ...overrides,
@@ -16,6 +17,7 @@ describe("filter state helpers", () => {
     expect(hasActiveFilters(emptyFilters({ query: "cat" }))).toBe(true);
     expect(hasActiveFilters(emptyFilters({ tags: ["tag"] }))).toBe(true);
     expect(hasActiveFilters(emptyFilters({ folderId: "folder" }))).toBe(true);
+    expect(hasActiveFilters(emptyFilters({ smartFolderId: "smart-folder" }))).toBe(true);
     expect(hasActiveFilters(emptyFilters({ ext: "png" }))).toBe(true);
     expect(hasActiveFilters(emptyFilters({ rating: "0" }))).toBe(true);
   });
@@ -23,6 +25,7 @@ describe("filter state helpers", () => {
   test("detects resettable filters without treating category as clearable", () => {
     expect(hasResettableFilters(emptyFilters())).toBe(false);
     expect(hasResettableFilters(emptyFilters({ folderId: "folder" }))).toBe(false);
+    expect(hasResettableFilters(emptyFilters({ smartFolderId: "smart-folder" }))).toBe(false);
     expect(hasResettableFilters(emptyFilters({ query: "cat" }))).toBe(true);
     expect(hasResettableFilters(emptyFilters({ tags: ["tag"] }))).toBe(true);
     expect(hasResettableFilters(emptyFilters({ ext: "png" }))).toBe(true);
@@ -30,10 +33,11 @@ describe("filter state helpers", () => {
   });
 
   test("returns the reset state while preserving the selected category", () => {
-    expect(resetFilterState({ folderId: "folder" })).toEqual({
+    expect(resetFilterState({ folderId: "folder", smartFolderId: "smart-folder" })).toEqual({
       query: "",
       tags: [],
       folderId: "folder",
+      smartFolderId: "smart-folder",
       ext: "",
       rating: "",
       offset: 0,

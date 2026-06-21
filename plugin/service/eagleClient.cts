@@ -41,6 +41,10 @@ interface SearchItemsOptions extends PageOptions {
   query: string;
 }
 
+interface SmartFolderItemsOptions extends PageOptions {
+  smartFolderId?: unknown;
+}
+
 interface ListTagsOptions extends PageOptions {
   query?: unknown;
 }
@@ -206,6 +210,10 @@ function createEagleClient({
       );
     },
 
+    async smartFolders() {
+      return normalizePaginatedResponse(await request("/api/v2/smartFolder/get"));
+    },
+
     async listItems({ offset = 0, limit = 30, folderId, isUnfiled = false, ext, rating, keywords, tags }: ListItemsOptions = {}) {
       const body: {
         ext?: unknown;
@@ -245,6 +253,33 @@ function createEagleClient({
           body: { query, offset: normalizeOffset(offset), limit: clampLimit(limit) },
         }),
       );
+    },
+
+    async smartFolderItems({ smartFolderId, offset = 0, limit = 30 }: SmartFolderItemsOptions = {}) {
+      const id = String(smartFolderId || "").trim();
+      if (!id) throw new Error("smartFolderId is required");
+      const pageOffset = normalizeOffset(offset);
+      const pageLimit = clampLimit(limit);
+      const smartFolder = unwrapSmartFolder(await request("/api/v2/smartFolder/get", { searchParams: { id } }));
+      const sourceIds = smartFolderGroupLeafIds(smartFolder);
+      const result = sourceIds.length
+        ? mergePaginatedItemResponses(await Promise.all(sourceIds.map((sourceId) => smartFolderItemsResponse(sourceId))))
+        : await smartFolderItemsResponse(id);
+      return {
+        ...result,
+        items: result.items.slice(pageOffset, pageOffset + pageLimit),
+        total: result.total || result.items.length,
+        offset: pageOffset,
+        limit: pageLimit,
+      };
+
+      async function smartFolderItemsResponse(sourceId: string) {
+        return normalizePaginatedResponse(
+          await request("/api/v2/smartFolder/getItems", {
+            searchParams: { smartFolderId: sourceId },
+          }),
+        );
+      }
     },
 
     async listTags({ query = "", offset = 0, limit = 20 }: ListTagsOptions = {}) {
@@ -321,7 +356,7 @@ function normalizeStringArray(value: unknown, fieldName: string) {
   return [...new Set(value.map((item) => String(item).trim()).filter(Boolean))];
 }
 
-function normalizePaginatedResponse(payload: unknown) {
+function normalizePaginatedResponse(payload: unknown): { items: unknown[]; limit: number; offset: number; total: number } {
   const data = unwrapData(payload);
   if (Array.isArray(data)) {
     return { items: data, total: data.length, offset: 0, limit: data.length };
@@ -329,10 +364,61 @@ function normalizePaginatedResponse(payload: unknown) {
   const page = isRecord(data) ? data : {};
   return {
     items: Array.isArray(page.data) ? page.data : [],
-    total: Number.isFinite(page.total) ? page.total : 0,
-    offset: Number.isFinite(page.offset) ? page.offset : 0,
-    limit: Number.isFinite(page.limit) ? page.limit : 0,
+    total: typeof page.total === "number" && Number.isFinite(page.total) ? page.total : 0,
+    offset: typeof page.offset === "number" && Number.isFinite(page.offset) ? page.offset : 0,
+    limit: typeof page.limit === "number" && Number.isFinite(page.limit) ? page.limit : 0,
   };
+}
+
+function mergePaginatedItemResponses(responses: Array<{ items: unknown[]; limit: number; offset: number; total: number }>) {
+  const seen = new Set<string>();
+  const items: unknown[] = [];
+  for (const response of responses) {
+    for (const item of response.items) {
+      const key = itemKey(item);
+      if (key && seen.has(key)) continue;
+      if (key) seen.add(key);
+      items.push(item);
+    }
+  }
+  return { items, total: items.length, offset: 0, limit: items.length };
+}
+
+function itemKey(item: unknown) {
+  if (isRecord(item) && typeof item.id === "string" && item.id) return item.id;
+  return "";
+}
+
+function unwrapSmartFolder(payload: unknown) {
+  const data = unwrapData(payload);
+  if (Array.isArray(data)) return isRecord(data[0]) ? data[0] : {};
+  return isRecord(data) ? data : {};
+}
+
+function smartFolderGroupLeafIds(folder: Record<string, unknown>) {
+  if (!isSmartFolderGroup(folder)) return [];
+  const children = Array.isArray(folder.children) ? folder.children : [];
+  if (!children.length) return [];
+  const ids: string[] = [];
+  collectSmartFolderLeafIds(children, ids);
+  return ids;
+}
+
+function collectSmartFolderLeafIds(folders: unknown[], ids: string[]) {
+  for (const folder of folders) {
+    if (!isRecord(folder)) continue;
+    const children = Array.isArray(folder.children) ? folder.children : [];
+    if (isSmartFolderGroup(folder)) {
+      collectSmartFolderLeafIds(children, ids);
+      continue;
+    }
+    const id = typeof folder.id === "string" ? folder.id.trim() : "";
+    if (id) ids.push(id);
+  }
+}
+
+function isSmartFolderGroup(folder: Record<string, unknown>) {
+  return folder.icon === "grid";
 }
 
 function unwrapData(payload: unknown) {

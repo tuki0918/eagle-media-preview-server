@@ -82,6 +82,7 @@ import type {
   LoadFoldersResponse,
   LoadItemsOptions,
   LoadItemsResponse,
+  LoadSmartFoldersResponse,
   OpenPreviewOptions,
   TagSuggestionApiItem,
   ViewerPermissions,
@@ -138,7 +139,10 @@ async function init() {
       hideTagSuggestions();
     },
     folderChanged: (folderId: string) => {
-      applyFilterChange({ folderId });
+      applyFilterChange({ folderId, smartFolderId: "" });
+    },
+    smartFolderChanged: (smartFolderId: string) => {
+      applyFilterChange({ folderId: "", smartFolderId });
     },
     mediaTypeChanged: (ext: string) => {
       applyFilterChange({ ext });
@@ -206,7 +210,7 @@ async function connect(credentials?: { password: string; username: string }) {
     const connection = { ...DEFAULT_EAGLE_CONNECTION };
     const data = await postJson<ConnectResponse>("/api/connect", connection);
     showViewer(data);
-    await Promise.all([loadFolders(), loadItems(), loadAllFoldersTotal()]);
+    await Promise.all([loadFolders(), loadSmartFolders(), loadItems(), loadAllFoldersTotal()]);
   } catch (error) {
     if (signedInThisAttempt && handlePostLoginAuthError(error)) return;
     if (handleAuthError(error)) return;
@@ -371,6 +375,7 @@ function resetViewerResults({ resetOffset = false }: { resetOffset?: boolean } =
   state.tilesLoadingMore = false;
   state.items = [];
   state.folders = [];
+  state.smartFolders = [];
   state.total = 0;
   if (resetOffset) state.offset = 0;
 }
@@ -417,6 +422,18 @@ async function loadFolders() {
     if (handleAuthError(error)) return;
     state.folders = [];
     // Folder loading is optional; item browsing still works without it.
+  }
+}
+
+async function loadSmartFolders() {
+  try {
+    const data = await getJson<LoadSmartFoldersResponse>("/api/smart-folders");
+    state.smartFolders = flattenFolders(data.items);
+    renderSearchControlButtons();
+  } catch (error) {
+    if (handleAuthError(error)) return;
+    state.smartFolders = [];
+    renderSearchControlButtons();
   }
 }
 
@@ -612,7 +629,7 @@ function applyControlsFromState() {
   updateStatus();
 }
 
-function applyFilterChange(patch: Partial<Pick<typeof state, "query" | "tags" | "folderId" | "ext" | "rating" | "limit">>) {
+function applyFilterChange(patch: Partial<Pick<typeof state, "query" | "tags" | "folderId" | "smartFolderId" | "ext" | "rating" | "limit">>) {
   Object.assign(state, patch, { offset: 0 });
   resetPreviewState();
   syncResetFiltersButton();
@@ -712,6 +729,8 @@ function renderSearchControlButtons() {
     selectedFolderId: state.folderId,
     selectedLimit: state.limit,
     selectedRating: state.rating,
+    selectedSmartFolderId: state.smartFolderId,
+    smartFolders: state.smartFolders,
   });
 }
 

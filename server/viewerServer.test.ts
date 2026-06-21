@@ -242,6 +242,55 @@ test("createViewerServer starts and stops without the CLI entrypoint", async () 
   assert.equal(viewer.status().state, "stopped");
 });
 
+test("createViewerServer exposes smart folders and smart folder items", async () => {
+  const calls: unknown[] = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    viewerPassword: "",
+    eagleClient: {
+      async appInfo() {
+        return { version: "4.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/tmp/Test.library", name: "Test Library" };
+      },
+      async smartFolders() {
+        calls.push({ method: "smartFolders" });
+        return { items: [{ id: "smart-1", name: "Large Images", imageCount: 42 }] };
+      },
+      async smartFolderItems(options: unknown) {
+        calls.push({ method: "smartFolderItems", options });
+        return { items: [{ id: "item-1", name: "Hero" }], total: 1 };
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const origin = `http://127.0.0.1:${status.port}`;
+    const folders = await fetch(`${origin}/api/smart-folders`);
+    assert.equal(folders.status, 200);
+    assert.deepEqual(await folders.json(), {
+      items: [{ id: "smart-1", name: "Large Images", imageCount: 42 }],
+    });
+
+    const items = await fetch(`${origin}/api/items?smartFolderId=smart-1&offset=30&limit=60`);
+    assert.equal(items.status, 200);
+    assert.deepEqual(await items.json(), {
+      items: [{ id: "item-1", name: "Hero" }],
+      total: 1,
+    });
+    assert.deepEqual(calls, [
+      { method: "smartFolders" },
+      { method: "smartFolderItems", options: { smartFolderId: "smart-1", offset: 30, limit: 60 } },
+    ]);
+  } finally {
+    await viewer.stop();
+  }
+});
+
 test("createViewerServer blocks metadata writes unless editing is enabled for an authenticated viewer", async () => {
   const calls: unknown[] = [];
   const viewer = createViewerServer({

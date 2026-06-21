@@ -6,6 +6,14 @@ export interface EagleFolder {
   depth?: number;
 }
 
+export interface EagleSmartFolder extends EagleFolder {
+  conditions?: unknown;
+  description?: string;
+  icon?: string;
+  iconColor?: string;
+  modificationTime?: number;
+}
+
 export interface EagleItem {
   id?: string;
   name?: string;
@@ -80,6 +88,10 @@ export interface LoadFoldersResponse {
   items?: EagleFolder[];
 }
 
+export interface LoadSmartFoldersResponse {
+  items?: EagleSmartFolder[];
+}
+
 export interface LoadItemsResponse {
   items?: EagleItem[];
   total?: number;
@@ -109,10 +121,12 @@ export interface ViewerState {
   tags: string[];
   tagSuggestionsRequestId: number;
   folderId: string;
+  smartFolderId: string;
   ext: string;
   rating: string;
   filtersOpen: boolean;
   folders: EagleFolder[];
+  smartFolders: EagleSmartFolder[];
   viewMode: ViewerMode;
   tilesLoadingMore: boolean;
   tilesObserver: IntersectionObserver | null;

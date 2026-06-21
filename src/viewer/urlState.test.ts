@@ -14,6 +14,7 @@ function urlState(overrides: Partial<ViewerUrlState> = {}): ViewerUrlState {
     query: "",
     tags: [],
     folderId: "",
+    smartFolderId: "",
     ext: "",
     rating: "",
     filtersOpen: false,
@@ -28,10 +29,11 @@ function urlState(overrides: Partial<ViewerUrlState> = {}): ViewerUrlState {
 
 describe("viewer URL state", () => {
   test("parses filters, pagination, and preview state from a query string", () => {
-    expect(parseViewerUrlState("?q=cat&tag= alpha &tag=alpha&tag=beta&folder=f1&ext=jpg&rating=4&filters=1&limit=60&view=list&page=3&item=i1&info=1")).toEqual({
+    expect(parseViewerUrlState("?q=cat&tag= alpha &tag=alpha&tag=beta&folder=f1&smartFolder=s1&ext=jpg&rating=4&filters=1&limit=60&view=list&page=3&item=i1&info=1")).toEqual({
       query: "cat",
       tags: ["alpha", "beta"],
       folderId: "f1",
+      smartFolderId: "s1",
       ext: "jpg",
       rating: "4",
       filtersOpen: true,
@@ -58,6 +60,7 @@ describe("viewer URL state", () => {
       query: "cat",
       tags: ["alpha", "beta"],
       folderId: "f1",
+      smartFolderId: "s1",
       ext: "jpg",
       rating: "4",
       filtersOpen: true,
@@ -67,7 +70,7 @@ describe("viewer URL state", () => {
       previewItemId: "i1",
       previewInfoOpen: true,
     }));
-    expect(search).toBe("q=cat&tag=alpha&tag=beta&folder=f1&ext=jpg&rating=4&filters=1&limit=60&view=list&page=3&item=i1&info=1");
+    expect(search).toBe("q=cat&tag=alpha&tag=beta&folder=f1&smartFolder=s1&ext=jpg&rating=4&filters=1&limit=60&view=list&page=3&item=i1&info=1");
     expect(buildViewerUrl("/viewer", urlState({ query: "cat" }))).toBe("/viewer?q=cat");
   });
 
