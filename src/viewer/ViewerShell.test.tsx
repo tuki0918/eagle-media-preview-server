@@ -412,10 +412,14 @@ describe("ViewerAppShell", () => {
     expect(html).toContain('data-slot="tabs-trigger"');
     expect(html).toContain('aria-label="Folder tree"');
     expect(html).toContain("All folders");
-    expect(html).toContain("All folders (99)");
+    expect(html).toContain(">99</span>");
+    expect(html).toContain('title="All folders"');
+    expect(html).not.toContain('title="All folders (99)"');
     expect(html).toContain("Uncategorized");
     expect(html).toContain("Large Images");
-    expect(html).toContain("Large Images (42)");
+    expect(html).toContain(">42</span>");
+    expect(html).toContain('title="Large Images"');
+    expect(html).not.toContain('title="Large Images (42)"');
     expect(html).toContain("Zero Smart");
     expect(html).not.toContain("Zero Smart (0)");
     expect(html).toContain("Needs Review");

@@ -283,7 +283,6 @@ function FolderNavItem({
   const Icon = folderNavIcon(icon);
   const safeDepth = Math.max(0, Math.min(depth, 8));
   const displayCount = displayFolderCount(count);
-  const title = displayCount === undefined ? label : `${label} (${displayCount.toLocaleString()})`;
 
   return (
     <SidebarMenuItem>
@@ -291,10 +290,10 @@ function FolderNavItem({
         className="h-8 gap-2 text-[13px] font-normal data-active:bg-transparent data-active:font-[650] data-active:text-sidebar-foreground group-data-[collapsible=icon]:!pl-2"
         isActive={active}
         style={{ paddingLeft: `calc(0.5rem + ${safeDepth} * 0.875rem)` }}
-        tooltip={title}
+        tooltip={label}
         type="button"
         aria-current={active ? "page" : undefined}
-        title={title}
+        title={label}
         onClick={onSelect}
       >
         <Icon className={active ? "text-sidebar-primary" : "text-muted-foreground"} aria-hidden="true" />
