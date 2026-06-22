@@ -84,16 +84,18 @@ export function AccountSideMenu() {
         </SidebarHeader>
 
         <SidebarContent className="overflow-hidden">
-          <SmartFolderSideNav
-            selectedSmartFolderId={searchState.selectedSmartFolderId}
-            smartFolders={searchState.smartFolders}
-          />
-          <FolderSideNav
-            allFoldersTotal={searchState.allFoldersTotal}
-            folders={searchState.folders}
-            selectedFolderId={searchState.selectedFolderId}
-            selectedSmartFolderId={searchState.selectedSmartFolderId}
-          />
+          <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto">
+            <SmartFolderSideNav
+              selectedSmartFolderId={searchState.selectedSmartFolderId}
+              smartFolders={searchState.smartFolders}
+            />
+            <FolderSideNav
+              allFoldersTotal={searchState.allFoldersTotal}
+              folders={searchState.folders}
+              selectedFolderId={searchState.selectedFolderId}
+              selectedSmartFolderId={searchState.selectedSmartFolderId}
+            />
+          </div>
           <ThemeSideNav />
         </SidebarContent>
 
@@ -144,7 +146,7 @@ function FolderSideNav({
   };
 
   return (
-    <SidebarGroup className="min-h-0 flex-1 overflow-y-auto px-2 pb-2 pt-1">
+    <SidebarGroup className="shrink-0 px-2 pb-2 pt-1">
       <SidebarGroupLabel className="h-7 px-2 text-[11px] uppercase tracking-normal">
         Folders
       </SidebarGroupLabel>
