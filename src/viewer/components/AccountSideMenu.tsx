@@ -367,6 +367,22 @@ function ThemeSideNav() {
   );
 }
 
+const folderTreeDepthClasses = [
+  "sidebar-tree-depth-0 pl-0.5",
+  "sidebar-tree-depth-1 pl-4",
+  "sidebar-tree-depth-2 pl-[1.875rem]",
+  "sidebar-tree-depth-3 pl-[2.75rem]",
+  "sidebar-tree-depth-4 pl-[3.625rem]",
+  "sidebar-tree-depth-5 pl-[4.5rem]",
+  "sidebar-tree-depth-6 pl-[5.375rem]",
+  "sidebar-tree-depth-7 pl-[6.25rem]",
+  "sidebar-tree-depth-8 pl-[7.125rem]",
+] as const;
+
+function folderTreeDepthClass(depth: number) {
+  return folderTreeDepthClasses[Math.max(0, Math.min(depth, folderTreeDepthClasses.length - 1))];
+}
+
 function FolderNavItem({
   active,
   count,
@@ -397,8 +413,10 @@ function FolderNavItem({
   return (
     <SidebarMenuItem>
       <div
-        className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center group-data-[collapsible=icon]:block"
-        style={{ paddingLeft: `calc(0.125rem + ${safeDepth} * 0.875rem)` }}
+        className={[
+          "grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center group-data-[collapsible=icon]:block",
+          folderTreeDepthClass(safeDepth),
+        ].join(" ")}
       >
         <div className="relative flex h-8 w-6 shrink-0 items-center justify-center group-data-[collapsible=icon]:hidden">
           {safeDepth > 0 ? (

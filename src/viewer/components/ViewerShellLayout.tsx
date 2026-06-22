@@ -1,4 +1,4 @@
-import { useCallback, useState, useSyncExternalStore, type CSSProperties } from "react";
+import { useCallback, useState, useSyncExternalStore } from "react";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { SIDEBAR_OPEN_STORAGE_KEY, UNCATEGORIZED_FOLDER_ID } from "../constants";
@@ -44,9 +44,6 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
         sidebarWidthMin={SIDEBAR_MIN_WIDTH}
         sidebarWidthMax={SIDEBAR_MAX_WIDTH}
         onSidebarWidthChange={setSidebarWidth}
-        style={{
-          "--sidebar-width-icon": "3rem",
-        } as CSSProperties}
       >
         <AccountSideMenu />
         <SidebarInset className="min-w-0 md:!m-1 md:!ml-0">

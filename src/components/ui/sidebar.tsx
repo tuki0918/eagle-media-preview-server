@@ -26,13 +26,43 @@ import { PanelLeftIcon } from "lucide-react"
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
-const SIDEBAR_WIDTH = "16rem"
-const SIDEBAR_WIDTH_MOBILE = "18rem"
-const SIDEBAR_WIDTH_ICON = "3rem"
 const SIDEBAR_WIDTH_DEFAULT = 16 * 16
 const SIDEBAR_WIDTH_MIN = 12 * 16
 const SIDEBAR_WIDTH_MAX = 22 * 16
+const SIDEBAR_WIDTH_STEP = 8
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
+
+const sidebarWidthClasses = [
+  { width: 192, className: "sidebar-width-192 [--sidebar-width:192px]" },
+  { width: 200, className: "sidebar-width-200 [--sidebar-width:200px]" },
+  { width: 208, className: "sidebar-width-208 [--sidebar-width:208px]" },
+  { width: 216, className: "sidebar-width-216 [--sidebar-width:216px]" },
+  { width: 224, className: "sidebar-width-224 [--sidebar-width:224px]" },
+  { width: 232, className: "sidebar-width-232 [--sidebar-width:232px]" },
+  { width: 240, className: "sidebar-width-240 [--sidebar-width:240px]" },
+  { width: 248, className: "sidebar-width-248 [--sidebar-width:248px]" },
+  { width: 256, className: "sidebar-width-256 [--sidebar-width:256px]" },
+  { width: 264, className: "sidebar-width-264 [--sidebar-width:264px]" },
+  { width: 272, className: "sidebar-width-272 [--sidebar-width:272px]" },
+  { width: 280, className: "sidebar-width-280 [--sidebar-width:280px]" },
+  { width: 288, className: "sidebar-width-288 [--sidebar-width:288px]" },
+  { width: 296, className: "sidebar-width-296 [--sidebar-width:296px]" },
+  { width: 304, className: "sidebar-width-304 [--sidebar-width:304px]" },
+  { width: 312, className: "sidebar-width-312 [--sidebar-width:312px]" },
+  { width: 320, className: "sidebar-width-320 [--sidebar-width:320px]" },
+  { width: 328, className: "sidebar-width-328 [--sidebar-width:328px]" },
+  { width: 336, className: "sidebar-width-336 [--sidebar-width:336px]" },
+  { width: 344, className: "sidebar-width-344 [--sidebar-width:344px]" },
+  { width: 352, className: "sidebar-width-352 [--sidebar-width:352px]" },
+] as const
+
+const skeletonWidthClasses = [
+  "max-w-[50%]",
+  "max-w-[60%]",
+  "max-w-[70%]",
+  "max-w-[80%]",
+  "max-w-[90%]",
+] as const
 
 type SidebarContextProps = {
   state: "expanded" | "collapsed"
@@ -63,12 +93,20 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max)
 }
 
+function normalizeSidebarWidth(value: number, min: number, max: number) {
+  return clamp(Math.round(value / SIDEBAR_WIDTH_STEP) * SIDEBAR_WIDTH_STEP, min, max)
+}
+
+function sidebarWidthClass(width: number) {
+  return sidebarWidthClasses.find((item) => item.width === width)?.className ?? sidebarWidthClasses[8].className
+}
+
 function SidebarProvider({
   defaultOpen = true,
   open: openProp,
   onOpenChange: setOpenProp,
   className,
-  style,
+  style: _style,
   sidebarWidth,
   sidebarWidthMin = SIDEBAR_WIDTH_MIN,
   sidebarWidthMax = SIDEBAR_WIDTH_MAX,
@@ -132,11 +170,11 @@ function SidebarProvider({
   const state = open ? "expanded" : "collapsed"
   const clampedSidebarWidth =
     typeof sidebarWidth === "number"
-      ? clamp(sidebarWidth, sidebarWidthMin, sidebarWidthMax)
+      ? normalizeSidebarWidth(sidebarWidth, sidebarWidthMin, sidebarWidthMax)
       : SIDEBAR_WIDTH_DEFAULT
   const setSidebarWidth = React.useCallback(
     (width: number) => {
-      onSidebarWidthChange?.(clamp(width, sidebarWidthMin, sidebarWidthMax))
+      onSidebarWidthChange?.(normalizeSidebarWidth(width, sidebarWidthMin, sidebarWidthMax))
     },
     [onSidebarWidthChange, sidebarWidthMin, sidebarWidthMax]
   )
@@ -174,16 +212,9 @@ function SidebarProvider({
     <SidebarContext.Provider value={contextValue}>
       <div
         data-slot="sidebar-wrapper"
-        style={
-          {
-            "--sidebar-width": SIDEBAR_WIDTH,
-            "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
-            ...style,
-            ...(typeof sidebarWidth === "number" ? { "--sidebar-width": `${clampedSidebarWidth}px` } : {}),
-          } as React.CSSProperties
-        }
         className={cn(
-          "group/sidebar-wrapper flex min-h-svh w-full has-data-[variant=inset]:bg-sidebar",
+          "group/sidebar-wrapper flex min-h-svh w-full [--sidebar-width-icon:3rem] has-data-[variant=inset]:bg-sidebar",
+          typeof sidebarWidth === "number" ? sidebarWidthClass(clampedSidebarWidth) : "[--sidebar-width:16rem]",
           className
         )}
         {...props}
@@ -226,18 +257,13 @@ function Sidebar({
 
   if (isMobile) {
     return (
-      <Sheet open={openMobile} onOpenChange={setOpenMobile} {...props}>
+      <Sheet modal={false} open={openMobile} onOpenChange={setOpenMobile} {...props}>
         <SheetContent
           dir={dir}
           data-sidebar="sidebar"
           data-slot="sidebar"
           data-mobile="true"
-          className="w-[var(--sidebar-width)] bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
-          style={
-            {
-              "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
-            } as React.CSSProperties
-          }
+          className="w-[var(--sidebar-width)] bg-sidebar p-0 text-sidebar-foreground [--sidebar-width:18rem] [&>button]:hidden"
           side={side}
         >
           <SheetHeader className="sr-only">
@@ -322,7 +348,7 @@ function SidebarTrigger({
   )
 }
 
-function SidebarRail({ className, style, ...props }: React.ComponentProps<"button">) {
+function SidebarRail({ className, style: _style, ...props }: React.ComponentProps<"button">) {
   const { state, sidebarWidth, setSidebarWidth, toggleSidebar } = useSidebar()
   const dragStateRef = React.useRef<{
     startX: number
@@ -331,8 +357,8 @@ function SidebarRail({ className, style, ...props }: React.ComponentProps<"butto
     moved: boolean
     pendingWidth: number | null
     animationFrame: number | null
-    previousCursor: string
-    previousUserSelect: string
+    hadCursorClass: boolean
+    hadUserSelectClass: boolean
     cleanup: () => void
   } | null>(null)
 
@@ -349,11 +375,10 @@ function SidebarRail({ className, style, ...props }: React.ComponentProps<"butto
       const doc = event.currentTarget.ownerDocument
       const win = event.currentTarget.ownerDocument.defaultView
       if (!win) return
-      const previousCursor = doc.body.style.cursor
-      const previousUserSelect = doc.body.style.userSelect
+      const hadCursorClass = doc.body.classList.contains("cursor-col-resize")
+      const hadUserSelectClass = doc.body.classList.contains("select-none")
 
-      doc.body.style.cursor = "col-resize"
-      doc.body.style.userSelect = "none"
+      doc.body.classList.add("cursor-col-resize", "select-none")
 
       const scheduleWidth = (width: number) => {
         const activeDrag = dragStateRef.current
@@ -407,8 +432,12 @@ function SidebarRail({ className, style, ...props }: React.ComponentProps<"butto
           setSidebarWidth(activeDrag.pendingWidth)
           activeDrag.pendingWidth = null
         }
-        doc.body.style.cursor = activeDrag?.previousCursor ?? ""
-        doc.body.style.userSelect = activeDrag?.previousUserSelect ?? ""
+        if (!activeDrag?.hadCursorClass) {
+          doc.body.classList.remove("cursor-col-resize")
+        }
+        if (!activeDrag?.hadUserSelectClass) {
+          doc.body.classList.remove("select-none")
+        }
         win.removeEventListener("pointermove", handlePointerMove)
         win.removeEventListener("pointerup", handlePointerUp)
         win.removeEventListener("pointercancel", handlePointerUp)
@@ -421,8 +450,8 @@ function SidebarRail({ className, style, ...props }: React.ComponentProps<"butto
         moved: false,
         pendingWidth: null,
         animationFrame: null,
-        previousCursor,
-        previousUserSelect,
+        hadCursorClass,
+        hadUserSelectClass,
         cleanup,
       }
       win.addEventListener("pointermove", handlePointerMove)
@@ -449,7 +478,6 @@ function SidebarRail({ className, style, ...props }: React.ComponentProps<"butto
         toggleSidebar()
       }}
       title="Toggle Sidebar"
-      style={{ ...style, cursor: "col-resize" }}
       className={cn(
         "absolute inset-y-0 z-20 hidden w-4 cursor-col-resize transition-all ease-linear group-data-[side=left]:right-0 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:w-[2px] group-data-[side=left]:after:right-0 group-data-[side=right]:after:left-0 hover:after:bg-sidebar-border sm:flex",
         "[[data-side=left][data-state=collapsed]_&]:cursor-e-resize [[data-side=right][data-state=collapsed]_&]:cursor-w-resize",
@@ -749,10 +777,7 @@ function SidebarMenuSkeleton({
 }: React.ComponentProps<"div"> & {
   showIcon?: boolean
 }) {
-  // Random width between 50 to 90%.
-  const [width] = React.useState(() => {
-    return `${Math.floor(Math.random() * 40) + 50}%`
-  })
+  const [widthClassName] = React.useState(() => skeletonWidthClasses[Math.floor(Math.random() * skeletonWidthClasses.length)])
 
   return (
     <div
@@ -768,13 +793,8 @@ function SidebarMenuSkeleton({
         />
       )}
       <Skeleton
-        className="h-4 max-w-(--skeleton-width) flex-1"
+        className={cn("h-4 flex-1", widthClassName)}
         data-sidebar="menu-skeleton-text"
-        style={
-          {
-            "--skeleton-width": width,
-          } as React.CSSProperties
-        }
       />
     </div>
   )

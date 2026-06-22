@@ -350,7 +350,8 @@ test("public UI no longer shows connect lock icon or connection settings button"
   assert.match(html, /onOpenChange=\{setSidebarOpen\}/);
   assert.match(html, /const \[sidebarOpen, setSidebarOpenState\] = useState\(readSavedSidebarOpen\);/);
   assert.match(html, /SIDEBAR_OPEN_STORAGE_KEY/);
-  assert.match(html, /"--sidebar-width-icon": "3rem"/);
+  assert.match(html, /sidebarWidth=\{sidebarWidth\}/);
+  assert.doesNotMatch(html, /"--sidebar-width-icon": "3rem"/);
   assert.match(html, /<AccountSideMenu \/>/);
   assert.doesNotMatch(app, /loginView: document\.querySelector\("#loginView"\),/);
   assert.doesNotMatch(app, /viewerShell: document\.querySelector\("#viewerShell"\),/);

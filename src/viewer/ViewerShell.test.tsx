@@ -438,7 +438,8 @@ describe("ViewerAppShell", () => {
     expect(html).not.toContain("Zero Folder (0)");
     expect(html).toContain("Child");
     expect(html).toContain('aria-current="page"');
-    expect(html).toContain("calc(0.125rem + 1 * 0.875rem)");
+    expect(html).toContain("sidebar-tree-depth-1");
+    expect(html).not.toContain("calc(0.125rem + 1 * 0.875rem)");
     expect(html).toContain('data-slot="sidebar"');
     expect(html).toContain('data-variant="inset"');
     expect(html).toContain('data-sidebar="menu-button"');
@@ -668,24 +669,26 @@ describe("ViewerAppShell", () => {
       const rail = container.querySelector('[data-slot="sidebar-rail"]');
       if (!(wrapper instanceof dom.window.HTMLElement)) throw new Error("Missing sidebar wrapper");
       if (!(rail instanceof dom.window.HTMLButtonElement)) throw new Error("Missing sidebar rail");
-      expect(wrapper.style.getPropertyValue("--sidebar-width")).toBe("224px");
-      expect(rail.style.cursor).toBe("col-resize");
+      expect(wrapper.classList.contains("sidebar-width-224")).toBe(true);
+      expect(wrapper.getAttribute("style")).toBeNull();
+      expect(rail.classList.contains("cursor-col-resize")).toBe(true);
+      expect(rail.getAttribute("style")).toBeNull();
 
       await act(async () => {
         rail.dispatchEvent(new dom.window.MouseEvent("pointerdown", { bubbles: true, button: 0, clientX: 224 }));
       });
 
-      expect(dom.window.document.body.style.cursor).toBe("col-resize");
-      expect(dom.window.document.body.style.userSelect).toBe("none");
+      expect(dom.window.document.body.classList.contains("cursor-col-resize")).toBe(true);
+      expect(dom.window.document.body.classList.contains("select-none")).toBe(true);
 
       await act(async () => {
         dom.window.dispatchEvent(new dom.window.MouseEvent("pointermove", { bubbles: true, clientX: 500 }));
         dom.window.dispatchEvent(new dom.window.MouseEvent("pointerup", { bubbles: true, clientX: 500 }));
       });
 
-      expect(wrapper.style.getPropertyValue("--sidebar-width")).toBe("352px");
-      expect(dom.window.document.body.style.cursor).toBe("");
-      expect(dom.window.document.body.style.userSelect).toBe("");
+      expect(wrapper.classList.contains("sidebar-width-352")).toBe(true);
+      expect(dom.window.document.body.classList.contains("cursor-col-resize")).toBe(false);
+      expect(dom.window.document.body.classList.contains("select-none")).toBe(false);
       expect(dom.window.localStorage.length).toBe(0);
 
       await act(async () => {
@@ -703,7 +706,8 @@ describe("ViewerAppShell", () => {
 
       const resetWrapper = container.querySelector('[data-slot="sidebar-wrapper"]');
       if (!(resetWrapper instanceof dom.window.HTMLElement)) throw new Error("Missing reset sidebar wrapper");
-      expect(resetWrapper.style.getPropertyValue("--sidebar-width")).toBe("224px");
+      expect(resetWrapper.classList.contains("sidebar-width-224")).toBe(true);
+      expect(resetWrapper.getAttribute("style")).toBeNull();
     } finally {
       if (root) {
         await act(async () => {
