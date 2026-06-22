@@ -20,6 +20,13 @@ Optional:
 - HTTPS: use TLS when certificate paths are set.
 - Multiple users with Viewer, Editor, and Admin roles.
 
+## Future Plans
+
+- Migrate more Eagle features into the preview server
+- Expand support for additional file extensions
+- Improve UI/UX
+- Add AI-related capabilities
+
 ## Settings
 
 ### General
