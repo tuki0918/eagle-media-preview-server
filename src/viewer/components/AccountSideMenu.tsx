@@ -24,6 +24,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -112,6 +113,7 @@ export function AccountSideMenu() {
             ) : null}
           </SidebarFooter>
         ) : null}
+        <SidebarRail />
       </Sidebar>
     </>
   );

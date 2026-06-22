@@ -16,9 +16,14 @@ interface ViewerShellLayoutProps {
   hidden?: boolean;
 }
 
+const SIDEBAR_INITIAL_WIDTH = 14 * 16;
+const SIDEBAR_MIN_WIDTH = 12 * 16;
+const SIDEBAR_MAX_WIDTH = 22 * 16;
+
 export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
   const searchState = useSyncExternalStore(subscribeSearchControlsState, getSearchControlsState, getSearchControlsState);
   const [sidebarOpen, setSidebarOpenState] = useState(readSavedSidebarOpen);
+  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_INITIAL_WIDTH);
   const folderName = selectedFolderName(
     searchState.selectedFolderId,
     searchState.folders,
@@ -35,8 +40,11 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
       <SidebarProvider
         open={sidebarOpen}
         onOpenChange={setSidebarOpen}
+        sidebarWidth={sidebarWidth}
+        sidebarWidthMin={SIDEBAR_MIN_WIDTH}
+        sidebarWidthMax={SIDEBAR_MAX_WIDTH}
+        onSidebarWidthChange={setSidebarWidth}
         style={{
-          "--sidebar-width": "14rem",
           "--sidebar-width-icon": "3rem",
         } as CSSProperties}
       >

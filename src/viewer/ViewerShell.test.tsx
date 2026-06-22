@@ -564,6 +564,91 @@ describe("ViewerAppShell", () => {
     }
   });
 
+  test("resizes the viewer sidebar for the current page session only", async () => {
+    const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
+    const testGlobal = globalThis as typeof globalThis & {
+      IS_REACT_ACT_ENVIRONMENT?: boolean;
+    };
+    const previousWindow = globalThis.window;
+    const previousDocument = globalThis.document;
+    const previousNode = globalThis.Node;
+    const previousHTMLElement = globalThis.HTMLElement;
+    const previousIS_REACT_ACT_ENVIRONMENT = testGlobal.IS_REACT_ACT_ENVIRONMENT;
+    globalThis.window = dom.window;
+    globalThis.document = dom.window.document;
+    globalThis.Node = dom.window.Node;
+    globalThis.HTMLElement = dom.window.HTMLElement;
+    testGlobal.IS_REACT_ACT_ENVIRONMENT = true;
+
+    const { createRoot } = await import("react-dom/client");
+    let root: import("react-dom/client").Root | null = null;
+    try {
+      const container = dom.window.document.querySelector("#root");
+      if (!(container instanceof dom.window.HTMLElement)) throw new Error("Missing test root");
+      root = createRoot(container);
+
+      await act(async () => {
+        root?.render(
+          <TooltipProvider>
+            <ViewerShellLayout hidden={false} />
+          </TooltipProvider>,
+        );
+      });
+
+      const wrapper = container.querySelector('[data-slot="sidebar-wrapper"]');
+      const rail = container.querySelector('[data-slot="sidebar-rail"]');
+      if (!(wrapper instanceof dom.window.HTMLElement)) throw new Error("Missing sidebar wrapper");
+      if (!(rail instanceof dom.window.HTMLButtonElement)) throw new Error("Missing sidebar rail");
+      expect(wrapper.style.getPropertyValue("--sidebar-width")).toBe("224px");
+      expect(rail.style.cursor).toBe("col-resize");
+
+      await act(async () => {
+        rail.dispatchEvent(new dom.window.MouseEvent("pointerdown", { bubbles: true, button: 0, clientX: 224 }));
+      });
+
+      expect(dom.window.document.body.style.cursor).toBe("col-resize");
+      expect(dom.window.document.body.style.userSelect).toBe("none");
+
+      await act(async () => {
+        dom.window.dispatchEvent(new dom.window.MouseEvent("pointermove", { bubbles: true, clientX: 500 }));
+        dom.window.dispatchEvent(new dom.window.MouseEvent("pointerup", { bubbles: true, clientX: 500 }));
+      });
+
+      expect(wrapper.style.getPropertyValue("--sidebar-width")).toBe("352px");
+      expect(dom.window.document.body.style.cursor).toBe("");
+      expect(dom.window.document.body.style.userSelect).toBe("");
+      expect(dom.window.localStorage.length).toBe(0);
+
+      await act(async () => {
+        root?.unmount();
+      });
+      root = createRoot(container);
+
+      await act(async () => {
+        root?.render(
+          <TooltipProvider>
+            <ViewerShellLayout hidden={false} />
+          </TooltipProvider>,
+        );
+      });
+
+      const resetWrapper = container.querySelector('[data-slot="sidebar-wrapper"]');
+      if (!(resetWrapper instanceof dom.window.HTMLElement)) throw new Error("Missing reset sidebar wrapper");
+      expect(resetWrapper.style.getPropertyValue("--sidebar-width")).toBe("224px");
+    } finally {
+      if (root) {
+        await act(async () => {
+          root?.unmount();
+        });
+      }
+      globalThis.window = previousWindow;
+      globalThis.document = previousDocument;
+      globalThis.Node = previousNode;
+      globalThis.HTMLElement = previousHTMLElement;
+      testGlobal.IS_REACT_ACT_ENVIRONMENT = previousIS_REACT_ACT_ENVIRONMENT;
+    }
+  });
+
   test("renders advanced filters as a reusable component", () => {
     const html = renderToStaticMarkup(
       <AdvancedFilters
