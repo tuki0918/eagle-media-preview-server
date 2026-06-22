@@ -54,8 +54,7 @@ describe("viewer metadata helpers", () => {
 
   test("builds folder suggestions in folder order with selected folders disabled", () => {
     const folders = [
-      { id: "root", name: "Root", depth: 0, imageCount: 10 },
-      { id: "child", name: "Child", depth: 1, imageCount: 3 },
+      { id: "root", name: "Root", depth: 0, imageCount: 10, children: [{ id: "child", name: "Child", depth: 1, imageCount: 3 }] },
     ];
 
     expect(folderLabel("child", folders)).toBe("Root / Child");

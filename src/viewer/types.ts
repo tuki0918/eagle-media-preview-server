@@ -2,6 +2,7 @@ export interface EagleFolder {
   id: string;
   name: string;
   imageCount?: number;
+  isExpand?: boolean;
   children?: EagleFolder[];
   depth?: number;
 }

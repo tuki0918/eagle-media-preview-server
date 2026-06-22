@@ -336,11 +336,18 @@ describe("ViewerAppShell", () => {
   });
 
   test("renders folder options as a reusable component", () => {
-    const html = renderToStaticMarkup(<FolderOptions folders={[{ id: "folder-1", name: "Folder 1", imageCount: 8, depth: 1 }]} />);
+    const html = renderToStaticMarkup(<FolderOptions folders={[{
+      id: "folder-1",
+      name: "Folder 1",
+      imageCount: 8,
+      depth: 0,
+      children: [{ id: "folder-child", name: "Folder Child", imageCount: 3, depth: 1 }],
+    }]} />);
 
     expect(html).toContain("All folders");
     expect(html).toContain("Uncategorized");
-    expect(html).toContain("  Folder 1 (8)");
+    expect(html).toContain("Folder 1 (8)");
+    expect(html).toContain("  Folder Child (3)");
   });
 
   test("renders library footer as a reusable component", () => {
@@ -431,7 +438,7 @@ describe("ViewerAppShell", () => {
     expect(html).not.toContain("Zero Folder (0)");
     expect(html).toContain("Child");
     expect(html).toContain('aria-current="page"');
-    expect(html).toContain("calc(0.5rem + 1 * 0.875rem)");
+    expect(html).toContain("calc(0.125rem + 1 * 0.875rem)");
     expect(html).toContain('data-slot="sidebar"');
     expect(html).toContain('data-variant="inset"');
     expect(html).toContain('data-sidebar="menu-button"');
@@ -468,6 +475,67 @@ describe("ViewerAppShell", () => {
       selectedSmartFolderId: "",
       smartFolders: [],
     });
+  });
+
+  test("renders sidebar folder trees with isExpand state and neutral branch lines", () => {
+    setSearchControlsState({
+      allFoldersTotal: 0,
+      filtersOpen: false,
+      folders: [
+        {
+          id: "open-folder",
+          name: "Open Folder",
+          imageCount: 3,
+          isExpand: true,
+          children: [
+            { id: "open-child", name: "Open Child", imageCount: 2, depth: 1 },
+            { id: "last-child", name: "Last Child", imageCount: 1, depth: 1 },
+          ],
+        },
+        {
+          id: "closed-folder",
+          name: "Closed Folder",
+          imageCount: 1,
+          isExpand: false,
+          children: [{ id: "closed-child", name: "Closed Child", imageCount: 1, depth: 1 }],
+        },
+      ],
+      hasActiveFilters: false,
+      hasResettableFilters: false,
+      searchQuery: "",
+      selectedExt: "",
+      selectedFolderId: "open-child",
+      selectedLimit: 30,
+      selectedRating: "",
+      selectedSmartFolderId: "",
+      smartFolders: [
+        {
+          id: "open-smart",
+          name: "Open Smart",
+          imageCount: 3,
+          isExpand: true,
+          children: [{ id: "open-smart-child", name: "Open Smart Child", imageCount: 2, depth: 1 }],
+        },
+      ],
+    });
+
+    const html = renderAccountSideMenu();
+
+    expect(html).toContain("Open Folder");
+    expect(html).toContain("Open Child");
+    expect(html).toContain("Last Child");
+    expect(html).toContain("Closed Folder");
+    expect(html).not.toContain("Closed Child");
+    expect(html).toContain("Open Smart Child");
+    expect(html).toContain('aria-label="Collapse Open Folder"');
+    expect(html).toContain('aria-label="Expand Closed Folder"');
+    expect(html).toContain('aria-expanded="true"');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain("sidebar-tree-branch");
+    expect(html).toContain("sidebar-tree-branch-mid");
+    expect(html).toContain("sidebar-tree-branch-last");
+    expect(html).toContain("bg-sidebar-border");
+    expect(html).not.toContain("bg-sidebar-primary");
   });
 
   test("applies and stores selected viewer theme", () => {

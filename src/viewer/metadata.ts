@@ -56,7 +56,8 @@ export function folderSuggestionItems({
   folders: readonly EagleFolder[];
 }) {
   const selected = new Set(selectedValues);
-  const folderById = new Map(folders.map((folder) => [folder.id, folder]));
+  const folderItems = folderTreeItems(folders);
+  const folderById = new Map(folderItems.map((folder) => [folder.id, folder]));
   const suggestionForFolder = (id: string) => {
     const folder = folderById.get(id);
     const disabled = selected.has(id);
@@ -69,7 +70,7 @@ export function folderSuggestionItems({
       disabled,
     };
   };
-  return folders
+  return folderItems
     .filter((folder) => matchesQuery(folderLabel(folder.id, folders), query))
     .map((folder) => suggestionForFolder(folder.id));
 }
@@ -92,19 +93,29 @@ export function matchesQuery(value: unknown, query: string) {
 }
 
 export function folderLabel(id: string, folders: readonly EagleFolder[]) {
-  const index = folders.findIndex((entry) => entry.id === id);
-  const folder = folders[index];
+  const flattenedFolders = folderTreeItems(folders);
+  const index = flattenedFolders.findIndex((entry) => entry.id === id);
+  const folder = flattenedFolders[index];
   if (!folder) return id;
   const path = [folder.name];
   let targetDepth = Number(folder.depth || 0);
   for (let cursor = index - 1; cursor >= 0 && targetDepth > 0; cursor -= 1) {
-    const parent = folders[cursor];
+    const parent = flattenedFolders[cursor];
     const parentDepth = Number(parent?.depth || 0);
     if (parentDepth >= targetDepth) continue;
     path.unshift(parent.name);
     targetDepth = parentDepth;
   }
   return path.join(" / ");
+}
+
+function folderTreeItems(folders: readonly EagleFolder[]): EagleFolder[] {
+  const items: EagleFolder[] = [];
+  for (const folder of folders) {
+    items.push(folder);
+    if (folder.children?.length) items.push(...folderTreeItems(folder.children));
+  }
+  return items;
 }
 
 export function readRecentList(key: string, storage: Storage = localStorage) {

@@ -43,8 +43,13 @@ describe("viewer format helpers", () => {
   test("normalizes tags and folder references", () => {
     expect(itemTags({ tags: [" alpha ", "", null, "beta"] })).toEqual(["alpha", "beta"]);
     expect(folderIds([{ id: "folder-a" }, "folder-b", { name: "missing-id" }, null])).toEqual(["folder-a", "folder-b"]);
-    expect(folderDisplayNames(["folder-a", "folder-c"], [{ id: "folder-a", name: "Folder A" }])).toEqual([
+    expect(folderDisplayNames(["folder-a", "folder-child", "folder-c"], [{
+      id: "folder-a",
+      name: "Folder A",
+      children: [{ id: "folder-child", name: "Folder Child" }],
+    }])).toEqual([
       "Folder A",
+      "Folder Child",
       "folder-c",
     ]);
   });
@@ -57,7 +62,7 @@ describe("viewer format helpers", () => {
     expect(normalizeRating("bad")).toBe(0);
   });
 
-  test("flattens folder trees with depth metadata", () => {
+  test("annotates folder trees with depth metadata while preserving children", () => {
     expect(flattenFolders([
       {
         id: "root",
@@ -65,8 +70,7 @@ describe("viewer format helpers", () => {
         children: [{ id: "child", name: "Child" }],
       },
     ])).toEqual([
-      { id: "root", name: "Root", children: [{ id: "child", name: "Child" }], depth: 0 },
-      { id: "child", name: "Child", depth: 1 },
+      { id: "root", name: "Root", children: [{ id: "child", name: "Child", depth: 1 }], depth: 0 },
     ]);
   });
 

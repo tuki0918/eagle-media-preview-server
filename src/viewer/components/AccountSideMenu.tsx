@@ -1,5 +1,7 @@
 import {
   BookOpenTextIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
   ChevronsUpDownIcon,
   FolderCogIcon,
   FolderIcon,
@@ -11,7 +13,7 @@ import {
   SunIcon,
   UserRoundIcon,
 } from "lucide-react";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { Fragment, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Sidebar,
@@ -139,6 +141,7 @@ function FolderSideNav({
   selectedSmartFolderId: string;
 }) {
   const { isMobile, setOpenMobile } = useSidebar();
+  const { expandedIds, toggleFolder } = useFolderExpansion(folders);
 
   const selectFolder = (folderId: string) => {
     changeFolder({ currentTarget: { value: folderId } });
@@ -167,17 +170,14 @@ function FolderSideNav({
             label="Uncategorized"
             onSelect={() => selectFolder(UNCATEGORIZED_FOLDER_ID)}
           />
-          {folders.map((folder) => (
-            <FolderNavItem
-              key={folder.id}
-              active={selectedFolderId === folder.id}
-              count={folder.imageCount}
-              depth={folder.depth || 0}
-              icon={selectedFolderId === folder.id ? "open" : "folder"}
-              label={folder.name}
-              onSelect={() => selectFolder(folder.id)}
-            />
-          ))}
+          <FolderTreeNavItems
+            expandedIds={expandedIds}
+            folders={folders}
+            iconForFolder={(folder) => selectedFolderId === folder.id ? "open" : "folder"}
+            isActive={(folder) => selectedFolderId === folder.id}
+            onSelect={selectFolder}
+            onToggle={toggleFolder}
+          />
         </SidebarMenu>
       </SidebarGroupContent>
     </SidebarGroup>
@@ -192,6 +192,7 @@ function SmartFolderSideNav({
   smartFolders: readonly EagleSmartFolder[];
 }) {
   const { isMobile, setOpenMobile } = useSidebar();
+  const { expandedIds, toggleFolder } = useFolderExpansion(smartFolders);
 
   if (!smartFolders.length) return null;
 
@@ -207,17 +208,14 @@ function SmartFolderSideNav({
       </SidebarGroupLabel>
       <SidebarGroupContent>
         <SidebarMenu className="gap-0.5" aria-label="Smart folder tree">
-          {smartFolders.map((folder) => (
-            <FolderNavItem
-              key={folder.id}
-              active={selectedSmartFolderId === folder.id}
-              count={folder.imageCount}
-              depth={folder.depth || 0}
-              icon={isSmartFolderGroup(folder) ? "smartGroup" : "smart"}
-              label={folder.name}
-              onSelect={() => selectSmartFolder(folder.id)}
-            />
-          ))}
+          <FolderTreeNavItems
+            expandedIds={expandedIds}
+            folders={smartFolders}
+            iconForFolder={(folder) => isSmartFolderGroup(folder as EagleSmartFolder) ? "smartGroup" : "smart"}
+            isActive={(folder) => selectedSmartFolderId === folder.id}
+            onSelect={selectSmartFolder}
+            onToggle={toggleFolder}
+          />
         </SidebarMenu>
       </SidebarGroupContent>
     </SidebarGroup>
@@ -226,6 +224,106 @@ function SmartFolderSideNav({
 
 function isSmartFolderGroup(folder: EagleSmartFolder) {
   return folder.icon === "grid";
+}
+
+type FolderNavIconName = "folder" | "inbox" | "open" | "smart" | "smartGroup";
+
+function FolderTreeNavItems({
+  expandedIds,
+  folders,
+  iconForFolder,
+  isActive,
+  onSelect,
+  onToggle,
+}: {
+  expandedIds: Readonly<Record<string, boolean>>;
+  folders: readonly EagleFolder[];
+  iconForFolder: (folder: EagleFolder) => FolderNavIconName;
+  isActive: (folder: EagleFolder) => boolean;
+  onSelect: (folderId: string) => void;
+  onToggle: (folderId: string) => void;
+}) {
+  return (
+    <>
+      {folders.map((folder, index) => {
+        const children = Array.isArray(folder.children) ? folder.children : [];
+        const isExpanded = Boolean(expandedIds[folder.id]);
+        const isLastChild = index === folders.length - 1;
+        return (
+          <Fragment key={folder.id}>
+            <FolderNavItem
+              active={isActive(folder)}
+              count={folder.imageCount}
+              depth={folder.depth || 0}
+              expanded={children.length ? isExpanded : undefined}
+              icon={iconForFolder(folder)}
+              isLastChild={isLastChild}
+              label={folder.name}
+              onSelect={() => onSelect(folder.id)}
+              onToggle={children.length ? () => onToggle(folder.id) : undefined}
+            />
+            {children.length && isExpanded ? (
+              <FolderTreeNavItems
+                expandedIds={expandedIds}
+                folders={children}
+                iconForFolder={iconForFolder}
+                isActive={isActive}
+                onSelect={onSelect}
+                onToggle={onToggle}
+              />
+            ) : null}
+          </Fragment>
+        );
+      })}
+    </>
+  );
+}
+
+function useFolderExpansion(folders: readonly EagleFolder[]) {
+  const signature = folderExpansionSignature(folders);
+  const signatureRef = useRef("");
+  const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>(() => initialFolderExpansion(folders));
+
+  useEffect(() => {
+    if (signatureRef.current === signature) return;
+    signatureRef.current = signature;
+    setExpandedIds(initialFolderExpansion(folders));
+  }, [folders, signature]);
+
+  return {
+    expandedIds,
+    toggleFolder(folderId: string) {
+      setExpandedIds((current) => ({ ...current, [folderId]: !current[folderId] }));
+    },
+  };
+}
+
+function initialFolderExpansion(folders: readonly EagleFolder[]) {
+  const expanded: Record<string, boolean> = {};
+  collectInitialFolderExpansion(folders, expanded);
+  return expanded;
+}
+
+function collectInitialFolderExpansion(folders: readonly EagleFolder[], expanded: Record<string, boolean>) {
+  for (const folder of folders) {
+    const children = Array.isArray(folder.children) ? folder.children : [];
+    if (children.length && folder.isExpand === true) expanded[folder.id] = true;
+    if (children.length) collectInitialFolderExpansion(children, expanded);
+  }
+}
+
+function folderExpansionSignature(folders: readonly EagleFolder[]) {
+  const parts: string[] = [];
+  collectFolderExpansionSignature(folders, parts);
+  return parts.join("|");
+}
+
+function collectFolderExpansionSignature(folders: readonly EagleFolder[], parts: string[]) {
+  for (const folder of folders) {
+    const children = Array.isArray(folder.children) ? folder.children : [];
+    parts.push(`${folder.id}:${folder.isExpand === true ? "1" : "0"}:${children.length}`);
+    if (children.length) collectFolderExpansionSignature(children, parts);
+  }
 }
 
 function ThemeSideNav() {
@@ -273,41 +371,78 @@ function FolderNavItem({
   active,
   count,
   depth,
+  expanded,
   icon,
+  isLastChild,
   label,
   onSelect,
+  onToggle,
 }: {
   active: boolean;
   count?: number;
   depth: number;
-  icon: "folder" | "inbox" | "open" | "smart" | "smartGroup";
+  expanded?: boolean;
+  icon: FolderNavIconName;
+  isLastChild?: boolean;
   label: string;
   onSelect: () => void;
+  onToggle?: () => void;
 }) {
   const Icon = folderNavIcon(icon);
   const safeDepth = Math.max(0, Math.min(depth, 8));
   const displayCount = displayFolderCount(count);
+  const canToggle = onToggle && expanded !== undefined;
+  const ToggleIcon = expanded ? ChevronDownIcon : ChevronRightIcon;
 
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton
-        className="h-8 gap-2 text-[13px] font-normal data-active:bg-transparent data-active:font-[650] data-active:text-sidebar-foreground group-data-[collapsible=icon]:!pl-2"
-        isActive={active}
-        style={{ paddingLeft: `calc(0.5rem + ${safeDepth} * 0.875rem)` }}
-        tooltip={label}
-        type="button"
-        aria-current={active ? "page" : undefined}
-        title={label}
-        onClick={onSelect}
+      <div
+        className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center group-data-[collapsible=icon]:block"
+        style={{ paddingLeft: `calc(0.125rem + ${safeDepth} * 0.875rem)` }}
       >
-        <Icon className={active ? "text-sidebar-primary" : "text-muted-foreground"} aria-hidden="true" />
-        <span className="min-w-0 truncate">{label}</span>
-        {displayCount === undefined ? null : (
-          <span className="ml-auto shrink-0 text-[11px] font-normal text-muted-foreground [font-variant-numeric:tabular-nums] group-data-[collapsible=icon]:hidden">
-            {displayCount.toLocaleString()}
-          </span>
-        )}
-      </SidebarMenuButton>
+        <div className="relative flex h-8 w-6 shrink-0 items-center justify-center group-data-[collapsible=icon]:hidden">
+          {safeDepth > 0 ? (
+            <>
+              <span
+                className={[
+                  "sidebar-tree-branch absolute left-1/2 top-0 w-px -translate-x-1/2 bg-sidebar-border",
+                  isLastChild ? "sidebar-tree-branch-last h-1/2" : "sidebar-tree-branch-mid bottom-0",
+                ].join(" ")}
+                aria-hidden="true"
+              />
+              <span className="sidebar-tree-branch absolute left-1/2 top-1/2 h-px w-3 bg-sidebar-border" aria-hidden="true" />
+            </>
+          ) : null}
+          {canToggle ? (
+            <button
+              className="relative z-10 flex size-5 items-center justify-center rounded-sm bg-sidebar text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+              type="button"
+              aria-label={`${expanded ? "Collapse" : "Expand"} ${label}`}
+              aria-expanded={expanded}
+              onClick={onToggle}
+            >
+              <ToggleIcon className="size-3.5" aria-hidden="true" />
+            </button>
+          ) : null}
+        </div>
+        <SidebarMenuButton
+          className="h-8 min-w-0 gap-2 px-1 text-[13px] font-normal data-active:bg-transparent data-active:font-[650] data-active:text-sidebar-foreground group-data-[collapsible=icon]:!pl-2"
+          isActive={active}
+          tooltip={label}
+          type="button"
+          aria-current={active ? "page" : undefined}
+          title={label}
+          onClick={onSelect}
+        >
+          <Icon className={active ? "text-sidebar-primary" : "text-muted-foreground"} aria-hidden="true" />
+          <span className="min-w-0 truncate">{label}</span>
+          {displayCount === undefined ? null : (
+            <span className="ml-auto shrink-0 text-[11px] font-normal text-muted-foreground [font-variant-numeric:tabular-nums] group-data-[collapsible=icon]:hidden">
+              {displayCount.toLocaleString()}
+            </span>
+          )}
+        </SidebarMenuButton>
+      </div>
     </SidebarMenuItem>
   );
 }
@@ -319,7 +454,7 @@ function displayFolderCount(count: number | undefined) {
   return normalized;
 }
 
-function folderNavIcon(icon: "folder" | "inbox" | "open" | "smart" | "smartGroup") {
+function folderNavIcon(icon: FolderNavIconName) {
   if (icon === "inbox") return InboxIcon;
   if (icon === "open") return FolderOpenIcon;
   if (icon === "smart") return FolderCogIcon;

@@ -77,8 +77,17 @@ export function folderIds(value: unknown) {
 }
 
 export function folderDisplayNames(value: unknown, folders: EagleFolder[]) {
-  const byId = new Map(folders.map((folder) => [folder.id, folder.name]));
+  const byId = new Map(folderTreeItems(folders).map((folder) => [folder.id, folder.name]));
   return folderIds(value).map((id) => byId.get(id) || id);
+}
+
+function folderTreeItems(folders: readonly EagleFolder[]): EagleFolder[] {
+  const items: EagleFolder[] = [];
+  for (const folder of folders) {
+    items.push(folder);
+    if (folder.children?.length) items.push(...folderTreeItems(folder.children));
+  }
+  return items;
 }
 
 export function formatBytes(value: unknown) {
@@ -125,10 +134,9 @@ export function isTimedMedia(item: EagleItem) {
 }
 
 export function flattenFolders(folders: EagleFolder[] = [], depth = 0): EagleFolder[] {
-  const output: EagleFolder[] = [];
-  for (const folder of folders || []) {
-    output.push({ ...folder, depth });
-    output.push(...flattenFolders(folder.children, depth + 1));
-  }
-  return output;
+  return (folders || []).map((folder) => ({
+    ...folder,
+    children: folder.children?.length ? flattenFolders(folder.children, depth + 1) : folder.children,
+    depth,
+  }));
 }

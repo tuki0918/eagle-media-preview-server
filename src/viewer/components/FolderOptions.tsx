@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { UNCATEGORIZED_FOLDER_ID } from "../constants";
 import type { EagleFolder } from "../types";
 
@@ -10,10 +11,21 @@ export function FolderOptions({ folders }: FolderOptionsProps) {
     <>
       <option value="">All folders</option>
       <option value={UNCATEGORIZED_FOLDER_ID}>Uncategorized</option>
+      <FolderOptionItems folders={folders} />
+    </>
+  );
+}
+
+function FolderOptionItems({ folders }: { folders: readonly EagleFolder[] }) {
+  return (
+    <>
       {folders.map((folder) => (
-        <option key={folder.id} value={folder.id}>
-          {folderLabel(folder)}
-        </option>
+        <Fragment key={folder.id}>
+          <option value={folder.id}>
+            {folderLabel(folder)}
+          </option>
+          {folder.children?.length ? <FolderOptionItems folders={folder.children} /> : null}
+        </Fragment>
       ))}
     </>
   );
