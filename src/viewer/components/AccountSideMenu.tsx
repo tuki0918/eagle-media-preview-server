@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UNCATEGORIZED_FOLDER_ID } from "../constants";
+import { displayFolderCount } from "../format";
 import { getLibraryFooterName, subscribeLibraryFooterName } from "../libraryFooterState";
 import { getLoginConnectState, subscribeLoginConnectState } from "../loginConnectState";
 import { getSearchControlsState, subscribeSearchControlsState } from "../searchControlsState";
@@ -463,13 +464,6 @@ function FolderNavItem({
       </div>
     </SidebarMenuItem>
   );
-}
-
-function displayFolderCount(count: number | undefined) {
-  if (count === undefined) return undefined;
-  const normalized = Number(count);
-  if (!Number.isFinite(normalized) || normalized <= 0) return undefined;
-  return normalized;
 }
 
 function folderNavIcon(icon: FolderNavIconName) {

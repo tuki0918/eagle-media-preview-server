@@ -1,5 +1,5 @@
 import { RECENT_METADATA_LIMIT } from "./constants";
-import { normalizeTag } from "./format";
+import { displayFolderCount, normalizeTag } from "./format";
 import type { EagleFolder } from "./types";
 
 export interface MetadataSuggestion {
@@ -61,11 +61,11 @@ export function folderSuggestionItems({
   const suggestionForFolder = (id: string) => {
     const folder = folderById.get(id);
     const disabled = selected.has(id);
-    const imageCount = folder?.imageCount;
+    const imageCount = displayFolderCount(folder?.imageCount);
     return {
       value: id,
       label: folder?.name || id,
-      meta: disabled ? "Added" : Number.isFinite(imageCount) ? `${Number(imageCount).toLocaleString()} items` : "",
+      meta: disabled ? "Added" : imageCount === undefined ? "" : `${imageCount.toLocaleString()} items`,
       depth: Number(folder?.depth || 0),
       disabled,
     };

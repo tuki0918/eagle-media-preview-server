@@ -821,6 +821,7 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(app, /postJson<\{[\s\S]*folders\?: unknown;[\s\S]*\}>\(`\/api\/items\/\$\{encodeURIComponent\(String\(item\.id \|\| ""\)\)\}\/metadata`, \{ tags, folders \}\)/);
   assert.match(app, /rememberRecentValues\(RECENT_TAGS_STORAGE_KEY, patch\.tags\);/);
   assert.match(app, /rememberRecentValues\(RECENT_FOLDERS_STORAGE_KEY, patch\.folders\);/);
+  assert.match(app, /await loadFolders\(\);[\s\S]*if \(isPreviewDialogOpen\(\)\) renderPreviewDetails\(item\);/);
   assert.match(app, /if \(isPreviewDialogOpen\(\)\) renderPreviewDetails\(item\);/);
   assert.match(app, /return patch;/);
   assert.doesNotMatch(html, /setStatus\("Saved"\);/);

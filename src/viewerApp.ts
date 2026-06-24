@@ -13,7 +13,10 @@ import {
 import { ApiError, debounce, errorMessage, getJson, postJson } from "./viewer/api";
 import {
   displayFileName,
+  applyFolderCountChanges,
   flattenFolders,
+  folderCountBaselines,
+  folderIds,
   isTimedMedia,
   itemMeta,
   normalizeRating,
@@ -22,7 +25,7 @@ import {
   previewFileName,
 } from "./viewer/format";
 import { hasActiveFilters, hasResettableFilters, resetFilterState } from "./viewer/filters";
-import { itemQueryParams } from "./viewer/itemQuery";
+import { itemMatchesFolderFilter, itemQueryParams } from "./viewer/itemQuery";
 import { setLoginConnectState } from "./viewer/loginConnectState";
 import {
   folderSuggestionItems as buildFolderSuggestionItems,
@@ -983,6 +986,8 @@ async function savePreviewMetadata(item: EagleItem, { tags, folders }: { tags: s
   if (!state.permissions.writeMetadata) {
     throw new Error("Metadata editing is not allowed for this viewer");
   }
+  const previousFolderIds = folderIds(item.folders);
+  const folderBaselines = folderCountBaselines(state.folders);
   try {
     const data = await postJson<{
       tags?: unknown;
@@ -996,13 +1001,36 @@ async function savePreviewMetadata(item: EagleItem, { tags, folders }: { tags: s
     rememberRecentValues(RECENT_FOLDERS_STORAGE_KEY, patch.folders);
     Object.assign(item, patch);
     updateItemInState(String(item.id || ""), patch);
+    removeItemIfOutsideCurrentFolderFilter(item);
+    applyMetadataFolderCountChanges(previousFolderIds, patch.folders);
     render();
+    await loadFolders();
+    applyMetadataFolderCountChanges(previousFolderIds, patch.folders, folderBaselines);
     if (isPreviewDialogOpen()) renderPreviewDetails(item);
     return patch;
   } catch (error) {
     handleAuthError(error);
     throw error instanceof Error ? error : new Error(errorMessage(error));
   }
+}
+
+function removeItemIfOutsideCurrentFolderFilter(item: EagleItem) {
+  if (itemMatchesFolderFilter(item, state)) return;
+  const itemId = String(item.id || "");
+  const previousLength = state.items.length;
+  state.items = state.items.filter((entry) => String(entry.id || "") !== itemId);
+  if (state.items.length !== previousLength) {
+    state.total = Math.max(0, state.total - (previousLength - state.items.length));
+  }
+}
+
+function applyMetadataFolderCountChanges(
+  previousFolderIds: readonly string[],
+  nextFolderIds: readonly string[],
+  baselines?: ReadonlyMap<string, number>,
+) {
+  state.folders = applyFolderCountChanges(state.folders, previousFolderIds, nextFolderIds, baselines);
+  renderSearchControlButtons();
 }
 
 function tagSuggestionItems(query: string, selectedValues: string[]): Promise<MetadataSuggestion[]> | MetadataSuggestion[] {

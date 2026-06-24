@@ -323,7 +323,8 @@ function PreviewMetadataEditor({
     const query = rawValue.trim();
     if (!query) return;
     const lowerQuery = query.toLowerCase();
-    const exactFolder = folders.find((folder) => folder.id === query || folder.name.toLowerCase() === lowerQuery);
+    const folderItems = folderTreeItems(folders);
+    const exactFolder = folderItems.find((folder) => folder.id === query || folder.name.toLowerCase() === lowerQuery);
     const suggestions = exactFolder ? [] : await onFolderSuggestions(query, categories);
     const suggestionFolder = suggestions.find((suggestion) => String(suggestion.value).toLowerCase() === lowerQuery || suggestion.label.toLowerCase() === lowerQuery) || suggestions[0];
     const folderId = exactFolder?.id || String(suggestionFolder?.value || "");
@@ -639,9 +640,29 @@ function ExternalLinkIcon() {
 }
 
 function folderLabel(id: string, folders: readonly EagleFolder[]) {
-  const folder = folders.find((entry) => entry.id === id);
+  const flattenedFolders = folderTreeItems(folders);
+  const index = flattenedFolders.findIndex((entry) => entry.id === id);
+  const folder = flattenedFolders[index];
   if (!folder) return id;
-  return folder.name;
+  const path = [folder.name];
+  let targetDepth = Number(folder.depth || 0);
+  for (let cursor = index - 1; cursor >= 0 && targetDepth > 0; cursor -= 1) {
+    const parent = flattenedFolders[cursor];
+    const parentDepth = Number(parent?.depth || 0);
+    if (parentDepth >= targetDepth) continue;
+    path.unshift(parent.name);
+    targetDepth = parentDepth;
+  }
+  return path.join(" / ");
+}
+
+function folderTreeItems(folders: readonly EagleFolder[]): EagleFolder[] {
+  const items: EagleFolder[] = [];
+  for (const folder of folders) {
+    items.push(folder);
+    if (folder.children?.length) items.push(...folderTreeItems(folder.children));
+  }
+  return items;
 }
 
 function tagValues(value: unknown) {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { itemQueryParams, type ItemQueryState } from "./itemQuery";
+import { itemMatchesFolderFilter, itemQueryParams, type ItemQueryState } from "./itemQuery";
 
 const queryState = (overrides: Partial<ItemQueryState> = {}): ItemQueryState => ({
   offset: 0,
@@ -41,5 +41,14 @@ describe("itemQueryParams", () => {
 
     expect(params.get("smartFolderId")).toBe("smart-1");
     expect(params.has("folderId")).toBe(false);
+  });
+
+  test("checks whether edited item folders still match the active folder filter", () => {
+    expect(itemMatchesFolderFilter({ folders: ["folder-1"] }, { folderId: "folder-1", smartFolderId: "" })).toBe(true);
+    expect(itemMatchesFolderFilter({ folders: ["folder-2"] }, { folderId: "folder-1", smartFolderId: "" })).toBe(false);
+    expect(itemMatchesFolderFilter({ folders: [] }, { folderId: "__uncategorized__", smartFolderId: "" })).toBe(true);
+    expect(itemMatchesFolderFilter({ folders: ["folder-1"] }, { folderId: "__uncategorized__", smartFolderId: "" })).toBe(false);
+    expect(itemMatchesFolderFilter({ folders: [] }, { folderId: "folder-1", smartFolderId: "smart-1" })).toBe(true);
+    expect(itemMatchesFolderFilter({ folders: ["folder-2"] }, { folderId: "", smartFolderId: "" })).toBe(true);
   });
 });

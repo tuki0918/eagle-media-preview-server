@@ -1401,6 +1401,83 @@ describe("ViewerAppShell", () => {
     }
   });
 
+  test("adds nested zero-count folders from clicked suggestions", async () => {
+    const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
+    const testGlobal = globalThis as typeof globalThis & {
+      IS_REACT_ACT_ENVIRONMENT?: boolean;
+    };
+    const previousWindow = globalThis.window;
+    const previousDocument = globalThis.document;
+    const previousNode = globalThis.Node;
+    const previousHTMLElement = globalThis.HTMLElement;
+    const previousIS_REACT_ACT_ENVIRONMENT = testGlobal.IS_REACT_ACT_ENVIRONMENT;
+    globalThis.window = dom.window;
+    globalThis.document = dom.window.document;
+    globalThis.Node = dom.window.Node;
+    globalThis.HTMLElement = dom.window.HTMLElement;
+    testGlobal.IS_REACT_ACT_ENVIRONMENT = true;
+
+    const { createRoot } = await import("react-dom/client");
+    let root: import("react-dom/client").Root | null = null;
+    const savedPatches: Array<{ tags: string[]; folders: string[] }> = [];
+    try {
+      const container = dom.window.document.querySelector("#root");
+      if (!(container instanceof dom.window.HTMLElement)) throw new Error("Missing test root");
+      root = createRoot(container);
+
+      await act(async () => {
+        root?.render(
+          <PreviewDetailsPanel
+            canEditMetadata
+            item={{ id: "item-1", tags: ["alpha"], folders: [] }}
+            folders={[{
+              id: "parent",
+              name: "Parent",
+              children: [{ id: "child-zero", name: "Child Zero", imageCount: 0, depth: 1 }],
+            }]}
+            detailRows={[{ label: "Type", value: "Image" }]}
+            onTagSuggestions={() => []}
+            onFolderSuggestions={(query) => query === "child-zero" ? [] : [{ value: "child-zero", label: "Child Zero", meta: "", depth: 1 }]}
+            onSaveMetadata={async (_item, patch) => {
+              savedPatches.push(patch);
+              return patch;
+            }}
+          />,
+        );
+      });
+
+      const addFolderButton = Array.from(container.querySelectorAll(".preview-metadata-add")).find((button) => button.getAttribute("aria-label") === "Add Folders");
+      if (!(addFolderButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing folder add button");
+
+      await act(async () => {
+        addFolderButton.click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      const childSuggestion = Array.from(container.querySelectorAll("[role=\"option\"]")).find((option) => option.textContent?.includes("Child Zero"));
+      if (!(childSuggestion instanceof dom.window.HTMLButtonElement)) throw new Error("Missing child folder suggestion");
+
+      await act(async () => {
+        childSuggestion.dispatchEvent(new dom.window.Event("pointerdown", { bubbles: true, cancelable: true }));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      expect(savedPatches).toEqual([{ tags: ["alpha"], folders: ["child-zero"] }]);
+      expect(container.textContent).toContain("Parent / Child Zero");
+    } finally {
+      if (root) {
+        await act(async () => {
+          root?.unmount();
+        });
+      }
+      globalThis.window = previousWindow;
+      globalThis.document = previousDocument;
+      globalThis.Node = previousNode;
+      globalThis.HTMLElement = previousHTMLElement;
+      testGlobal.IS_REACT_ACT_ENVIRONMENT = previousIS_REACT_ACT_ENVIRONMENT;
+    }
+  });
+
   test("removes folders immediately from metadata chips", async () => {
     const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
     const testGlobal = globalThis as typeof globalThis & {

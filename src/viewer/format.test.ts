@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest";
 import {
+  applyFolderCountChanges,
   clamp,
+  displayFolderCount,
   displayFileName,
   flattenFolders,
   folderDisplayNames,
@@ -71,6 +73,36 @@ describe("viewer format helpers", () => {
       },
     ])).toEqual([
       { id: "root", name: "Root", children: [{ id: "child", name: "Child", depth: 1 }], depth: 0 },
+    ]);
+    expect(displayFolderCount(0)).toBeUndefined();
+    expect(displayFolderCount("12")).toBe(12);
+  });
+
+  test("applies metadata folder count deltas without double-applying fresh folder data", () => {
+    const folders = [
+      { id: "old", name: "Old", imageCount: 3 },
+      { id: "new", name: "New", imageCount: 0 },
+      { id: "parent", name: "Parent", imageCount: 5, children: [{ id: "child", name: "Child", imageCount: 1 }] },
+    ];
+    const baseline = new Map([
+      ["old", 3],
+      ["new", 0],
+      ["child", 1],
+    ]);
+
+    expect(applyFolderCountChanges(folders, ["old"], ["new", "child"])).toEqual([
+      { id: "old", name: "Old", imageCount: 2 },
+      { id: "new", name: "New", imageCount: 1 },
+      { id: "parent", name: "Parent", imageCount: 5, children: [{ id: "child", name: "Child", imageCount: 2 }] },
+    ]);
+    expect(applyFolderCountChanges([
+      { id: "old", name: "Old", imageCount: 2 },
+      { id: "new", name: "New", imageCount: 1 },
+      { id: "parent", name: "Parent", imageCount: 5, children: [{ id: "child", name: "Child", imageCount: 2 }] },
+    ], ["old"], ["new", "child"], baseline)).toEqual([
+      { id: "old", name: "Old", imageCount: 2 },
+      { id: "new", name: "New", imageCount: 1 },
+      { id: "parent", name: "Parent", imageCount: 5, children: [{ id: "child", name: "Child", imageCount: 2 }] },
     ]);
   });
 

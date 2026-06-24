@@ -140,3 +140,69 @@ export function flattenFolders(folders: EagleFolder[] = [], depth = 0): EagleFol
     depth,
   }));
 }
+
+export function displayFolderCount(count: unknown) {
+  if (count === undefined || count === null) return undefined;
+  const normalized = Number(count);
+  if (!Number.isFinite(normalized) || normalized <= 0) return undefined;
+  return normalized;
+}
+
+export function folderCountBaselines(folders: readonly EagleFolder[]) {
+  const baselines = new Map<string, number>();
+  collectFolderCountBaselines(folders, baselines);
+  return baselines;
+}
+
+export function applyFolderCountChanges(
+  folders: readonly EagleFolder[],
+  previousFolderIds: readonly string[],
+  nextFolderIds: readonly string[],
+  baselines?: ReadonlyMap<string, number>,
+): EagleFolder[] {
+  const deltas = folderCountDeltas(previousFolderIds, nextFolderIds);
+  if (!deltas.size) return [...folders];
+  return folders.map((folder) => applyFolderCountChange(folder, deltas, baselines));
+}
+
+function collectFolderCountBaselines(folders: readonly EagleFolder[], baselines: Map<string, number>) {
+  for (const folder of folders) {
+    const count = Number(folder.imageCount);
+    if (Number.isFinite(count)) baselines.set(folder.id, count);
+    if (folder.children?.length) collectFolderCountBaselines(folder.children, baselines);
+  }
+}
+
+function folderCountDeltas(previousFolderIds: readonly string[], nextFolderIds: readonly string[]) {
+  const previous = new Set(previousFolderIds);
+  const next = new Set(nextFolderIds);
+  const deltas = new Map<string, number>();
+  for (const id of next) {
+    if (!previous.has(id)) deltas.set(id, 1);
+  }
+  for (const id of previous) {
+    if (!next.has(id)) deltas.set(id, -1);
+  }
+  return deltas;
+}
+
+function applyFolderCountChange(
+  folder: EagleFolder,
+  deltas: ReadonlyMap<string, number>,
+  baselines?: ReadonlyMap<string, number>,
+): EagleFolder {
+  const children = folder.children?.length
+    ? folder.children.map((child) => applyFolderCountChange(child, deltas, baselines))
+    : folder.children;
+  const delta = deltas.get(folder.id) || 0;
+  if (!delta) return children === folder.children ? folder : { ...folder, children };
+  const currentCount = Number(folder.imageCount);
+  if (!Number.isFinite(currentCount)) return children === folder.children ? folder : { ...folder, children };
+  const baseline = baselines?.get(folder.id);
+  if (baselines && baseline !== currentCount) return children === folder.children ? folder : { ...folder, children };
+  return {
+    ...folder,
+    children,
+    imageCount: Math.max(0, currentCount + delta),
+  };
+}

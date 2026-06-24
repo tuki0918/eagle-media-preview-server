@@ -78,6 +78,23 @@ describe("viewer metadata helpers", () => {
     ]);
   });
 
+  test("formats folder suggestion counts like the sidebar", () => {
+    const folders = [
+      { id: "zero", name: "Zero", depth: 0, imageCount: 0 },
+      { id: "string-count", name: "String Count", depth: 0, imageCount: "12" },
+    ] as unknown as Parameters<typeof folderSuggestionItems>[0]["folders"];
+
+    expect(folderSuggestionItems({
+      query: "",
+      selectedValues: [],
+      recentFolderIds: [],
+      folders,
+    })).toEqual([
+      { value: "zero", label: "Zero", meta: "", depth: 0, disabled: false },
+      { value: "string-count", label: "String Count", meta: "12 items", depth: 0, disabled: false },
+    ]);
+  });
+
   test("deduplicates, filters, and matches suggestion values", () => {
     expect(dedupeSuggestions([
       { value: "a", label: "A", meta: "" },
