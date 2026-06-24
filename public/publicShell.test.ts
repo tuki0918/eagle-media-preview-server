@@ -621,7 +621,7 @@ test("public preview renders text-like files and PDFs inline", async () => {
   assert.doesNotMatch(app, /function renderPdfPreview\(item\) \{/);
   assert.doesNotMatch(app, /viewer\.src = directFileUrl\(item\);/);
   assert.match(app, /function previewFileName\(item[^)]*\) \{/);
-  assert.match(app, /PreviewDialogMode = "" \| "audio" \| "image" \| "pdf" \| "text" \| "unsupported" \| "video"/);
+  assert.match(app, /PreviewDialogMode = "" \| "audio" \| "image" \| "pdf" \| "text" \| "unsupported" \| "url" \| "video"/);
   assert.match(html, /previewDialogState\.mode \? `\$\{previewDialogState\.mode\}-mode` : ""/);
   assert.match(html, /if \(kind === "text"\) return `\$\{base\} overflow-auto bg-muted p-\[18px\]`;/);
   assert.match(html, /if \(kind === "pdf"\) return `\$\{base\} bg-background`;/);
@@ -634,6 +634,25 @@ test("public preview renders text-like files and PDFs inline", async () => {
   assert.match(staticSource, /"\.txt": "text\/plain; charset=utf-8"/);
   assert.match(staticSource, /"\.md": "text\/plain; charset=utf-8"/);
   assert.match(staticSource, /"\.pdf": "application\/pdf"/);
+});
+
+test("public preview renders InternetShortcut url files as thumbnail links", async () => {
+  const html = await readAppSources();
+  const app = await readViewerSources();
+  const staticSource = await readFile(new URL("../dist/.generated/plugin-service/static.cjs", import.meta.url), "utf8");
+
+  assert.match(app, /const urlPreviewExts = new Set\(\["url"\]\);/);
+  assert.match(app, /urlPreviewExts\.has\(ext\)/);
+  assert.match(app, /if \(urlPreviewExts\.has\(ext\)\) return \{ kind: "url" \};/);
+  assert.match(app, /PreviewDialogMode = "" \| "audio" \| "image" \| "pdf" \| "text" \| "unsupported" \| "url" \| "video"/);
+  assert.match(html, /function UrlPreview\(\{ item \}/);
+  assert.match(html, /className=\{urlThumbPreviewImageClassName\}/);
+  assert.match(html, /src=\{mediaUrl\(String\(item\.id \|\| ""\), "thumb"\)\}/);
+  assert.match(html, /href=\{externalUrl\}/);
+  assert.match(html, /このページを開く/);
+  assert.doesNotMatch(html, /function ExternalUrlPreview\(\{ url \}/);
+  assert.doesNotMatch(html, /frameUrl/);
+  assert.doesNotMatch(staticSource, /frame-src http: https:/);
 });
 
 test("public grid hover icons remain while tiles hover shows file names", async () => {

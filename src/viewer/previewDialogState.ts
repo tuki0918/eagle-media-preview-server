@@ -1,4 +1,4 @@
-export type PreviewDialogMode = "" | "audio" | "image" | "pdf" | "text" | "unsupported" | "video";
+export type PreviewDialogMode = "" | "audio" | "image" | "pdf" | "text" | "unsupported" | "url" | "video";
 
 interface PreviewDialogState {
   infoOpen: boolean;

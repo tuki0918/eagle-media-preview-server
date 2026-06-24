@@ -46,6 +46,7 @@ import { setLoginConnectState } from "./loginConnectState";
 import { setLibraryFooterName } from "./libraryFooterState";
 import { setSearchControlsState } from "./searchControlsState";
 import { getThemeState, initializeThemeState, setThemePreference } from "./themeState";
+import { safeExternalUrl } from "./components/PreviewBody";
 
 function renderAccountSideMenu() {
   return renderToStaticMarkup(
@@ -94,6 +95,12 @@ const REQUIRED_ELEMENT_IDS = [
 ] as const;
 
 describe("ViewerAppShell", () => {
+  test("normalizes url preview links to safe external URLs only", () => {
+    expect(safeExternalUrl("https://example.test/page")).toBe("https://example.test/page");
+    expect(safeExternalUrl("https://subdomain.example.test/path?query=1")).toBe("https://subdomain.example.test/path?query=1");
+    expect(safeExternalUrl("javascript:alert(1)")).toBe("");
+  });
+
   test("renders the DOM contract used by viewerApp", () => {
     const html = renderToStaticMarkup(<ViewerAppShell />);
 
@@ -1501,6 +1508,7 @@ describe("ViewerAppShell", () => {
     const image = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", name: "Sample.jpg" }} kind="image" />);
     const text = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", name: "Sample.txt" }} kind="text" />);
     const pdf = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", name: "Sample.pdf", ext: "pdf" }} kind="pdf" />);
+    const url = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", name: "Sample.url", ext: "url", url: "https://example.test/page" }} kind="url" />);
     const unsupported = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", ext: "avi" }} kind="unsupported" />);
 
     expect(video).toContain("video-player");
@@ -1521,6 +1529,11 @@ describe("ViewerAppShell", () => {
     expect(pdf).toContain("pdf-preview");
     expect(pdf).toContain('src="/file/item-1"');
     expect(pdf).toContain('title="Sample.pdf"');
+    expect(url).toContain("url-thumb-preview");
+    expect(url).toContain('src="/api/items/item-1/thumb"');
+    expect(url).toContain('href="https://example.test/page"');
+    expect(url).toContain("このページを開く");
+    expect(url).not.toContain("<iframe");
     expect(unsupported).toContain("unsupported-thumb");
   });
 

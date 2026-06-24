@@ -1,5 +1,5 @@
 const { createReadStream } = require("fs");
-const { stat } = require("fs").promises;
+const { readFile, stat } = require("fs").promises;
 const { extname } = require("path");
 const { pathFromFileValue, resolveLibraryItemFile } = require("./eagleClient.cjs");
 const { mediaContentType, securityHeaders } = require("./static.cjs");
@@ -7,6 +7,7 @@ const { mediaContentType, securityHeaders } = require("./static.cjs");
 import type { IncomingMessage, ServerResponse } from "http";
 
 type MediaKind = "file" | "thumb";
+const MAX_INTERNET_SHORTCUT_BYTES = 128 * 1024;
 
 interface EagleItem {
   data?: EagleItem[];
@@ -41,40 +42,7 @@ async function streamItemMedia(id: string, kind: MediaKind, req: IncomingMessage
     return;
   }
 
-  const item = await session.client.itemById(id);
-  const itemData = Array.isArray(item?.data) ? item.data[0] : item;
-  let filePath = "";
-
-  if (kind === "thumb") {
-    filePath =
-      pathFromFileValue(itemData?.thumbnailURL) ||
-      pathFromFileValue(itemData?.thumbnailPath);
-    if (!filePath) {
-      try {
-        filePath = pathFromFileValue(await session.client.legacyThumbnailPath(id));
-      } catch {
-        filePath = "";
-      }
-    }
-    if (!filePath) {
-      filePath = await resolveLibraryItemFile({
-        libraryPath: await getLibraryPath(session),
-        item: itemData,
-        kind: "thumb",
-      });
-    }
-  } else {
-    filePath =
-      pathFromFileValue(itemData?.fileURL) ||
-      pathFromFileValue(itemData?.filePath);
-    if (!filePath) {
-      filePath = await resolveLibraryItemFile({
-        libraryPath: await getLibraryPath(session),
-        item: itemData,
-        kind: "file",
-      });
-    }
-  }
+  const { filePath, itemData } = await resolveItemMediaPath(id, kind, session);
 
   if (!filePath) {
     sendJson(res, 404, { error: "Media path is unavailable from Eagle" });
@@ -139,6 +107,70 @@ async function streamItemMedia(id: string, kind: MediaKind, req: IncomingMessage
     return;
   }
   pipeMediaStream(filePath, undefined, res, 200, headers);
+}
+
+async function readInternetShortcutUrl(id: string, session: EagleMediaSession) {
+  const { filePath } = await resolveItemMediaPath(id, "file", session);
+  if (!filePath) return "";
+  const info = await safeStat(filePath);
+  if (!info || !info.isFile() || info.size > MAX_INTERNET_SHORTCUT_BYTES) return "";
+  return parseInternetShortcutUrl(await readFile(filePath, "utf8"));
+}
+
+function parseInternetShortcutUrl(text: string) {
+  let inInternetShortcutSection = false;
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith(";") || line.startsWith("#")) continue;
+    const section = line.match(/^\[([^\]]+)\]$/);
+    if (section) {
+      inInternetShortcutSection = section[1].trim().toLowerCase() === "internetshortcut";
+      continue;
+    }
+    if (!inInternetShortcutSection) continue;
+    const match = line.match(/^URL\s*=\s*(.+)$/i);
+    if (match) return match[1].trim();
+  }
+  return "";
+}
+
+async function resolveItemMediaPath(id: string, kind: MediaKind, session: EagleMediaSession) {
+  const item = await session.client.itemById(id);
+  const itemData = Array.isArray(item?.data) ? item.data[0] : item;
+  let filePath = "";
+
+  if (kind === "thumb") {
+    filePath =
+      pathFromFileValue(itemData?.thumbnailURL) ||
+      pathFromFileValue(itemData?.thumbnailPath);
+    if (!filePath) {
+      try {
+        filePath = pathFromFileValue(await session.client.legacyThumbnailPath(id));
+      } catch {
+        filePath = "";
+      }
+    }
+    if (!filePath) {
+      filePath = await resolveLibraryItemFile({
+        libraryPath: await getLibraryPath(session),
+        item: itemData,
+        kind: "thumb",
+      });
+    }
+  } else {
+    filePath =
+      pathFromFileValue(itemData?.fileURL) ||
+      pathFromFileValue(itemData?.filePath);
+    if (!filePath) {
+      filePath = await resolveLibraryItemFile({
+        libraryPath: await getLibraryPath(session),
+        item: itemData,
+        kind: "file",
+      });
+    }
+  }
+
+  return { filePath, itemData };
 }
 
 function pipeMediaStream(
@@ -244,4 +276,4 @@ async function getLibraryPath(session: EagleMediaSession) {
   return library?.path || "";
 }
 
-module.exports = { streamItemMedia };
+module.exports = { readInternetShortcutUrl, streamItemMedia };

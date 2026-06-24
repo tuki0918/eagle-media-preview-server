@@ -3,6 +3,7 @@ import {
   playableAudioExts,
   playableVideoExts,
   textPreviewExts,
+  urlPreviewExts,
 } from "./constants";
 import type { EagleItem } from "./types";
 
@@ -13,7 +14,7 @@ export function thumbnailMediaType(item: EagleItem): ThumbnailMediaType {
   const ext = String(item.ext || "").toLowerCase();
   if (playableVideoExts.has(ext)) return "video";
   if (playableAudioExts.has(ext)) return "audio";
-  if (textPreviewExts.has(ext) || pdfPreviewExts.has(ext)) return "document";
+  if (textPreviewExts.has(ext) || pdfPreviewExts.has(ext) || urlPreviewExts.has(ext)) return "document";
   return "image";
 }
 

@@ -4,7 +4,7 @@ const { createServer: createHttpsServer } = require("https");
 const { randomBytes } = require("crypto");
 const { createEagleClient, normalizeStringArray } = require("./eagleClient.cjs");
 const { buildConnectionCandidates, createConnectionContext } = require("./connection.cjs");
-const { streamItemMedia } = require("./media.cjs");
+const { readInternetShortcutUrl, streamItemMedia } = require("./media.cjs");
 const { resolveDefaultPublicDir, securityHeaders, serveStatic } = require("./static.cjs");
 const {
   AUTH_SESSION_MAX_AGE_SECONDS,
@@ -520,6 +520,21 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       id: item.id || itemId,
       isDeleted: typeof item.isDeleted === "boolean" ? item.isDeleted : body.isDeleted,
     });
+    return;
+  }
+
+  const urlPreviewMatch = url.pathname.match(/^\/api\/items\/([^/]+)\/url-preview$/);
+  if (urlPreviewMatch) {
+    if (req.method !== "GET") {
+      sendMethodNotAllowed(res, ["GET"]);
+      return;
+    }
+    const shortcutUrl = await readInternetShortcutUrl(decodeURIComponent(urlPreviewMatch[1]), session);
+    if (!shortcutUrl) {
+      sendJson(res, 404, { error: "URL preview is unavailable" });
+      return;
+    }
+    sendJson(res, 200, { url: shortcutUrl });
     return;
   }
 

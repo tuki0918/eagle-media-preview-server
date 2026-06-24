@@ -8,6 +8,7 @@ import {
   playableAudioExts,
   playableVideoExts,
   textPreviewExts,
+  urlPreviewExts,
 } from "./viewer/constants";
 import { ApiError, debounce, errorMessage, getJson, postJson } from "./viewer/api";
 import {
@@ -588,6 +589,7 @@ function previewBodyForItem(item: EagleItem): { kind: PreviewBodyKind; srcKind?:
   if (playableAudioExts.has(ext)) return { kind: "audio" };
   if (textPreviewExts.has(ext)) return { kind: "text" };
   if (pdfPreviewExts.has(ext)) return { kind: "pdf" };
+  if (urlPreviewExts.has(ext)) return { kind: "url" };
   if (isTimedMedia(item)) return { kind: "unsupported" };
   return { kind: "image" };
 }

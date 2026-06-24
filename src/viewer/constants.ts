@@ -25,6 +25,7 @@ export const textPreviewExts = new Set([
   "ts", "tsx", "jsx", "mjs", "cjs", "yml", "yaml",
 ]);
 export const pdfPreviewExts = new Set(["pdf"]);
+export const urlPreviewExts = new Set(["url"]);
 export const videoExts = new Set([...playableVideoExts, "avi", "mkv"]);
 export const audioExts = new Set([...playableAudioExts, "flac", "wma"]);
 export const IMAGE_FIT_MARGIN = 0.96;

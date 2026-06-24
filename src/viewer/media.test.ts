@@ -6,6 +6,7 @@ describe("thumbnail media helpers", () => {
     expect(thumbnailMediaType({ ext: "mp4" })).toBe("video");
     expect(thumbnailMediaType({ ext: "MP3" })).toBe("audio");
     expect(thumbnailMediaType({ ext: "pdf" })).toBe("document");
+    expect(thumbnailMediaType({ ext: "url" })).toBe("document");
     expect(thumbnailMediaType({ ext: "md" })).toBe("document");
     expect(thumbnailMediaType({ ext: "png" })).toBe("image");
   });
