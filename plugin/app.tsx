@@ -4,6 +4,7 @@ import qrcodeFactory from "qrcode-generator";
 import { CloseIcon } from "./components/Icons";
 import { ServerStatusPanel } from "./components/ServerStatusPanel";
 import { SettingsForm } from "./components/SettingsForm";
+import { serverRestartSettingsChanged, settingsPayloadChanged } from "./settingsChange";
 import type { AuthUser, PluginSettings, PluginStatus, ServerState, SettingsTab, UserRole } from "./types";
 
 interface ServerManager {
@@ -464,44 +465,6 @@ function willRestartServer(status: PluginStatus, nextSettings: Record<string, un
   const current = status.settings;
   if (!current || status.state !== "running") return false;
   return serverRestartSettingsChanged(current, nextSettings);
-}
-
-function settingsPayloadChanged(current: PluginSettings | undefined, nextSettings: Record<string, unknown>) {
-  if (!current) return true;
-  if (Boolean(nextSettings.autoStart ?? current.autoStart) !== Boolean(current.autoStart)) return true;
-  return serverSettingsChanged(current, nextSettings);
-}
-
-function serverSettingsChanged(current: PluginSettings, nextSettings: Record<string, unknown>) {
-  if ((nextSettings.host ?? current.host) !== current.host) return true;
-  if (Boolean(nextSettings.httpsEnabled ?? current.httpsEnabled) !== Boolean(current.httpsEnabled)) return true;
-  if ((nextSettings.httpsCertPath ?? current.httpsCertPath ?? "") !== (current.httpsCertPath ?? "")) return true;
-  if ((nextSettings.httpsKeyPath ?? current.httpsKeyPath ?? "") !== (current.httpsKeyPath ?? "")) return true;
-  if (Number(nextSettings.port ?? current.port) !== Number(current.port)) return true;
-  if (Number(nextSettings.sessionDurationDays ?? current.sessionDurationDays ?? 7) !== Number(current.sessionDurationDays ?? 7)) return true;
-  if (Boolean(nextSettings.authEnabled ?? current.authEnabled) !== Boolean(current.authEnabled)) return true;
-  if (JSON.stringify(nextSettings.authUsers ?? current.authUsers ?? []) !== JSON.stringify(current.authUsers ?? [])) return true;
-  return false;
-}
-
-function serverRestartSettingsChanged(current: PluginSettings, nextSettings: Record<string, unknown>) {
-  const currentAuthEnabled = Boolean(current.authEnabled);
-  const nextAuthEnabled = Boolean(nextSettings.authEnabled ?? current.authEnabled);
-  if ((nextSettings.host ?? current.host) !== current.host) return true;
-  if (Boolean(nextSettings.httpsEnabled ?? current.httpsEnabled) !== Boolean(current.httpsEnabled)) return true;
-  if ((nextSettings.httpsCertPath ?? current.httpsCertPath ?? "") !== (current.httpsCertPath ?? "")) return true;
-  if ((nextSettings.httpsKeyPath ?? current.httpsKeyPath ?? "") !== (current.httpsKeyPath ?? "")) return true;
-  if (Number(nextSettings.port ?? current.port) !== Number(current.port)) return true;
-  if (Number(nextSettings.sessionDurationDays ?? current.sessionDurationDays ?? 7) !== Number(current.sessionDurationDays ?? 7)) return true;
-  if (nextAuthEnabled !== currentAuthEnabled) return true;
-  if (!currentAuthEnabled && !nextAuthEnabled) return false;
-  if (hasPasswordUpdates(nextSettings.userPasswords)) return true;
-  if (JSON.stringify(nextSettings.authUsers ?? current.authUsers ?? []) !== JSON.stringify(current.authUsers ?? [])) return true;
-  return false;
-}
-
-function hasPasswordUpdates(value: unknown) {
-  return Boolean(value && typeof value === "object" && Object.keys(value).length);
 }
 
 function normalizedAuthUsers(settings: PluginSettings): AuthUser[] {

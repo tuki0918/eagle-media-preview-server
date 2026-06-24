@@ -85,6 +85,16 @@ test("plugin app delegates management panels to focused components", async () =>
   assert.match(settingsForm, /function SettingsForm/);
 });
 
+test("plugin restart detection is shared between the window and runtime", async () => {
+  const app = await readPluginAppSource();
+  const runtimeSource = await readFile(new URL("./service/runtime.cts", import.meta.url), "utf8");
+
+  assert.match(app, /from "\.\/settingsChange"/);
+  assert.match(runtimeSource, /require\("\.\/settingsChange\.cjs"\)/);
+  assert.doesNotMatch(app, /function serverRestartSettingsChanged\(/);
+  assert.doesNotMatch(runtimeSource, /function needsServerRestart\(/);
+});
+
 test("plugin window uses per-user roles for metadata permissions", async () => {
   const app = await readPluginAppSource();
   const uiSource = await readPluginUiSource();
@@ -164,13 +174,14 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(app, /function authUsersMissingPassword\(users: AuthUser\[\], values: Record<string, string>\)/);
   assert.doesNotMatch(app, /Object\.fromEntries\(effectiveAuthUsers\s*\n\s*\.map/);
   assert.doesNotMatch(app, /authUsers\.some\(\(user, index\) => !user\.passwordHash && !userPasswords/);
-  assert.match(app, /function settingsPayloadChanged\(current: PluginSettings \| undefined, nextSettings: Record<string, unknown>\)/);
-  assert.match(app, /function serverSettingsChanged\(current: PluginSettings, nextSettings: Record<string, unknown>\)/);
-  assert.match(app, /function serverRestartSettingsChanged\(current: PluginSettings, nextSettings: Record<string, unknown>\)/);
+  assert.match(app, /import \{ serverRestartSettingsChanged, settingsPayloadChanged \} from "\.\/settingsChange";/);
+  assert.doesNotMatch(app, /function settingsPayloadChanged\(current:/);
+  assert.doesNotMatch(app, /function serverSettingsChanged\(current:/);
+  assert.doesNotMatch(app, /function serverRestartSettingsChanged\(current:/);
   assert.match(app, /return serverRestartSettingsChanged\(current, nextSettings\);/);
-  assert.match(app, /return serverSettingsChanged\(current, nextSettings\);/);
-  assert.match(app, /if \(hasPasswordUpdates\(nextSettings\.userPasswords\)\) return true;/);
-  assert.match(app, /function hasPasswordUpdates\(value: unknown\)/);
+  assert.doesNotMatch(app, /return serverSettingsChanged\(current, nextSettings\);/);
+  assert.doesNotMatch(app, /if \(hasPasswordUpdates\(nextSettings\.userPasswords\)\) return true;/);
+  assert.doesNotMatch(app, /function hasPasswordUpdates\(value: unknown\)/);
   assert.match(app, /role: settings\.authEnabled && settings\.allowMetadataEditing \? "editor" : "viewer"/);
   assert.doesNotMatch(app, /allowMetadataEditing: nextAllowMetadataEditing/);
   assert.doesNotMatch(app, /nextSettings\.password/);

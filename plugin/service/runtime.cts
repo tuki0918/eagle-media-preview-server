@@ -3,6 +3,7 @@ const { createPrivateKey, createPublicKey, pbkdf2Sync, randomBytes, X509Certific
 const { dirname, join } = require("path");
 const { homedir, networkInterfaces } = require("os");
 const { createViewerServer } = require("./viewerServer.cjs");
+const { serverRestartSettingsChanged } = require("./settingsChange.cjs");
 
 type ServerStatus = "error" | "running" | "stopped";
 type UserRole = "admin" | "editor" | "viewer";
@@ -483,18 +484,6 @@ function createServerManager({
     });
   }
 
-  function needsServerRestart(prev: PluginSettings, next: PluginSettings) {
-    if (prev.host !== next.host) return true;
-    if (prev.httpsEnabled !== next.httpsEnabled) return true;
-    if (prev.httpsCertPath !== next.httpsCertPath) return true;
-    if (prev.httpsKeyPath !== next.httpsKeyPath) return true;
-    if (prev.port !== next.port) return true;
-    if (prev.sessionDurationDays !== next.sessionDurationDays) return true;
-    if (prev.authEnabled !== next.authEnabled) return true;
-    if (!prev.authEnabled && !next.authEnabled) return false;
-    return JSON.stringify(prev.authUsers) !== JSON.stringify(next.authUsers);
-  }
-
   return {
     async init() {
       const settings = await settingsStore.load();
@@ -534,7 +523,7 @@ function createServerManager({
       const wasRunning = viewer?.status().state === "running";
       const current = await settingsStore.load();
       const settings = await settingsStore.save(input);
-      if (wasRunning && needsServerRestart(current, settings)) {
+      if (wasRunning && serverRestartSettingsChanged(current, settings)) {
         await this.stop();
         return this.start();
       }
