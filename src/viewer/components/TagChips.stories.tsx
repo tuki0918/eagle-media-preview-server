@@ -16,3 +16,15 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
+
+export const ManyTags: Story = {
+  args: {
+    tags: ["landing", "reference", "bright", "campaign", "homepage", "retina", "approved"],
+  },
+};
+
+export const Empty: Story = {
+  args: {
+    tags: [],
+  },
+};

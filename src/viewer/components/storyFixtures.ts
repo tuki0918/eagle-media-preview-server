@@ -1,10 +1,16 @@
-import type { EagleFolder, EagleItem } from "../types";
+import type { EagleFolder, EagleItem, EagleSmartFolder } from "../types";
 
 export const sampleFolders: EagleFolder[] = [
   { id: "design", name: "Design References", imageCount: 124 },
   { id: "campaigns", name: "Campaigns", imageCount: 58 },
   { id: "campaigns-social", name: "Social", imageCount: 31, depth: 1 },
   { id: "screenshots", name: "Screenshots", imageCount: 17 },
+];
+
+export const sampleSmartFolders: EagleSmartFolder[] = [
+  { id: "recent", name: "Recently Added", imageCount: 48, conditions: [] },
+  { id: "favorites", name: "Favorites", imageCount: 16, conditions: [] },
+  { id: "needs-review", name: "Needs Review", imageCount: 7, conditions: [] },
 ];
 
 export const sampleItems: EagleItem[] = [

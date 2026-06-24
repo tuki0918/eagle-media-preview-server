@@ -21,3 +21,20 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
+
+export const Nested: Story = {
+  args: {
+    folders: [
+      { id: "brand", name: "Brand", imageCount: 128 },
+      { id: "brand-guides", name: "Guides", imageCount: 22, depth: 1 },
+      { id: "brand-social", name: "Social Campaigns", imageCount: 58, depth: 1 },
+      { id: "brand-social-q3", name: "Q3 Launch", imageCount: 14, depth: 2 },
+    ],
+  },
+};
+
+export const Empty: Story = {
+  args: {
+    folders: [],
+  },
+};
