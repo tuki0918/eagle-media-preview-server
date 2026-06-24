@@ -12,6 +12,21 @@ async function readPluginAppSource() {
   return readFile(new URL("./app.tsx", import.meta.url), "utf8");
 }
 
+async function readPluginComponentSource(name: string) {
+  return readFile(new URL(`./components/${name}.tsx`, import.meta.url), "utf8");
+}
+
+async function readPluginUiSource() {
+  const [app, serverStatusPanel, settingsForm, icons, types] = await Promise.all([
+    readPluginAppSource(),
+    readPluginComponentSource("ServerStatusPanel"),
+    readPluginComponentSource("SettingsForm"),
+    readPluginComponentSource("Icons"),
+    readFile(new URL("./types.ts", import.meta.url), "utf8"),
+  ]);
+  return [app, serverStatusPanel, settingsForm, icons, types].join("\n");
+}
+
 async function waitFor(predicate: () => boolean, { timeoutMs = 1000 } = {}) {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
@@ -40,72 +55,85 @@ test("manifest declares an Eagle background service management window", async ()
 test("plugin window renders the management UI from React", async () => {
   const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
   const app = await readPluginAppSource();
+  const uiSource = await readPluginUiSource();
 
   assert.match(html, /id="root"/);
   assert.match(html, /<script src="\.\/app\.js"><\/script>/);
   assert.match(app, /function App\(\)/);
   assert.match(app, /createRoot\(root\)\.render/);
-  assert.match(app, /Media Preview Server/);
-  assert.match(app, /Start or stop server/);
-  assert.match(app, /Endpoint URL/);
-  assert.match(app, /Quick Access \(QR\)/);
-  assert.match(app, /<span className="m-0 text-base font-\[420\] leading-none text-\[#111\]">Settings<\/span>/);
+  assert.match(uiSource, /Media Preview Server/);
+  assert.match(uiSource, /Start or stop server/);
+  assert.match(uiSource, /Endpoint URL/);
+  assert.match(uiSource, /Quick Access \(QR\)/);
+  assert.match(uiSource, /<span className="m-0 text-base font-\[420\] leading-none text-\[#111\]">Settings<\/span>/);
   assert.match(app, /src=\{serverState === "running" \? "\.\/assets\/icon_on\.svg" : "\.\/assets\/icon_off\.svg"\}/);
-  assert.doesNotMatch(app, /<select\s+hidden/);
-  assert.doesNotMatch(app, /<button type="submit" hidden/);
+  assert.doesNotMatch(uiSource, /<select\s+hidden/);
+  assert.doesNotMatch(uiSource, /<button type="submit" hidden/);
   assert.doesNotMatch(html, /id="requestLogBody"/);
   assert.doesNotMatch(html, /id="requestLogEnabledInput"/);
   assert.doesNotMatch(html, /id="grid"/);
 });
 
+test("plugin app delegates management panels to focused components", async () => {
+  const app = await readPluginAppSource();
+  const serverStatusPanel = await readPluginComponentSource("ServerStatusPanel");
+  const settingsForm = await readPluginComponentSource("SettingsForm");
+
+  assert.match(app, /<ServerStatusPanel/);
+  assert.match(app, /<SettingsForm/);
+  assert.match(serverStatusPanel, /function ServerStatusPanel/);
+  assert.match(settingsForm, /function SettingsForm/);
+});
+
 test("plugin window uses per-user roles for metadata permissions", async () => {
   const app = await readPluginAppSource();
+  const uiSource = await readPluginUiSource();
 
-  assert.match(app, /<option value="viewer">Viewer<\/option>/);
-  assert.match(app, /<option value="editor">Editor<\/option>/);
-  assert.match(app, /<option value="admin">Admin<\/option>/);
-  assert.match(app, /type SettingsTab = "access" \| "general" \| "security";/);
+  assert.match(uiSource, /<option value="viewer">Viewer<\/option>/);
+  assert.match(uiSource, /<option value="editor">Editor<\/option>/);
+  assert.match(uiSource, /<option value="admin">Admin<\/option>/);
+  assert.match(uiSource, /type SettingsTab = "access" \| "general" \| "security";/);
   assert.match(app, /const \[settingsTab, setSettingsTab\] = useState<SettingsTab>\("general"\);/);
-  assert.match(app, /role="tablist" aria-label="Settings sections"/);
-  assert.match(app, /<SettingsTabButton active=\{settingsTab === "general"\} controls="generalSettingsPanel" id="generalSettingsTab" onClick=\{\(\) => setSettingsTab\("general"\)\}>General<\/SettingsTabButton>/);
-  assert.match(app, /<SettingsTabButton active=\{settingsTab === "access"\} controls="accessSettingsPanel" id="accessSettingsTab" onClick=\{\(\) => setSettingsTab\("access"\)\}>Access<\/SettingsTabButton>/);
-  assert.match(app, /<SettingsTabButton active=\{settingsTab === "security"\} controls="securitySettingsPanel" id="securitySettingsTab" onClick=\{\(\) => setSettingsTab\("security"\)\}>Security<\/SettingsTabButton>/);
-  assert.match(app, /id="generalSettingsPanel" role="tabpanel" aria-labelledby="generalSettingsTab" hidden=\{settingsTab !== "general"\}/);
-  assert.match(app, /id="accessSettingsPanel" role="tabpanel" aria-labelledby="accessSettingsTab" hidden=\{settingsTab !== "access"\}/);
-  assert.match(app, /id="securitySettingsPanel" role="tabpanel" aria-labelledby="securitySettingsTab" hidden=\{settingsTab !== "security"\}/);
-  assert.doesNotMatch(app, /id="authUsersStatus"/);
-  assert.doesNotMatch(app, /const metadataEditingEnabled/);
-  assert.doesNotMatch(app, /const authUsersStatusLabel/);
-  assert.doesNotMatch(app, /Active editors/);
-  assert.doesNotMatch(app, /Active viewers/);
-  assert.doesNotMatch(app, /Active/);
-  assert.doesNotMatch(app, /Inactive/);
-  assert.doesNotMatch(app, /metadataEditingEnabled\s*\?/);
-  assert.doesNotMatch(app, /id="authUsersStatus"[^>]+role="status"/);
-  assert.match(app, /Saved users apply when password protection is enabled\./);
-  assert.match(app, /Admin has all permissions\./);
-  assert.match(app, /<span>Username<\/span>/);
-  assert.match(app, /<span>Role<\/span>/);
-  assert.match(app, /<span>Password<\/span>/);
-  assert.match(app, /aria-label=\{`Username for user \$\{index \+ 1\}`\}/);
-  assert.match(app, /aria-label=\{`Role for \$\{user\.username \|\| `user \$\{index \+ 1\}`\}`\}/);
-  assert.match(app, /aria-label=\{`Password for \$\{user\.username \|\| `user \$\{index \+ 1\}`\}`\}/);
-  assert.match(app, /<PlusIcon className="h-\[12px\] w-\[12px\]" \/>/);
-  assert.match(app, /<span>Add user<\/span>/);
-  assert.match(app, /const settingInputClassName = /);
-  assert.match(app, /className=\{settingInputClassName\}/);
-  assert.match(app, /className=\{`\$\{settingInputClassName\} px-1\.5`\}/);
-  assert.match(app, /const authActionButtonClassName = /);
-  assert.match(app, /\$\{authActionButtonClassName\}/);
-  assert.match(app, /disabled:cursor-not-allowed disabled:opacity-45/);
-  assert.match(app, /disabled:cursor-not-allowed disabled:bg-\[#f4f5f7\] disabled:text-\[#8a8f99\]/);
-  assert.match(app, /has-\[:disabled\]:cursor-not-allowed has-\[:disabled\]:opacity-60/);
-  assert.match(app, /disabled:cursor-not-allowed" type="checkbox"/);
-  assert.match(app, /function SettingRow\(\{ children, help, label \}/);
-  assert.doesNotMatch(app, /<label className="grid grid-cols-\[72px_minmax\(0,1fr\)\]/);
-  assert.doesNotMatch(app, /Admin is reserved for full management permissions/);
-  assert.doesNotMatch(app, /title="Editor roles"/);
-  assert.doesNotMatch(app, /function EditIcon\(/);
+  assert.match(uiSource, /role="tablist" aria-label="Settings sections"/);
+  assert.match(uiSource, /<SettingsTabButton active=\{settingsTab === "general"\} controls="generalSettingsPanel" id="generalSettingsTab" onClick=\{\(\) => onSettingsTabChange\("general"\)\}>General<\/SettingsTabButton>/);
+  assert.match(uiSource, /<SettingsTabButton active=\{settingsTab === "access"\} controls="accessSettingsPanel" id="accessSettingsTab" onClick=\{\(\) => onSettingsTabChange\("access"\)\}>Access<\/SettingsTabButton>/);
+  assert.match(uiSource, /<SettingsTabButton active=\{settingsTab === "security"\} controls="securitySettingsPanel" id="securitySettingsTab" onClick=\{\(\) => onSettingsTabChange\("security"\)\}>Security<\/SettingsTabButton>/);
+  assert.match(uiSource, /id="generalSettingsPanel" role="tabpanel" aria-labelledby="generalSettingsTab" hidden=\{settingsTab !== "general"\}/);
+  assert.match(uiSource, /id="accessSettingsPanel" role="tabpanel" aria-labelledby="accessSettingsTab" hidden=\{settingsTab !== "access"\}/);
+  assert.match(uiSource, /id="securitySettingsPanel" role="tabpanel" aria-labelledby="securitySettingsTab" hidden=\{settingsTab !== "security"\}/);
+  assert.doesNotMatch(uiSource, /id="authUsersStatus"/);
+  assert.doesNotMatch(uiSource, /const metadataEditingEnabled/);
+  assert.doesNotMatch(uiSource, /const authUsersStatusLabel/);
+  assert.doesNotMatch(uiSource, /Active editors/);
+  assert.doesNotMatch(uiSource, /Active viewers/);
+  assert.doesNotMatch(uiSource, /Active/);
+  assert.doesNotMatch(uiSource, /Inactive/);
+  assert.doesNotMatch(uiSource, /metadataEditingEnabled\s*\?/);
+  assert.doesNotMatch(uiSource, /id="authUsersStatus"[^>]+role="status"/);
+  assert.match(uiSource, /Saved users apply when password protection is enabled\./);
+  assert.match(uiSource, /Admin has all permissions\./);
+  assert.match(uiSource, /<span>Username<\/span>/);
+  assert.match(uiSource, /<span>Role<\/span>/);
+  assert.match(uiSource, /<span>Password<\/span>/);
+  assert.match(uiSource, /aria-label=\{`Username for user \$\{index \+ 1\}`\}/);
+  assert.match(uiSource, /aria-label=\{`Role for \$\{user\.username \|\| `user \$\{index \+ 1\}`\}`\}/);
+  assert.match(uiSource, /aria-label=\{`Password for \$\{user\.username \|\| `user \$\{index \+ 1\}`\}`\}/);
+  assert.match(uiSource, /<PlusIcon className="h-\[12px\] w-\[12px\]" \/>/);
+  assert.match(uiSource, /<span>Add user<\/span>/);
+  assert.match(uiSource, /const settingInputClassName = /);
+  assert.match(uiSource, /className=\{settingInputClassName\}/);
+  assert.match(uiSource, /className=\{`\$\{settingInputClassName\} px-1\.5`\}/);
+  assert.match(uiSource, /const authActionButtonClassName = /);
+  assert.match(uiSource, /\$\{authActionButtonClassName\}/);
+  assert.match(uiSource, /disabled:cursor-not-allowed disabled:opacity-45/);
+  assert.match(uiSource, /disabled:cursor-not-allowed disabled:bg-\[#f4f5f7\] disabled:text-\[#8a8f99\]/);
+  assert.match(uiSource, /has-\[:disabled\]:cursor-not-allowed has-\[:disabled\]:opacity-60/);
+  assert.match(uiSource, /disabled:cursor-not-allowed" type="checkbox"/);
+  assert.match(uiSource, /function SettingRow\(\{ children, help, label \}/);
+  assert.doesNotMatch(uiSource, /<label className="grid grid-cols-\[72px_minmax\(0,1fr\)\]/);
+  assert.doesNotMatch(uiSource, /Admin is reserved for full management permissions/);
+  assert.doesNotMatch(uiSource, /title="Editor roles"/);
+  assert.doesNotMatch(uiSource, /function EditIcon\(/);
   assert.doesNotMatch(app, /const \[password, setPassword\]/);
   assert.match(app, /const \[passwordVisibleByIndex, setPasswordVisibleByIndex\] = useState<Record<string, boolean>>\(\{\}\);/);
   assert.match(app, /const \[passwordDraftRevision, setPasswordDraftRevision\] = useState\(0\);/);
@@ -129,7 +157,7 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.doesNotMatch(app, /allowMetadataEditing: authEnabled && authUsersCanEditMetadata\(nextUsers\)/);
   assert.doesNotMatch(app, /function saveAuthUser/);
   assert.doesNotMatch(app, /saveAuthUser\(/);
-  assert.match(app, /onChange=\{\(event\) => updateAuthUser\(index, \{ role: event\.currentTarget\.value as UserRole \}\)\}/);
+  assert.match(uiSource, /onChange=\{\(event\) => onUpdateAuthUser\(index, \{ role: event\.currentTarget\.value as UserRole \}\)\}/);
   assert.doesNotMatch(app, /saveSettings\(\{ patch: \{ authUsers: authUsers\.map/);
   assert.match(app, /const cleanUserPasswords = collectUserPasswords\(effectiveAuthUsers, passwordDrafts\);/);
   assert.match(app, /function collectUserPasswords\(users: AuthUser\[\], values: Record<string, string>\)/);
@@ -153,37 +181,38 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(app, /function setUserPasswordDraft\(index: number, value: string\)/);
   assert.match(app, /function replaceUserPasswordDrafts\(nextDrafts: Record<string, string>\)/);
   assert.match(app, /function clearUserPasswordDrafts\(\)/);
-  assert.match(app, /userPasswordsRef\.current\[String\(index\)\]/);
+  assert.match(app, /userPasswords=\{userPasswordsRef\.current\}/);
+  assert.match(uiSource, /userPasswords\[String\(index\)\]/);
   assert.match(app, /removeIndexedValue\(userPasswordsRef\.current, index\)/);
   assert.match(app, /setPasswordVisibleByIndex\(\(current\) => removeIndexedValue\(current, index\)\);/);
   assert.match(app, /passwordDrafts = userPasswordsRef\.current/);
-  assert.match(app, /defaultValue=\{userPasswordsRef\.current\[String\(index\)\] \|\| ""\}/);
-  assert.match(app, /onChange=\{\(event\) => setUserPasswordDraft\(index, event\.currentTarget\.value\)\}/);
-  assert.match(app, /key=\{`\$\{passwordDraftRevision\}-\$\{index\}`\}/);
+  assert.match(uiSource, /defaultValue=\{userPasswords\[String\(index\)\] \|\| ""\}/);
+  assert.match(uiSource, /onChange=\{\(event\) => onUserPasswordDraftChange\(index, event\.currentTarget\.value\)\}/);
+  assert.match(uiSource, /key=\{`\$\{passwordDraftRevision\}-\$\{index\}`\}/);
   assert.match(app, /function togglePasswordVisible\(index: number\)/);
-  assert.match(app, /const canTogglePasswordVisible = !user\.passwordHash;/);
-  assert.match(app, /const passwordVisible = canTogglePasswordVisible && passwordVisibleByIndex\[String\(index\)\];/);
-  assert.match(app, /type=\{passwordVisible \? "text" : "password"\}/);
-  assert.match(app, /aria-label=\{canTogglePasswordVisible \? \(passwordVisible \? `Hide password for \$\{user\.username \|\| `user \$\{index \+ 1\}`\}` : `Show password for \$\{user\.username \|\| `user \$\{index \+ 1\}`\}`\) : `Saved password for \$\{user\.username \|\| `user \$\{index \+ 1\}`\} is hidden`\}/);
-  assert.match(app, /title=\{canTogglePasswordVisible \? \(passwordVisible \? "Hide password" : "Show password"\) : "Saved password is hidden"\}/);
-  assert.match(app, /disabled=\{settingsInputDisabled \|\| !canTogglePasswordVisible\}/);
-  assert.match(app, /onClick=\{canTogglePasswordVisible \? \(\) => togglePasswordVisible\(index\) : undefined\}/);
-  assert.match(app, /passwordVisible \? <EyeIcon className="h-\[13px\] w-\[13px\]" \/> : <EyeOffIcon className="h-\[13px\] w-\[13px\]" \/>/);
+  assert.match(uiSource, /const canTogglePasswordVisible = !user\.passwordHash;/);
+  assert.match(uiSource, /const passwordVisible = canTogglePasswordVisible && passwordVisibleByIndex\[String\(index\)\];/);
+  assert.match(uiSource, /type=\{passwordVisible \? "text" : "password"\}/);
+  assert.match(uiSource, /aria-label=\{canTogglePasswordVisible \? \(passwordVisible \? `Hide password for \$\{user\.username \|\| `user \$\{index \+ 1\}`\}` : `Show password for \$\{user\.username \|\| `user \$\{index \+ 1\}`\}`\) : `Saved password for \$\{user\.username \|\| `user \$\{index \+ 1\}`\} is hidden`\}/);
+  assert.match(uiSource, /title=\{canTogglePasswordVisible \? \(passwordVisible \? "Hide password" : "Show password"\) : "Saved password is hidden"\}/);
+  assert.match(uiSource, /disabled=\{settingsInputDisabled \|\| !canTogglePasswordVisible\}/);
+  assert.match(uiSource, /onClick=\{canTogglePasswordVisible \? \(\) => onTogglePasswordVisible\(index\) : undefined\}/);
+  assert.match(uiSource, /passwordVisible \? <EyeIcon className="h-\[13px\] w-\[13px\]" \/> : <EyeOffIcon className="h-\[13px\] w-\[13px\]" \/>/);
   assert.doesNotMatch(app, /const \[passwordVisible, setPasswordVisible\]/);
   assert.doesNotMatch(app, /Show passwords/);
   assert.doesNotMatch(app, /Hide passwords/);
   assert.doesNotMatch(app, /const \[userPasswords, setUserPasswords\]/);
   assert.doesNotMatch(app, /value=\{userPasswords/);
-  assert.match(app, /<button className=\{`ml-auto inline-flex h-7 items-center rounded-md px-2 text-\[11px\] font-medium text-\[#111\] \$\{authActionButtonClassName\}`\} type="submit" disabled=\{settingsInputDisabled\}>/);
-  assert.match(app, />\s*Save settings\s*<\/button>/);
+  assert.match(uiSource, /<button className=\{`ml-auto inline-flex h-7 items-center rounded-md px-2 text-\[11px\] font-medium text-\[#111\] \$\{authActionButtonClassName\}`\} type="submit" disabled=\{settingsInputDisabled\}>/);
+  assert.match(uiSource, />\s*Save settings\s*<\/button>/);
   assert.match(app, /saveSettings\(\{ forceSave: true, successMessage: "Saved" \}\)/);
-  assert.doesNotMatch(app, /onBlur=\{[^}]*saveSettings/);
+  assert.doesNotMatch(uiSource, /onBlur=\{[^}]*saveSettings/);
   assert.doesNotMatch(app, /saveSettings\(\{ forceSave: true, patch: \{ port:/);
-  assert.match(app, /<SettingRow label="Port" help=\{serverState === "running" \? "Stop the server before changing the port\." : "The port the server listens on\."\}>/);
-  assert.match(app, /disabled=\{settingsInputDisabled\}/);
-  assert.match(app, /flex min-h-8 items-center justify-between gap-3 border-t border-\[#e1e3e7\] pt-2/);
-  assert.match(app, /<p className=\{`min-w-0 flex-1 truncate px-0\.5 text-\[10px\] \$\{messageIsError \? "text-\[#d92d20\]" : "text-\[#178c35\]"\}`\} aria-live="polite" hidden=\{!message\}>/);
-  assert.match(app, /messageIsError \? "text-\[#d92d20\]" : "text-\[#178c35\]"/);
+  assert.match(uiSource, /<SettingRow label="Port" help=\{serverRunning \? "Stop the server before changing the port\." : "The port the server listens on\."\}>/);
+  assert.match(uiSource, /disabled=\{settingsInputDisabled\}/);
+  assert.match(uiSource, /flex min-h-8 items-center justify-between gap-3 border-t border-\[#e1e3e7\] pt-2/);
+  assert.match(uiSource, /<p className=\{`min-w-0 flex-1 truncate px-0\.5 text-\[10px\] \$\{messageIsError \? "text-\[#d92d20\]" : "text-\[#178c35\]"\}`\} aria-live="polite" hidden=\{!message\}>/);
+  assert.match(uiSource, /messageIsError \? "text-\[#d92d20\]" : "text-\[#178c35\]"/);
   assert.doesNotMatch(app, /onBlur=\{\(\) => saveSettings\(\)\}\s*\/>\s*<button className=\{`grid h-7 w-7 place-items-center rounded-md \$\{authActionButtonClassName\}`\}/);
   assert.doesNotMatch(app, /passwordDrafts: nextUserPasswords/);
   assert.match(app, /const effectiveAuthUsers = Array\.isArray\(patch\.authUsers\)/);
@@ -211,19 +240,20 @@ test("plugin app keeps Eagle Node API compatibility with a classic script", asyn
 test("settings can collapse and endpoint opens externally", async () => {
   const html = await readFile(new URL("./index.html", import.meta.url), "utf8");
   const app = await readPluginAppSource();
+  const uiSource = await readPluginUiSource();
 
-  assert.match(app, /<form/);
+  assert.match(uiSource, /<form/);
   assert.match(app, /const \[settingsExpanded, setSettingsExpanded\] = useState\(true\);/);
-  assert.match(app, /id="settingsToggleButton"/);
-  assert.match(app, /aria-label=\{settingsExpanded \? "Hide settings" : "Show settings"\}/);
-  assert.match(app, /className=\{`\$\{settingsExpanded \? "mb-2\.5 border-b border-\[#e1e3e7\] pb-2\.5" : ""\} flex w-full items-center justify-between gap-3 border-0 bg-transparent p-0 text-left`\}/);
-  assert.match(app, /aria-controls="settingsPanel"/);
-  assert.match(app, /aria-expanded=\{settingsExpanded\}/);
-  assert.match(app, /hidden=\{!settingsExpanded\}/);
-  assert.match(app, /setSettingsExpanded\(\(current\) => !current\)/);
-  assert.match(app, /<ChevronIcon className=\{`h-\[12px\] w-\[12px\] text-\[#555c66\] transition-transform \$\{settingsExpanded \? "rotate-180" : ""\}`\} \/>/);
-  assert.doesNotMatch(app, /<span>\{settingsExpanded \? "Hide" : "Show"\}<\/span>/);
-  assert.match(app, /function ChevronIcon/);
+  assert.match(uiSource, /id="settingsToggleButton"/);
+  assert.match(uiSource, /aria-label=\{settingsExpanded \? "Hide settings" : "Show settings"\}/);
+  assert.match(uiSource, /className=\{`\$\{settingsExpanded \? "mb-2\.5 border-b border-\[#e1e3e7\] pb-2.5" : ""\} flex w-full items-center justify-between gap-3 border-0 bg-transparent p-0 text-left`\}/);
+  assert.match(uiSource, /aria-controls="settingsPanel"/);
+  assert.match(uiSource, /aria-expanded=\{settingsExpanded\}/);
+  assert.match(uiSource, /hidden=\{!settingsExpanded\}/);
+  assert.match(uiSource, /onSettingsExpandedChange\(\(current\) => !current\)/);
+  assert.match(uiSource, /<ChevronIcon className=\{`h-\[12px\] w-\[12px\] text-\[#555c66\] transition-transform \$\{settingsExpanded \? "rotate-180" : ""\}`\} \/>/);
+  assert.doesNotMatch(uiSource, /<span>\{settingsExpanded \? "Hide" : "Show"\}<\/span>/);
+  assert.match(uiSource, /function ChevronIcon/);
   assert.match(app, /openEndpointUrl/);
   assert.match(app, /eagle\?\.shell\?\.openExternal/);
   assert.doesNotMatch(app, /setMessage\("Updated"\)/);
@@ -1141,15 +1171,15 @@ test("plugin QR rendering uses the bundled QR library instead of custom matrix c
 
 test("plugin component styles are embedded as Tailwind classes", async () => {
   const css = await readFile(new URL("./styles.css", import.meta.url), "utf8");
-  const app = await readPluginAppSource();
+  const uiSource = await readPluginUiSource();
 
   assert.doesNotMatch(css, /\.titlebar\s*\{/);
   assert.doesNotMatch(css, /\.brand-icon\s*\{/);
   assert.doesNotMatch(css, /\.power-switch\s*\{/);
-  assert.match(app, /h-\[46px\]/);
-  assert.match(app, /h-6 w-6 rounded-md object-cover/);
-  assert.match(app, /cursor-pointer/);
-  assert.match(app, /grid h-\[124px\] w-\[124px\]/);
+  assert.match(uiSource, /h-\[46px\]/);
+  assert.match(uiSource, /h-6 w-6 rounded-md object-cover/);
+  assert.match(uiSource, /cursor-pointer/);
+  assert.match(uiSource, /grid h-\[124px\] w-\[124px\]/);
   assert.match(css, /button:disabled,\s*input:disabled,\s*select:disabled\s*\{[^}]*cursor: not-allowed;/s);
 });
 
