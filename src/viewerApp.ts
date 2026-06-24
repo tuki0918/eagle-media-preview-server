@@ -100,6 +100,7 @@ let connectBusy = false;
 let authAuthenticated = false;
 let authRequired = false;
 let authUser: NonNullable<AuthStatusResponse["user"]> | null = null;
+let serverReachable = true;
 let allFoldersTotal = 0;
 let allFoldersTotalRequestId = 0;
 const pendingRatingItemIds = new Set<string>();
@@ -190,6 +191,7 @@ async function init() {
 async function connect(credentials?: { password: string; username: string }) {
   setConnectMessage(authRequired && !authAuthenticated ? "Signing in" : "Connecting", false);
   setConnectBusy(true);
+  let loginAttempted = false;
   let signedInThisAttempt = false;
 
   try {
@@ -199,6 +201,7 @@ async function connect(credentials?: { password: string; username: string }) {
       if (!username || !password) {
         throw new Error("Enter username and password.");
       }
+      loginAttempted = true;
       const login = await postJson<AuthStatusResponse>("/api/auth/login", { username, password });
       authAuthenticated = Boolean(login.authenticated);
       authUser = login.user ?? null;
@@ -209,11 +212,18 @@ async function connect(credentials?: { password: string; username: string }) {
     }
     const connection = { ...DEFAULT_EAGLE_CONNECTION };
     const data = await postJson<ConnectResponse>("/api/connect", connection);
+    serverReachable = true;
     showViewer(data);
     await Promise.all([loadFolders(), loadSmartFolders(), loadItems(), loadAllFoldersTotal()]);
   } catch (error) {
     if (signedInThisAttempt && handlePostLoginAuthError(error)) return;
+    if (loginAttempted && !signedInThisAttempt && isLoginAuthFailure(error)) {
+      showLogin();
+      setConnectMessage(connectErrorMessage(error), true);
+      return;
+    }
     if (handleAuthError(error)) return;
+    if (isEagleConnectionError(error)) serverReachable = false;
     showLogin();
     setConnectMessage(connectErrorMessage(error), true);
   } finally {
@@ -242,11 +252,13 @@ async function logout() {
 async function loadAuthStatus() {
   try {
     const data = await getJson<AuthStatusResponse>("/api/auth/status");
+    serverReachable = true;
     authAuthenticated = Boolean(data.authenticated);
     authRequired = Boolean(data.required);
     authUser = data.user ?? null;
     state.permissions = normalizePermissions(data.permissions, !authRequired || authAuthenticated);
   } catch {
+    serverReachable = false;
     clearAuthState(false);
   }
   renderLoginConnect();
@@ -296,6 +308,10 @@ function handlePostLoginAuthError(error: unknown) {
   showLogin();
   setConnectMessage("Sign-in succeeded, but the browser did not keep the session cookie. Allow cookies for this address and try again.", true);
   return true;
+}
+
+function isLoginAuthFailure(error: unknown) {
+  return error instanceof ApiError && error.status === 401;
 }
 
 function connectErrorMessage(error: unknown) {
@@ -398,6 +414,7 @@ function renderLoginConnect() {
     disabled: connectBusy,
     isError: connectMessageIsError,
     message: connectMessageText,
+    serverStatus: serverReachable ? "online" : "error",
     user: authUser,
   });
 }

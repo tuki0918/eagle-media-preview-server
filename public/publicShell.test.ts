@@ -109,6 +109,8 @@ test("public login no longer renders advanced Eagle connection settings", async 
   assert.match(login, /src="(?:[^"]*icon_on\.svg|data:image\/svg\+xml,)/);
   assert.match(login, /<h1 class="[^"]*">Media Preview Server<\/h1>/);
   assert.match(login, /A local media server for your Eagle library\./);
+  assert.match(login, /Connect this browser to the media server\./);
+  assert.doesNotMatch(login, /Connect this browser to the local Eagle media server\./);
   assert.doesNotMatch(login, /Start the server from the Eagle plugin panel/);
   assert.doesNotMatch(login, /Use an account configured in the Eagle plugin panel\./);
   assert.doesNotMatch(login, /id="viewerPasswordField"/);
@@ -151,6 +153,8 @@ test("public login renders credentials when server auth is required", async () =
   assert.match(login, /name="password"/);
   assert.match(login, /aria-label="Password"/);
   assert.match(login, /id="authPasswordInput"[\s\S]*required=""/);
+  assert.match(login, /id="authPasswordToggle"/);
+  assert.match(login, /aria-label="Show password"/);
   assert.match(login, /Use an account configured in the Eagle plugin panel\./);
   assert.doesNotMatch(login, /Use a viewer account/);
   assert.match(button, /Sign in/);
@@ -253,6 +257,41 @@ test("public viewer exposes sign out when authenticated", async () => {
   });
 });
 
+test("public login shows compact server status and session duration", () => {
+  setLoginConnectState({
+    authenticated: false,
+    authRequired: true,
+    disabled: false,
+    isError: false,
+    message: "",
+    user: null,
+  });
+  const login = renderToStaticMarkup(createElement(LoginView, { hidden: false }));
+
+  assert.match(login, /Server status/);
+  assert.match(login, />Sign in<\/h2>/);
+  assert.doesNotMatch(login, /Authenticate viewer access/);
+  assert.match(login, /id="serverStatusDivider"/);
+  assert.ok(login.indexOf('id="serverStatusDivider"') < login.indexOf("Server status"));
+  assert.match(login, /id="serverStatusDot"/);
+  assert.match(login, /aria-label="Server status: Online"/);
+  assert.match(login, /title="Online"/);
+  assert.match(login, /127\.0\.0\.1:5173/);
+  assert.match(login, /Session expires after 7 days\./);
+  assert.match(login, /login-primary[^"]*\bgap-7\b/);
+  assert.match(login, /form-actions[^"]*\bgap-4\b/);
+  assert.doesNotMatch(login, /HttpOnly/);
+
+  setLoginConnectState({
+    authenticated: false,
+    authRequired: false,
+    disabled: false,
+    isError: false,
+    message: "",
+    user: null,
+  });
+});
+
 test("public login shows auth errors above the submit button", () => {
   setLoginConnectState({
     authenticated: false,
@@ -272,6 +311,8 @@ test("public login shows auth errors above the submit button", () => {
   assert.match(message, /text-left/);
   assert.match(message, /lucide-circle-alert/);
   assert.ok(login.indexOf('id="connectMessage"') < login.indexOf('id="connectButton"'));
+  assert.match(login, /aria-label="Server status: Online"/);
+  assert.doesNotMatch(login, /aria-label="Server status: Error"/);
 
   setLoginConnectState({
     authenticated: false,
@@ -279,6 +320,48 @@ test("public login shows auth errors above the submit button", () => {
     disabled: false,
     isError: false,
     message: "",
+    user: null,
+  });
+});
+
+test("public login treats failed credentials as form errors, not expired sessions", async () => {
+  const app = await readViewerSources();
+
+  assert.match(app, /let loginAttempted = false;/);
+  assert.match(app, /loginAttempted = true;[\s\S]*postJson<AuthStatusResponse>\("\/api\/auth\/login"/);
+  assert.match(app, /if \(loginAttempted && !signedInThisAttempt && isLoginAuthFailure\(error\)\) \{/);
+  assert.match(app, /function isLoginAuthFailure\(error: unknown\) \{/);
+  assert.match(app, /setConnectMessage\(connectErrorMessage\(error\), true\);/);
+  assert.match(app, /setConnectMessage\("Your session expired\. Sign in again\.", true\);/);
+});
+
+test("public login marks server status as error for Eagle connection failures", async () => {
+  const app = await readViewerSources();
+
+  assert.match(app, /if \(isEagleConnectionError\(error\)\) serverReachable = false;/);
+  assert.match(app, /serverStatus: serverReachable \? "online" : "error"/);
+
+  setLoginConnectState({
+    authenticated: false,
+    authRequired: true,
+    disabled: false,
+    isError: true,
+    message: "Cannot connect to Eagle. Make sure Eagle is running and the local Eagle API is available.",
+    serverStatus: "error",
+    user: null,
+  });
+  const login = renderToStaticMarkup(createElement(LoginView, { hidden: false }));
+
+  assert.match(login, /aria-label="Server status: Error"/);
+  assert.match(login, /title="Error"/);
+
+  setLoginConnectState({
+    authenticated: false,
+    authRequired: false,
+    disabled: false,
+    isError: false,
+    message: "",
+    serverStatus: "online",
     user: null,
   });
 });
@@ -377,8 +460,8 @@ test("public UI no longer shows connect lock icon or connection settings button"
   assert.doesNotMatch(html, /id="showHeaderButton"/);
   assert.doesNotMatch(app, /setHeaderHidden/);
   assert.doesNotMatch(app, /setConnectionStatus/);
-  assert.match(login, /w-\[min\(320px,100%\)\]/);
-  assert.match(login, /pt-\[42px\]/);
+  assert.match(login, /max-w-\[760px\]/);
+  assert.match(login, /min-\[720px\]:grid-cols-\[minmax\(0,0\.84fr\)_minmax\(320px,1fr\)\]/);
   assert.match(message, /min-h-\[18px\]/);
   assert.doesNotMatch(message, /fixed/);
   assert.match(message, /empty:hidden/);

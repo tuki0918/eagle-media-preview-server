@@ -4,6 +4,7 @@ interface LoginConnectState {
   disabled: boolean;
   isError: boolean;
   message: string;
+  serverStatus?: "error" | "online";
   user: {
     role?: string;
     username?: string;
@@ -17,6 +18,7 @@ let currentLoginConnect: LoginConnectState = {
   disabled: false,
   isError: false,
   message: "",
+  serverStatus: "online",
   user: null,
 };
 
@@ -31,6 +33,7 @@ export function setLoginConnectState(nextState: LoginConnectState) {
     && currentLoginConnect.disabled === nextState.disabled
     && currentLoginConnect.isError === nextState.isError
     && currentLoginConnect.message === nextState.message
+    && currentLoginConnect.serverStatus === nextState.serverStatus
     && currentLoginConnect.user?.role === nextState.user?.role
     && currentLoginConnect.user?.username === nextState.user?.username
   ) {
