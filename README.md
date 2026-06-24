@@ -47,13 +47,13 @@ Use this panel to control whether other devices on the LAN can open the viewer a
 - Editor: edit rating, tags, and categories from the preview panel
 - Admin: has all available permissions
 
+Authentication is optional. When password protection is enabled, browser access uses the built-in login screen and cookie-based sessions. Sessions expire after the configured session duration, 7 days by default.
+
 ### Security
 
-Authentication and HTTPS/TLS settings.
+HTTPS/TLS settings.
 
 ![](docs/server_panel_security.png)
-
-Authentication is optional. When password protection is enabled, browser access uses the built-in login screen and cookie-based sessions. Sessions expire after the configured session duration, 7 days by default.
 
 HTTPS protects the login password and session cookie on the network. For local/LAN use, `mkcert` is the recommended way to create a trusted development certificate.
 
