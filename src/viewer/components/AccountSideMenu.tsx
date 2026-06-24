@@ -1,5 +1,4 @@
 import {
-  BookOpenTextIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   ChevronsUpDownIcon,
@@ -10,6 +9,7 @@ import {
   LayoutGridIcon,
   LogOutIcon,
   MoonIcon,
+  RouterIcon,
   SunIcon,
   UserRoundIcon,
 } from "lucide-react";
@@ -70,7 +70,7 @@ export function AccountSideMenu() {
                 <div>
                   <Avatar className="size-8 rounded-lg" aria-hidden="true">
                     <AvatarFallback className="rounded-lg">
-                      <BookOpenTextIcon className="size-5" />
+                      <RouterIcon className="size-5" />
                     </AvatarFallback>
                   </Avatar>
                   <span className="grid min-w-0 group-data-[collapsible=icon]:hidden">
