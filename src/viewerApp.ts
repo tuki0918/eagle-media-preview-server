@@ -101,6 +101,7 @@ let authAuthenticated = false;
 let authRequired = false;
 let authUser: NonNullable<AuthStatusResponse["user"]> | null = null;
 let serverReachable = true;
+let sessionMaxAgeSeconds = 7 * 24 * 60 * 60;
 let allFoldersTotal = 0;
 let allFoldersTotalRequestId = 0;
 const pendingRatingItemIds = new Set<string>();
@@ -205,6 +206,7 @@ async function connect(credentials?: { password: string; username: string }) {
       const login = await postJson<AuthStatusResponse>("/api/auth/login", { username, password });
       authAuthenticated = Boolean(login.authenticated);
       authUser = login.user ?? null;
+      sessionMaxAgeSeconds = normalizeSessionMaxAgeSeconds(login.sessionMaxAgeSeconds);
       state.permissions = normalizePermissions(login.permissions, authAuthenticated);
       signedInThisAttempt = authAuthenticated;
       renderLoginConnect();
@@ -238,6 +240,7 @@ async function logout() {
     const logoutStatus = await postJson<AuthStatusResponse>("/api/auth/logout", {});
     const nextAuthRequired = Boolean(logoutStatus.required);
     clearAuthState(nextAuthRequired);
+    sessionMaxAgeSeconds = normalizeSessionMaxAgeSeconds(logoutStatus.sessionMaxAgeSeconds);
     state.permissions = normalizePermissions(logoutStatus.permissions, !nextAuthRequired);
     clearViewerSessionState();
     renderLoginConnect();
@@ -256,6 +259,7 @@ async function loadAuthStatus() {
     authAuthenticated = Boolean(data.authenticated);
     authRequired = Boolean(data.required);
     authUser = data.user ?? null;
+    sessionMaxAgeSeconds = normalizeSessionMaxAgeSeconds(data.sessionMaxAgeSeconds);
     state.permissions = normalizePermissions(data.permissions, !authRequired || authAuthenticated);
   } catch {
     serverReachable = false;
@@ -281,6 +285,11 @@ function normalizePermissions(value: AuthStatusResponse["permissions"], readFall
     writeMetadata: Boolean(value?.writeMetadata),
     writeRating: Boolean(value?.writeRating),
   };
+}
+
+function normalizeSessionMaxAgeSeconds(value: unknown) {
+  const seconds = Number(value);
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : 7 * 24 * 60 * 60;
 }
 
 function clearAuthState(nextAuthRequired: boolean) {
@@ -415,6 +424,7 @@ function renderLoginConnect() {
     isError: connectMessageIsError,
     message: connectMessageText,
     serverStatus: serverReachable ? "online" : "error",
+    sessionMaxAgeSeconds,
     user: authUser,
   });
 }

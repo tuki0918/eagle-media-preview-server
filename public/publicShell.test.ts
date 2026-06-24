@@ -264,6 +264,7 @@ test("public login shows compact server status and session duration", () => {
     disabled: false,
     isError: false,
     message: "",
+    sessionMaxAgeSeconds: 14 * 24 * 60 * 60,
     user: null,
   });
   const login = renderToStaticMarkup(createElement(LoginView, { hidden: false }));
@@ -277,7 +278,8 @@ test("public login shows compact server status and session duration", () => {
   assert.match(login, /aria-label="Server status: Online"/);
   assert.match(login, /title="Online"/);
   assert.match(login, /127\.0\.0\.1:5173/);
-  assert.match(login, /Session expires after 7 days\./);
+  assert.match(login, /Session expires after 14 days\./);
+  assert.doesNotMatch(login, /Session expires after 7 days\./);
   assert.match(login, /login-primary[^"]*\bgap-7\b/);
   assert.match(login, /form-actions[^"]*\bgap-4\b/);
   assert.doesNotMatch(login, /HttpOnly/);
@@ -288,6 +290,7 @@ test("public login shows compact server status and session duration", () => {
     disabled: false,
     isError: false,
     message: "",
+    sessionMaxAgeSeconds: 7 * 24 * 60 * 60,
     user: null,
   });
 });

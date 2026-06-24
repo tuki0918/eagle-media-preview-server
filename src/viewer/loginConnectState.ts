@@ -5,6 +5,7 @@ interface LoginConnectState {
   isError: boolean;
   message: string;
   serverStatus?: "error" | "online";
+  sessionMaxAgeSeconds?: number;
   user: {
     role?: string;
     username?: string;
@@ -19,6 +20,7 @@ let currentLoginConnect: LoginConnectState = {
   isError: false,
   message: "",
   serverStatus: "online",
+  sessionMaxAgeSeconds: 7 * 24 * 60 * 60,
   user: null,
 };
 
@@ -34,6 +36,7 @@ export function setLoginConnectState(nextState: LoginConnectState) {
     && currentLoginConnect.isError === nextState.isError
     && currentLoginConnect.message === nextState.message
     && currentLoginConnect.serverStatus === nextState.serverStatus
+    && currentLoginConnect.sessionMaxAgeSeconds === nextState.sessionMaxAgeSeconds
     && currentLoginConnect.user?.role === nextState.user?.role
     && currentLoginConnect.user?.username === nextState.user?.username
   ) {

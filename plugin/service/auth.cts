@@ -176,6 +176,7 @@ function authStatusResponse(auth: AuthContext, user: AuthSession | AuthUser | nu
   return {
     required: authRequired(auth),
     authenticated,
+    sessionMaxAgeSeconds: auth.sessionMaxAgeSeconds,
     user: user ? { role: user.role, username: user.username } : null,
     permissions: permissionsForUser(user, { authenticated }),
   };

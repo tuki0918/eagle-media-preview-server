@@ -232,7 +232,7 @@ Settings path:
 
 - Routes with a fixed method return `405` with an `Allow` header for unsupported methods
 - `GET /api/auth/status`
-  - Returns whether authentication is required, whether the current request is authenticated, the current user, and viewer permissions
+  - Returns whether authentication is required, whether the current request is authenticated, the current user, viewer permissions, and the configured session max age in seconds
 - `POST /api/auth/login`
   - Requires username and password
   - Issues an HttpOnly session cookie: `viewer_session_http` for HTTP and `viewer_session` for HTTPS

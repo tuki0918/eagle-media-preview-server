@@ -44,7 +44,7 @@ export function LoginView({ hidden = false }: LoginViewProps) {
             {showCredentials ? <LoginCredentials disabled={state.disabled} /> : null}
             {showInlineError ? <ConnectMessage /> : null}
             <ConnectButton />
-            {showCredentials ? <SessionDuration /> : null}
+            {showCredentials ? <SessionDuration seconds={state.sessionMaxAgeSeconds} /> : null}
           </div>
           {showInlineError ? null : <ConnectMessage />}
         </div>
@@ -154,13 +154,18 @@ function LoginCredentials({ disabled }: { disabled: boolean }) {
   );
 }
 
-function SessionDuration() {
+function SessionDuration({ seconds }: { seconds?: number }) {
   return (
     <p className="m-0 inline-flex items-center justify-center gap-1.5 text-center text-[11px] leading-[1.45] text-muted-foreground">
       <ClockIcon className="size-3.5" aria-hidden="true" />
-      <span>Session expires after 7 days.</span>
+      <span>{sessionDurationLabel(seconds)}</span>
     </p>
   );
+}
+
+function sessionDurationLabel(seconds: unknown) {
+  const days = Math.max(1, Math.round(Number(seconds || 0) / 86400) || 7);
+  return `Session expires after ${days} ${days === 1 ? "day" : "days"}.`;
 }
 
 export function ConnectButton({ disabled }: ConnectButtonProps) {

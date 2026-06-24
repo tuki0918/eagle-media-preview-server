@@ -79,6 +79,7 @@ export interface AuthStatusResponse {
   authenticated?: boolean;
   permissions?: AuthStatusPermissions;
   required?: boolean;
+  sessionMaxAgeSeconds?: number;
   user?: {
     role?: string;
     username?: string;

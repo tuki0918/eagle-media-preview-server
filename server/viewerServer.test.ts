@@ -178,6 +178,7 @@ test("createViewerServer starts and stops without the CLI entrypoint", async () 
   assert.deepEqual(await response.json(), {
     required: false,
     authenticated: true,
+    sessionMaxAgeSeconds: 7 * 24 * 60 * 60,
     user: null,
     permissions: {
       manageLibrary: false,
@@ -212,6 +213,7 @@ test("createViewerServer starts and stops without the CLI entrypoint", async () 
   assert.deepEqual(await login.json(), {
     required: false,
     authenticated: true,
+    sessionMaxAgeSeconds: 7 * 24 * 60 * 60,
     user: null,
     permissions: {
       manageLibrary: false,
@@ -229,6 +231,7 @@ test("createViewerServer starts and stops without the CLI entrypoint", async () 
   assert.deepEqual(await logout.json(), {
     required: false,
     authenticated: true,
+    sessionMaxAgeSeconds: 7 * 24 * 60 * 60,
     user: null,
     permissions: {
       manageLibrary: false,
@@ -368,6 +371,7 @@ test("createViewerServer allows metadata writes when editing is enabled for an a
     assert.deepEqual(await authStatus.json(), {
       required: true,
       authenticated: true,
+      sessionMaxAgeSeconds: 7 * 24 * 60 * 60,
       user: {
         role: "editor",
         username: "eagle",
@@ -487,6 +491,7 @@ test("createViewerServer authorizes metadata writes by user role", async () => {
     assert.deepEqual(await readerStatus.json(), {
       required: true,
       authenticated: true,
+      sessionMaxAgeSeconds: 7 * 24 * 60 * 60,
       user: { username: "reader", role: "viewer" },
       permissions: {
         manageLibrary: false,
@@ -848,6 +853,7 @@ test("createViewerServer logs out cookie sessions", async () => {
     assert.deepEqual(loginBody, {
       required: true,
       authenticated: true,
+      sessionMaxAgeSeconds: 7 * 24 * 60 * 60,
       user: {
         role: "viewer",
         username: "eagle",
@@ -866,6 +872,7 @@ test("createViewerServer logs out cookie sessions", async () => {
     assert.deepEqual(await authenticated.json(), {
       required: true,
       authenticated: true,
+      sessionMaxAgeSeconds: 7 * 24 * 60 * 60,
       user: {
         role: "viewer",
         username: "eagle",
@@ -886,6 +893,7 @@ test("createViewerServer logs out cookie sessions", async () => {
     assert.deepEqual(await bearerIgnored.json(), {
       required: true,
       authenticated: false,
+      sessionMaxAgeSeconds: 7 * 24 * 60 * 60,
       user: null,
       permissions: {
         manageLibrary: false,
@@ -906,6 +914,7 @@ test("createViewerServer logs out cookie sessions", async () => {
     assert.deepEqual(await logout.json(), {
       required: true,
       authenticated: false,
+      sessionMaxAgeSeconds: 7 * 24 * 60 * 60,
       user: null,
       permissions: {
         manageLibrary: false,
@@ -924,6 +933,7 @@ test("createViewerServer logs out cookie sessions", async () => {
     assert.deepEqual(await afterLogout.json(), {
       required: true,
       authenticated: false,
+      sessionMaxAgeSeconds: 7 * 24 * 60 * 60,
       user: null,
       permissions: {
         manageLibrary: false,
@@ -940,6 +950,7 @@ test("createViewerServer logs out cookie sessions", async () => {
     assert.deepEqual(await malformedCookie.json(), {
       required: true,
       authenticated: false,
+      sessionMaxAgeSeconds: 7 * 24 * 60 * 60,
       user: null,
       permissions: {
         manageLibrary: false,
@@ -1079,6 +1090,7 @@ test("createViewerServer accepts signed session cookies after restart and invali
     assert.deepEqual(await response.json(), {
       required: true,
       authenticated: true,
+      sessionMaxAgeSeconds: 7 * 24 * 60 * 60,
       user: {
         role: "viewer",
         username: "eagle",
@@ -1328,6 +1340,7 @@ test("createViewerServer expires cookie sessions server side", async () => {
     assert.deepEqual(await expired.json(), {
       required: true,
       authenticated: false,
+      sessionMaxAgeSeconds: 7 * 24 * 60 * 60,
       user: null,
       permissions: {
         manageLibrary: false,

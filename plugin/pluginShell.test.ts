@@ -1000,6 +1000,7 @@ test("plugin server caches authenticated users per request", async () => {
   assert.doesNotMatch(authSource, /randomUUID/);
   assert.match(authSource, /function authStatusResponse\(auth, user, \{ authenticated = Boolean\(user\) \} = \{\}\)/);
   assert.match(authSource, /required: authRequired\(auth\)/);
+  assert.match(authSource, /sessionMaxAgeSeconds: auth\.sessionMaxAgeSeconds/);
   assert.match(authSource, /user: user \? \{ role: user\.role, username: user\.username \} : null/);
   assert.match(authSource, /permissions: permissionsForUser\(user, \{ authenticated \}\)/);
   assert.match(serverSource, /authStatusResponse\(auth, null, \{ authenticated: true \}\)/);
