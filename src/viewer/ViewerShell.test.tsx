@@ -789,7 +789,11 @@ describe("ViewerAppShell", () => {
 
     expect(message).toContain("Loading");
     expect(empty).toContain("Clear filters");
+    expect(empty).toContain("lucide-search-x");
+    expect(empty).toContain("text-muted-foreground");
+    expect(empty).toContain('stroke-width="1.5"');
     expect(libraryEmpty).toContain("Library is empty");
+    expect(libraryEmpty).toContain("lucide-inbox");
     expect(error).toContain("Eagle connection lost");
     expect(error).toContain("Make sure Eagle is running.");
   });

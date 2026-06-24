@@ -1,3 +1,4 @@
+import { InboxIcon, SearchXIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
@@ -12,6 +13,7 @@ const errorTitleClassName = `${messageTitleClassName} text-destructive`;
 const messageDetailClassName = "mx-auto mt-2 max-w-[460px] text-sm leading-[1.55] text-muted-foreground";
 const emptyStateClassName =
   "col-span-full grid min-h-[320px] content-center justify-items-center gap-2.5 rounded-xl border border-dashed border-border bg-card px-5 py-14 text-center shadow-sm ring-0";
+const emptyStateIconClassName = "mb-1 size-14 text-muted-foreground";
 const emptyStateButtonClassName = "mt-1 min-h-[38px] rounded-lg text-[13px] font-[680]";
 
 export function ResultStateView(props: ResultStateViewProps) {
@@ -30,9 +32,11 @@ export function ResultStateView(props: ResultStateViewProps) {
   }
 
   const hasClearableFilters = props.hasClearableFilters ?? props.hasActiveFilters;
+  const EmptyIcon = props.hasActiveFilters ? SearchXIcon : InboxIcon;
 
   return (
     <Card className={emptyStateClassName}>
+      <EmptyIcon className={emptyStateIconClassName} strokeWidth={1.5} aria-hidden="true" />
       <strong className="text-[17px] font-[760] text-foreground">{props.hasActiveFilters ? "No items matched these filters" : "Library is empty"}</strong>
       <p className="m-0 max-w-[420px] text-sm leading-[1.55] text-muted-foreground">
         {props.hasActiveFilters
