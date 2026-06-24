@@ -100,8 +100,18 @@ export interface LoadItemsResponse {
 }
 
 export interface TagSuggestionApiItem {
+  color?: string;
+  groups?: unknown;
   name?: string;
   count?: number;
+}
+
+export interface TagGroupApiItem {
+  color?: string;
+  description?: string;
+  id?: string;
+  name?: string;
+  tags?: unknown;
 }
 
 export interface LoadItemsOptions {

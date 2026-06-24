@@ -42,6 +42,7 @@ export { ResultStateView } from "./components/ResultState";
 export { ResultsStatus } from "./components/ResultsStatus";
 export { AdvancedFilters, SearchControls, SearchFiltersButton, SearchInput } from "./components/SearchControls";
 export { TagChips } from "./components/TagChips";
+export { TagExplorer } from "./components/TagExplorer";
 export { TagSuggestions } from "./components/TagSuggestions";
 export { TilesSentinel } from "./components/TilesSentinel";
 export { ViewerShellLayout } from "./components/ViewerShellLayout";

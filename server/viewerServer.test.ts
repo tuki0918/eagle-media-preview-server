@@ -12,6 +12,7 @@ const require = createRequire(import.meta.url);
 
 type ItemListOptions = { keywords?: string; limit?: number | string; offset?: number | string; query?: string; tags?: string[] };
 type TagListOptions = { query?: string; limit?: string };
+type TagGroupListOptions = { limit?: string; offset?: string };
 
 const TEST_TLS_CERT = `-----BEGIN CERTIFICATE-----
 MIIDCTCCAfGgAwIBAgIUUHUI19IWC5rws+d99s190uGba4owDQYJKoZIhvcNAQEL
@@ -2120,6 +2121,44 @@ test("createViewerServer serves tag autocomplete suggestions", async () => {
       limit: 20,
     });
     assert.deepEqual(calls[0], { query: "pho", limit: "20" });
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer serves tag groups", async () => {
+  const calls: TagGroupListOptions[] = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    viewerPassword: "",
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/tmp/Test.library", name: "Test Library" };
+      },
+      async listTagGroups(options: TagGroupListOptions) {
+        calls.push(options);
+        return { items: [{ id: "TG_001", name: "Design", tags: ["photo"], color: "blue" }], total: 1, offset: 0, limit: 1000 };
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const response = await fetch(`http://127.0.0.1:${status.port}/api/tag-groups?limit=1000`);
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      items: [{ id: "TG_001", name: "Design", tags: ["photo"], color: "blue" }],
+      total: 1,
+      offset: 0,
+      limit: 1000,
+    });
+    assert.deepEqual(calls[0], { offset: 0, limit: "1000" });
   } finally {
     await viewer.stop();
   }

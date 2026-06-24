@@ -33,6 +33,7 @@ import {
   SearchControls,
   SearchInput,
   TagChips,
+  TagExplorer,
   TagSuggestions,
   TilesSentinel,
   ViewerAppShell,
@@ -45,6 +46,7 @@ import { MEDIA_TYPE_OPTIONS, PAGE_SIZE_OPTIONS, RATING_OPTIONS } from "./shellCo
 import { setLoginConnectState } from "./loginConnectState";
 import { setLibraryFooterName } from "./libraryFooterState";
 import { setSearchControlsState } from "./searchControlsState";
+import { setTagExplorerState } from "./tagExplorerState";
 import { getThemeState, initializeThemeState, setThemePreference } from "./themeState";
 import { safeExternalUrl } from "./components/PreviewBody";
 
@@ -172,6 +174,7 @@ describe("ViewerAppShell", () => {
     const components = [
       { Component: LoginView, expectedId: "loginView" },
       { Component: SearchControls, expectedId: "advancedFilters" },
+      { Component: TagExplorer, expectedId: "tagExplorer" },
       { Component: ResultsStatus, expectedId: "gridViewButton" },
       { Component: ResultSurface, expectedId: "grid" },
       { Component: Pager, expectedId: "pageButtons" },
@@ -187,6 +190,36 @@ describe("ViewerAppShell", () => {
     for (const { Component, expectedId } of components) {
       expect(renderToStaticMarkup(<TooltipProvider><Component /></TooltipProvider>)).toContain(`id="${expectedId}"`);
     }
+  });
+
+  test("renders tag explorer search and empty state", () => {
+    const html = renderToStaticMarkup(<TagExplorer />);
+
+    expect(html).toContain('id="tagExplorer"');
+    expect(html).toContain('id="tagExplorerSearch"');
+    expect(html).not.toContain('aria-label="Refresh tags"');
+    expect(html).toContain("No items matched these filters");
+  });
+
+  test("renders tag explorer groups and pinned tags", () => {
+    setTagExplorerState({
+      groups: [{ id: "TG_001", name: "Design", color: "blue", tags: ["ui"] }],
+      items: [
+        { name: "ui", count: 12, groups: ["TG_001"] },
+        { name: "draft", count: 3, groups: [] },
+      ],
+      pinnedTags: ["draft"],
+      status: "ready",
+    });
+
+    const html = renderToStaticMarkup(<TagExplorer />);
+
+    expect(html).toContain("Pinned Tags");
+    expect(html).toContain("Design");
+    expect(html).toContain("draft");
+    expect(html).toContain("ui");
+
+    setTagExplorerState({ groups: [], items: [], pinnedTags: [], status: "idle", query: "" });
   });
 
   test("renders preview header with back action, divider, filename, and mobile info toggle", () => {

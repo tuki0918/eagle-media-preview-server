@@ -120,6 +120,7 @@ interface EagleClient {
     rating?: string | null;
     tags?: string[];
   }): Promise<unknown>;
+  listTagGroups(options: { limit?: string | number; offset?: string | number }): Promise<unknown>;
   listTags(options: { limit?: string | number; query?: string }): Promise<unknown>;
   searchItems(options: { limit?: string | number; offset?: string | number; query: string }): Promise<unknown>;
   smartFolderItems(options: { limit?: string | number; offset?: string | number; smartFolderId: string }): Promise<unknown>;
@@ -456,6 +457,18 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
     const query = url.searchParams.get("q") || "";
     const limit = url.searchParams.get("limit") || 20;
     const result = await session.client.listTags({ query, limit });
+    sendJson(res, 200, result);
+    return;
+  }
+
+  if (url.pathname === "/api/tag-groups") {
+    if (req.method !== "GET") {
+      sendMethodNotAllowed(res, ["GET"]);
+      return;
+    }
+    const offset = url.searchParams.get("offset") || 0;
+    const limit = url.searchParams.get("limit") || 1000;
+    const result = await session.client.listTagGroups({ offset, limit });
     sendJson(res, 200, result);
     return;
   }

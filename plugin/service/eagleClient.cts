@@ -49,6 +49,8 @@ interface ListTagsOptions extends PageOptions {
   query?: unknown;
 }
 
+interface ListTagGroupsOptions extends PageOptions {}
+
 interface EagleApiEnvelope {
   data?: unknown;
   message?: unknown;
@@ -298,6 +300,17 @@ function createEagleClient({
             name: String(query || "").trim(),
             offset: normalizeOffset(offset),
             limit: clampTagLimit(limit),
+          },
+        }),
+      );
+    },
+
+    async listTagGroups({ offset = 0, limit = 1000 }: ListTagGroupsOptions = {}) {
+      return normalizePaginatedResponse(
+        await request("/api/v2/tagGroup/get", {
+          searchParams: {
+            offset: normalizeOffset(offset),
+            limit: clampLimit(limit, 1000),
           },
         }),
       );

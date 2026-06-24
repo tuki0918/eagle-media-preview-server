@@ -221,6 +221,27 @@ test("listTags uses V2 tag/get with a bounded name query", async () => {
   assert.equal(calls[0].init.method, "GET");
 });
 
+test("listTagGroups uses V2 tagGroup/get with bounded pagination", async () => {
+  const calls: RequestCall[] = [];
+  const client = createEagleClient({
+    baseUrl: "http://localhost:41595",
+    fetchImpl: async (url: string, init: { method?: string; body: string }) => {
+      calls.push({ url, init });
+      return jsonResponse({
+        status: "success",
+        data: { data: [{ id: "TG_001", name: "Design", tags: ["ui"], color: "blue" }], total: 1, offset: 0, limit: 1000 },
+      });
+    },
+  });
+
+  const result = await client.listTagGroups({ limit: 5000 });
+
+  assert.deepEqual(result.items, [{ id: "TG_001", name: "Design", tags: ["ui"], color: "blue" }]);
+  assert.equal(result.total, 1);
+  assert.equal(calls[0].url, "http://localhost:41595/api/v2/tagGroup/get?offset=0&limit=1000");
+  assert.equal(calls[0].init.method, "GET");
+});
+
 test("smartFolders lists V2 smart folders", async () => {
   const calls: RequestCall[] = [];
   const client = createEagleClient({

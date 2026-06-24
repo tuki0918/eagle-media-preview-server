@@ -1031,7 +1031,7 @@ test("public UI supports tag filter chips", async () => {
   assert.match(app, /function loadTagSuggestions\(\) \{/);
   assert.match(app, /function renderTagSuggestions\(items[^)]*\) \{/);
   assert.match(app, /function addTagFilter\(value[^)]*\) \{/);
-  assert.match(app, /applyFilterChange\(\{ query: "", tags: \[\.\.\.state\.tags, tag\] \}\);/);
+  assert.match(app, /applyFilterChange\(\{ query: "", tags: \[\.\.\.state\.tags, tag\], filtersOpen: true \}\);/);
   assert.match(app, /function removeTagFilter\(tag[^)]*\) \{/);
   assert.match(app, /function renderTagChips\(\) \{/);
   assert.match(app, /Object\.assign\(state, resetFilterState\(\)\);/);

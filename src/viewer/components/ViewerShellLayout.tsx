@@ -1,4 +1,6 @@
 import { useCallback, useState, useSyncExternalStore } from "react";
+import { TagIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { SIDEBAR_OPEN_STORAGE_KEY, UNCATEGORIZED_FOLDER_ID } from "../constants";
@@ -10,6 +12,9 @@ import { PreviewDialog } from "./PreviewDialog";
 import { ResultSurface } from "./ResultSurface";
 import { ResultsStatus } from "./ResultsStatus";
 import { SearchControls, SearchFiltersButton } from "./SearchControls";
+import { TagExplorer } from "./TagExplorer";
+import { getTagExplorerState, subscribeTagExplorerState } from "../tagExplorerState";
+import { openTagExplorer } from "../shellActions";
 import { TilesSentinel } from "./TilesSentinel";
 
 interface ViewerShellLayoutProps {
@@ -22,6 +27,8 @@ const SIDEBAR_MAX_WIDTH = 22 * 16;
 
 export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
   const searchState = useSyncExternalStore(subscribeSearchControlsState, getSearchControlsState, getSearchControlsState);
+  const tagExplorerState = useSyncExternalStore(subscribeTagExplorerState, getTagExplorerState, getTagExplorerState);
+  const tagExplorerOpen = tagExplorerState.mode === "tagExplorer";
   const [sidebarOpen, setSidebarOpenState] = useState(readSavedSidebarOpen);
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_INITIAL_WIDTH);
   const folderName = selectedFolderName(
@@ -62,20 +69,50 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
                 {folderName}
               </span>
             </div>
-            <SearchFiltersButton filtersOpen={searchState.filtersOpen} />
+            <div className="flex shrink-0 items-center gap-1.5">
+              <TagExplorerButton active={tagExplorerOpen} />
+              <SearchFiltersButton filtersOpen={searchState.filtersOpen} />
+            </div>
           </header>
           <div className="flex w-full flex-col gap-2 px-2 pb-3 pt-1 min-[720px]:px-3">
-            <SearchControls />
-            <ResultsStatus />
-            <ResultSurface />
-            <TilesSentinel />
-            <Pager />
+            {tagExplorerOpen ? (
+              <TagExplorer />
+            ) : (
+              <>
+                <SearchControls />
+                <ResultsStatus />
+                <ResultSurface />
+                <TilesSentinel />
+                <Pager />
+              </>
+            )}
           </div>
         </SidebarInset>
       </SidebarProvider>
       <PreviewDialog />
       <CardTemplate />
     </div>
+  );
+}
+
+function TagExplorerButton({ active = false }: { active?: boolean }) {
+  return (
+    <Button
+      id="tagExplorerButton"
+      className={[
+        "icon-button size-9 rounded-lg",
+        active ? "bg-muted text-foreground" : "",
+      ].join(" ")}
+      variant="ghost"
+      size="icon-sm"
+      type="button"
+      aria-label="Show tag explorer"
+      aria-pressed={active}
+      title="Show tag explorer"
+      onClick={openTagExplorer}
+    >
+      <TagIcon aria-hidden="true" />
+    </Button>
   );
 }
 

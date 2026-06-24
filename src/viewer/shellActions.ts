@@ -15,6 +15,7 @@ export interface ViewerShellActions {
   pageSizeChanged: (pageSize: number) => void;
   toggleFilters: () => void;
   resetFilters: () => void;
+  openTagExplorer: () => void;
   goToPreviousPage: () => void;
   goToNextPage: () => void;
   setViewMode: (mode: ViewerMode) => void;
@@ -42,6 +43,7 @@ let actions: ViewerShellActions = {
   pageSizeChanged: noop,
   toggleFilters: noop,
   resetFilters: noop,
+  openTagExplorer: noop,
   goToPreviousPage: noop,
   goToNextPage: noop,
   setViewMode: noop,
@@ -117,6 +119,10 @@ export function toggleFilters() {
 
 export function resetFilters() {
   actions.resetFilters();
+}
+
+export function openTagExplorer() {
+  actions.openTagExplorer();
 }
 
 export function goToPreviousPage() {

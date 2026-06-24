@@ -4,6 +4,7 @@ import {
   LIBRARY_EMPTY_LABEL,
   RECENT_FOLDERS_STORAGE_KEY,
   RECENT_TAGS_STORAGE_KEY,
+  TAG_EXPLORER_PINNED_STORAGE_KEY,
   pdfPreviewExts,
   playableAudioExts,
   playableVideoExts,
@@ -46,6 +47,7 @@ import { setPreviewTextState } from "./viewer/previewTextState";
 import { type PreviewBodyKind } from "./viewer/components/PreviewBody";
 import { clearPreviewBodyState, setPreviewBodyState } from "./viewer/previewBodyState";
 import { setTagChipsState } from "./viewer/tagChipsState";
+import { getTagExplorerState, setTagExplorerState, type TagExplorerGroup, type TagExplorerItem } from "./viewer/tagExplorerState";
 import {
   clearTagSuggestionsState,
   setTagSuggestionsState,
@@ -85,6 +87,7 @@ import type {
   LoadItemsResponse,
   LoadSmartFoldersResponse,
   OpenPreviewOptions,
+  TagGroupApiItem,
   TagSuggestionApiItem,
   ViewerPermissions,
 } from "./viewer/types";
@@ -106,8 +109,11 @@ let serverReachable = true;
 let sessionMaxAgeSeconds = 7 * 24 * 60 * 60;
 let allFoldersTotal = 0;
 let allFoldersTotalRequestId = 0;
+let tagExplorerRequestId = 0;
 const pendingRatingItemIds = new Set<string>();
 const DEFAULT_DOCUMENT_TITLE = "Media Preview Server";
+const TAG_EXPLORER_LIMIT = 60;
+const debouncedLoadTagExplorerTags = debounce(() => loadTagExplorerTags(), 180);
 
 export function initViewer() {
   init();
@@ -143,26 +149,36 @@ async function init() {
       hideTagSuggestions();
     },
     folderChanged: (folderId: string) => {
+      showLibraryMode();
       applyFilterChange({ folderId, smartFolderId: "" });
     },
     smartFolderChanged: (smartFolderId: string) => {
+      showLibraryMode();
       applyFilterChange({ folderId: "", smartFolderId });
     },
     mediaTypeChanged: (ext: string) => {
+      showLibraryMode();
       applyFilterChange({ ext });
     },
     ratingChanged: (rating: string) => {
+      showLibraryMode();
       applyFilterChange({ rating });
     },
     pageSizeChanged: (limit: number) => {
+      showLibraryMode();
       applyFilterChange({ limit });
     },
     toggleFilters: () => {
+      if (getTagExplorerState().mode === "tagExplorer") {
+        showLibraryMode();
+        return;
+      }
       state.filtersOpen = !state.filtersOpen;
       syncAdvancedFiltersUi();
       syncUrlState();
     },
     resetFilters,
+    openTagExplorer,
     goToPreviousPage: () => {
       state.offset = Math.max(0, state.offset - state.limit);
       resetPreviewState();
@@ -188,6 +204,7 @@ async function init() {
       }
     },
   });
+  initializeTagExplorerState();
   showLogin();
 }
 
@@ -373,6 +390,7 @@ function showViewer(data: ConnectResponse) {
   setShellView("viewer");
   setLibraryFooterName(libraryLabel(data));
   document.title = libraryTitle(data);
+  showLibraryMode();
   resetViewerResults();
   renderSearchControlButtons();
   applyControlsFromState();
@@ -382,6 +400,7 @@ function showViewer(data: ConnectResponse) {
 
 function clearViewerSessionState() {
   state.requestId += 1;
+  tagExplorerRequestId += 1;
   allFoldersTotalRequestId += 1;
   allFoldersTotal = 0;
   resetViewerResults({ resetOffset: true });
@@ -389,6 +408,14 @@ function clearViewerSessionState() {
   hideTagSuggestions();
   resetTileAutoLoading();
   closePreview({ skipHistory: true });
+  setTagExplorerState({
+    error: "",
+    groups: [],
+    items: [],
+    mode: "library",
+    query: "",
+    status: "idle",
+  });
   syncUrlState({ replace: true });
   setLibraryFooterName("");
   renderTagChips();
@@ -661,12 +688,16 @@ function applyControlsFromState() {
   updateStatus();
 }
 
-function applyFilterChange(patch: Partial<Pick<typeof state, "query" | "tags" | "folderId" | "smartFolderId" | "ext" | "rating" | "limit">>) {
+function applyFilterChange(patch: Partial<Pick<typeof state, "query" | "tags" | "folderId" | "smartFolderId" | "ext" | "rating" | "limit" | "filtersOpen">>) {
   Object.assign(state, patch, { offset: 0 });
   resetPreviewState();
   syncResetFiltersButton();
   syncUrlState();
   loadItems();
+}
+
+function showLibraryMode() {
+  setTagExplorerState({ mode: "library" });
 }
 
 function syncUrlState({ replace = false }: { replace?: boolean } = {}) {
@@ -681,11 +712,15 @@ function syncUrlState({ replace = false }: { replace?: boolean } = {}) {
 function addTagFilter(value: unknown) {
   const tag = normalizeTag(value);
   if (!tag || state.tags.includes(tag)) {
+    showLibraryMode();
+    state.filtersOpen = true;
+    syncUrlState();
     renderSearchControlButtons();
     hideTagSuggestions();
     return;
   }
-  applyFilterChange({ query: "", tags: [...state.tags, tag] });
+  showLibraryMode();
+  applyFilterChange({ query: "", tags: [...state.tags, tag], filtersOpen: true });
   renderTagChips();
   hideTagSuggestions();
 }
@@ -700,6 +735,7 @@ function renderTagChips() {
     tags: state.tags,
     onRemove: removeTagFilter,
   });
+  setTagExplorerState({ selectedTags: state.tags });
   syncResetFiltersButton();
 }
 
@@ -739,6 +775,153 @@ function renderTagSuggestions(items: readonly TagSuggestionApiItem[]) {
 function hideTagSuggestions() {
   state.tagSuggestionsRequestId += 1;
   clearTagSuggestionsState();
+}
+
+function initializeTagExplorerState() {
+  setTagExplorerState({
+    pinnedTags: readPinnedTags(),
+    selectedTags: state.tags,
+    onOpen: openTagExplorer,
+    onRefresh: () => loadTagExplorerTags(),
+    onRemoveSelectedTag: removeTagFilter,
+    onSearch: searchTagExplorer,
+    onSelectTag: addTagFilter,
+    onTogglePinned: togglePinnedTag,
+  });
+}
+
+function openTagExplorer() {
+  tagExplorerRequestId += 1;
+  const explorerState = getTagExplorerState();
+  setTagExplorerState({ mode: explorerState.mode === "tagExplorer" ? "library" : "tagExplorer" });
+  if (explorerState.status === "idle" || !explorerState.items.length) loadTagExplorerTags();
+}
+
+function searchTagExplorer(query: string) {
+  setTagExplorerState({ query });
+  debouncedLoadTagExplorerTags();
+}
+
+async function loadTagExplorerTags() {
+  const requestId = ++tagExplorerRequestId;
+  const query = getTagExplorerState().query.trim();
+  setTagExplorerState({ error: "", status: "loading" });
+
+  try {
+    const params = new URLSearchParams({ limit: String(TAG_EXPLORER_LIMIT) });
+    if (query) params.set("q", query);
+    const [data, groupData] = await Promise.all([
+      getJson<{ items?: TagSuggestionApiItem[] }>(`/api/tags?${params.toString()}`),
+      getJson<{ items?: TagGroupApiItem[] }>("/api/tag-groups?limit=1000"),
+    ]);
+    if (requestId !== tagExplorerRequestId) return;
+    const groups = normalizeTagGroups(groupData.items);
+    const items = normalizeTagExplorerItems(data.items);
+    setTagExplorerState({ groups, items, status: "ready" });
+
+    const itemsWithThumbnails = await Promise.all(items.map(async (item) => {
+      const thumbnail = await tagThumbnail(item.name);
+      return {
+        ...item,
+        count: thumbnail.total ?? item.count,
+        thumbnailItem: thumbnail.item,
+      };
+    }));
+    if (requestId !== tagExplorerRequestId) return;
+    setTagExplorerState({ items: itemsWithThumbnails, status: "ready" });
+  } catch (error) {
+    if (requestId !== tagExplorerRequestId) return;
+    if (handleAuthError(error)) return;
+    setTagExplorerState({
+      error: errorMessage(error),
+      items: [],
+      status: "error",
+    });
+  }
+}
+
+function normalizeTagExplorerItems(items: unknown): TagExplorerItem[] {
+  if (!Array.isArray(items)) return [];
+  const normalized: TagExplorerItem[] = [];
+  for (const item of items) {
+    const name = normalizeTag((item as TagSuggestionApiItem | null)?.name);
+    if (!name || normalized.some((entry) => entry.name === name)) continue;
+    const count = Number((item as TagSuggestionApiItem).count);
+    normalized.push({
+      color: typeof (item as TagSuggestionApiItem).color === "string" ? (item as TagSuggestionApiItem).color : undefined,
+      name,
+      count: Number.isFinite(count) && count >= 0 ? count : undefined,
+      groups: normalizeStringList((item as TagSuggestionApiItem).groups),
+    });
+  }
+  return normalized;
+}
+
+function normalizeTagGroups(items: unknown): TagExplorerGroup[] {
+  if (!Array.isArray(items)) return [];
+  const normalized: TagExplorerGroup[] = [];
+  for (const item of items) {
+    const id = String((item as TagGroupApiItem | null)?.id || "").trim();
+    const name = String((item as TagGroupApiItem | null)?.name || "").trim();
+    if (!id || !name || normalized.some((entry) => entry.id === id)) continue;
+    normalized.push({
+      color: typeof (item as TagGroupApiItem).color === "string" ? (item as TagGroupApiItem).color : undefined,
+      description: typeof (item as TagGroupApiItem).description === "string" ? (item as TagGroupApiItem).description : undefined,
+      id,
+      name,
+      tags: normalizeStringList((item as TagGroupApiItem).tags),
+    });
+  }
+  return normalized;
+}
+
+function normalizeStringList(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.map((entry) => String(entry || "").trim()).filter(Boolean);
+}
+
+async function tagThumbnail(tag: string) {
+  try {
+    const params = new URLSearchParams({ offset: "0", limit: "1" });
+    params.append("tag", tag);
+    const data = await getJson<LoadItemsResponse>(`/api/items?${params.toString()}`);
+    const total = Number(data.total);
+    return {
+      item: data.items?.[0],
+      total: Number.isFinite(total) && total >= 0 ? total : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
+function togglePinnedTag(tag: string) {
+  const normalized = normalizeTag(tag);
+  if (!normalized) return;
+  const current = readPinnedTags();
+  const next = current.includes(normalized)
+    ? current.filter((entry) => entry !== normalized)
+    : [normalized, ...current];
+  writePinnedTags(next);
+  setTagExplorerState({ pinnedTags: next });
+}
+
+function readPinnedTags() {
+  try {
+    const data = JSON.parse(window.localStorage.getItem(TAG_EXPLORER_PINNED_STORAGE_KEY) || "[]") as unknown;
+    if (!Array.isArray(data)) return [];
+    return data.map(normalizeTag).filter(Boolean).filter((tag, index, tags) => tags.indexOf(tag) === index);
+  } catch {
+    return [];
+  }
+}
+
+function writePinnedTags(tags: readonly string[]) {
+  try {
+    window.localStorage.setItem(TAG_EXPLORER_PINNED_STORAGE_KEY, JSON.stringify(tags));
+  } catch {
+    // Pinning still works in memory for the current render.
+  }
 }
 
 function syncAdvancedFiltersUi() {
@@ -1059,6 +1242,7 @@ function renderEmptyState() {
 
 function resetFilters() {
   if (!hasResettableFilters(state)) return;
+  showLibraryMode();
   Object.assign(state, resetFilterState(state));
   renderTagChips();
   syncResetFiltersButton();
