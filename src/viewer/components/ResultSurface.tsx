@@ -22,8 +22,10 @@ export function ResultSurface({ state }: ResultSurfaceProps) {
     <section id="grid" className={resultSurfaceClassName(surfaceState.viewMode, isEmpty)} aria-label="Eagle assets">
       {surfaceState.kind === "list" ? (
         <ResultList items={surfaceState.items} viewMode={surfaceState.viewMode} onOpenPreview={surfaceState.onOpenPreview} />
-      ) : (
+      ) : surfaceState.kind === "empty" ? (
         <ResultStateView {...surfaceState} viewMode={surfaceState.viewMode} />
+      ) : (
+        <ResultStateView {...surfaceState} />
       )}
     </section>
   );
