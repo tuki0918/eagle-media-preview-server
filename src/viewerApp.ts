@@ -92,7 +92,8 @@ import { buildViewerUrl, currentPage, parseViewerUrlState } from "./viewer/urlSt
 import {
   isViewerMode,
   needsViewModeReload,
-  savedViewerMode,
+  readSavedViewerMode,
+  writeSavedViewerMode,
 } from "./viewer/viewMode";
 
 let connectMessageText = "";
@@ -599,7 +600,7 @@ function setViewMode(mode: string) {
   if (state.viewMode === mode) return;
   const previousMode = state.viewMode;
   state.viewMode = mode;
-  localStorage.setItem("eagleViewMode", mode);
+  writeSavedViewerMode(mode);
   if (needsViewModeReload(previousMode, mode)) {
     state.offset = 0;
     resetPreviewState();
@@ -616,8 +617,7 @@ function restoreViewMode() {
     updateStatus();
     return;
   }
-  const saved = localStorage.getItem("eagleViewMode");
-  state.viewMode = savedViewerMode(saved);
+  state.viewMode = readSavedViewerMode();
   updateStatus();
 }
 

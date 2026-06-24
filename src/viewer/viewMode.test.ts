@@ -2,7 +2,9 @@ import { describe, expect, test } from "vitest";
 import {
   isViewerMode,
   needsViewModeReload,
+  readSavedViewerMode,
   savedViewerMode,
+  writeSavedViewerMode,
 } from "./viewMode";
 
 describe("isViewerMode", () => {
@@ -26,6 +28,30 @@ describe("savedViewerMode", () => {
   test("falls back to the default mode for missing or invalid values", () => {
     expect(savedViewerMode(null)).toBe("tiles");
     expect(savedViewerMode("table")).toBe("tiles");
+  });
+});
+
+describe("readSavedViewerMode", () => {
+  test("falls back to the default mode when storage is unavailable", () => {
+    const storage = {
+      getItem() {
+        throw new Error("storage unavailable");
+      },
+    } as unknown as Storage;
+
+    expect(readSavedViewerMode(storage)).toBe("tiles");
+  });
+});
+
+describe("writeSavedViewerMode", () => {
+  test("ignores storage write failures", () => {
+    const storage = {
+      setItem() {
+        throw new Error("quota exceeded");
+      },
+    } as unknown as Storage;
+
+    expect(() => writeSavedViewerMode("list", storage)).not.toThrow();
   });
 });
 
