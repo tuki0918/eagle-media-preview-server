@@ -1,10 +1,12 @@
 import { InboxIcon, SearchXIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { DEFAULT_VIEW_MODE } from "../constants";
+import type { ViewerMode } from "../types";
 
 export type ResultStateViewProps =
   | { kind: "message"; text: string; className?: string; detail?: string; title?: string }
-  | { kind: "empty"; hasActiveFilters: boolean; hasClearableFilters?: boolean; onClearFilters: () => void };
+  | { kind: "empty"; hasActiveFilters: boolean; hasClearableFilters?: boolean; onClearFilters: () => void; viewMode?: ViewerMode };
 
 const emptyMessageClassName = "rounded-md border border-dashed border-border bg-card px-3.5 py-11 text-center text-muted-foreground";
 const errorMessageClassName = `${emptyMessageClassName} text-destructive`;
@@ -12,7 +14,9 @@ const messageTitleClassName = "block text-[17px] font-[760] text-foreground";
 const errorTitleClassName = `${messageTitleClassName} text-destructive`;
 const messageDetailClassName = "mx-auto mt-2 max-w-[460px] text-sm leading-[1.55] text-muted-foreground";
 const emptyStateClassName =
-  "col-span-full grid min-h-[320px] content-center justify-items-center gap-2.5 rounded-xl border border-dashed border-border bg-card px-5 py-14 text-center shadow-sm ring-0";
+  "col-span-full grid content-center justify-items-center gap-2.5 rounded-xl border border-dashed border-border bg-card px-5 py-12 text-center shadow-sm ring-0";
+const tilesEmptyStateHeightClassName = "min-h-[clamp(280px,calc(100dvh-220px),460px)]";
+const pagedEmptyStateHeightClassName = "min-h-[clamp(260px,calc(100dvh-300px),420px)]";
 const emptyStateIconClassName = "mb-1 size-14 text-muted-foreground";
 const emptyStateButtonClassName = "mt-1 min-h-[38px] rounded-lg text-[13px] font-[680]";
 
@@ -35,7 +39,7 @@ export function ResultStateView(props: ResultStateViewProps) {
   const EmptyIcon = props.hasActiveFilters ? SearchXIcon : InboxIcon;
 
   return (
-    <Card className={emptyStateClassName}>
+    <Card className={`${emptyStateClassName} ${emptyStateHeightClassName(props.viewMode)}`}>
       <EmptyIcon className={emptyStateIconClassName} strokeWidth={1.5} aria-hidden="true" />
       <strong className="text-[17px] font-[760] text-foreground">{props.hasActiveFilters ? "No items matched these filters" : "Library is empty"}</strong>
       <p className="m-0 max-w-[420px] text-sm leading-[1.55] text-muted-foreground">
@@ -50,6 +54,10 @@ export function ResultStateView(props: ResultStateViewProps) {
       ) : null}
     </Card>
   );
+}
+
+function emptyStateHeightClassName(viewMode: ViewerMode = DEFAULT_VIEW_MODE) {
+  return viewMode === "tiles" ? tilesEmptyStateHeightClassName : pagedEmptyStateHeightClassName;
 }
 
 function messageClassName(className?: string) {

@@ -23,7 +23,7 @@ export function ResultSurface({ state }: ResultSurfaceProps) {
       {surfaceState.kind === "list" ? (
         <ResultList items={surfaceState.items} viewMode={surfaceState.viewMode} onOpenPreview={surfaceState.onOpenPreview} />
       ) : (
-        <ResultStateView {...surfaceState} />
+        <ResultStateView {...surfaceState} viewMode={surfaceState.viewMode} />
       )}
     </section>
   );

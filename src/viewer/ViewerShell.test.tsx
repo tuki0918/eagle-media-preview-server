@@ -775,8 +775,8 @@ describe("ViewerAppShell", () => {
 
   test("renders result state as a reusable component", () => {
     const message = renderToStaticMarkup(<ResultStateView kind="message" text="Loading" />);
-    const empty = renderToStaticMarkup(<ResultStateView kind="empty" hasActiveFilters={true} onClearFilters={() => {}} />);
-    const libraryEmpty = renderToStaticMarkup(<ResultStateView kind="empty" hasActiveFilters={false} onClearFilters={() => {}} />);
+    const empty = renderToStaticMarkup(<ResultStateView kind="empty" hasActiveFilters={true} onClearFilters={() => {}} viewMode="grid" />);
+    const libraryEmpty = renderToStaticMarkup(<ResultStateView kind="empty" hasActiveFilters={false} onClearFilters={() => {}} viewMode="tiles" />);
     const error = renderToStaticMarkup(
       <ResultStateView
         kind="message"
@@ -792,8 +792,10 @@ describe("ViewerAppShell", () => {
     expect(empty).toContain("lucide-search-x");
     expect(empty).toContain("text-muted-foreground");
     expect(empty).toContain('stroke-width="1.5"');
+    expect(empty).toContain("min-h-[clamp(260px,calc(100dvh-300px),420px)]");
     expect(libraryEmpty).toContain("Library is empty");
     expect(libraryEmpty).toContain("lucide-inbox");
+    expect(libraryEmpty).toContain("min-h-[clamp(280px,calc(100dvh-220px),460px)]");
     expect(error).toContain("Eagle connection lost");
     expect(error).toContain("Make sure Eagle is running.");
   });
@@ -816,7 +818,36 @@ describe("ViewerAppShell", () => {
     expect(html).toContain("[grid-auto-rows:4px]");
     expect(html).toContain("max-[540px]:grid-cols-3");
     expect(html).toContain("is-empty");
+    expect(html).toContain("min-h-[clamp(280px,calc(100dvh-220px),460px)]");
     expect(html).not.toContain("column-count");
+  });
+
+  test("renders grid and list empty states with pagination-aware height", () => {
+    const grid = renderToStaticMarkup(
+      <ResultSurface
+        state={{
+          kind: "empty",
+          hasActiveFilters: true,
+          onClearFilters: () => {},
+          viewMode: "grid",
+        }}
+      />,
+    );
+    const list = renderToStaticMarkup(
+      <ResultSurface
+        state={{
+          kind: "empty",
+          hasActiveFilters: true,
+          onClearFilters: () => {},
+          viewMode: "list",
+        }}
+      />,
+    );
+
+    expect(grid).toContain("media-grid");
+    expect(grid).toContain("min-h-[clamp(260px,calc(100dvh-300px),420px)]");
+    expect(list).toContain("media-list");
+    expect(list).toContain("min-h-[clamp(260px,calc(100dvh-300px),420px)]");
   });
 
   test("renders result list as reusable media items", () => {

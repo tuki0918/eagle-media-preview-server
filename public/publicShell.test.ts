@@ -1068,7 +1068,9 @@ test("public results status and empty states stay concise and consistent across 
   assert.doesNotMatch(css, /\.media-grid\s*\{[^}]*min-height:\s*320px;/s);
   assert.doesNotMatch(css, /\.media-list\s*\{[^}]*min-height:\s*320px;/s);
   assert.match(html, /is-empty block overflow-visible !rounded-none !border-0 !bg-transparent !shadow-none/);
-  assert.match(html, /min-h-\[320px\]/);
+  assert.doesNotMatch(html, /min-h-\[320px\]/);
+  assert.match(html, /min-h-\[clamp\(280px,calc\(100dvh-220px\),460px\)\]/);
+  assert.match(html, /min-h-\[clamp\(260px,calc\(100dvh-300px\),420px\)\]/);
 });
 
 test("public UI exposes collapsible advanced filters without sort controls", async () => {
