@@ -693,6 +693,10 @@ test("pathFromFileValue decodes Eagle URL-encoded filesystem paths", () => {
   );
 });
 
+test("pathFromFileValue ignores malformed file URLs", () => {
+  assert.equal(pathFromFileValue("file://%zz"), "");
+});
+
 test("resolveLibraryItemFile finds the original file inside an Eagle item folder", async () => {
   const libraryPath = await mkdtemp(join(tmpdir(), "eagle-library-"));
   const itemDir = join(libraryPath, "images", "ITEM123.info");

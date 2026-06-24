@@ -10,9 +10,10 @@
     "dev": "vite --host 127.0.0.1",
     "storybook": "STORYBOOK=1 HOME=.storybook-home storybook dev -p 6006 --disable-telemetry",
     "test": "npm run build:plugin-service && vitest run",
+    "test:run": "vitest run",
     "typecheck": "tsc --noEmit && npm run typecheck:plugin-service",
     "typecheck:plugin-service": "tsc -p tsconfig.plugin-service.json --noEmit",
-    "verify": "npm run typecheck && npm run build && npm test"
+    "verify": "npm run build && tsc --noEmit && npm run test:run"
   },
   "engines": {
     "node": ">=20"

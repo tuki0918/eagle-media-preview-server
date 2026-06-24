@@ -471,7 +471,11 @@ function unwrapData(payload: unknown) {
 function pathFromFileValue(value: unknown) {
   if (!value || typeof value !== "string") return "";
   if (value.startsWith("file://")) {
-    return fileURLToPath(value);
+    try {
+      return fileURLToPath(value);
+    } catch {
+      return "";
+    }
   }
   try {
     return decodeURIComponent(value);

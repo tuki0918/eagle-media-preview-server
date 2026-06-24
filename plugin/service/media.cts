@@ -114,7 +114,30 @@ async function readInternetShortcutUrl(id: string, session: EagleMediaSession) {
   if (!filePath) return "";
   const info = await safeStat(filePath);
   if (!info || !info.isFile() || info.size > MAX_INTERNET_SHORTCUT_BYTES) return "";
-  return parseInternetShortcutUrl(await readFile(filePath, "utf8"));
+  return parseInternetShortcutUrl(decodeInternetShortcutText(await readFile(filePath)));
+}
+
+function decodeInternetShortcutText(buffer: Buffer) {
+  if (buffer[0] === 0xff && buffer[1] === 0xfe) {
+    return buffer.subarray(2).toString("utf16le");
+  }
+  if (buffer[0] === 0xfe && buffer[1] === 0xff) {
+    return swapUtf16Bytes(buffer.subarray(2)).toString("utf16le");
+  }
+  if (buffer[0] === 0xef && buffer[1] === 0xbb && buffer[2] === 0xbf) {
+    return buffer.subarray(3).toString("utf8");
+  }
+  return buffer.toString("utf8");
+}
+
+function swapUtf16Bytes(buffer: Buffer) {
+  const output = Buffer.from(buffer);
+  for (let index = 0; index + 1 < output.length; index += 2) {
+    const left = output[index];
+    output[index] = output[index + 1];
+    output[index + 1] = left;
+  }
+  return output;
 }
 
 function parseInternetShortcutUrl(text: string) {

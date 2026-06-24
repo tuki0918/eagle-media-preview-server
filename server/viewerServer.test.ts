@@ -1932,6 +1932,45 @@ test("createViewerServer reads InternetShortcut files for url previews", async (
   }
 });
 
+test("createViewerServer reads UTF-16LE InternetShortcut files for url previews", async () => {
+  const root = join(tmpdir(), `eagle-media-preview-server-url-utf16-${Date.now()}`);
+  await mkdir(root, { recursive: true });
+  const filePath = join(root, "shortcut.url");
+  await writeFile(filePath, Buffer.concat([
+    Buffer.from([0xff, 0xfe]),
+    Buffer.from("[InternetShortcut]\r\nURL=https://example.test/utf16\r\n", "utf16le"),
+  ]));
+
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: root, name: "Test Library" };
+      },
+      async itemById(id: string) {
+        return {
+          data: [{ id, filePath, name: "shortcut", ext: "url" }],
+        };
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const response = await fetch(`http://127.0.0.1:${status.port}/api/items/URL123/url-preview`);
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { url: "https://example.test/utf16" });
+  } finally {
+    await viewer.stop();
+  }
+});
+
 test("createViewerServer forwards repeated tag filters to item listing", async () => {
   const calls: ItemListOptions[] = [];
   const viewer = createViewerServer({
