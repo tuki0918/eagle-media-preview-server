@@ -101,6 +101,18 @@ describe("ViewerAppShell", () => {
     expect(safeExternalUrl("javascript:alert(1)")).toBe("");
   });
 
+  test("preview body delegates media, image, and simple previews to focused modules", async () => {
+    const [{ MediaControls }, { ImagePreview }, { TextPreview }] = await Promise.all([
+      import("./components/previewBody/MediaPreviews"),
+      import("./components/previewBody/ImagePreview"),
+      import("./components/previewBody/SimplePreviews"),
+    ]);
+
+    expect(typeof MediaControls).toBe("function");
+    expect(typeof ImagePreview).toBe("function");
+    expect(typeof TextPreview).toBe("function");
+  });
+
   test("renders the DOM contract used by viewerApp", () => {
     const html = renderToStaticMarkup(<ViewerAppShell />);
 
