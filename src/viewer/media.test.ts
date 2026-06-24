@@ -27,6 +27,9 @@ describe("thumbnail media helpers", () => {
   test("detects items without preview assets", () => {
     expect(hasNoPreviewAsset({ id: "thumbnail-missing", noThumbnail: true })).toBe(true);
     expect(hasNoPreviewAsset({ id: "preview-missing", noPreview: true })).toBe(true);
+    expect(hasNoPreviewAsset({ id: "empty-preview-flags-missing", size: 0 })).toBe(true);
+    expect(hasNoPreviewAsset({ id: "preview-flags-missing" })).toBe(false);
+    expect(hasNoPreviewAsset({ id: "non-empty-preview-flags-missing", size: 1024 })).toBe(false);
     expect(hasNoPreviewAsset({ id: "preview-available", noThumbnail: false, noPreview: false })).toBe(false);
   });
 });

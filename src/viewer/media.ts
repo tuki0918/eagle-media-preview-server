@@ -28,5 +28,8 @@ export function thumbnailAriaLabel(item: EagleItem, mediaType = thumbnailMediaTy
 }
 
 export function hasNoPreviewAsset(item: EagleItem) {
-  return item.noThumbnail === true || item.noPreview === true;
+  const hasNoThumbnailFlag = Object.prototype.hasOwnProperty.call(item, "noThumbnail");
+  const hasNoPreviewFlag = Object.prototype.hasOwnProperty.call(item, "noPreview");
+  const hasNoPreviewFlags = !hasNoThumbnailFlag && !hasNoPreviewFlag;
+  return item.noThumbnail === true || item.noPreview === true || (hasNoPreviewFlags && item.size === 0);
 }

@@ -862,7 +862,7 @@ describe("ViewerAppShell", () => {
   test("renders result list as reusable media items", () => {
     const html = renderToStaticMarkup(
       <ResultList
-        items={[{ id: "item-1", name: "Sample.mp4", ext: "mp4", width: 120, height: 80, duration: 125, star: 4 }]}
+        items={[{ id: "item-1", name: "Sample.mp4", ext: "mp4", width: 120, height: 80, duration: 125, star: 4, noThumbnail: false, noPreview: false }]}
         viewMode="tiles"
         onOpenPreview={() => {}}
       />,
@@ -879,13 +879,17 @@ describe("ViewerAppShell", () => {
   test("does not request list thumbnails when Eagle reports no preview asset", () => {
     const html = renderToStaticMarkup(
       <ResultList
-        items={[{ id: "item-1", name: "Sample.url", ext: "url", noPreview: true }]}
+        items={[
+          { id: "item-1", name: "Sample.url", ext: "url", noPreview: true },
+          { id: "item-2", name: "Legacy.url", ext: "url", size: 0 },
+        ]}
         viewMode="grid"
         onOpenPreview={() => {}}
       />,
     );
 
     expect(html).not.toContain("/api/items/item-1/thumb");
+    expect(html).not.toContain("/api/items/item-2/thumb");
     expect(html).toContain("thumb-missing");
     expect(html).toContain("NO PREVIEW");
   });
@@ -1518,12 +1522,12 @@ describe("ViewerAppShell", () => {
 
   test("renders preview body media variants", () => {
     const video = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", name: "Sample.mp4", ext: "mp4" }} kind="video" />);
-    const audio = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", name: "Sample.mp3", ext: "mp3" }} kind="audio" />);
+    const audio = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", name: "Sample.mp3", ext: "mp3", noThumbnail: false, noPreview: false }} kind="audio" />);
     const image = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", name: "Sample.jpg" }} kind="image" />);
     const text = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", name: "Sample.txt" }} kind="text" />);
     const pdf = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", name: "Sample.pdf", ext: "pdf" }} kind="pdf" />);
-    const url = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", name: "Sample.url", ext: "url", url: "https://example.test/page" }} kind="url" />);
-    const unsupported = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", ext: "avi" }} kind="unsupported" />);
+    const url = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", name: "Sample.url", ext: "url", url: "https://example.test/page", noThumbnail: false, noPreview: false }} kind="url" />);
+    const unsupported = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", ext: "avi", noThumbnail: false, noPreview: false }} kind="unsupported" />);
 
     expect(video).toContain("video-player");
     expect(video).toContain("Playback position");
@@ -1558,9 +1562,18 @@ describe("ViewerAppShell", () => {
         kind="url"
       />,
     );
+    const missingFlagsUrl = renderToStaticMarkup(
+      <PreviewBody
+        item={{ id: "item-2", name: "Legacy.url", ext: "url", size: 0, url: "https://example.test/legacy" }}
+        kind="url"
+      />,
+    );
 
     expect(url).toContain("url-thumb-preview");
     expect(url).not.toContain("/api/items/item-1/thumb");
+    expect(missingFlagsUrl).not.toContain("/api/items/item-2/thumb");
+    expect(url).toContain("No thumbnail");
+    expect(missingFlagsUrl).toContain("No thumbnail");
     expect(url).toContain('href="https://example.test/page"');
     expect(url).toContain("このページを開く");
   });
