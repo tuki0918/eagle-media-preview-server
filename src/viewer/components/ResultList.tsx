@@ -14,7 +14,7 @@ import {
   isTimedMedia,
   originalFileName,
 } from "../format";
-import { thumbnailAriaLabel, thumbnailMediaType, thumbnailOverlayIcon } from "../media";
+import { hasNoPreviewAsset, thumbnailAriaLabel, thumbnailMediaType, thumbnailOverlayIcon } from "../media";
 import type { EagleItem, ViewerMode } from "../types";
 import { RatingStars } from "./RatingStars";
 
@@ -274,8 +274,9 @@ function ExtensionPill({ item }: { item: EagleItem }) {
 }
 
 function ThumbnailButton({ children, item, onOpenPreview, style, variant, withBadges = false, withFileBadge = true, withFileNameOverlay = false, withOverlay = false }: ThumbnailButtonProps) {
-  const [loading, setLoading] = useState(true);
-  const [missing, setMissing] = useState(false);
+  const noPreviewAsset = hasNoPreviewAsset(item);
+  const [loading, setLoading] = useState(!noPreviewAsset);
+  const [missing, setMissing] = useState(noPreviewAsset);
   const mediaType = thumbnailMediaType(item);
   const duration = isTimedMedia(item) ? formatDuration(item.duration) : "";
   const trigger = usePreviewTrigger(item, onOpenPreview);
@@ -295,22 +296,24 @@ function ThumbnailButton({ children, item, onOpenPreview, style, variant, withBa
       onPointerMove={trigger.onPointerMove}
       onPointerUp={trigger.onPointerUp}
     >
-      <img
-        className={loading || missing ? "opacity-0" : undefined}
-        alt={item.name || item.id || ""}
-        decoding="async"
-        hidden={missing}
-        loading="lazy"
-        src={mediaUrl(String(item.id || ""), "thumb")}
-        onError={() => {
-          setLoading(false);
-          setMissing(true);
-        }}
-        onLoad={() => {
-          setLoading(false);
-          setMissing(false);
-        }}
-      />
+      {noPreviewAsset ? null : (
+        <img
+          className={loading || missing ? "opacity-0" : undefined}
+          alt={item.name || item.id || ""}
+          decoding="async"
+          hidden={missing}
+          loading="lazy"
+          src={mediaUrl(String(item.id || ""), "thumb")}
+          onError={() => {
+            setLoading(false);
+            setMissing(true);
+          }}
+          onLoad={() => {
+            setLoading(false);
+            setMissing(false);
+          }}
+        />
+      )}
       {loading ? <LoadingIndicator variant={variant} /> : null}
       {missing ? <span className="pointer-events-none absolute inset-0 z-[1] grid place-items-center text-[11px] font-[760] tracking-[0] text-muted-foreground">NO PREVIEW</span> : null}
       {withOverlay ? (

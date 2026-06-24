@@ -26,3 +26,7 @@ export function thumbnailAriaLabel(item: EagleItem, mediaType = thumbnailMediaTy
   const name = item.name || item.id || "file";
   return mediaType === "video" || mediaType === "audio" ? `Play ${name}` : `Open ${name}`;
 }
+
+export function hasNoPreviewAsset(item: EagleItem) {
+  return item.noThumbnail === true || item.noPreview === true;
+}

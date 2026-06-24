@@ -876,6 +876,20 @@ describe("ViewerAppShell", () => {
     expect(html).not.toContain("rating-star");
   });
 
+  test("does not request list thumbnails when Eagle reports no preview asset", () => {
+    const html = renderToStaticMarkup(
+      <ResultList
+        items={[{ id: "item-1", name: "Sample.url", ext: "url", noPreview: true }]}
+        viewMode="grid"
+        onOpenPreview={() => {}}
+      />,
+    );
+
+    expect(html).not.toContain("/api/items/item-1/thumb");
+    expect(html).toContain("thumb-missing");
+    expect(html).toContain("NO PREVIEW");
+  });
+
   test("renders preview info as reusable detail and action components", () => {
     const details = renderToStaticMarkup(
       <PreviewDetailsPanel
@@ -1535,6 +1549,32 @@ describe("ViewerAppShell", () => {
     expect(url).toContain("このページを開く");
     expect(url).not.toContain("<iframe");
     expect(unsupported).toContain("unsupported-thumb");
+  });
+
+  test("does not request url preview thumbnails when Eagle reports no preview asset", () => {
+    const url = renderToStaticMarkup(
+      <PreviewBody
+        item={{ id: "item-1", name: "Sample.url", ext: "url", noPreview: true, url: "https://example.test/page" }}
+        kind="url"
+      />,
+    );
+
+    expect(url).toContain("url-thumb-preview");
+    expect(url).not.toContain("/api/items/item-1/thumb");
+    expect(url).toContain('href="https://example.test/page"');
+    expect(url).toContain("このページを開く");
+  });
+
+  test("does not request preview thumbnails when Eagle reports no preview asset", () => {
+    const audio = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", name: "Sample.mp3", ext: "mp3", noPreview: true }} kind="audio" />);
+    const imageThumb = renderToStaticMarkup(<PreviewBody item={{ id: "item-2", name: "Sample.psd", noPreview: true }} kind="image" srcKind="thumb" />);
+    const unsupported = renderToStaticMarkup(<PreviewBody item={{ id: "item-3", ext: "avi", noPreview: true }} kind="unsupported" />);
+
+    expect(audio).not.toContain("/api/items/item-1/thumb");
+    expect(imageThumb).not.toContain("/api/items/item-2/thumb");
+    expect(imageThumb).toContain("Thumbnail is unavailable");
+    expect(unsupported).not.toContain("/api/items/item-3/thumb");
+    expect(unsupported).toContain("AVI is not supported");
   });
 
   test("renders rating stars as reusable static and interactive controls", () => {

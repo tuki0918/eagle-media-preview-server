@@ -18,6 +18,7 @@ import {
   setPreviewZoom,
 } from "../previewTransform";
 import { getPreviewBodyState, subscribePreviewBodyState } from "../previewBodyState";
+import { hasNoPreviewAsset } from "../media";
 import {
   getVideoOverlayControlsVisible,
   setVideoOverlayControlsVisible,
@@ -71,6 +72,7 @@ const pdfPreviewClassName = "pdf-preview h-full min-h-0 w-full border-0 bg-backg
 const urlThumbPreviewClassName = "url-thumb-preview grid h-full min-h-0 place-items-center bg-[#05070a] p-5";
 const urlThumbPreviewPanelClassName = "grid w-[min(760px,calc(100vw_-_40px))] gap-4";
 const urlThumbPreviewImageClassName = "url-thumb-preview-image max-h-[min(66dvh,680px)] w-full max-w-full rounded-md object-contain shadow-[0_24px_80px_rgba(0,0,0,0.42)]";
+const urlThumbPreviewPlaceholderClassName = "url-thumb-preview-placeholder grid min-h-[220px] place-items-center rounded-md border border-[rgba(255,255,255,0.14)] bg-[rgba(255,255,255,0.06)] px-5 text-center text-sm font-[680] text-white/70";
 const urlThumbPreviewLinkClassName = "inline-flex min-h-11 w-fit max-w-full items-center justify-center gap-2 justify-self-center rounded-md bg-primary px-4 text-sm font-[720] text-primary-foreground no-underline hover:bg-primary/90 [&_svg]:size-4";
 const unsupportedThumbClassName = "unsupported-thumb max-h-[min(62dvh,640px)] w-[min(640px,calc(100vw_-_48px))] max-w-full object-contain";
 const previewNoticeClassName = "preview-notice m-0 max-w-[560px] text-center text-[13px] leading-normal text-muted-foreground";
@@ -136,12 +138,13 @@ function VideoPreview({ item }: { item: EagleItem }) {
 
 function AudioPreview({ item }: { item: EagleItem }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [artworkMissing, setArtworkMissing] = useState(false);
+  const noPreviewAsset = hasNoPreviewAsset(item);
+  const [artworkMissing, setArtworkMissing] = useState(noPreviewAsset);
 
   useEffect(() => {
-    setArtworkMissing(false);
+    setArtworkMissing(hasNoPreviewAsset(item));
     audioRef.current?.play().catch(() => {});
-  }, [item.id]);
+  }, [item.id, item.noPreview, item.noThumbnail]);
 
   return (
     <section className={audioPlayerShellClassName} aria-label="Audio player">
@@ -381,12 +384,16 @@ function UrlPreview({ item }: { item: EagleItem }) {
   return (
     <section className={urlThumbPreviewClassName} aria-label="Link preview">
       <div className={urlThumbPreviewPanelClassName}>
-        <img
-          className={urlThumbPreviewImageClassName}
-          src={mediaUrl(String(item.id || ""), "thumb")}
-          alt={item.name || item.id || ""}
-          decoding="async"
-        />
+        {hasNoPreviewAsset(item) ? (
+          <div className={urlThumbPreviewPlaceholderClassName}>No thumbnail</div>
+        ) : (
+          <img
+            className={urlThumbPreviewImageClassName}
+            src={mediaUrl(String(item.id || ""), "thumb")}
+            alt={item.name || item.id || ""}
+            decoding="async"
+          />
+        )}
         {externalUrl ? (
           <a className={urlThumbPreviewLinkClassName} href={externalUrl} target="_blank" rel="noopener noreferrer">
             <ExternalLinkIcon aria-hidden="true" />
@@ -415,13 +422,16 @@ export function safeExternalUrl(value: unknown) {
 function UnsupportedPreview({ item }: { item: EagleItem }) {
   return (
     <>
-      <img className={unsupportedThumbClassName} src={mediaUrl(String(item.id || ""), "thumb")} alt={item.name || item.id || ""} />
+      {hasNoPreviewAsset(item) ? null : (
+        <img className={unsupportedThumbClassName} src={mediaUrl(String(item.id || ""), "thumb")} alt={item.name || item.id || ""} />
+      )}
       <PreviewNotice message={`${(item.ext || "This format").toUpperCase()} is not supported in this browser.`} />
     </>
   );
 }
 
 function ImagePreview({ item, srcKind }: { item: EagleItem; srcKind: "file" | "thumb" }) {
+  const thumbnailUnavailable = srcKind === "thumb" && hasNoPreviewAsset(item);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const dragRef = useRef<PreviewDrag | null>(null);
@@ -603,6 +613,10 @@ function ImagePreview({ item, srcKind }: { item: EagleItem; srcKind: "file" | "t
       dragRef.current = null;
     }
   };
+
+  if (thumbnailUnavailable) {
+    return <PreviewNotice message="Thumbnail is unavailable" />;
+  }
 
   return (
     <>

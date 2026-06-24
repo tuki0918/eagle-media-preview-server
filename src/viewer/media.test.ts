@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { thumbnailAriaLabel, thumbnailMediaType, thumbnailOverlayIcon } from "./media";
+import { hasNoPreviewAsset, thumbnailAriaLabel, thumbnailMediaType, thumbnailOverlayIcon } from "./media";
 
 describe("thumbnail media helpers", () => {
   test("classifies supported thumbnail media types", () => {
@@ -22,5 +22,11 @@ describe("thumbnail media helpers", () => {
     expect(thumbnailAriaLabel({ id: "1", name: "Clip", ext: "mp4" })).toBe("Play Clip");
     expect(thumbnailAriaLabel({ id: "1", name: "Photo", ext: "jpg" })).toBe("Open Photo");
     expect(thumbnailAriaLabel({ id: "fallback", ext: "png" })).toBe("Open fallback");
+  });
+
+  test("detects items without preview assets", () => {
+    expect(hasNoPreviewAsset({ id: "thumbnail-missing", noThumbnail: true })).toBe(true);
+    expect(hasNoPreviewAsset({ id: "preview-missing", noPreview: true })).toBe(true);
+    expect(hasNoPreviewAsset({ id: "preview-available", noThumbnail: false, noPreview: false })).toBe(false);
   });
 });
