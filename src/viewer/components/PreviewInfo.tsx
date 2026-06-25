@@ -570,8 +570,7 @@ function MetadataInlineInput({
               aria-selected={item.disabled ? "true" : "false"}
               disabled={disabled || item.disabled}
               style={{ paddingLeft: `${10 + Math.min(Math.max(Number(item.depth || 0), 0), 8) * 16}px` }}
-              onPointerDown={(event) => {
-                event.preventDefault();
+              onClick={() => {
                 if (item.disabled) return;
                 onSubmitValue(String(item.value || ""));
               }}
