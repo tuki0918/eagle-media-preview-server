@@ -290,11 +290,11 @@ test("smartFolderItems aggregates child smart folders for groups", async () => {
           data: {
             id: "group-1",
             name: "Review",
-            conditions: [{ key: "type", value: "group-marker" }],
+            conditions: [],
             icon: "grid",
             children: [
               { id: "smart-a", name: "Wide", conditions: [{ key: "width", value: 1200 }], imageCount: 2 },
-              { id: "nested", name: "Nested", conditions: [{ key: "type", value: "nested-group" }], icon: "grid", children: [{ id: "smart-b", name: "Tall", conditions: [{ key: "height", value: 1200 }], imageCount: 2 }] },
+              { id: "nested", name: "Nested", conditions: [], icon: "grid", children: [{ id: "smart-b", name: "Tall", conditions: [{ key: "height", value: 1200 }], imageCount: 2 }] },
             ],
           },
         });
@@ -320,6 +320,46 @@ test("smartFolderItems aggregates child smart folders for groups", async () => {
   ]);
 });
 
+test("smartFolderItems fetches parent results when a smart folder has conditions and children", async () => {
+  const calls: RequestCall[] = [];
+  const client = createEagleClient({
+    baseUrl: "http://localhost:41595",
+    fetchImpl: async (url: string, init: { method?: string; body: string }) => {
+      calls.push({ url, init });
+      if (url === "http://localhost:41595/api/v2/smartFolder/get?id=smart-with-child") {
+        return jsonResponse({
+          status: "success",
+          data: {
+            id: "smart-with-child",
+            name: "Rated",
+            conditions: [{ rules: [{ property: "rating", method: "equal", value: "4" }] }],
+            imageCount: 6,
+            children: [
+              { id: "child-css", name: "CSS", conditions: [{ rules: [{ property: "type", method: "equal", value: "css" }] }], imageCount: 1 },
+            ],
+          },
+        });
+      }
+      if (url === "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=smart-with-child") {
+        return jsonResponse({ status: "success", data: [{ id: "one" }, { id: "two" }, { id: "three" }, { id: "four" }, { id: "five" }, { id: "six" }] });
+      }
+      if (url === "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=child-css") {
+        return jsonResponse({ status: "success", data: [{ id: "child-only" }] });
+      }
+      return jsonResponse({ status: "success", data: [] });
+    },
+  });
+
+  const result = await client.smartFolderItems({ smartFolderId: "smart-with-child", offset: 0, limit: 90 });
+
+  assert.deepEqual(result.items.map((item: { id?: string }) => item.id), ["one", "two", "three", "four", "five", "six"]);
+  assert.equal(result.total, 6);
+  assert.deepEqual(calls.map((call) => call.url), [
+    "http://localhost:41595/api/v2/smartFolder/get?id=smart-with-child",
+    "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=smart-with-child",
+  ]);
+});
+
 test("smartFolderItems treats child containers as groups and skips zero-count leaves", async () => {
   const calls: RequestCall[] = [];
   const client = createEagleClient({
@@ -332,7 +372,7 @@ test("smartFolderItems treats child containers as groups and skips zero-count le
           data: {
             id: "container-1",
             name: "abc",
-            conditions: [{ key: "name", value: "a" }],
+            conditions: [],
             imageCount: 0,
             children: [
               { id: "group-leaf", name: "Untitled", icon: "grid", conditions: [{ key: "name", value: "b" }], imageCount: 1, children: [] },

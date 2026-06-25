@@ -261,7 +261,7 @@ function createEagleClient({
       const pageOffset = normalizeOffset(offset);
       const pageLimit = clampLimit(limit);
       const smartFolder = await resolveSmartFolder(id);
-      const sourceIds = smartFolderGroupLeafIds(smartFolder);
+      const sourceIds = isSmartFolderGroup(smartFolder) ? smartFolderGroupLeafIds(smartFolder) : [];
       const result = sourceIds.length
         ? mergePaginatedItemResponses(await Promise.all(sourceIds.map((sourceId) => smartFolderItemsResponse(sourceId))))
         : isZeroCountSmartFolder(smartFolder)
@@ -442,6 +442,12 @@ function smartFolderGroupLeafIds(folder: Record<string, unknown>) {
   const ids: string[] = [];
   collectSmartFolderLeafIds(children, ids);
   return ids;
+}
+
+function isSmartFolderGroup(folder: Record<string, unknown>) {
+  const children = Array.isArray(folder.children) ? folder.children : [];
+  const conditions = Array.isArray(folder.conditions) ? folder.conditions : [];
+  return children.length > 0 && conditions.length === 0;
 }
 
 function collectSmartFolderLeafIds(folders: unknown[], ids: string[]) {
