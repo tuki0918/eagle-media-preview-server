@@ -572,6 +572,142 @@ describe("ViewerAppShell", () => {
     expect(html).not.toContain("bg-sidebar-primary");
   });
 
+  test("renders collapsible folder section labels with belonging folder counts", () => {
+    setSearchControlsState({
+      allFoldersTotal: 0,
+      filtersOpen: false,
+      folders: [
+        {
+          id: "folder-parent",
+          name: "Folder Parent",
+          imageCount: 3,
+          isExpand: true,
+          children: [
+            { id: "folder-child-a", name: "Folder Child A", imageCount: 2, depth: 1 },
+            { id: "folder-child-b", name: "Folder Child B", imageCount: 1, depth: 1 },
+          ],
+        },
+      ],
+      hasActiveFilters: false,
+      hasResettableFilters: false,
+      searchQuery: "",
+      selectedExt: "",
+      selectedFolderId: "",
+      selectedLimit: 30,
+      selectedRating: "",
+      selectedSmartFolderId: "",
+      smartFolders: [
+        {
+          id: "smart-parent",
+          name: "Smart Parent",
+          imageCount: 3,
+          isExpand: true,
+          children: [
+            { id: "smart-child-a", name: "Smart Child A", imageCount: 2, depth: 1 },
+            { id: "smart-child-b", name: "Smart Child B", imageCount: 1, depth: 1 },
+          ],
+        },
+      ],
+    });
+
+    const html = renderAccountSideMenu();
+
+    expect(html).toContain("Smart Folders (3)");
+    expect(html).toContain("Folders (3)");
+    expect(html).toContain('aria-label="Collapse Smart Folders section"');
+    expect(html).toContain('aria-label="Collapse Folders section"');
+    expect(html).toContain("Smart Child A");
+    expect(html).toContain("Folder Child A");
+    const accountMenuDocument = new JSDOM(html, { url: "http://localhost" }).window.document;
+    const smartSectionToggle = accountMenuDocument.querySelector('[aria-label="Collapse Smart Folders section"]');
+    const folderSectionToggle = accountMenuDocument.querySelector('[aria-label="Collapse Folders section"]');
+    expect(smartSectionToggle?.querySelector("svg")).toBeNull();
+    expect(folderSectionToggle?.querySelector("svg")).toBeNull();
+    expect(smartSectionToggle?.className).toContain("folder-section-heading-open");
+    expect(folderSectionToggle?.className).toContain("folder-section-heading-open");
+  });
+
+  test("restores and stores collapsible folder section open state", async () => {
+    const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
+    const testGlobal = globalThis as typeof globalThis & {
+      IS_REACT_ACT_ENVIRONMENT?: boolean;
+    };
+    const previousWindow = globalThis.window;
+    const previousDocument = globalThis.document;
+    const previousNode = globalThis.Node;
+    const previousHTMLElement = globalThis.HTMLElement;
+    const previousIS_REACT_ACT_ENVIRONMENT = testGlobal.IS_REACT_ACT_ENVIRONMENT;
+    globalThis.window = dom.window;
+    globalThis.document = dom.window.document;
+    globalThis.Node = dom.window.Node;
+    globalThis.HTMLElement = dom.window.HTMLElement;
+    testGlobal.IS_REACT_ACT_ENVIRONMENT = true;
+    dom.window.localStorage.setItem("eagleFolderSectionsOpen", JSON.stringify({ folders: false, smartFolders: false }));
+    setSearchControlsState({
+      allFoldersTotal: 0,
+      filtersOpen: false,
+      folders: [{ id: "folder-one", name: "Folder One", imageCount: 1 }],
+      hasActiveFilters: false,
+      hasResettableFilters: false,
+      searchQuery: "",
+      selectedExt: "",
+      selectedFolderId: "",
+      selectedLimit: 30,
+      selectedRating: "",
+      selectedSmartFolderId: "",
+      smartFolders: [{ id: "smart-one", name: "Smart One", imageCount: 1, conditions: [] }],
+    });
+
+    const { createRoot } = await import("react-dom/client");
+    let root: import("react-dom/client").Root | null = null;
+    try {
+      const container = dom.window.document.querySelector("#root");
+      if (!(container instanceof dom.window.HTMLElement)) throw new Error("Missing test root");
+      root = createRoot(container);
+
+      await act(async () => {
+        root?.render(
+          <TooltipProvider>
+            <SidebarProvider>
+              <AccountSideMenu />
+            </SidebarProvider>
+          </TooltipProvider>,
+        );
+      });
+
+      expect(container.textContent).toContain("Smart Folders (1)");
+      expect(container.textContent).toContain("Folders (1)");
+      expect(container.textContent).not.toContain("Smart One");
+      expect(container.textContent).not.toContain("Folder One");
+
+      const smartToggle = container.querySelector('[aria-label="Expand Smart Folders section"]');
+      if (!(smartToggle instanceof dom.window.HTMLButtonElement)) throw new Error("Missing smart section toggle");
+      expect(smartToggle.querySelector("svg")).toBeNull();
+      expect(smartToggle.className).toContain("folder-section-heading-closed");
+
+      await act(async () => {
+        smartToggle.click();
+      });
+
+      expect(container.textContent).toContain("Smart One");
+      expect(JSON.parse(dom.window.localStorage.getItem("eagleFolderSectionsOpen") || "{}")).toEqual({
+        folders: false,
+        smartFolders: true,
+      });
+    } finally {
+      if (root) {
+        await act(async () => {
+          root?.unmount();
+        });
+      }
+      globalThis.window = previousWindow;
+      globalThis.document = previousDocument;
+      globalThis.Node = previousNode;
+      globalThis.HTMLElement = previousHTMLElement;
+      testGlobal.IS_REACT_ACT_ENVIRONMENT = previousIS_REACT_ACT_ENVIRONMENT;
+    }
+  });
+
   test("applies and stores selected viewer theme", () => {
     const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://localhost/" });
     const previousWindow = globalThis.window;

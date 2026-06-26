@@ -31,7 +31,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { UNCATEGORIZED_FOLDER_ID, UNTAGGED_FOLDER_ID } from "../constants";
+import { FOLDER_SECTIONS_OPEN_STORAGE_KEY, UNCATEGORIZED_FOLDER_ID, UNTAGGED_FOLDER_ID } from "../constants";
 import { displayFolderCount } from "../format";
 import { getLibraryFooterName, subscribeLibraryFooterName } from "../libraryFooterState";
 import { getLoginConnectState, subscribeLoginConnectState } from "../loginConnectState";
@@ -194,6 +194,8 @@ function FolderSideNav({
 }) {
   const { isMobile, setOpenMobile } = useSidebar();
   const { expandedIds, toggleFolder } = useFolderExpansion(folders);
+  const { open, toggleOpen } = useFolderSectionOpen("folders");
+  const label = folderSectionLabel("Folders", folders);
 
   const selectFolder = (folderId: string) => {
     changeFolder({ currentTarget: { value: folderId } });
@@ -202,21 +204,26 @@ function FolderSideNav({
 
   return (
     <SidebarGroup className="shrink-0 px-2 pb-2 pt-1">
-      <SidebarGroupLabel className="h-7 px-2 text-[11px] uppercase tracking-normal">
-        Folders
-      </SidebarGroupLabel>
-      <SidebarGroupContent>
-        <SidebarMenu className="gap-0.5" aria-label="Folder tree">
-          <FolderTreeNavItems
-            expandedIds={expandedIds}
-            folders={folders}
-            iconForFolder={(folder) => selectedFolderId === folder.id ? "open" : "folder"}
-            isActive={(folder) => selectedFolderId === folder.id}
-            onSelect={selectFolder}
-            onToggle={toggleFolder}
-          />
-        </SidebarMenu>
-      </SidebarGroupContent>
+      <FolderSectionHeader
+        label={label}
+        open={open}
+        storageName="Folders"
+        onToggle={toggleOpen}
+      />
+      {open ? (
+        <SidebarGroupContent>
+          <SidebarMenu className="gap-0.5" aria-label="Folder tree">
+            <FolderTreeNavItems
+              expandedIds={expandedIds}
+              folders={folders}
+              iconForFolder={(folder) => selectedFolderId === folder.id ? "open" : "folder"}
+              isActive={(folder) => selectedFolderId === folder.id}
+              onSelect={selectFolder}
+              onToggle={toggleFolder}
+            />
+          </SidebarMenu>
+        </SidebarGroupContent>
+      ) : null}
     </SidebarGroup>
   );
 }
@@ -230,6 +237,8 @@ function SmartFolderSideNav({
 }) {
   const { isMobile, setOpenMobile } = useSidebar();
   const { expandedIds, toggleFolder } = useFolderExpansion(smartFolders);
+  const { open, toggleOpen } = useFolderSectionOpen("smartFolders");
+  const label = folderSectionLabel("Smart Folders", smartFolders);
 
   if (!smartFolders.length) return null;
 
@@ -240,23 +249,110 @@ function SmartFolderSideNav({
 
   return (
     <SidebarGroup className="shrink-0 px-2 pb-1 pt-1">
-      <SidebarGroupLabel className="h-7 px-2 text-[11px] uppercase tracking-normal">
-        Smart Folders
-      </SidebarGroupLabel>
-      <SidebarGroupContent>
-        <SidebarMenu className="gap-0.5" aria-label="Smart folder tree">
-          <FolderTreeNavItems
-            expandedIds={expandedIds}
-            folders={smartFolders}
-            iconForFolder={(folder) => isSmartFolderGroup(folder as EagleSmartFolder) ? "smartGroup" : "smart"}
-            isActive={(folder) => selectedSmartFolderId === folder.id}
-            onSelect={selectSmartFolder}
-            onToggle={toggleFolder}
-          />
-        </SidebarMenu>
-      </SidebarGroupContent>
+      <FolderSectionHeader
+        label={label}
+        open={open}
+        storageName="Smart Folders"
+        onToggle={toggleOpen}
+      />
+      {open ? (
+        <SidebarGroupContent>
+          <SidebarMenu className="gap-0.5" aria-label="Smart folder tree">
+            <FolderTreeNavItems
+              expandedIds={expandedIds}
+              folders={smartFolders}
+              iconForFolder={(folder) => isSmartFolderGroup(folder as EagleSmartFolder) ? "smartGroup" : "smart"}
+              isActive={(folder) => selectedSmartFolderId === folder.id}
+              onSelect={selectSmartFolder}
+              onToggle={toggleFolder}
+            />
+          </SidebarMenu>
+        </SidebarGroupContent>
+      ) : null}
     </SidebarGroup>
   );
+}
+
+type FolderSectionKey = "folders" | "smartFolders";
+
+function FolderSectionHeader({
+  label,
+  open,
+  storageName,
+  onToggle,
+}: {
+  label: string;
+  open: boolean;
+  storageName: string;
+  onToggle: () => void;
+}) {
+  return (
+    <SidebarGroupLabel className="h-7 px-0 text-[11px] uppercase tracking-normal">
+      <button
+        className={[
+          "flex h-7 min-w-0 flex-1 items-center rounded-md px-2 text-left text-[11px] font-medium uppercase tracking-normal transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+          open ? "folder-section-heading-open" : "folder-section-heading-closed",
+        ].join(" ")}
+        type="button"
+        aria-label={`${open ? "Collapse" : "Expand"} ${storageName} section`}
+        aria-expanded={open}
+        onClick={onToggle}
+      >
+        <span className="min-w-0 truncate">{label}</span>
+      </button>
+    </SidebarGroupLabel>
+  );
+}
+
+function useFolderSectionOpen(section: FolderSectionKey) {
+  const [open, setOpen] = useState(() => readFolderSectionOpen(section));
+
+  return {
+    open,
+    toggleOpen() {
+      setOpen((current) => {
+        const next = !current;
+        writeFolderSectionOpen(section, next);
+        return next;
+      });
+    },
+  };
+}
+
+function folderSectionLabel(label: string, folders: readonly EagleFolder[]) {
+  const count = folderTreeCount(folders);
+  return count > 0 ? `${label} (${count.toLocaleString()})` : label;
+}
+
+function folderTreeCount(folders: readonly EagleFolder[]) {
+  let count = 0;
+  for (const folder of folders) {
+    count += 1;
+    const children = Array.isArray(folder.children) ? folder.children : [];
+    if (children.length) count += folderTreeCount(children);
+  }
+  return count;
+}
+
+function readFolderSectionOpen(section: FolderSectionKey) {
+  try {
+    if (typeof window === "undefined") return true;
+    const saved = JSON.parse(window.localStorage.getItem(FOLDER_SECTIONS_OPEN_STORAGE_KEY) || "{}") as Partial<Record<FolderSectionKey, unknown>>;
+    if (saved[section] === false) return false;
+    if (saved[section] === true) return true;
+  } catch {
+    // Keep the default when storage is unavailable or corrupted.
+  }
+  return true;
+}
+
+function writeFolderSectionOpen(section: FolderSectionKey, open: boolean) {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(FOLDER_SECTIONS_OPEN_STORAGE_KEY) || "{}") as Partial<Record<FolderSectionKey, unknown>>;
+    window.localStorage.setItem(FOLDER_SECTIONS_OPEN_STORAGE_KEY, JSON.stringify({ ...saved, [section]: open }));
+  } catch {
+    // Ignore unavailable storage; the in-memory section state still updates.
+  }
 }
 
 function isSmartFolderGroup(folder: EagleSmartFolder) {

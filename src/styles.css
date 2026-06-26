@@ -175,3 +175,19 @@
     opacity: 0.9;
   }
 }
+
+.folder-section-heading-open {
+  color: var(--sidebar-foreground);
+  opacity: 0.7;
+}
+
+.folder-section-heading-closed {
+  color: var(--muted-foreground);
+  opacity: 0.55;
+}
+
+.folder-section-heading-open:hover,
+.folder-section-heading-closed:hover {
+  color: var(--sidebar-accent-foreground);
+  opacity: 1;
+}

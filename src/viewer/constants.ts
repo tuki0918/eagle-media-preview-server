@@ -18,6 +18,7 @@ export const RECENT_TAGS_STORAGE_KEY = "eagleRecentTags";
 export const RECENT_FOLDERS_STORAGE_KEY = "eagleRecentFolders";
 export const RECENT_METADATA_LIMIT = 10;
 export const SIDEBAR_OPEN_STORAGE_KEY = "eagleSidebarOpen";
+export const FOLDER_SECTIONS_OPEN_STORAGE_KEY = "eagleFolderSectionsOpen";
 
 export const playableVideoExts = new Set(["mp4", "webm", "mov", "m4v"]);
 export const playableAudioExts = new Set(["mp3", "wav", "m4a", "aac", "ogg"]);
