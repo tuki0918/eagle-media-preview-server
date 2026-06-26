@@ -101,6 +101,7 @@ const ITEM_FIELDS = [
 ];
 
 const MAX_ERROR_BODY_LENGTH = 240;
+const MAX_SMART_FOLDER_ITEMS_PAGE_SIZE = 1000;
 
 function clampLimit(value: unknown, fallback = 60) {
   const parsed = Number.parseInt(String(value), 10);
@@ -266,25 +267,64 @@ function createEagleClient({
       const pageLimit = clampLimit(limit);
       const smartFolder = await resolveSmartFolder(id);
       const sourceIds = isSmartFolderGroup(smartFolder) ? smartFolderGroupLeafIds(smartFolder) : [];
-      const result = sourceIds.length
-        ? mergePaginatedItemResponses(await Promise.all(sourceIds.map((sourceId) => smartFolderItemsResponse(sourceId))))
-        : isZeroCountSmartFolder(smartFolder)
-          ? emptyPaginatedResponse()
-          : await smartFolderItemsResponse(id);
+      if (sourceIds.length) {
+        const result = mergePaginatedItemResponses(await Promise.all(sourceIds.map((sourceId) => allSmartFolderItemsResponse(sourceId))));
+        return {
+          ...result,
+          items: result.items.slice(pageOffset, pageOffset + pageLimit),
+          total: result.total || result.items.length,
+          offset: pageOffset,
+          limit: pageLimit,
+        };
+      }
+      const result = isZeroCountSmartFolder(smartFolder)
+        ? emptyPaginatedResponse()
+        : await smartFolderItemsResponse(id, { offset: pageOffset, limit: pageLimit });
       return {
         ...result,
-        items: result.items.slice(pageOffset, pageOffset + pageLimit),
+        items: result.offset === pageOffset
+          ? result.items
+          : result.items.slice(pageOffset, pageOffset + pageLimit),
         total: result.total || result.items.length,
         offset: pageOffset,
         limit: pageLimit,
       };
 
-      async function smartFolderItemsResponse(sourceId: string) {
+      async function smartFolderItemsResponse(sourceId: string, page: Required<PageOptions>) {
         return normalizePaginatedResponse(
           await request("/api/v2/smartFolder/getItems", {
-            searchParams: { smartFolderId: sourceId },
+            searchParams: {
+              smartFolderId: sourceId,
+              offset: normalizeOffset(page.offset),
+              limit: clampLimit(page.limit),
+            },
           }),
         );
+      }
+
+      async function allSmartFolderItemsResponse(sourceId: string) {
+        const items: unknown[] = [];
+        let total = 0;
+        let nextOffset = 0;
+        while (true) {
+          const page = await smartFolderItemsResponse(sourceId, {
+            offset: nextOffset,
+            limit: MAX_SMART_FOLDER_ITEMS_PAGE_SIZE,
+          });
+          items.push(...page.items);
+          total = page.total || items.length;
+          if (
+            !page.items.length ||
+            !page.total ||
+            items.length >= page.total ||
+            page.items.length < MAX_SMART_FOLDER_ITEMS_PAGE_SIZE ||
+            page.offset !== nextOffset
+          ) {
+            break;
+          }
+          nextOffset += MAX_SMART_FOLDER_ITEMS_PAGE_SIZE;
+        }
+        return { items, total: total || items.length, offset: 0, limit: items.length };
       }
 
       async function resolveSmartFolder(sourceId: string) {

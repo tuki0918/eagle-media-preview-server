@@ -293,9 +293,49 @@ test("smartFolderItems fetches matching items with requested fields", async () =
   assert.equal(result.total, 1);
   assert.deepEqual(calls.map((call) => call.url), [
     "http://localhost:41595/api/v2/smartFolder/get?id=smart-1",
-    "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=smart-1",
+    "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=smart-1&offset=0&limit=60",
   ]);
   assert.equal(calls[1].init.method, "GET");
+});
+
+test("smartFolderItems forwards offset and limit without double slicing paged Eagle results", async () => {
+  const calls: RequestCall[] = [];
+  const client = createEagleClient({
+    baseUrl: "http://localhost:41595",
+    fetchImpl: async (url: string, init: { method?: string; body: string }) => {
+      calls.push({ url, init });
+      if (url === "http://localhost:41595/api/v2/smartFolder/get?id=smart-1") {
+        return jsonResponse({
+          status: "success",
+          data: {
+            id: "smart-1",
+            name: "Many Items",
+            conditions: [{ key: "star", value: 4 }],
+            imageCount: 240,
+            children: [],
+          },
+        });
+      }
+      if (url === "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=smart-1&offset=150&limit=30") {
+        return jsonResponse({
+          status: "success",
+          data: { data: [{ id: "item-151" }], total: 240, offset: 150, limit: 30 },
+        });
+      }
+      return jsonResponse({ status: "success", data: [] });
+    },
+  });
+
+  const result = await client.smartFolderItems({ smartFolderId: "smart-1", offset: 150, limit: 30 });
+
+  assert.deepEqual(result.items, [{ id: "item-151" }]);
+  assert.equal(result.total, 240);
+  assert.equal(result.offset, 150);
+  assert.equal(result.limit, 30);
+  assert.deepEqual(calls.map((call) => call.url), [
+    "http://localhost:41595/api/v2/smartFolder/get?id=smart-1",
+    "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=smart-1&offset=150&limit=30",
+  ]);
 });
 
 test("smartFolderItems aggregates child smart folders for groups", async () => {
@@ -319,10 +359,10 @@ test("smartFolderItems aggregates child smart folders for groups", async () => {
           },
         });
       }
-      if (url === "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=smart-a") {
+      if (url === "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=smart-a&offset=0&limit=1000") {
         return jsonResponse({ status: "success", data: [{ id: "shared" }, { id: "wide" }] });
       }
-      if (url === "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=smart-b") {
+      if (url === "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=smart-b&offset=0&limit=1000") {
         return jsonResponse({ status: "success", data: [{ id: "shared" }, { id: "tall" }] });
       }
       return jsonResponse({ status: "success", data: [] });
@@ -335,8 +375,8 @@ test("smartFolderItems aggregates child smart folders for groups", async () => {
   assert.equal(result.total, 3);
   assert.deepEqual(calls.map((call) => call.url), [
     "http://localhost:41595/api/v2/smartFolder/get?id=group-1",
-    "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=smart-a",
-    "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=smart-b",
+    "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=smart-a&offset=0&limit=1000",
+    "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=smart-b&offset=0&limit=1000",
   ]);
 });
 
@@ -360,7 +400,7 @@ test("smartFolderItems fetches parent results when a smart folder has conditions
           },
         });
       }
-      if (url === "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=smart-with-child") {
+      if (url === "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=smart-with-child&offset=0&limit=90") {
         return jsonResponse({ status: "success", data: [{ id: "one" }, { id: "two" }, { id: "three" }, { id: "four" }, { id: "five" }, { id: "six" }] });
       }
       if (url === "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=child-css") {
@@ -376,7 +416,7 @@ test("smartFolderItems fetches parent results when a smart folder has conditions
   assert.equal(result.total, 6);
   assert.deepEqual(calls.map((call) => call.url), [
     "http://localhost:41595/api/v2/smartFolder/get?id=smart-with-child",
-    "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=smart-with-child",
+    "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=smart-with-child&offset=0&limit=90",
   ]);
 });
 
@@ -401,7 +441,7 @@ test("smartFolderItems treats child containers as groups and skips zero-count le
           },
         });
       }
-      if (url === "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=group-leaf") {
+      if (url === "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=group-leaf&offset=0&limit=1000") {
         return jsonResponse({ status: "success", data: [{ id: "only-item" }] });
       }
       if (url === "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=empty-leaf") {
@@ -417,7 +457,7 @@ test("smartFolderItems treats child containers as groups and skips zero-count le
   assert.equal(result.total, 1);
   assert.deepEqual(calls.map((call) => call.url), [
     "http://localhost:41595/api/v2/smartFolder/get?id=container-1",
-    "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=group-leaf",
+    "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=group-leaf&offset=0&limit=1000",
   ]);
 });
 
@@ -483,7 +523,7 @@ test("smartFolderItems resolves nested groups from the smart folder tree when de
           ],
         });
       }
-      if (url === "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=MQNR1QIEIS2VI") {
+      if (url === "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=MQNR1QIEIS2VI&offset=0&limit=1000") {
         return jsonResponse({ status: "success", data: [{ id: "only-group-item" }] });
       }
       return jsonResponse({ status: "success", data: [{ id: "all-items-fallback" }] });
@@ -497,7 +537,7 @@ test("smartFolderItems resolves nested groups from the smart folder tree when de
   assert.deepEqual(calls.map((call) => call.url), [
     "http://localhost:41595/api/v2/smartFolder/get?id=MQNQUGZMZ6KDU",
     "http://localhost:41595/api/v2/smartFolder/get",
-    "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=MQNR1QIEIS2VI",
+    "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=MQNR1QIEIS2VI&offset=0&limit=1000",
   ]);
 });
 
@@ -531,7 +571,7 @@ test("smartFolderItems uses the requested nested smart folder when the detail en
           ],
         });
       }
-      if (url === "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=MQNR1QIEIS2VI") {
+      if (url === "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=MQNR1QIEIS2VI&offset=0&limit=1000") {
         return jsonResponse({ status: "success", data: [{ id: "nested-item" }] });
       }
       if (url === "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=MQNSIBLING0001") {
@@ -547,7 +587,7 @@ test("smartFolderItems uses the requested nested smart folder when the detail en
   assert.equal(result.total, 1);
   assert.deepEqual(calls.map((call) => call.url), [
     "http://localhost:41595/api/v2/smartFolder/get?id=MQNQV7J68TLN7",
-    "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=MQNR1QIEIS2VI",
+    "http://localhost:41595/api/v2/smartFolder/getItems?smartFolderId=MQNR1QIEIS2VI&offset=0&limit=1000",
   ]);
 });
 
