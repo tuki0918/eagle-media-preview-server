@@ -22,10 +22,10 @@ Optional:
 
 ## Future Plans
 
-- Migrate more Eagle features into the preview server
 - Expand support for additional file extensions
-- Improve UI/UX
+- Add an Inbox QR code for uploading media from other devices
 - Add AI-related capabilities
+- Improve UI/UX
 
 ## Settings
 
