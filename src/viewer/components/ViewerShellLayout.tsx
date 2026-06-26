@@ -1,7 +1,7 @@
 import { useCallback, useState, useSyncExternalStore } from "react";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { SIDEBAR_OPEN_STORAGE_KEY, UNCATEGORIZED_FOLDER_ID } from "../constants";
+import { SIDEBAR_OPEN_STORAGE_KEY, UNCATEGORIZED_FOLDER_ID, UNTAGGED_FOLDER_ID } from "../constants";
 import { getSearchControlsState, subscribeSearchControlsState } from "../searchControlsState";
 import { AccountSideMenu } from "./AccountSideMenu";
 import { CardTemplate } from "./CardTemplate";
@@ -88,6 +88,7 @@ function selectedFolderName(
   if (selectedSmartFolderId) return smartFolders.find((folder) => folder.id === selectedSmartFolderId)?.name || "Smart Folder";
   if (!selectedFolderId) return "All";
   if (selectedFolderId === UNCATEGORIZED_FOLDER_ID) return "Uncategorized";
+  if (selectedFolderId === UNTAGGED_FOLDER_ID) return "Untagged";
   return folders.find((folder) => folder.id === selectedFolderId)?.name || "All";
 }
 

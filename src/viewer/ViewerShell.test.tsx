@@ -448,6 +448,9 @@ describe("ViewerAppShell", () => {
     expect(html).toContain('title="All folders"');
     expect(html).not.toContain('title="All folders (99)"');
     expect(html).toContain("Uncategorized");
+    expect(html).toContain("Untagged");
+    expect(html.indexOf("Uncategorized")).toBeLessThan(html.indexOf("Untagged"));
+    expect(html.indexOf("Untagged")).toBeLessThan(smartFoldersIndex);
     const accountMenuDocument = new JSDOM(html, { url: "http://localhost" }).window.document;
     const folderShortcuts = accountMenuDocument.querySelector('[aria-label="Folder shortcuts"]');
     expect(folderShortcuts?.querySelector(".sidebar-tree-depth-0")).toBeNull();

@@ -177,6 +177,26 @@ test("listItems supports uncategorized filtering without folder ids", async () =
   });
 });
 
+test("listItems supports untagged filtering without local scanning", async () => {
+  const calls: RequestCall[] = [];
+  const client = createEagleClient({
+    baseUrl: "http://eagle.local:41595",
+    fetchImpl: async (url: string, init: { method?: string; body: string }) => {
+      calls.push({ url, init });
+      return jsonResponse({
+        status: "success",
+        data: { data: [], total: 0, offset: 0, limit: 60 },
+      });
+    },
+  });
+
+  await client.listItems({ isUntagged: true });
+
+  const body = JSON.parse(calls[0].init.body);
+  assert.equal(body.isUntagged, true);
+  assert.equal(Object.hasOwn(body, "folders"), false);
+});
+
 test("searchItems uses V2 item/query", async () => {
   const calls: RequestCall[] = [];
   const client = createEagleClient({

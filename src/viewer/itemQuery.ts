@@ -1,5 +1,5 @@
-import { UNCATEGORIZED_FOLDER_ID } from "./constants";
-import { folderIds } from "./format";
+import { UNCATEGORIZED_FOLDER_ID, UNTAGGED_FOLDER_ID } from "./constants";
+import { folderIds, itemTags } from "./format";
 import type { EagleItem, ViewerState } from "./types";
 
 export type ItemQueryState = Pick<ViewerState, "offset" | "query" | "tags" | "folderId" | "ext" | "rating"> & {
@@ -25,10 +25,11 @@ export function itemQueryParams(state: ItemQueryState) {
 }
 
 export function itemMatchesFolderFilter(
-  item: Pick<EagleItem, "folders">,
+  item: Pick<EagleItem, "folders" | "tags">,
   state: Pick<ItemQueryState, "folderId" | "smartFolderId">,
 ) {
   if (state.smartFolderId || !state.folderId) return true;
+  if (state.folderId === UNTAGGED_FOLDER_ID) return itemTags(item).length === 0;
   const folders = folderIds(item.folders);
   if (state.folderId === UNCATEGORIZED_FOLDER_ID) return folders.length === 0;
   return folders.includes(state.folderId);

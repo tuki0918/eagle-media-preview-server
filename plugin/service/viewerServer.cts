@@ -83,6 +83,7 @@ const LOGIN_RATE_LIMIT_MESSAGE = "Too many failed login attempts. Try again late
 const RATING_WRITE_FORBIDDEN_MESSAGE = "Rating editing is not allowed for this viewer";
 const METADATA_WRITE_FORBIDDEN_MESSAGE = "Metadata editing is not allowed for this viewer";
 const ADMIN_WRITE_FORBIDDEN_MESSAGE = "Admin actions are not allowed for this viewer";
+const UNTAGGED_FOLDER_ID = "__untagged__";
 
 interface EagleLibraryInfo {
   path?: string;
@@ -113,6 +114,7 @@ interface EagleClient {
   listItems(options: {
     ext?: string | null;
     folderId?: string | null;
+    isUntagged?: boolean;
     isUnfiled?: boolean;
     keywords?: string;
     limit?: string | number;
@@ -430,6 +432,7 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
     const hasStructuredFilters = Boolean(
       url.searchParams.get("folderId") || url.searchParams.get("ext") || url.searchParams.get("rating") || tags.length,
     );
+    const folderId = url.searchParams.get("folderId");
     const result = smartFolderId
       ? await session.client.smartFolderItems({ smartFolderId, offset, limit })
       : query && !hasStructuredFilters
@@ -438,8 +441,9 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
           offset,
           limit,
           keywords: query,
-          folderId: url.searchParams.get("folderId"),
-          isUnfiled: url.searchParams.get("folderId") === "__uncategorized__",
+          folderId: folderId === UNTAGGED_FOLDER_ID ? undefined : folderId,
+          isUntagged: folderId === UNTAGGED_FOLDER_ID,
+          isUnfiled: folderId === "__uncategorized__",
           ext: url.searchParams.get("ext"),
           rating: url.searchParams.get("rating"),
           tags,

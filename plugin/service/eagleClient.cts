@@ -26,6 +26,7 @@ interface PageOptions {
 interface ListItemsOptions extends PageOptions {
   ext?: unknown;
   folderId?: unknown;
+  isUntagged?: boolean;
   isUnfiled?: boolean;
   keywords?: unknown;
   rating?: unknown;
@@ -214,11 +215,12 @@ function createEagleClient({
       return normalizePaginatedResponse(await request("/api/v2/smartFolder/get"));
     },
 
-    async listItems({ offset = 0, limit = 30, folderId, isUnfiled = false, ext, rating, keywords, tags }: ListItemsOptions = {}) {
+    async listItems({ offset = 0, limit = 30, folderId, isUntagged = false, isUnfiled = false, ext, rating, keywords, tags }: ListItemsOptions = {}) {
       const body: {
         ext?: unknown;
         fields: readonly string[];
         folders?: unknown[];
+        isUntagged?: boolean;
         isUnfiled?: boolean;
         keywords?: unknown[];
         limit: number;
@@ -232,6 +234,8 @@ function createEagleClient({
       };
       if (isUnfiled) {
         body.isUnfiled = true;
+      } else if (isUntagged) {
+        body.isUntagged = true;
       } else if (folderId) {
         body.folders = [folderId];
       }

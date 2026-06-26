@@ -1,4 +1,5 @@
 export const UNCATEGORIZED_FOLDER_ID = "__uncategorized__";
+export const UNTAGGED_FOLDER_ID = "__untagged__";
 
 export const DEFAULT_EAGLE_CONNECTION = Object.freeze({
   host: "127.0.0.1",

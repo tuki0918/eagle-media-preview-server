@@ -10,7 +10,7 @@ import { createViewerServer, resolveDefaultPublicDir, sha256 } from "./viewerSer
 
 const require = createRequire(import.meta.url);
 
-type ItemListOptions = { keywords?: string; limit?: number | string; offset?: number | string; query?: string; tags?: string[] };
+type ItemListOptions = { folderId?: string; isUntagged?: boolean; keywords?: string; limit?: number | string; offset?: number | string; query?: string; tags?: string[] };
 type TagListOptions = { query?: string; limit?: string };
 
 const TEST_TLS_CERT = `-----BEGIN CERTIFICATE-----
@@ -2003,6 +2003,40 @@ test("createViewerServer forwards repeated tag filters to item listing", async (
     assert.deepEqual(await response.json(), { items: [], total: 0, offset: 0, limit: 30 });
     assert.deepEqual(calls[0].tags, ["photo", "favorite"]);
     assert.equal(calls[0].keywords, "cat");
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer forwards untagged item menu filter to Eagle", async () => {
+  const calls: ItemListOptions[] = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    viewerPassword: "",
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/tmp/Test.library", name: "Test Library" };
+      },
+      async listItems(options: ItemListOptions) {
+        calls.push(options);
+        return { items: [{ id: "untagged", tags: [] }], total: 1, offset: 0, limit: 30 };
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const response = await fetch(`http://127.0.0.1:${status.port}/api/items?folderId=__untagged__`);
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { items: [{ id: "untagged", tags: [] }], total: 1, offset: 0, limit: 30 });
+    assert.equal(calls[0].folderId, undefined);
+    assert.equal(calls[0].isUntagged, true);
   } finally {
     await viewer.stop();
   }

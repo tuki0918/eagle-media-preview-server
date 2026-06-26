@@ -48,6 +48,8 @@ describe("itemQueryParams", () => {
     expect(itemMatchesFolderFilter({ folders: ["folder-2"] }, { folderId: "folder-1", smartFolderId: "" })).toBe(false);
     expect(itemMatchesFolderFilter({ folders: [] }, { folderId: "__uncategorized__", smartFolderId: "" })).toBe(true);
     expect(itemMatchesFolderFilter({ folders: ["folder-1"] }, { folderId: "__uncategorized__", smartFolderId: "" })).toBe(false);
+    expect(itemMatchesFolderFilter({ folders: [], tags: [] }, { folderId: "__untagged__", smartFolderId: "" })).toBe(true);
+    expect(itemMatchesFolderFilter({ folders: [], tags: ["tag"] }, { folderId: "__untagged__", smartFolderId: "" })).toBe(false);
     expect(itemMatchesFolderFilter({ folders: [] }, { folderId: "folder-1", smartFolderId: "smart-1" })).toBe(true);
     expect(itemMatchesFolderFilter({ folders: ["folder-2"] }, { folderId: "", smartFolderId: "" })).toBe(true);
   });

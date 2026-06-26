@@ -11,6 +11,7 @@ import {
   MoonIcon,
   RouterIcon,
   SunIcon,
+  TagIcon,
   UserRoundIcon,
 } from "lucide-react";
 import { Fragment, useEffect, useRef, useState, useSyncExternalStore } from "react";
@@ -30,7 +31,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { UNCATEGORIZED_FOLDER_ID } from "../constants";
+import { UNCATEGORIZED_FOLDER_ID, UNTAGGED_FOLDER_ID } from "../constants";
 import { displayFolderCount } from "../format";
 import { getLibraryFooterName, subscribeLibraryFooterName } from "../libraryFooterState";
 import { getLoginConnectState, subscribeLoginConnectState } from "../loginConnectState";
@@ -170,6 +171,14 @@ function FolderShortcutSideNav({
             treeLayout={false}
             onSelect={() => selectFolder(UNCATEGORIZED_FOLDER_ID)}
           />
+          <FolderNavItem
+            active={selectedFolderId === UNTAGGED_FOLDER_ID}
+            depth={0}
+            icon="tag"
+            label="Untagged"
+            treeLayout={false}
+            onSelect={() => selectFolder(UNTAGGED_FOLDER_ID)}
+          />
         </SidebarMenu>
       </SidebarGroupContent>
     </SidebarGroup>
@@ -254,7 +263,7 @@ function isSmartFolderGroup(folder: EagleSmartFolder) {
   return folder.icon === "grid";
 }
 
-type FolderNavIconName = "folder" | "inbox" | "open" | "smart" | "smartGroup";
+type FolderNavIconName = "folder" | "inbox" | "open" | "smart" | "smartGroup" | "tag";
 
 function FolderTreeNavItems({
   expandedIds,
@@ -504,6 +513,7 @@ function folderNavIcon(icon: FolderNavIconName) {
   if (icon === "open") return FolderOpenIcon;
   if (icon === "smart") return FolderCogIcon;
   if (icon === "smartGroup") return LayoutGridIcon;
+  if (icon === "tag") return TagIcon;
   return FolderIcon;
 }
 
