@@ -507,6 +507,7 @@ async function loadItems({ append = false }: LoadItemsOptions = {}) {
       render();
     } else {
       render();
+      refreshOpenedFolderCounts();
       if (state.viewMode === "tiles" && new URLSearchParams(window.location.search).has("page")) {
         syncUrlState({ replace: true });
       }
@@ -542,6 +543,14 @@ async function loadAllFoldersTotal() {
     if (previousAllFoldersTotal !== allFoldersTotal) renderSearchControlButtons();
   } catch (error) {
     if (requestId === allFoldersTotalRequestId) handleAuthError(error);
+  }
+}
+
+function refreshOpenedFolderCounts() {
+  if (state.smartFolderId) {
+    void loadSmartFolders();
+  } else if (state.folderId) {
+    void loadFolders();
   }
 }
 
