@@ -88,15 +88,18 @@ export function AccountSideMenu() {
 
         <SidebarContent className="overflow-hidden">
           <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto">
+            <FolderShortcutSideNav
+              allFoldersTotal={searchState.allFoldersTotal}
+              selectedFolderId={searchState.selectedFolderId}
+              selectedSmartFolderId={searchState.selectedSmartFolderId}
+            />
             <SmartFolderSideNav
               selectedSmartFolderId={searchState.selectedSmartFolderId}
               smartFolders={searchState.smartFolders}
             />
             <FolderSideNav
-              allFoldersTotal={searchState.allFoldersTotal}
               folders={searchState.folders}
               selectedFolderId={searchState.selectedFolderId}
-              selectedSmartFolderId={searchState.selectedSmartFolderId}
             />
           </div>
           <ThemeSideNav />
@@ -130,16 +133,55 @@ function libraryHeaderLabels(displayName: string) {
   return { name: match[1], version: match[2] };
 }
 
-function FolderSideNav({
+function FolderShortcutSideNav({
   allFoldersTotal,
-  folders,
   selectedFolderId,
   selectedSmartFolderId,
 }: {
   allFoldersTotal: number;
-  folders: readonly EagleFolder[];
   selectedFolderId: string;
   selectedSmartFolderId: string;
+}) {
+  const { isMobile, setOpenMobile } = useSidebar();
+
+  const selectFolder = (folderId: string) => {
+    changeFolder({ currentTarget: { value: folderId } });
+    if (isMobile) setOpenMobile(false);
+  };
+
+  return (
+    <SidebarGroup className="shrink-0 px-2 pb-1 pt-1">
+      <SidebarGroupContent>
+        <SidebarMenu className="gap-0.5" aria-label="Folder shortcuts">
+          <FolderNavItem
+            active={!selectedFolderId && !selectedSmartFolderId}
+            count={allFoldersTotal}
+            depth={0}
+            icon="open"
+            label="All folders"
+            treeLayout={false}
+            onSelect={() => selectFolder("")}
+          />
+          <FolderNavItem
+            active={selectedFolderId === UNCATEGORIZED_FOLDER_ID}
+            depth={0}
+            icon="inbox"
+            label="Uncategorized"
+            treeLayout={false}
+            onSelect={() => selectFolder(UNCATEGORIZED_FOLDER_ID)}
+          />
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  );
+}
+
+function FolderSideNav({
+  folders,
+  selectedFolderId,
+}: {
+  folders: readonly EagleFolder[];
+  selectedFolderId: string;
 }) {
   const { isMobile, setOpenMobile } = useSidebar();
   const { expandedIds, toggleFolder } = useFolderExpansion(folders);
@@ -156,21 +198,6 @@ function FolderSideNav({
       </SidebarGroupLabel>
       <SidebarGroupContent>
         <SidebarMenu className="gap-0.5" aria-label="Folder tree">
-          <FolderNavItem
-            active={!selectedFolderId && !selectedSmartFolderId}
-            count={allFoldersTotal}
-            depth={0}
-            icon="open"
-            label="All folders"
-            onSelect={() => selectFolder("")}
-          />
-          <FolderNavItem
-            active={selectedFolderId === UNCATEGORIZED_FOLDER_ID}
-            depth={0}
-            icon="inbox"
-            label="Uncategorized"
-            onSelect={() => selectFolder(UNCATEGORIZED_FOLDER_ID)}
-          />
           <FolderTreeNavItems
             expandedIds={expandedIds}
             folders={folders}
@@ -394,6 +421,7 @@ function FolderNavItem({
   label,
   onSelect,
   onToggle,
+  treeLayout = true,
 }: {
   active: boolean;
   count?: number;
@@ -404,6 +432,7 @@ function FolderNavItem({
   label: string;
   onSelect: () => void;
   onToggle?: () => void;
+  treeLayout?: boolean;
 }) {
   const Icon = folderNavIcon(icon);
   const safeDepth = Math.max(0, Math.min(depth, 8));
@@ -415,35 +444,39 @@ function FolderNavItem({
     <SidebarMenuItem>
       <div
         className={[
-          "grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center group-data-[collapsible=icon]:block",
-          folderTreeDepthClass(safeDepth),
+          treeLayout
+            ? "grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center group-data-[collapsible=icon]:block"
+            : "min-w-0",
+          treeLayout ? folderTreeDepthClass(safeDepth) : "",
         ].join(" ")}
       >
-        <div className="relative flex h-8 w-6 shrink-0 items-center justify-center group-data-[collapsible=icon]:hidden">
-          {safeDepth > 0 ? (
-            <>
-              <span
-                className={[
-                  "sidebar-tree-branch absolute left-1/2 top-0 w-px -translate-x-1/2 bg-sidebar-border",
-                  isLastChild ? "sidebar-tree-branch-last h-1/2" : "sidebar-tree-branch-mid bottom-0",
-                ].join(" ")}
-                aria-hidden="true"
-              />
-              <span className="sidebar-tree-branch absolute left-1/2 top-1/2 h-px w-3 bg-sidebar-border" aria-hidden="true" />
-            </>
-          ) : null}
-          {canToggle ? (
-            <button
-              className="relative z-10 flex size-5 items-center justify-center rounded-sm bg-sidebar text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-              type="button"
-              aria-label={`${expanded ? "Collapse" : "Expand"} ${label}`}
-              aria-expanded={expanded}
-              onClick={onToggle}
-            >
-              <ToggleIcon className="size-3.5" aria-hidden="true" />
-            </button>
-          ) : null}
-        </div>
+        {treeLayout ? (
+          <div className="relative flex h-8 w-6 shrink-0 items-center justify-center group-data-[collapsible=icon]:hidden">
+            {safeDepth > 0 ? (
+              <>
+                <span
+                  className={[
+                    "sidebar-tree-branch absolute left-1/2 top-0 w-px -translate-x-1/2 bg-sidebar-border",
+                    isLastChild ? "sidebar-tree-branch-last h-1/2" : "sidebar-tree-branch-mid bottom-0",
+                  ].join(" ")}
+                  aria-hidden="true"
+                />
+                <span className="sidebar-tree-branch absolute left-1/2 top-1/2 h-px w-3 bg-sidebar-border" aria-hidden="true" />
+              </>
+            ) : null}
+            {canToggle ? (
+              <button
+                className="relative z-10 flex size-5 items-center justify-center rounded-sm bg-sidebar text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+                type="button"
+                aria-label={`${expanded ? "Collapse" : "Expand"} ${label}`}
+                aria-expanded={expanded}
+                onClick={onToggle}
+              >
+                <ToggleIcon className="size-3.5" aria-hidden="true" />
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         <SidebarMenuButton
           className="h-8 min-w-0 gap-2 px-1 text-[13px] font-normal data-active:bg-transparent data-active:font-[650] data-active:text-sidebar-foreground group-data-[collapsible=icon]:!pl-2"
           isActive={active}

@@ -424,7 +424,13 @@ describe("ViewerAppShell", () => {
     expect(html).toContain("Smart Folders");
     expect(html).toContain("Folders");
     expect(html).toContain("Theme");
-    expect(html.indexOf("Smart Folders")).toBeLessThan(html.indexOf("Folders"));
+    const allFoldersIndex = html.indexOf("All folders");
+    const uncategorizedIndex = html.indexOf("Uncategorized");
+    const smartFoldersIndex = html.indexOf("Smart Folders");
+    const foldersIndex = html.indexOf("Folders", smartFoldersIndex + "Smart Folders".length);
+    expect(allFoldersIndex).toBeLessThan(smartFoldersIndex);
+    expect(uncategorizedIndex).toBeLessThan(smartFoldersIndex);
+    expect(smartFoldersIndex).toBeLessThan(foldersIndex);
     expect(html).toContain('id="themeModeGroup"');
     expect(html).toContain('aria-label="Theme color"');
     expect(html).toContain("Light");
@@ -442,6 +448,9 @@ describe("ViewerAppShell", () => {
     expect(html).toContain('title="All folders"');
     expect(html).not.toContain('title="All folders (99)"');
     expect(html).toContain("Uncategorized");
+    const accountMenuDocument = new JSDOM(html, { url: "http://localhost" }).window.document;
+    const folderShortcuts = accountMenuDocument.querySelector('[aria-label="Folder shortcuts"]');
+    expect(folderShortcuts?.querySelector(".sidebar-tree-depth-0")).toBeNull();
     expect(html).toContain("Large Images");
     expect(html).toContain(">42</span>");
     expect(html).toContain('title="Large Images"');
