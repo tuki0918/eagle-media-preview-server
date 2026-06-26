@@ -7,6 +7,7 @@ function installDom() {
   });
   Object.defineProperty(globalThis, "document", { configurable: true, value: dom.window.document });
   Object.defineProperty(globalThis, "window", { configurable: true, value: dom.window });
+  Object.defineProperty(globalThis, "navigator", { configurable: true, value: dom.window.navigator });
   Object.defineProperty(globalThis, "history", { configurable: true, value: dom.window.history });
   Object.defineProperty(globalThis, "location", { configurable: true, value: dom.window.location });
   Object.defineProperty(globalThis, "FormData", { configurable: true, value: dom.window.FormData });
@@ -27,6 +28,7 @@ describe("viewer app data refresh", () => {
     dom.window.close();
     delete (globalThis as { document?: Document }).document;
     delete (globalThis as { window?: Window & typeof globalThis }).window;
+    delete (globalThis as { navigator?: Navigator }).navigator;
     delete (globalThis as { history?: History }).history;
     delete (globalThis as { location?: Location }).location;
     delete (globalThis as { FormData?: typeof FormData }).FormData;
