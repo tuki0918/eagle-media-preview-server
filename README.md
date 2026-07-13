@@ -25,6 +25,7 @@ Optional:
 - Expand support for additional file extensions
 - Add an Inbox QR code for uploading media from other devices
 - Add an upload-only role for media uploads
+- Add PWA support
 - Add AI-related capabilities
 - Improve UI/UX
 
