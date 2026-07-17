@@ -90,6 +90,8 @@ Build output is created under `dist`:
 - `dist/public/styles.css`
 - `dist/public/assets/*`
 - `dist/public/favicon.ico`
+- `dist/public/manifest.webmanifest`
+- `dist/public/service-worker.js`
 
 ## Server Management Window
 
@@ -377,7 +379,7 @@ npm test
 npm run verify
 ```
 
-`npm run build` compiles the plugin service `.cts` files into `dist/.generated/plugin-service` before Vite builds and packages the React surfaces. The Vite package step also copies `manifest.json`, plugin icons/assets, public assets, favicon, generated service `.cjs` files, and CSS into `dist`.
+`npm run build` compiles the plugin service `.cts` files into `dist/.generated/plugin-service` before Vite builds and packages the React surfaces. The Vite package step also copies `manifest.json`, plugin icons/assets, public assets, favicon, the PWA manifest and service worker, generated service `.cjs` files, and CSS into `dist`.
 
 Generated `dist/.generated/plugin-service/*.cjs` files and `dist` output are build artifacts.
 
@@ -386,5 +388,6 @@ Generated `dist/.generated/plugin-service/*.cjs` files and `dist` output are bui
 ## Implementation Notes
 
 - QR code generation is bundled into the plugin window from the `qrcode-generator` dependency.
+- The browser viewer registers its service worker only in production builds. The service worker caches the application shell and excludes `/api/*` and `/file/*` so authenticated API responses and library media are never added to its cache.
 - Generated `dist/.generated/plugin-service/*.cjs` files are build artifacts and are not tracked as source.
 - Request log UI, diagnostics UI, and shared URL expiration UI are intentionally not part of the current implementation.

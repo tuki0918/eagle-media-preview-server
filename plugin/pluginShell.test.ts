@@ -1090,6 +1090,7 @@ test("plugin server serves text and markdown media as inline raw text", async ()
 
   assert.match(staticSource, /"\.txt": "text\/plain; charset=utf-8"/);
   assert.match(staticSource, /"\.md": "text\/plain; charset=utf-8"/);
+  assert.match(staticSource, /"\.webmanifest": "application\/manifest\+json; charset=utf-8"/);
   assert.match(staticSource, /"frame-ancestors 'self'"/);
   assert.doesNotMatch(staticSource, /"frame-ancestors 'none'"/);
   assert.match(staticSource, /"X-Frame-Options": "SAMEORIGIN"/);

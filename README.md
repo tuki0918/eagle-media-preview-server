@@ -11,6 +11,7 @@ You can preview your media from other devices on the same network.
 - One-click local preview server for your Eagle library
 - Browse Eagle media from phones, tablets, and other computers on the same LAN
 - Endpoint URL and QR code for quick access
+- Installable PWA with a cached application shell
 
 Optional:
 
@@ -25,9 +26,14 @@ Optional:
 - Expand support for additional file extensions
 - Add an Inbox QR code for uploading media from other devices
 - Add an upload-only role for media uploads
-- Add PWA support
 - Add AI-related capabilities
 - Improve UI/UX
+
+## PWA Installation
+
+The browser viewer can be installed from a supported desktop or mobile browser. Service workers require a secure context, so use HTTPS when opening the viewer from another device on your LAN. Loopback addresses such as `localhost` are also treated as secure by browsers.
+
+The PWA caches only the application shell. Eagle API responses and library media are intentionally excluded from the service-worker cache, so browsing library content still requires a connection to the running plugin server.
 
 ## Settings
 
