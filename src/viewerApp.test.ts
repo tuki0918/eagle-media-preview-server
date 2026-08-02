@@ -133,6 +133,79 @@ describe("viewer app data refresh", () => {
     expect(getPreviewInfoState()).toBeNull();
     expect(new URLSearchParams(window.location.search).has("item")).toBe(false);
   });
+
+  test("does not render a completed rating save into a different preview", async () => {
+    const items = [
+      { id: "item-a", name: "A", ext: "jpg", star: 1 },
+      { id: "item-b", name: "B", ext: "jpg", star: 2 },
+    ];
+    let resolveRating: ((response: Response) => void) | undefined;
+    const ratingResponse = new Promise<Response>((resolve) => {
+      resolveRating = resolve;
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/auth/status") {
+        return jsonResponse({
+          authenticated: true,
+          required: false,
+          permissions: { manageLibrary: true, read: true, writeMetadata: true, writeRating: true },
+        });
+      }
+      if (url === "/api/connect" && options?.method === "POST") {
+        return jsonResponse({ app: { version: "1.0" }, library: { name: "Library" } });
+      }
+      if (url === "/api/folders" || url === "/api/smart-folders") {
+        return jsonResponse({ items: [] });
+      }
+      if (url.startsWith("/api/items?")) {
+        return jsonResponse({ items, total: items.length });
+      }
+      if (url === "/api/items/item-a/star" && options?.method === "POST") {
+        return ratingResponse;
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: fetchMock });
+
+    const { initViewer } = await import("./viewerApp");
+    const { closePreview, submitConnection } = await import("./viewer/shellActions");
+    const { getLoginConnectState } = await import("./viewer/loginConnectState");
+    const { getPreviewRatingState } = await import("./viewer/previewRatingState");
+    const { getResultSurfaceState } = await import("./viewer/resultSurfaceState");
+    initViewer();
+    await vi.waitFor(() => expect(getLoginConnectState().authenticated).toBe(true));
+
+    submitConnection({
+      currentTarget: document.querySelector<HTMLFormElement>("#connectForm")!,
+      preventDefault: () => {},
+    });
+    await vi.waitFor(() => expect(getResultSurfaceState().kind).toBe("list"));
+    let results = getResultSurfaceState();
+    if (results.kind !== "list") throw new Error("Missing result list");
+    results.onOpenPreview(items[0]);
+    getPreviewRatingState().onSelect(5);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/api/items/item-a/star",
+      expect.objectContaining({ method: "POST" }),
+    ));
+
+    closePreview();
+    results = getResultSurfaceState();
+    if (results.kind !== "list") throw new Error("Missing result list");
+    results.onOpenPreview(items[1]);
+    expect(getPreviewRatingState().item?.id).toBe("item-b");
+
+    resolveRating?.(jsonResponse({ star: 5 }));
+    await vi.waitFor(() => {
+      const currentResults = getResultSurfaceState();
+      if (currentResults.kind !== "list") throw new Error("Missing result list");
+      expect(currentResults.items.find((item) => item.id === "item-a")?.star).toBe(5);
+    });
+
+    expect(getPreviewRatingState().item?.id).toBe("item-b");
+    expect(getPreviewRatingState().item?.star).toBe(2);
+  });
 });
 
 function jsonResponse(body: unknown) {

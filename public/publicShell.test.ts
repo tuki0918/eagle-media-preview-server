@@ -760,7 +760,8 @@ test("public ratings are static in grid and list but editable in the preview mod
   assert.match(app, /saving: pendingRatingItemIds\.has\(String\(item\.id \|\| ""\)\)/);
   assert.match(html, /disabledLabel=\{state\.saving \? "Saving rating" : undefined\}/);
   assert.match(app, /renderPreviewRating\(item\);/);
-  assert.match(app, /if \(isPreviewDialogOpen\(\)\) renderPreviewRating\(item\);/);
+  assert.match(app, /if \(isCurrentPreviewItem\(itemId\)\) renderPreviewRating\(item\);/);
+  assert.match(app, /function isCurrentPreviewItem\(itemId: string\) \{[\s\S]*state\.previewItemId === itemId;/);
   assert.doesNotMatch(app, /if \(isPreviewDialogOpen\(\)\) \{\s*setPreviewRatingState/s);
   assert.match(html, /const Tag = interactive \? "button" : "span";/);
 });
@@ -822,8 +823,8 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(app, /postJson<\{[\s\S]*folders\?: unknown;[\s\S]*\}>\(`\/api\/items\/\$\{encodeURIComponent\(String\(item\.id \|\| ""\)\)\}\/metadata`, \{ tags, folders \}\)/);
   assert.match(app, /rememberRecentValues\(RECENT_TAGS_STORAGE_KEY, patch\.tags\);/);
   assert.match(app, /rememberRecentValues\(RECENT_FOLDERS_STORAGE_KEY, patch\.folders\);/);
-  assert.match(app, /await loadFolders\(\);[\s\S]*if \(isPreviewDialogOpen\(\)\) renderPreviewDetails\(item\);/);
-  assert.match(app, /if \(isPreviewDialogOpen\(\)\) renderPreviewDetails\(item\);/);
+  assert.match(app, /await loadFolders\(\);[\s\S]*if \(isCurrentPreviewItem\(itemId\)\) renderPreviewDetails\(item\);/);
+  assert.match(app, /if \(isCurrentPreviewItem\(itemId\)\) renderPreviewDetails\(item\);/);
   assert.match(app, /return patch;/);
   assert.doesNotMatch(html, /setStatus\("Saved"\);/);
   assert.match(app, /showSuccessToast\("Rating saved"/);
@@ -853,9 +854,9 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.doesNotMatch(app, /preview-date-section/);
   assert.match(app, /function formatItemDate\(item[^,]*,\s*keys[^)]*\) \{/);
   assert.match(html, /<div id="previewDetails" className="preview-details grid gap-2\.5">/);
-  assert.match(html, /\{previewInfoState \? <PreviewDetailsPanel \{\.\.\.previewInfoState\} \/> : null\}/);
+  assert.match(html, /\{previewInfoState \? <PreviewDetailsPanel key=\{String\(previewInfoState\.item\.id \|\| ""\)\} \{\.\.\.previewInfoState\} \/> : null\}/);
   assert.match(html, /<div id="previewActions" className="preview-info-actions/);
-  assert.match(html, /<PreviewActions canEditMetadata=\{previewInfoState\.canEditMetadata\} canManageLibrary=\{previewInfoState\.canManageLibrary\}/);
+  assert.match(html, /<PreviewActions key=\{String\(previewInfoState\.item\.id \|\| ""\)\} canEditMetadata=\{previewInfoState\.canEditMetadata\} canManageLibrary=\{previewInfoState\.canManageLibrary\}/);
   assert.match(html, /const previewDetailsSectionClassName =[\s\S]*gap-1\.5/);
   assert.doesNotMatch(css, /\.preview-detail-row-divider\s*\{/);
   assert.match(html, /preview-rating-section mx-2 grid min-h-8/);

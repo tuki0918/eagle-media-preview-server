@@ -104,7 +104,7 @@ export function PreviewInfoDetails() {
   const previewInfoState = useSyncExternalStore(subscribePreviewInfoState, getPreviewInfoState, getPreviewInfoState);
   return (
     <div id="previewDetails" className="preview-details grid gap-2.5">
-      {previewInfoState ? <PreviewDetailsPanel {...previewInfoState} /> : null}
+      {previewInfoState ? <PreviewDetailsPanel key={String(previewInfoState.item.id || "")} {...previewInfoState} /> : null}
     </div>
   );
 }
@@ -113,7 +113,7 @@ export function PreviewInfoActions() {
   const previewInfoState = useSyncExternalStore(subscribePreviewInfoState, getPreviewInfoState, getPreviewInfoState);
   return (
     <div id="previewActions" className="preview-info-actions mx-2 border-t border-border pt-3">
-      {previewInfoState ? <PreviewActions canEditMetadata={previewInfoState.canEditMetadata} canManageLibrary={previewInfoState.canManageLibrary} item={previewInfoState.item} onToggleTrash={previewInfoState.onToggleTrash} /> : null}
+      {previewInfoState ? <PreviewActions key={String(previewInfoState.item.id || "")} canEditMetadata={previewInfoState.canEditMetadata} canManageLibrary={previewInfoState.canManageLibrary} item={previewInfoState.item} onToggleTrash={previewInfoState.onToggleTrash} /> : null}
     </div>
   );
 }

@@ -824,7 +824,7 @@ async function setItemStar(item: EagleItem, star: number) {
   item.star = star;
   updateItemInState(itemId, { star });
   render();
-  if (isPreviewDialogOpen()) renderPreviewRating(item);
+  if (isCurrentPreviewItem(itemId)) renderPreviewRating(item);
 
   try {
     const data = await postJson<{ star?: unknown }>(`/api/items/${encodeURIComponent(itemId)}/star`, { star });
@@ -844,7 +844,7 @@ async function setItemStar(item: EagleItem, star: number) {
   } finally {
     pendingRatingItemIds.delete(itemId);
     render();
-    if (isPreviewDialogOpen()) renderPreviewRating(item);
+    if (isCurrentPreviewItem(itemId)) renderPreviewRating(item);
   }
 }
 
@@ -864,6 +864,10 @@ function ratingSavedDescription(star: number) {
 
 function isPreviewDialogOpen() {
   return getPreviewDialogState().open;
+}
+
+function isCurrentPreviewItem(itemId: string) {
+  return isPreviewDialogOpen() && state.previewItemId === itemId;
 }
 
 function updateItemInState(id: string, patch: ItemPatch) {
@@ -972,7 +976,7 @@ async function setItemTrash(item: EagleItem, isDeleted: boolean) {
   item.isDeleted = isDeleted;
   updateItemInState(itemId, { isDeleted });
   render();
-  if (isPreviewDialogOpen()) renderPreviewDetails(item);
+  if (isCurrentPreviewItem(itemId)) renderPreviewDetails(item);
   try {
     const data = await postJson<{ isDeleted?: unknown }>(`/api/items/${encodeURIComponent(itemId)}/trash`, { isDeleted });
     const savedIsDeleted = typeof data.isDeleted === "boolean" ? data.isDeleted : isDeleted;
@@ -991,7 +995,7 @@ async function setItemTrash(item: EagleItem, isDeleted: boolean) {
     throw error;
   } finally {
     render();
-    if (isPreviewDialogOpen()) renderPreviewDetails(item);
+    if (isCurrentPreviewItem(itemId)) renderPreviewDetails(item);
   }
 }
 
@@ -1001,6 +1005,7 @@ async function savePreviewMetadata(item: EagleItem, { tags, folders }: { tags: s
   }
   const previousFolderIds = folderIds(item.folders);
   const folderBaselines = folderCountBaselines(state.folders);
+  const itemId = String(item.id || "");
   try {
     const data = await postJson<{
       tags?: unknown;
@@ -1013,13 +1018,13 @@ async function savePreviewMetadata(item: EagleItem, { tags, folders }: { tags: s
     rememberRecentValues(RECENT_TAGS_STORAGE_KEY, patch.tags);
     rememberRecentValues(RECENT_FOLDERS_STORAGE_KEY, patch.folders);
     Object.assign(item, patch);
-    updateItemInState(String(item.id || ""), patch);
+    updateItemInState(itemId, patch);
     removeItemIfOutsideCurrentFolderFilter(item);
     applyMetadataFolderCountChanges(previousFolderIds, patch.folders);
     render();
     await loadFolders();
     applyMetadataFolderCountChanges(previousFolderIds, patch.folders, folderBaselines);
-    if (isPreviewDialogOpen()) renderPreviewDetails(item);
+    if (isCurrentPreviewItem(itemId)) renderPreviewDetails(item);
     return patch;
   } catch (error) {
     handleAuthError(error);

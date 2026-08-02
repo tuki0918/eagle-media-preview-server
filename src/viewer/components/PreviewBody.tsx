@@ -36,7 +36,7 @@ export const PreviewBodyHost = forwardRef<HTMLDivElement>(function PreviewBodyHo
       id="previewBody"
       className={previewBodyClassName(previewBodyState?.kind)}
     >
-      {previewBodyState ? <PreviewBody {...previewBodyState} /> : null}
+      {previewBodyState ? <PreviewBody key={String(previewBodyState.item.id || "")} {...previewBodyState} /> : null}
     </div>
   );
 });
