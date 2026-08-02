@@ -111,6 +111,10 @@ let allFoldersTotal = 0;
 let allFoldersTotalRequestId = 0;
 const pendingRatingItemIds = new Set<string>();
 const DEFAULT_DOCUMENT_TITLE = "Media Preview Server";
+const changeSearch = debounce((query: string) => {
+  applyFilterChange({ query: query.trim() });
+  loadTagSuggestions();
+}, 220);
 
 export function initViewer() {
   init();
@@ -124,15 +128,13 @@ async function init() {
     connect,
     logout,
     urlPopped: () => {
+      changeSearch.cancel();
       restoreUrlState();
       applyControlsFromState();
       if (getShellView() !== "viewer") return;
       loadItems();
     },
-    searchChanged: debounce((query: string) => {
-      applyFilterChange({ query: query.trim() });
-      loadTagSuggestions();
-    }, 220),
+    searchChanged: changeSearch,
     searchFocused: (query: string) => {
       if (query.trim()) loadTagSuggestions();
     },
@@ -243,6 +245,7 @@ async function connect(credentials?: { password: string; username: string }) {
 }
 
 async function logout() {
+  changeSearch.cancel();
   setConnectMessage("", false);
   setConnectBusy(true);
   try {
@@ -388,6 +391,7 @@ function showViewer(data: ConnectResponse) {
 }
 
 function clearViewerSessionState() {
+  changeSearch.cancel();
   state.requestId += 1;
   allFoldersTotalRequestId += 1;
   allFoldersTotal = 0;

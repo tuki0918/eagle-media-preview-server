@@ -58,10 +58,23 @@ export function mediaUrl(id: string, kind: string) {
   return `/api/items/${encodeURIComponent(id)}/${kind}`;
 }
 
-export function debounce<TArgs extends unknown[]>(fn: (...args: TArgs) => void, wait: number) {
-  let timer = 0;
-  return (...args: TArgs) => {
-    window.clearTimeout(timer);
-    timer = window.setTimeout(() => fn(...args), wait);
+export type DebouncedFunction<TArgs extends unknown[]> = ((...args: TArgs) => void) & {
+  cancel: () => void;
+};
+
+export function debounce<TArgs extends unknown[]>(fn: (...args: TArgs) => void, wait: number): DebouncedFunction<TArgs> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const debounced = (...args: TArgs) => {
+    if (timer !== undefined) clearTimeout(timer);
+    timer = setTimeout(() => {
+      timer = undefined;
+      fn(...args);
+    }, wait);
   };
+  debounced.cancel = () => {
+    if (timer === undefined) return;
+    clearTimeout(timer);
+    timer = undefined;
+  };
+  return debounced;
 }

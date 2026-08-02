@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { ApiError, errorMessage, getJson, postJson } from "./api";
+import { ApiError, debounce, errorMessage, getJson, postJson } from "./api";
 
 describe("viewer API helpers", () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -60,5 +61,17 @@ describe("viewer API helpers", () => {
   test("normalizes unknown thrown values to display messages", () => {
     expect(errorMessage(new Error("Boom"))).toBe("Boom");
     expect(errorMessage("plain failure")).toBe("plain failure");
+  });
+
+  test("cancels a pending debounced call", () => {
+    vi.useFakeTimers();
+    const callback = vi.fn();
+    const debounced = debounce(callback, 220);
+
+    debounced("stale query");
+    debounced.cancel();
+    vi.advanceTimersByTime(220);
+
+    expect(callback).not.toHaveBeenCalled();
   });
 });

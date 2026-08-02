@@ -24,6 +24,7 @@ describe("viewer app data refresh", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     dom.window.close();
     delete (globalThis as { document?: Document }).document;
@@ -205,6 +206,117 @@ describe("viewer app data refresh", () => {
 
     expect(getPreviewRatingState().item?.id).toBe("item-b");
     expect(getPreviewRatingState().item?.star).toBe(2);
+  });
+
+  test("cancels a pending search when browser history is restored", async () => {
+    const requests: string[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      const url = String(input);
+      requests.push(url);
+      if (url === "/api/auth/status") {
+        return jsonResponse({ authenticated: true, required: false });
+      }
+      if (url === "/api/connect" && options?.method === "POST") {
+        return jsonResponse({ app: { version: "1.0" }, library: { name: "Library" } });
+      }
+      if (url === "/api/folders" || url === "/api/smart-folders") {
+        return jsonResponse({ items: [] });
+      }
+      if (url.startsWith("/api/items?")) {
+        return jsonResponse({ items: [], total: 2 });
+      }
+      if (url.startsWith("/api/tags?")) {
+        return jsonResponse({ items: [] });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: fetchMock });
+
+    const { initViewer } = await import("./viewerApp");
+    const { changeSearchQuery, handleUrlPop, submitConnection } = await import("./viewer/shellActions");
+    const { getLoginConnectState } = await import("./viewer/loginConnectState");
+    const { getSearchControlsState } = await import("./viewer/searchControlsState");
+    initViewer();
+    await vi.waitFor(() => expect(getLoginConnectState().authenticated).toBe(true));
+
+    submitConnection({
+      currentTarget: document.querySelector<HTMLFormElement>("#connectForm")!,
+      preventDefault: () => {},
+    });
+    await vi.waitFor(() => expect(requests.some((url) => url.startsWith("/api/items?"))).toBe(true));
+    const itemRequestCount = requests.filter((url) => url.startsWith("/api/items?")).length;
+
+    vi.useFakeTimers();
+    changeSearchQuery({ currentTarget: { value: "stale query" } });
+    history.replaceState(null, "", "/viewer?q=restored");
+    handleUrlPop();
+    vi.advanceTimersByTime(220);
+
+    expect(getSearchControlsState().searchQuery).toBe("restored");
+    expect(new URLSearchParams(window.location.search).get("q")).toBe("restored");
+    const nextItemRequests = requests.filter((url) => url.startsWith("/api/items?")).slice(itemRequestCount);
+    expect(nextItemRequests).toHaveLength(1);
+    expect(new URLSearchParams(nextItemRequests[0].split("?")[1]).get("q")).toBe("restored");
+    expect(requests.some((url) => url.includes("q=stale+query"))).toBe(false);
+  });
+
+  test("cancels a pending search as soon as logout starts", async () => {
+    const requests: string[] = [];
+    let resolveLogout: ((response: Response) => void) | undefined;
+    const logoutResponse = new Promise<Response>((resolve) => {
+      resolveLogout = resolve;
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      const url = String(input);
+      requests.push(url);
+      if (url === "/api/auth/status") {
+        return jsonResponse({ authenticated: true, required: false });
+      }
+      if (url === "/api/connect" && options?.method === "POST") {
+        return jsonResponse({ app: { version: "1.0" }, library: { name: "Library" } });
+      }
+      if (url === "/api/auth/logout" && options?.method === "POST") {
+        return logoutResponse;
+      }
+      if (url === "/api/folders" || url === "/api/smart-folders") {
+        return jsonResponse({ items: [] });
+      }
+      if (url.startsWith("/api/items?")) {
+        return jsonResponse({ items: [], total: 2 });
+      }
+      if (url.startsWith("/api/tags?")) {
+        return jsonResponse({ items: [] });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: fetchMock });
+
+    const { initViewer } = await import("./viewerApp");
+    const { changeSearchQuery, submitConnection, submitLogout } = await import("./viewer/shellActions");
+    const { getLoginConnectState } = await import("./viewer/loginConnectState");
+    const { getShellView } = await import("./viewer/shellVisibility");
+    initViewer();
+    await vi.waitFor(() => expect(getLoginConnectState().authenticated).toBe(true));
+
+    submitConnection({
+      currentTarget: document.querySelector<HTMLFormElement>("#connectForm")!,
+      preventDefault: () => {},
+    });
+    await vi.waitFor(() => expect(getShellView()).toBe("viewer"));
+    const itemRequestCount = requests.filter((url) => url.startsWith("/api/items?")).length;
+
+    vi.useFakeTimers();
+    changeSearchQuery({ currentTarget: { value: "stale query" } });
+    submitLogout();
+    vi.advanceTimersByTime(220);
+
+    expect(requests.filter((url) => url.startsWith("/api/items?"))).toHaveLength(itemRequestCount);
+    expect(requests.some((url) => url.includes("q=stale+query"))).toBe(false);
+
+    vi.useRealTimers();
+    resolveLogout?.(jsonResponse({ authenticated: false, required: true }));
+    await vi.waitFor(() => expect(getShellView()).toBe("login"));
+    expect(new URLSearchParams(window.location.search).has("q")).toBe(false);
   });
 });
 
