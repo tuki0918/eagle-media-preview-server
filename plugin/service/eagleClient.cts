@@ -538,7 +538,12 @@ async function resolveLibraryItemFile({ libraryPath, item, kind }: ResolveLibrar
   if (!libraryPath || !item?.id) return "";
   const itemDir = resolveLibraryItemDir(libraryPath, item.id);
   if (!itemDir) return "";
-  const entries = await readdir(itemDir, { withFileTypes: true }) as Dirent[];
+  let entries: Dirent[];
+  try {
+    entries = await readdir(itemDir, { withFileTypes: true }) as Dirent[];
+  } catch {
+    return "";
+  }
   const files = entries.filter((entry) => entry.isFile()).map((entry) => entry.name);
 
   if (kind === "thumb") {

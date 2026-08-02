@@ -1,5 +1,5 @@
 const CACHE_PREFIX = "media-preview-shell-";
-const CACHE_NAME = `${CACHE_PREFIX}v1`;
+const CACHE_NAME = `${CACHE_PREFIX}v2`;
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -49,16 +49,14 @@ self.addEventListener("fetch", (event) => {
   }
 
   event.respondWith(
-    caches.match(request).then((cachedResponse) => {
-      if (cachedResponse) return cachedResponse;
-
-      return fetch(request).then((networkResponse) => {
+    fetch(request)
+      .then((networkResponse) => {
         if (networkResponse.ok && networkResponse.type === "basic") {
           const responseToCache = networkResponse.clone();
           void caches.open(CACHE_NAME).then((cache) => cache.put(request, responseToCache));
         }
         return networkResponse;
-      });
-    }),
+      })
+      .catch(() => caches.match(request)),
   );
 });

@@ -839,6 +839,19 @@ test("resolveLibraryItemFile accepts item extensions with a leading dot", async 
   );
 });
 
+test("resolveLibraryItemFile returns empty when an Eagle item folder is unavailable", async () => {
+  const libraryPath = await mkdtemp(join(tmpdir(), "eagle-library-missing-item-"));
+
+  assert.equal(
+    await resolveLibraryItemFile({
+      libraryPath,
+      item: { id: "MISSING", ext: "png" },
+      kind: "file",
+    }),
+    "",
+  );
+});
+
 test("resolveLibraryItemFile rejects item ids that escape the library image folder", async () => {
   const libraryPath = await mkdtemp(join(tmpdir(), "eagle-library-escape-"));
   const escapedDir = join(libraryPath, "ESCAPED.info");

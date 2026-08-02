@@ -1747,6 +1747,54 @@ test("createViewerServer serves direct file routes from /file/:id", async () => 
   await viewer.stop();
 });
 
+test("createViewerServer falls back to the library original when Eagle reports noThumbnail and a stale file path", async () => {
+  const root = join(tmpdir(), `eagle-media-preview-server-original-fallback-${Date.now()}`);
+  const itemId = "ML3OU9S3PAJRO";
+  const itemDir = join(root, "images", `${itemId}.info`);
+  await mkdir(itemDir, { recursive: true });
+  await writeFile(join(itemDir, "metadata.json"), "{}");
+  await writeFile(join(itemDir, "Shimiko.png"), "original-image");
+
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: root, name: "Test Library" };
+      },
+      async itemById() {
+        return {
+          data: [{
+            id: itemId,
+            name: "Shimiko",
+            ext: "png",
+            width: 841,
+            height: 1280,
+            size: 772197,
+            noThumbnail: true,
+            filePath: join(root, "stale", "Shimiko.png"),
+          }],
+        };
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const response = await fetch(`http://127.0.0.1:${status.port}/file/${itemId}`);
+
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("content-type"), "image/png");
+    assert.equal(await response.text(), "original-image");
+  } finally {
+    await viewer.stop();
+  }
+});
+
 test("createViewerServer rejects direct file routes that resolve to a directory", async () => {
   const root = join(tmpdir(), `eagle-media-preview-server-directory-${Date.now()}`);
   await mkdir(root, { recursive: true });

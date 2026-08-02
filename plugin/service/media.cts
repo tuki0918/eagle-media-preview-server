@@ -22,7 +22,7 @@ interface EagleItem {
 }
 
 interface EagleMediaClient {
-  itemById(id: string): Promise<EagleItem>;
+  itemById(id: string): Promise<EagleItem | EagleItem[]>;
   legacyThumbnailPath(id: string): Promise<unknown>;
 }
 
@@ -158,17 +158,25 @@ function parseInternetShortcutUrl(text: string) {
 }
 
 async function resolveItemMediaPath(id: string, kind: MediaKind, session: EagleMediaSession) {
-  const item = await session.client.itemById(id);
-  const itemData = Array.isArray(item?.data) ? item.data[0] : item;
+  let itemData: EagleItem = { id };
+  try {
+    itemData = mediaItemById(await session.client.itemById(id), id);
+  } catch {
+    // The library folder can still resolve the original by its stable item id.
+  }
   let filePath = "";
 
   if (kind === "thumb") {
-    filePath =
+    const thumbnailPath =
       pathFromFileValue(itemData?.thumbnailURL) ||
       pathFromFileValue(itemData?.thumbnailPath);
+    filePath = await existingFilePath(thumbnailPath);
+    let unresolvedPath = thumbnailPath;
     if (!filePath) {
       try {
-        filePath = pathFromFileValue(await session.client.legacyThumbnailPath(id));
+        const legacyPath = pathFromFileValue(await session.client.legacyThumbnailPath(id));
+        unresolvedPath ||= legacyPath;
+        filePath = await existingFilePath(legacyPath);
       } catch {
         filePath = "";
       }
@@ -180,10 +188,12 @@ async function resolveItemMediaPath(id: string, kind: MediaKind, session: EagleM
         kind: "thumb",
       });
     }
+    filePath ||= unresolvedPath;
   } else {
-    filePath =
+    const originalPath =
       pathFromFileValue(itemData?.fileURL) ||
       pathFromFileValue(itemData?.filePath);
+    filePath = await existingFilePath(originalPath);
     if (!filePath) {
       filePath = await resolveLibraryItemFile({
         libraryPath: await getLibraryPath(session),
@@ -191,9 +201,25 @@ async function resolveItemMediaPath(id: string, kind: MediaKind, session: EagleM
         kind: "file",
       });
     }
+    filePath ||= originalPath;
   }
 
   return { filePath, itemData };
+}
+
+function mediaItemById(item: EagleItem | EagleItem[], id: string): EagleItem {
+  const items = Array.isArray(item)
+    ? item
+    : Array.isArray(item?.data)
+      ? item.data
+      : [item];
+  return items.find((candidate) => candidate?.id === id) || { id };
+}
+
+async function existingFilePath(filePath: string) {
+  if (!filePath) return "";
+  const info = await safeStat(filePath);
+  return info?.isFile() ? filePath : "";
 }
 
 function pipeMediaStream(
