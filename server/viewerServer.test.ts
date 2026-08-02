@@ -1044,6 +1044,53 @@ test("createViewerServer rate-limits repeated failed logins by client and userna
   }
 });
 
+test("createViewerServer preserves active login locks when the failure table reaches capacity", async () => {
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    authUsers: [
+      { username: "target", passwordHash: sha256("secret"), role: "viewer" },
+    ],
+  });
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const origin = `http://127.0.0.1:${status.port}`;
+    const attemptLogin = (username: string) => fetch(`${origin}/api/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: origin,
+      },
+      body: JSON.stringify({ username, password: "wrong" }),
+    });
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const response = await attemptLogin("target");
+      assert.equal(response.status, attempt === 4 ? 429 : 401);
+      await response.json();
+    }
+
+    for (let index = 0; index < 499; index += 1) {
+      const response = await attemptLogin(`noise-${index}`);
+      assert.equal(response.status, 401);
+      await response.json();
+    }
+
+    const capacityLimited = await attemptLogin("noise-499");
+    assert.equal(capacityLimited.status, 429);
+    assert.match(capacityLimited.headers.get("retry-after") || "", /^\d+$/);
+    assert.deepEqual(await capacityLimited.json(), { error: "Too many failed login attempts. Try again later." });
+
+    const targetStillLocked = await attemptLogin("target");
+    assert.equal(targetStillLocked.status, 429);
+    assert.deepEqual(await targetStillLocked.json(), { error: "Too many failed login attempts. Try again later." });
+  } finally {
+    await viewer.stop();
+  }
+});
+
 test("createViewerServer accepts signed session cookies after restart and invalidates only changed users", async () => {
   const sessionSecret = "test-session-secret";
   const authUsers = [

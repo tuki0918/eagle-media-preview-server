@@ -658,14 +658,15 @@ function clientAddress(req: IncomingMessage) {
 }
 
 function activeLoginLockSeconds(loginFailures: Map<string, LoginFailure>, key: string) {
-  pruneLoginFailures(loginFailures);
-  const entry = loginFailures.get(key);
-  if (!entry) return 0;
   const now = Date.now();
-  if (entry.lockedUntil > now) return Math.ceil((entry.lockedUntil - now) / 1000);
-  if (now - entry.firstFailedAt > LOGIN_FAILURE_WINDOW_MS) {
-    loginFailures.delete(key);
+  pruneLoginFailures(loginFailures, now);
+  const entry = loginFailures.get(key);
+  if (!entry) {
+    return loginFailures.size >= LOGIN_FAILURE_MAX_ENTRIES
+      ? loginFailureCapacityRetryAfterSeconds(loginFailures, now)
+      : 0;
   }
+  if (entry.lockedUntil > now) return Math.ceil((entry.lockedUntil - now) / 1000);
   return 0;
 }
 
@@ -673,6 +674,9 @@ function recordFailedLogin(loginFailures: Map<string, LoginFailure>, key: string
   const now = Date.now();
   pruneLoginFailures(loginFailures, now);
   const current = loginFailures.get(key);
+  if (!current && loginFailures.size >= LOGIN_FAILURE_MAX_ENTRIES) {
+    return loginFailureCapacityRetryAfterSeconds(loginFailures, now);
+  }
   const entry = current && now - current.firstFailedAt <= LOGIN_FAILURE_WINDOW_MS
     ? current
     : { count: 0, firstFailedAt: now, lockedUntil: 0 };
@@ -681,7 +685,6 @@ function recordFailedLogin(loginFailures: Map<string, LoginFailure>, key: string
     entry.lockedUntil = now + LOGIN_LOCK_MS;
   }
   loginFailures.set(key, entry);
-  pruneLoginFailures(loginFailures, now);
   return entry.lockedUntil > now ? Math.ceil((entry.lockedUntil - now) / 1000) : 0;
 }
 
@@ -691,15 +694,19 @@ function pruneLoginFailures(loginFailures: Map<string, LoginFailure>, now = Date
       loginFailures.delete(key);
     }
   }
-  if (loginFailures.size <= LOGIN_FAILURE_MAX_ENTRIES) return;
-  const overflow = loginFailures.size - LOGIN_FAILURE_MAX_ENTRIES;
-  const oldestKeys = [...loginFailures.entries()]
-    .sort(([, left], [, right]) => left.firstFailedAt - right.firstFailedAt)
-    .slice(0, overflow)
-    .map(([key]) => key);
-  for (const key of oldestKeys) {
-    loginFailures.delete(key);
+}
+
+function loginFailureCapacityRetryAfterSeconds(loginFailures: Map<string, LoginFailure>, now: number) {
+  let earliestExpiry = Number.POSITIVE_INFINITY;
+  for (const entry of loginFailures.values()) {
+    const expiresAt = Math.max(
+      entry.lockedUntil,
+      entry.firstFailedAt + LOGIN_FAILURE_WINDOW_MS + 1,
+    );
+    earliestExpiry = Math.min(earliestExpiry, expiresAt);
   }
+  const retryAt = Number.isFinite(earliestExpiry) ? earliestExpiry : now + LOGIN_FAILURE_WINDOW_MS;
+  return Math.max(1, Math.ceil((retryAt - now) / 1000));
 }
 
 function sendLoginRateLimited(res: ServerResponse, retryAfterSeconds: number) {
