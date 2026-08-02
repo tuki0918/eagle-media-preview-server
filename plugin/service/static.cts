@@ -61,7 +61,12 @@ const securityHeaders = {
   "X-Frame-Options": "SAMEORIGIN",
 };
 
-async function serveStatic(pathname: string, res: ServerResponse, publicDir: string) {
+async function serveStatic(
+  pathname: string,
+  res: ServerResponse,
+  publicDir: string,
+  createStream: typeof createReadStream = createReadStream,
+) {
   const cleanPath = pathname === "/" ? "/index.html" : pathname;
   const publicRoot = resolve(publicDir);
   const requestPath = cleanPath.startsWith("/") ? `.${cleanPath}` : `./${cleanPath}`;
@@ -75,15 +80,42 @@ async function serveStatic(pathname: string, res: ServerResponse, publicDir: str
   try {
     const info = await stat(filePath);
     if (!info.isFile()) throw new Error("Not a file");
+    pipeStaticStream(filePath, res, createStream);
+  } catch {
+    sendJson(res, 404, { error: "Not found" });
+  }
+}
+
+function pipeStaticStream(filePath: string, res: ServerResponse, createStream: typeof createReadStream) {
+  const stream = createStream(filePath);
+  let opened = false;
+  const destroyStream = () => {
+    if (!stream.destroyed) stream.destroy();
+  };
+  res.once("close", destroyStream);
+  stream.once("close", () => {
+    res.off("close", destroyStream);
+  });
+  stream.once("open", () => {
+    if (res.destroyed) {
+      destroyStream();
+      return;
+    }
+    opened = true;
     res.writeHead(200, {
       ...securityHeaders,
       "Content-Type": mimeTypes[extname(filePath).toLowerCase()] || "application/octet-stream",
       "Cache-Control": "no-cache",
     });
-    createReadStream(filePath).pipe(res);
-  } catch {
-    sendJson(res, 404, { error: "Not found" });
-  }
+    stream.pipe(res);
+  });
+  stream.once("error", (error: Error) => {
+    if (!opened && !res.headersSent) {
+      sendJson(res, 500, { error: "Unable to read static file" });
+      return;
+    }
+    res.destroy(error);
+  });
 }
 
 function mediaContentType(filePath: string, item?: { ext?: unknown } | null) {

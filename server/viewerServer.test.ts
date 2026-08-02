@@ -1,11 +1,14 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
+import { once } from "node:events";
+import { createReadStream } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { PassThrough } from "node:stream";
 import { createViewerServer, resolveDefaultPublicDir, sha256 } from "./viewerServer.js";
 
 const require = createRequire(import.meta.url);
@@ -1522,6 +1525,67 @@ test("serveStatic rejects sibling paths that only share the public directory pre
 
   assert.equal(status, 403);
   assert.deepEqual(JSON.parse(body), { error: "Forbidden" });
+});
+
+test("serveStatic handles file open races without an unhandled stream error", async () => {
+  const { serveStatic } = require("../dist/.generated/plugin-service/static.cjs");
+  const publicDir = join(tmpdir(), `eagle-media-preview-server-static-race-${Date.now()}`);
+  await mkdir(publicDir, { recursive: true });
+  await writeFile(join(publicDir, "index.html"), "ok");
+
+  let status = 0;
+  let body = "";
+  let finishResponse: (() => void) | undefined;
+  const responseFinished = new Promise<void>((resolve) => {
+    finishResponse = resolve;
+  });
+  const res = {
+    destroyed: false,
+    headersSent: false,
+    once() {},
+    off() {},
+    writeHead(nextStatus: number) {
+      status = nextStatus;
+      this.headersSent = true;
+    },
+    end(nextBody = "") {
+      body = String(nextBody);
+      finishResponse?.();
+    },
+    destroy(error: Error) {
+      throw error;
+    },
+  };
+
+  await serveStatic(
+    "/index.html",
+    res,
+    publicDir,
+    () => createReadStream(join(publicDir, "removed-before-open.html")),
+  );
+  await responseFinished;
+
+  assert.equal(status, 500);
+  assert.deepEqual(JSON.parse(body), { error: "Unable to read static file" });
+});
+
+test("media streams close their source file when the client disconnects", async () => {
+  const { pipeMediaStream } = require("../dist/.generated/plugin-service/media.cjs");
+  const root = join(tmpdir(), `eagle-media-preview-server-stream-close-${Date.now()}`);
+  await mkdir(root, { recursive: true });
+  const filePath = join(root, "large.bin");
+  await writeFile(filePath, Buffer.alloc(2 * 1024 * 1024));
+  const response = new PassThrough() as PassThrough & { writeHead: (status: number) => void };
+  response.writeHead = () => {};
+
+  const stream = pipeMediaStream(filePath, undefined, response, 200, {});
+  const streamClosed = once(stream, "close");
+  await once(stream, "open");
+  response.destroy();
+  await streamClosed;
+
+  assert.equal(stream.destroyed, true);
+  assert.equal(stream.closed, true);
 });
 
 test("createViewerServer serves static shell with browser hardening headers", async () => {

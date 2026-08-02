@@ -265,8 +265,19 @@ function pipeMediaStream(
 ) {
   const stream = options ? createReadStream(filePath, options) : createReadStream(filePath);
   let opened = false;
+  const destroyStream = () => {
+    if (!stream.destroyed) stream.destroy();
+  };
+  res.once("close", destroyStream);
+  stream.once("close", () => {
+    res.off("close", destroyStream);
+  });
 
   stream.once("open", () => {
+    if (res.destroyed) {
+      destroyStream();
+      return;
+    }
     opened = true;
     res.writeHead(status, headers);
     stream.pipe(res);
@@ -279,6 +290,7 @@ function pipeMediaStream(
     }
     res.destroy(error);
   });
+  return stream;
 }
 
 async function safeStat(filePath: string) {
@@ -359,4 +371,4 @@ async function getLibraryPath(session: EagleMediaSession) {
   return library?.path || "";
 }
 
-module.exports = { readInternetShortcutUrl, streamItemMedia };
+module.exports = { pipeMediaStream, readInternetShortcutUrl, streamItemMedia };
