@@ -1316,7 +1316,7 @@ describe("ViewerAppShell", () => {
       await act(async () => {
         const valueSetter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")?.set;
         valueSetter?.call(tagInput, "beta");
-        tagInput.onkeydown?.(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
+        tagInput.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
 
@@ -1537,7 +1537,7 @@ describe("ViewerAppShell", () => {
       await act(async () => {
         const valueSetter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")?.set;
         valueSetter?.call(folderInput, "New folder");
-        folderInput.onkeydown?.(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
+        folderInput.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
 
@@ -1613,7 +1613,7 @@ describe("ViewerAppShell", () => {
       await act(async () => {
         const valueSetter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")?.set;
         valueSetter?.call(folderInput, "Folder 2");
-        folderInput.onkeydown?.(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
+        folderInput.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
 

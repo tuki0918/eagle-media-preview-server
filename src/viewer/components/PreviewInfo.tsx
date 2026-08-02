@@ -531,13 +531,11 @@ function MetadataInlineInput({
     input.addEventListener("focus", handleFocus);
     input.addEventListener("pointerdown", handleFocus);
     input.addEventListener("keydown", handleKeyDown);
-    input.onkeydown = handleKeyDown;
     return () => {
       input.removeEventListener("input", handleInput);
       input.removeEventListener("focus", handleFocus);
       input.removeEventListener("pointerdown", handleFocus);
       input.removeEventListener("keydown", handleKeyDown);
-      input.onkeydown = null;
     };
   }, [onCloseInput, onSubmitValue, onSuggestions, selectedValues.join("\u0000")]);
 
