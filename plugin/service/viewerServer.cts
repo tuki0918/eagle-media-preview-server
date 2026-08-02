@@ -2,7 +2,7 @@ const { readFileSync } = require("fs");
 const { createServer: createHttpServer } = require("http");
 const { createServer: createHttpsServer } = require("https");
 const { randomBytes } = require("crypto");
-const { createEagleClient, normalizeStringArray } = require("./eagleClient.cjs");
+const { EagleRequestError, createEagleClient, normalizeStringArray } = require("./eagleClient.cjs");
 const { buildConnectionCandidates, createConnectionContext } = require("./connection.cjs");
 const { readInternetShortcutUrl, streamItemMedia } = require("./media.cjs");
 const { resolveDefaultPublicDir, securityHeaders, serveStatic } = require("./static.cjs");
@@ -245,7 +245,9 @@ function createViewerServer({
       }
       await serveStatic(url.pathname, res, publicDir);
     } catch (error) {
-      const status = error instanceof HttpError ? error.status : 500;
+      const status = error instanceof HttpError || error instanceof EagleRequestError
+        ? (error as { status: number }).status
+        : 500;
       sendJson(res, status, { error: errorMessage(error) || "Internal server error" });
     }
   });

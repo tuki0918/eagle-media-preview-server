@@ -12,6 +12,7 @@ import { PassThrough } from "node:stream";
 import { createViewerServer, resolveDefaultPublicDir, sha256 } from "./viewerServer.js";
 
 const require = createRequire(import.meta.url);
+const { EagleRequestError } = require("../dist/.generated/plugin-service/eagleClient.cjs");
 
 type ItemListOptions = { folderId?: string; isUntagged?: boolean; keywords?: string; limit?: number | string; offset?: number | string; query?: string; tags?: string[] };
 type TagListOptions = { query?: string; limit?: string };
@@ -292,6 +293,36 @@ test("createViewerServer exposes smart folders and smart folder items", async ()
       { method: "smartFolders" },
       { method: "smartFolderItems", options: { smartFolderId: "smart-1", offset: 30, limit: 60 } },
     ]);
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer preserves Eagle upstream error status codes", async () => {
+  let upstreamStatus = 504;
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    eagleClient: {
+      async folders() {
+        throw new EagleRequestError(upstreamStatus, upstreamStatus === 504
+          ? "Eagle request timed out"
+          : "Eagle response was too large");
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const timeoutResponse = await fetch(`${origin}/api/folders`);
+    assert.equal(timeoutResponse.status, 504);
+    assert.deepEqual(await timeoutResponse.json(), { error: "Eagle request timed out" });
+
+    upstreamStatus = 502;
+    const badGatewayResponse = await fetch(`${origin}/api/folders`);
+    assert.equal(badGatewayResponse.status, 502);
+    assert.deepEqual(await badGatewayResponse.json(), { error: "Eagle response was too large" });
   } finally {
     await viewer.stop();
   }
