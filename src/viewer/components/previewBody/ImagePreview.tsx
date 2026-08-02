@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent, type ReactNode, type TouchEvent } from "react";
 import { mediaUrl } from "../../api";
-import { hasNoPreviewAsset } from "../../media";
+import { hasNoThumbnail } from "../../media";
 import { closePreview } from "../../shellActions";
 import {
   getImageOverlayControlsVisible,
@@ -37,7 +37,7 @@ const imageZoomLabelClassName =
   "min-w-[44px] rounded-md px-1.5 text-center text-[11px] font-[680] tabular-nums text-muted-foreground";
 
 export function ImagePreview({ item, srcKind }: { item: EagleItem; srcKind: "file" | "thumb" }) {
-  const thumbnailUnavailable = srcKind === "thumb" && hasNoPreviewAsset(item);
+  const thumbnailUnavailable = srcKind === "thumb" && hasNoThumbnail(item);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const dragRef = useRef<PreviewDrag | null>(null);

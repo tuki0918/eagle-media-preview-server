@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { ExternalLinkIcon } from "lucide-react";
 import { errorMessage, getJson, mediaUrl } from "../../api";
-import { hasNoPreviewAsset } from "../../media";
+import { hasNoThumbnail } from "../../media";
 import type { EagleItem } from "../../types";
 import { PreviewNotice } from "./shared";
 
@@ -79,7 +79,7 @@ export function UrlPreview({ item }: { item: EagleItem }) {
   return (
     <section className={urlThumbPreviewClassName} aria-label="Link preview">
       <div className={urlThumbPreviewPanelClassName}>
-        {hasNoPreviewAsset(item) ? (
+        {hasNoThumbnail(item) ? (
           <div className={urlThumbPreviewPlaceholderClassName}>No thumbnail</div>
         ) : (
           <img
@@ -117,11 +117,10 @@ export function safeExternalUrl(value: unknown) {
 export function UnsupportedPreview({ item }: { item: EagleItem }) {
   return (
     <>
-      {hasNoPreviewAsset(item) ? null : (
+      {hasNoThumbnail(item) ? null : (
         <img className={unsupportedThumbClassName} src={mediaUrl(String(item.id || ""), "thumb")} alt={item.name || item.id || ""} />
       )}
       <PreviewNotice message={`${(item.ext || "This format").toUpperCase()} is not supported in this browser.`} />
     </>
   );
 }
-

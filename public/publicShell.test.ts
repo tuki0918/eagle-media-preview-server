@@ -496,7 +496,8 @@ test("public thumbnails lazy-load with visible loading states", async () => {
   assert.match(html, /loading \? " thumb-loading" : ""/);
   assert.match(html, /missing \? ` thumb-missing \$\{missingThumbClassName\}` : ""/);
   assert.match(html, /onLoad=\{\(\) => \{\s*setLoading\(false\);\s*setMissing\(false\);\s*\}\}/);
-  assert.match(html, /onError=\{\(\) => \{\s*setLoading\(false\);\s*setMissing\(true\);\s*\}\}/);
+  assert.match(html, /if \(sourceKind === "thumb" && canUseOriginalImage\) \{[\s\S]*setSourceKind\("file"\);/);
+  assert.match(html, /setSourceKind\("file"\);[\s\S]*return;[\s\S]*setLoading\(false\);\s*setMissing\(true\);/);
   assert.match(html, /const gridThumbButtonClassName =[\s\S]*aspect-\[3\/2\]/);
   assert.match(html, /function LoadingIndicator\(\{ variant \}/);
   assert.match(html, /animate-spin rounded-full border-2/);

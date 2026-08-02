@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { hasNoPreviewAsset, thumbnailAriaLabel, thumbnailMediaType, thumbnailOverlayIcon } from "./media";
+import { hasNoThumbnail, thumbnailAriaLabel, thumbnailMediaType, thumbnailOverlayIcon } from "./media";
 
 describe("thumbnail media helpers", () => {
   test("classifies supported thumbnail media types", () => {
@@ -24,12 +24,11 @@ describe("thumbnail media helpers", () => {
     expect(thumbnailAriaLabel({ id: "fallback", ext: "png" })).toBe("Open fallback");
   });
 
-  test("detects items without preview assets", () => {
-    expect(hasNoPreviewAsset({ id: "thumbnail-missing", noThumbnail: true })).toBe(true);
-    expect(hasNoPreviewAsset({ id: "preview-missing", noPreview: true })).toBe(true);
-    expect(hasNoPreviewAsset({ id: "empty-preview-flags-missing", size: 0 })).toBe(true);
-    expect(hasNoPreviewAsset({ id: "preview-flags-missing" })).toBe(false);
-    expect(hasNoPreviewAsset({ id: "non-empty-preview-flags-missing", size: 1024 })).toBe(false);
-    expect(hasNoPreviewAsset({ id: "preview-available", noThumbnail: false, noPreview: false })).toBe(false);
+  test("detects items without thumbnails using the Eagle v2 noThumbnail property", () => {
+    expect(hasNoThumbnail({ id: "thumbnail-missing", noThumbnail: true })).toBe(true);
+    expect(hasNoThumbnail({ id: "preview-unsupported", noPreview: true })).toBe(false);
+    expect(hasNoThumbnail({ id: "empty-file", size: 0 })).toBe(false);
+    expect(hasNoThumbnail({ id: "thumbnail-state-missing" })).toBe(false);
+    expect(hasNoThumbnail({ id: "thumbnail-available", noThumbnail: false, noPreview: true })).toBe(false);
   });
 });

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { mediaUrl } from "../../api";
 import { displayFileName } from "../../format";
-import { hasNoPreviewAsset } from "../../media";
+import { hasNoThumbnail } from "../../media";
 import {
   getVideoOverlayControlsVisible,
   setVideoOverlayControlsVisible,
@@ -62,13 +62,13 @@ export function VideoPreview({ item }: { item: EagleItem }) {
 
 export function AudioPreview({ item }: { item: EagleItem }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const noPreviewAsset = hasNoPreviewAsset(item);
-  const [artworkMissing, setArtworkMissing] = useState(noPreviewAsset);
+  const noThumbnail = hasNoThumbnail(item);
+  const [artworkMissing, setArtworkMissing] = useState(noThumbnail);
 
   useEffect(() => {
-    setArtworkMissing(hasNoPreviewAsset(item));
+    setArtworkMissing(hasNoThumbnail(item));
     audioRef.current?.play().catch(() => {});
-  }, [item.id, item.noPreview, item.noThumbnail]);
+  }, [item.id, item.noThumbnail]);
 
   return (
     <section className={audioPlayerShellClassName} aria-label="Audio player">
@@ -336,4 +336,3 @@ function MusicIcon() {
     </svg>
   );
 }
-

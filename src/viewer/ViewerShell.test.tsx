@@ -1036,12 +1036,13 @@ describe("ViewerAppShell", () => {
     expect(html).not.toContain("rating-star");
   });
 
-  test("does not request list thumbnails when Eagle reports no preview asset", () => {
+  test("uses noThumbnail instead of noPreview to detect unavailable list thumbnails", () => {
     const html = renderToStaticMarkup(
       <ResultList
         items={[
-          { id: "item-1", name: "Sample.url", ext: "url", noPreview: true },
-          { id: "item-2", name: "Legacy.url", ext: "url", size: 0 },
+          { id: "item-1", name: "No thumbnail.url", ext: "url", noThumbnail: true },
+          { id: "item-2", name: "No preview.url", ext: "url", noPreview: true },
+          { id: "item-3", name: "Empty.url", ext: "url", size: 0 },
         ]}
         viewMode="grid"
         onOpenPreview={() => {}}
@@ -1049,9 +1050,93 @@ describe("ViewerAppShell", () => {
     );
 
     expect(html).not.toContain("/api/items/item-1/thumb");
-    expect(html).not.toContain("/api/items/item-2/thumb");
+    expect(html).toContain("/api/items/item-2/thumb");
+    expect(html).toContain("/api/items/item-3/thumb");
     expect(html).toContain("thumb-missing");
     expect(html).toContain("NO PREVIEW");
+  });
+
+  test.each(["tiles", "grid", "list"] as const)(
+    "uses original images in %s view when Eagle reports noThumbnail",
+    (viewMode) => {
+      const html = renderToStaticMarkup(
+        <ResultList
+          items={[{ id: "item-1", name: "Small image.png", ext: "png", noThumbnail: true }]}
+          viewMode={viewMode}
+          onOpenPreview={() => {}}
+        />,
+      );
+
+      expect(html).toContain('src="/file/item-1"');
+      expect(html).not.toContain("/api/items/item-1/thumb");
+      expect(html).not.toContain("thumb-missing");
+      expect(html).not.toContain("NO PREVIEW");
+    },
+  );
+
+  test("falls back to the original image when a thumbnail request fails", async () => {
+    const dom = new JSDOM('<!doctype html><div id="root"></div>', { url: "http://localhost/" });
+    const testGlobal = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+    const previousWindow = globalThis.window;
+    const previousDocument = globalThis.document;
+    const previousNode = globalThis.Node;
+    const previousHTMLElement = globalThis.HTMLElement;
+    const previousIS_REACT_ACT_ENVIRONMENT = testGlobal.IS_REACT_ACT_ENVIRONMENT;
+    globalThis.window = dom.window;
+    globalThis.document = dom.window.document;
+    globalThis.Node = dom.window.Node;
+    globalThis.HTMLElement = dom.window.HTMLElement;
+    testGlobal.IS_REACT_ACT_ENVIRONMENT = true;
+
+    const { createRoot } = await import("react-dom/client");
+    let root: import("react-dom/client").Root | null = null;
+    try {
+      const container = dom.window.document.querySelector("#root");
+      if (!(container instanceof dom.window.HTMLElement)) throw new Error("Missing test root");
+      root = createRoot(container);
+
+      await act(async () => {
+        root?.render(
+          <ResultList
+            items={[{ id: "item-1", name: "Small image.png", ext: "png" }]}
+            viewMode="grid"
+            onOpenPreview={() => {}}
+          />,
+        );
+      });
+
+      const thumbnail = container.querySelector("img");
+      if (!(thumbnail instanceof dom.window.HTMLImageElement)) throw new Error("Missing thumbnail image");
+      expect(thumbnail.getAttribute("src")).toBe("/api/items/item-1/thumb");
+
+      await act(async () => {
+        thumbnail.dispatchEvent(new dom.window.Event("error"));
+      });
+
+      const original = container.querySelector("img");
+      if (!(original instanceof dom.window.HTMLImageElement)) throw new Error("Missing original image");
+      expect(original.getAttribute("src")).toBe("/file/item-1");
+      expect(container.textContent).not.toContain("NO PREVIEW");
+
+      await act(async () => {
+        original.dispatchEvent(new dom.window.Event("load"));
+      });
+
+      expect(original.className).not.toContain("opacity-0");
+      expect(container.querySelector("button")?.className).not.toContain("thumb-loading");
+    } finally {
+      if (root) {
+        await act(async () => {
+          root?.unmount();
+        });
+      }
+      globalThis.window = previousWindow;
+      globalThis.document = previousDocument;
+      globalThis.Node = previousNode;
+      globalThis.HTMLElement = previousHTMLElement;
+      testGlobal.IS_REACT_ACT_ENVIRONMENT = previousIS_REACT_ACT_ENVIRONMENT;
+      dom.window.close();
+    }
   });
 
   test("renders preview info as reusable detail and action components", () => {
@@ -1877,33 +1962,33 @@ describe("ViewerAppShell", () => {
     expect(unsupported).toContain("unsupported-thumb");
   });
 
-  test("does not request url preview thumbnails when Eagle reports no preview asset", () => {
+  test("does not request url preview thumbnails when Eagle reports noThumbnail", () => {
     const url = renderToStaticMarkup(
       <PreviewBody
-        item={{ id: "item-1", name: "Sample.url", ext: "url", noPreview: true, url: "https://example.test/page" }}
+        item={{ id: "item-1", name: "Sample.url", ext: "url", noThumbnail: true, url: "https://example.test/page" }}
         kind="url"
       />,
     );
-    const missingFlagsUrl = renderToStaticMarkup(
+    const noPreviewUrl = renderToStaticMarkup(
       <PreviewBody
-        item={{ id: "item-2", name: "Legacy.url", ext: "url", size: 0, url: "https://example.test/legacy" }}
+        item={{ id: "item-2", name: "No preview.url", ext: "url", noPreview: true, url: "https://example.test/no-preview" }}
         kind="url"
       />,
     );
 
     expect(url).toContain("url-thumb-preview");
     expect(url).not.toContain("/api/items/item-1/thumb");
-    expect(missingFlagsUrl).not.toContain("/api/items/item-2/thumb");
+    expect(noPreviewUrl).toContain("/api/items/item-2/thumb");
     expect(url).toContain("No thumbnail");
-    expect(missingFlagsUrl).toContain("No thumbnail");
+    expect(noPreviewUrl).not.toContain("No thumbnail");
     expect(url).toContain('href="https://example.test/page"');
     expect(url).toContain("このページを開く");
   });
 
-  test("does not request preview thumbnails when Eagle reports no preview asset", () => {
-    const audio = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", name: "Sample.mp3", ext: "mp3", noPreview: true }} kind="audio" />);
-    const imageThumb = renderToStaticMarkup(<PreviewBody item={{ id: "item-2", name: "Sample.psd", noPreview: true }} kind="image" srcKind="thumb" />);
-    const unsupported = renderToStaticMarkup(<PreviewBody item={{ id: "item-3", ext: "avi", noPreview: true }} kind="unsupported" />);
+  test("does not request preview thumbnails when Eagle reports noThumbnail", () => {
+    const audio = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", name: "Sample.mp3", ext: "mp3", noThumbnail: true }} kind="audio" />);
+    const imageThumb = renderToStaticMarkup(<PreviewBody item={{ id: "item-2", name: "Sample.psd", noThumbnail: true }} kind="image" srcKind="thumb" />);
+    const unsupported = renderToStaticMarkup(<PreviewBody item={{ id: "item-3", ext: "avi", noThumbnail: true }} kind="unsupported" />);
 
     expect(audio).not.toContain("/api/items/item-1/thumb");
     expect(imageThumb).not.toContain("/api/items/item-2/thumb");

@@ -14,7 +14,7 @@ import {
   isTimedMedia,
   originalFileName,
 } from "../format";
-import { hasNoPreviewAsset, thumbnailAriaLabel, thumbnailMediaType, thumbnailOverlayIcon } from "../media";
+import { hasNoThumbnail, thumbnailAriaLabel, thumbnailMediaType, thumbnailOverlayIcon } from "../media";
 import type { EagleItem, ViewerMode } from "../types";
 import { RatingStars } from "./RatingStars";
 
@@ -274,10 +274,15 @@ function ExtensionPill({ item }: { item: EagleItem }) {
 }
 
 function ThumbnailButton({ children, item, onOpenPreview, style, variant, withBadges = false, withFileBadge = true, withFileNameOverlay = false, withOverlay = false }: ThumbnailButtonProps) {
-  const noPreviewAsset = hasNoPreviewAsset(item);
-  const [loading, setLoading] = useState(!noPreviewAsset);
-  const [missing, setMissing] = useState(noPreviewAsset);
+  const noThumbnail = hasNoThumbnail(item);
   const mediaType = thumbnailMediaType(item);
+  const canUseOriginalImage = mediaType === "image";
+  const hasInitialSource = !noThumbnail || canUseOriginalImage;
+  const [sourceKind, setSourceKind] = useState<"file" | "thumb">(
+    noThumbnail && canUseOriginalImage ? "file" : "thumb",
+  );
+  const [loading, setLoading] = useState(hasInitialSource);
+  const [missing, setMissing] = useState(!hasInitialSource);
   const duration = isTimedMedia(item) ? formatDuration(item.duration) : "";
   const trigger = usePreviewTrigger(item, onOpenPreview);
   const baseClassName = thumbnailButtonBaseClassName(variant);
@@ -296,15 +301,21 @@ function ThumbnailButton({ children, item, onOpenPreview, style, variant, withBa
       onPointerMove={trigger.onPointerMove}
       onPointerUp={trigger.onPointerUp}
     >
-      {noPreviewAsset ? null : (
+      {missing ? null : (
         <img
           className={loading || missing ? "opacity-0" : undefined}
           alt={item.name || item.id || ""}
           decoding="async"
           hidden={missing}
           loading="lazy"
-          src={mediaUrl(String(item.id || ""), "thumb")}
+          src={mediaUrl(String(item.id || ""), sourceKind)}
           onError={() => {
+            if (sourceKind === "thumb" && canUseOriginalImage) {
+              setSourceKind("file");
+              setLoading(true);
+              setMissing(false);
+              return;
+            }
             setLoading(false);
             setMissing(true);
           }}
