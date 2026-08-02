@@ -183,6 +183,10 @@ async function init() {
     togglePreviewInfo,
     previewPointerDown: closePreviewInfoFromOutside,
     previewClosed: () => {
+      if (isPreviewDialogOpen()) {
+        closePreview();
+        return;
+      }
       clearPreviewContents();
     },
     previewDoubleClicked: (target, preventDefault) => {

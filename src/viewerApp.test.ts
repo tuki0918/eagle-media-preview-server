@@ -84,6 +84,55 @@ describe("viewer app data refresh", () => {
     await vi.waitFor(() => expect(requests.filter((url) => url === "/api/folders")).toHaveLength(2));
     expect(getSearchControlsState().folders[0]?.imageCount).toBe(7);
   });
+
+  test("synchronizes preview state when the native dialog closes", async () => {
+    const item = { id: "item-1", name: "Preview", ext: "jpg" };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/auth/status") {
+        return jsonResponse({ authenticated: true, required: false });
+      }
+      if (url === "/api/connect" && options?.method === "POST") {
+        return jsonResponse({ app: { version: "1.0" }, library: { name: "Library" } });
+      }
+      if (url === "/api/folders" || url === "/api/smart-folders") {
+        return jsonResponse({ items: [] });
+      }
+      if (url.startsWith("/api/items?")) {
+        return jsonResponse({ items: [item], total: 1 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: fetchMock });
+
+    const { initViewer } = await import("./viewerApp");
+    const { handlePreviewClose, submitConnection } = await import("./viewer/shellActions");
+    const { getLoginConnectState } = await import("./viewer/loginConnectState");
+    const { getPreviewDialogState } = await import("./viewer/previewDialogState");
+    const { getPreviewInfoState } = await import("./viewer/previewInfoState");
+    const { getResultSurfaceState } = await import("./viewer/resultSurfaceState");
+    initViewer();
+    await vi.waitFor(() => expect(getLoginConnectState().authenticated).toBe(true));
+
+    submitConnection({
+      currentTarget: document.querySelector<HTMLFormElement>("#connectForm")!,
+      preventDefault: () => {},
+    });
+    await vi.waitFor(() => expect(getResultSurfaceState().kind).toBe("list"));
+    const results = getResultSurfaceState();
+    if (results.kind !== "list") throw new Error("Missing result list");
+    results.onOpenPreview(item);
+
+    expect(getPreviewDialogState().open).toBe(true);
+    expect(getPreviewInfoState()?.item.id).toBe("item-1");
+    expect(new URLSearchParams(window.location.search).get("item")).toBe("item-1");
+
+    handlePreviewClose();
+
+    expect(getPreviewDialogState().open).toBe(false);
+    expect(getPreviewInfoState()).toBeNull();
+    expect(new URLSearchParams(window.location.search).has("item")).toBe(false);
+  });
 });
 
 function jsonResponse(body: unknown) {
