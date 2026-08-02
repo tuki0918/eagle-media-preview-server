@@ -8,6 +8,23 @@ import type { IncomingMessage, ServerResponse } from "http";
 
 type MediaKind = "file" | "thumb";
 const MAX_INTERNET_SHORTCUT_BYTES = 128 * 1024;
+const ACTIVE_DOCUMENT_CONTENT_TYPES = new Set([
+  "application/javascript",
+  "application/xhtml+xml",
+  "application/xml",
+  "image/svg+xml",
+  "text/html",
+  "text/javascript",
+  "text/xml",
+]);
+const ACTIVE_TEXT_CONTENT_TYPES = new Set([
+  "application/javascript",
+  "application/xhtml+xml",
+  "application/xml",
+  "text/html",
+  "text/javascript",
+  "text/xml",
+]);
 
 interface EagleItem {
   data?: EagleItem[];
@@ -58,7 +75,8 @@ async function streamItemMedia(id: string, kind: MediaKind, req: IncomingMessage
     sendJson(res, 404, { error: "Media file is unavailable" });
     return;
   }
-  const contentType = mediaContentType(filePath, itemData);
+  const detectedContentType = mediaContentType(filePath, itemData);
+  const contentType = safeMediaContentType(detectedContentType);
   const range = parseRange(req.headers.range, info.size);
 
   if (req.headers.range && !range) {
@@ -73,7 +91,7 @@ async function streamItemMedia(id: string, kind: MediaKind, req: IncomingMessage
   }
 
   const commonHeaders = {
-    ...securityHeaders,
+    ...mediaSecurityHeaders(detectedContentType),
     "Content-Type": contentType,
     "Accept-Ranges": "bytes",
     "Content-Disposition": contentDisposition(contentType, itemData, filePath),
@@ -107,6 +125,22 @@ async function streamItemMedia(id: string, kind: MediaKind, req: IncomingMessage
     return;
   }
   pipeMediaStream(filePath, undefined, res, 200, headers);
+}
+
+function safeMediaContentType(contentType: string) {
+  return ACTIVE_TEXT_CONTENT_TYPES.has(baseContentType(contentType)) ? "text/plain; charset=utf-8" : contentType;
+}
+
+function mediaSecurityHeaders(contentType: string) {
+  if (!ACTIVE_DOCUMENT_CONTENT_TYPES.has(baseContentType(contentType))) return securityHeaders;
+  return {
+    ...securityHeaders,
+    "Content-Security-Policy": "sandbox",
+  };
+}
+
+function baseContentType(contentType: string) {
+  return contentType.split(";", 1)[0].trim().toLowerCase();
 }
 
 async function readInternetShortcutUrl(id: string, session: EagleMediaSession) {

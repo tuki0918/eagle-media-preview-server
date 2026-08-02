@@ -1901,6 +1901,57 @@ test("createViewerServer serves text and markdown direct file routes inline as r
   await viewer.stop();
 });
 
+test("createViewerServer prevents active library files from executing in the viewer origin", async () => {
+  const root = join(tmpdir(), `eagle-media-preview-server-active-content-${Date.now()}`);
+  await mkdir(root, { recursive: true });
+  const files = {
+    html: join(root, "page.html"),
+    js: join(root, "script.js"),
+    svg: join(root, "image.svg"),
+  };
+  await Promise.all([
+    writeFile(files.html, '<script src="/file/js"></script>'),
+    writeFile(files.js, 'fetch("/api/library/switch", { method: "POST" })'),
+    writeFile(files.svg, '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'),
+  ]);
+
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: root, name: "Test Library" };
+      },
+      async itemById(id: keyof typeof files) {
+        return { data: [{ id, filePath: files[id] }] };
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const { port } = viewer.status();
+    const [htmlResponse, jsResponse, svgResponse] = await Promise.all([
+      fetch(`http://127.0.0.1:${port}/file/html`),
+      fetch(`http://127.0.0.1:${port}/file/js`),
+      fetch(`http://127.0.0.1:${port}/file/svg`),
+    ]);
+
+    assert.equal(htmlResponse.headers.get("content-type"), "text/plain; charset=utf-8");
+    assert.equal(jsResponse.headers.get("content-type"), "text/plain; charset=utf-8");
+    assert.equal(svgResponse.headers.get("content-type"), "image/svg+xml");
+    for (const response of [htmlResponse, jsResponse, svgResponse]) {
+      assert.equal(response.headers.get("content-security-policy"), "sandbox");
+      assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+    }
+  } finally {
+    await viewer.stop();
+  }
+});
+
 test("createViewerServer uses Eagle item extension as a PDF MIME fallback", async () => {
   const root = join(tmpdir(), `eagle-media-preview-server-pdf-${Date.now()}`);
   await mkdir(root, { recursive: true });
