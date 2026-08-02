@@ -13,7 +13,7 @@
     "test:run": "vitest run",
     "typecheck": "tsc --noEmit && npm run typecheck:plugin-service",
     "typecheck:plugin-service": "tsc -p tsconfig.plugin-service.json --noEmit",
-    "verify": "npm run build && tsc --noEmit && npm run test:run"
+    "verify": "npm run build && tsc --noEmit && npm run test:run && npm run build-storybook"
   },
   "engines": {
     "node": ">=20"
