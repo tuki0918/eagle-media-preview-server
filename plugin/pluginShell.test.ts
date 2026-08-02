@@ -1094,7 +1094,8 @@ test("plugin server serves text and markdown media as inline raw text", async ()
   assert.match(staticSource, /"frame-ancestors 'self'"/);
   assert.doesNotMatch(staticSource, /"frame-ancestors 'none'"/);
   assert.match(staticSource, /"X-Frame-Options": "SAMEORIGIN"/);
-  assert.doesNotMatch(mediaSource, /mediaSecurityHeaders/);
+  assert.match(mediaSource, /\.\.\.mediaSecurityHeaders\(detectedContentType\)/);
+  assert.match(mediaSource, /"Content-Security-Policy": "sandbox"/);
   assert.match(mediaSource, /"Content-Disposition": contentDisposition\(contentType, itemData, filePath\)/);
   assert.match(mediaSource, /if \(contentType !== "application\/pdf"\)\s*return "inline";/);
 });

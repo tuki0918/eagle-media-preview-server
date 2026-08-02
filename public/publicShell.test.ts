@@ -1030,7 +1030,9 @@ test("public UI supports tag filter chips", async () => {
   assert.doesNotMatch(app, /tagInput:/);
   assert.match(controls, /type="search"[^>]*id="searchInput"/);
   assert.doesNotMatch(app, /els\.searchInput\.value/);
-  assert.match(app, /searchChanged:\s*debounce\(\(query: string\) => \{[\s\S]*applyFilterChange\(\{ query: query\.trim\(\) \}\);[\s\S]*loadTagSuggestions\(\);/);
+  assert.match(app, /const changeSearch = debounce\(\(query: string\) => \{[\s\S]*applyFilterChange\(\{ query: query\.trim\(\) \}\);[\s\S]*loadTagSuggestions\(\);/);
+  assert.match(app, /searchChanged:\s*changeSearch,/);
+  assert.match(app, /urlPopped:\s*\(\) => \{\s*changeSearch\.cancel\(\);/);
   assert.match(app, /params\.getAll\("tag"\)/);
   assert.match(app, /params\.append\("tag", tag\)/);
   assert.match(app, /params\.append\("tags", tag\)/);
