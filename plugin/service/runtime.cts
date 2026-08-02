@@ -511,6 +511,7 @@ function createServerManager({
         viewer = null;
       }
       stateOverride = "stopped";
+      lastError = "";
       return snapshot();
     },
 
@@ -523,9 +524,10 @@ function createServerManager({
       const wasRunning = viewer?.status().state === "running";
       const current = await settingsStore.load();
       const settings = await settingsStore.save(input);
-      if (wasRunning && serverRestartSettingsChanged(current, settings)) {
+      const restartRequired = serverRestartSettingsChanged(current, settings);
+      if (viewer && restartRequired) {
         await this.stop();
-        return this.start();
+        if (wasRunning) return this.start();
       }
       return snapshot(settings);
     },

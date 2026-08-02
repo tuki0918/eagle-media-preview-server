@@ -747,3 +747,68 @@ test("generated server manager restarts after saving binding settings while runn
     ["start", 6123],
   ]);
 });
+
+test("generated server manager discards a failed viewer after its settings change", async () => {
+  const calls: unknown[] = [];
+  let settings = {
+    ...DEFAULT_SETTINGS,
+    host: "127.0.0.1",
+    port: 41532,
+  };
+  const manager = createServerManager({
+    settingsStore: {
+      async load() {
+        return settings;
+      },
+      async save(input: Record<string, unknown>) {
+        settings = { ...settings, ...input };
+        calls.push(["save", settings.port]);
+        return settings;
+      },
+    },
+    viewerServerFactory(options: { host: string; port: number }) {
+      let viewerState = "stopped";
+      calls.push(["create", options.port]);
+      return {
+        async start() {
+          calls.push(["start", options.port]);
+          if (options.port === 41532) {
+            viewerState = "error";
+            throw new Error("address already in use");
+          }
+          viewerState = "running";
+        },
+        async stop() {
+          calls.push(["stop", options.port]);
+          viewerState = "stopped";
+        },
+        status() {
+          return { state: viewerState, host: options.host, port: options.port };
+        },
+      };
+    },
+    lanAddressProvider() {
+      return [{ label: "lo0", address: "127.0.0.1" }];
+    },
+  });
+
+  const failed = await manager.start();
+  assert.equal(failed.state, "error");
+
+  const saved = await manager.saveSettings({ port: 6123 });
+  assert.equal(saved.state, "stopped");
+  assert.equal(saved.port, 6123);
+  assert.equal(saved.lastError, "");
+
+  const started = await manager.start();
+  assert.equal(started.state, "running");
+  assert.equal(started.port, 6123);
+  assert.deepEqual(calls, [
+    ["create", 41532],
+    ["start", 41532],
+    ["save", 6123],
+    ["stop", 41532],
+    ["create", 6123],
+    ["start", 6123],
+  ]);
+});
