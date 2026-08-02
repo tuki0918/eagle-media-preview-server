@@ -838,7 +838,7 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(html, /return \(\) => \{\s*requestId\.current \+= 1;\s*clearDebounceTimer\(\);\s*\};/);
   assert.match(html, /input\.addEventListener\("input", handleInput\);/);
   assert.match(html, /input\.addEventListener\("keydown", handleKeyDown\);/);
-  assert.match(html, /input\.onkeydown = handleKeyDown;/);
+  assert.doesNotMatch(html, /input\.onkeydown = handleKeyDown;/);
   assert.doesNotMatch(html, /className="preview-add-tag/);
   assert.match(app, /function readRecentList\(key[^)]*\) \{/);
   assert.match(app, /function writeRecentList\(key[^,]*,\s*values[^)]*\) \{/);
