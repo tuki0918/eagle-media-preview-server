@@ -779,6 +779,58 @@ test("client reports invalid JSON from successful Eagle responses", async () => 
   );
 });
 
+test("client aborts Eagle requests that exceed the configured timeout", async () => {
+  let aborted = false;
+  const client = createEagleClient({
+    baseUrl: "http://localhost:41595",
+    requestTimeoutMs: 10,
+    fetchImpl: ((_url, init) => new Promise<Response>((_resolve, reject) => {
+      const signal = init?.signal;
+      const handleAbort = () => {
+        aborted = true;
+        reject(signal?.reason || new Error("aborted"));
+      };
+      if (signal?.aborted) handleAbort();
+      else signal?.addEventListener("abort", handleAbort, { once: true });
+    })) as typeof fetch,
+  });
+
+  await assert.rejects(
+    () => client.appInfo(),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.match(error.message, /timed out after 10ms/);
+      assert.equal((error as Error & { status?: number }).status, 504);
+      return true;
+    },
+  );
+  assert.equal(aborted, true);
+});
+
+test("client rejects chunked Eagle responses above the configured size limit", async () => {
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode("12345"));
+      controller.close();
+    },
+  });
+  const client = createEagleClient({
+    baseUrl: "http://localhost:41595",
+    maxResponseBytes: 4,
+    fetchImpl: (async () => new Response(body, { status: 200 })) as typeof fetch,
+  });
+
+  await assert.rejects(
+    () => client.appInfo(),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.match(error.message, /exceeded the 4-byte limit/);
+      assert.equal((error as Error & { status?: number }).status, 502);
+      return true;
+    },
+  );
+});
+
 test("normalizePaginatedResponse rejects Eagle errors", () => {
   assert.throws(
     () => normalizePaginatedResponse({ status: "error", message: "Eagle is closed" }),

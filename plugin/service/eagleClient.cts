@@ -15,6 +15,8 @@ interface RequestOptions {
 interface EagleClientOptions {
   baseUrl?: string;
   fetchImpl?: typeof fetch;
+  maxResponseBytes?: number;
+  requestTimeoutMs?: number;
   token?: string;
 }
 
@@ -102,6 +104,18 @@ const ITEM_FIELDS = [
 
 const MAX_ERROR_BODY_LENGTH = 240;
 const MAX_SMART_FOLDER_ITEMS_PAGE_SIZE = 1000;
+const DEFAULT_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
+const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+
+class EagleRequestError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "EagleRequestError";
+    this.status = status;
+  }
+}
 
 function clampLimit(value: unknown, fallback = 60) {
   const parsed = Number.parseInt(String(value), 10);
@@ -142,12 +156,63 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object";
 }
 
+function positiveInteger(value: unknown, fallback: number) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+async function readResponseText(response: Response, maxResponseBytes: number) {
+  const declaredLength = Number(response.headers?.get?.("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > maxResponseBytes) {
+    throw responseTooLargeError(maxResponseBytes);
+  }
+
+  const reader = response.body?.getReader?.();
+  if (!reader) {
+    const text = await response.text();
+    if (Buffer.byteLength(text, "utf8") > maxResponseBytes) {
+      throw responseTooLargeError(maxResponseBytes);
+    }
+    return text;
+  }
+
+  const decoder = new TextDecoder();
+  let receivedBytes = 0;
+  let text = "";
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      receivedBytes += value.byteLength;
+      if (receivedBytes > maxResponseBytes) {
+        await reader.cancel().catch(() => {});
+        throw responseTooLargeError(maxResponseBytes);
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+    return text + decoder.decode();
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+function responseTooLargeError(maxResponseBytes: number) {
+  return new EagleRequestError(
+    502,
+    `Eagle response exceeded the ${maxResponseBytes}-byte limit`,
+  );
+}
+
 function createEagleClient({
   baseUrl = process.env.EAGLE_BASE_URL || "http://localhost:41595",
   token = process.env.EAGLE_TOKEN || "",
   fetchImpl = globalThis.fetch,
+  maxResponseBytes = DEFAULT_MAX_RESPONSE_BYTES,
+  requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
 }: EagleClientOptions = {}) {
   const root = baseUrl.replace(/\/+$/, "");
+  const responseLimit = positiveInteger(maxResponseBytes, DEFAULT_MAX_RESPONSE_BYTES);
+  const timeoutMs = positiveInteger(requestTimeoutMs, DEFAULT_REQUEST_TIMEOUT_MS);
 
   async function request(pathname: string, { method = "GET", body, searchParams }: RequestOptions = {}) {
     const url = new URL(`${root}${pathname}`);
@@ -160,14 +225,31 @@ function createEagleClient({
       }
     }
 
+    const abortController = new AbortController();
+    const timeout = setTimeout(() => abortController.abort(), timeoutMs);
+    timeout.unref?.();
     const requestInit = {
       method,
       headers: body ? { "Content-Type": "application/json" } : undefined,
       body: body ? JSON.stringify(body) : undefined,
+      signal: abortController.signal,
     };
-    const response = await fetchImpl(url.toString(), requestInit);
+    let response: Response;
+    let responseText: string;
+    try {
+      response = await fetchImpl(url.toString(), requestInit);
+      responseText = await readResponseText(response, responseLimit);
+    } catch (error) {
+      if (error instanceof EagleRequestError) throw error;
+      if (abortController.signal.aborted) {
+        throw new EagleRequestError(504, `Eagle request timed out after ${timeoutMs}ms`);
+      }
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new EagleRequestError(502, `Unable to reach Eagle API${detail ? `: ${detail}` : ""}`);
+    } finally {
+      clearTimeout(timeout);
+    }
 
-    const responseText = await response.text();
     const parsed = parseJsonResponseText(responseText);
     if (!response.ok) {
       const message = parsed.ok && isRecord(parsed.payload) && typeof parsed.payload.message === "string"
@@ -570,4 +652,4 @@ function resolveLibraryItemDir(libraryPath: string, itemId: unknown) {
   if (relativePath.startsWith("..") || isAbsolute(relativePath)) return "";
   return itemDir;
 }
-module.exports = { ITEM_FIELDS, clampLimit, normalizeOffset, normalizeStringArray, createEagleClient, normalizePaginatedResponse, unwrapData, pathFromFileValue, resolveLibraryItemFile };
+module.exports = { EagleRequestError, ITEM_FIELDS, clampLimit, normalizeOffset, normalizeStringArray, createEagleClient, normalizePaginatedResponse, unwrapData, pathFromFileValue, resolveLibraryItemFile };
