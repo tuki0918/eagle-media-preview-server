@@ -4,6 +4,7 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/s
 import { SIDEBAR_OPEN_STORAGE_KEY, UNCATEGORIZED_FOLDER_ID, UNTAGGED_FOLDER_ID } from "../constants";
 import { getSearchControlsState, subscribeSearchControlsState } from "../searchControlsState";
 import { AccountSideMenu } from "./AccountSideMenu";
+import { BatchDownloadBar } from "./BatchDownloadBar";
 import { CardTemplate } from "./CardTemplate";
 import { Pager } from "./Pager";
 import { PreviewDialog } from "./PreviewDialog";
@@ -67,6 +68,7 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
           <div className="flex w-full flex-col gap-2 px-2 pb-3 pt-1 min-[720px]:px-3">
             <SearchControls />
             <ResultsStatus />
+            <BatchDownloadBar />
             <ResultSurface />
             <TilesSentinel />
             <Pager />

@@ -1,4 +1,5 @@
-import { useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode } from "react";
+import { CheckIcon } from "lucide-react";
+import { useRef, useState, useSyncExternalStore, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -15,6 +16,7 @@ import {
   originalFileName,
 } from "../format";
 import { hasNoThumbnail, thumbnailAriaLabel, thumbnailMediaType, thumbnailOverlayIcon } from "../media";
+import { getSelectionState, subscribeSelectionState, toggleSelection } from "../selectionState";
 import type { EagleItem, ViewerMode } from "../types";
 import { RatingStars } from "./RatingStars";
 
@@ -177,9 +179,12 @@ function ResultItem({ item, viewMode, onOpenPreview }: { item: EagleItem; viewMo
 function GridCard({ item, onOpenPreview }: { item: EagleItem; onOpenPreview: (item: EagleItem) => void }) {
   return (
     <Card className={mediaCardClassName}>
-      <ThumbnailButton variant="grid" item={item} onOpenPreview={onOpenPreview} withBadges withOverlay>
-        <RatingStars item={item} className={cardRatingClassName} />
-      </ThumbnailButton>
+      <div className="relative">
+        <SelectionToggle item={item} />
+        <ThumbnailButton variant="grid" item={item} onOpenPreview={onOpenPreview} withBadges withOverlay>
+          <RatingStars item={item} className={cardRatingClassName} />
+        </ThumbnailButton>
+      </div>
       <div className={cardMetaClassName}>
         <strong title={originalFileName(item)}>{item.name || item.id || ""}</strong>
         <span hidden />
@@ -191,19 +196,22 @@ function GridCard({ item, onOpenPreview }: { item: EagleItem; onOpenPreview: (it
 function TileItem({ item, onOpenPreview }: { item: EagleItem; onOpenPreview: (item: EagleItem) => void }) {
   const width = Number(item.width);
   const height = Number(item.height);
+  const style = {
+    aspectRatio: width > 0 && height > 0 ? `${width} / ${height}` : "1 / 1",
+    gridRowEnd: `span ${tileMasonrySpan(width, height)}`,
+  } satisfies CSSProperties;
   return (
-    <ThumbnailButton
-      variant="tile"
-      item={item}
-      onOpenPreview={onOpenPreview}
-      style={{
-        aspectRatio: width > 0 && height > 0 ? `${width} / ${height}` : "1 / 1",
-        gridRowEnd: `span ${tileMasonrySpan(width, height)}`,
-      }}
-      withBadges
-      withFileBadge={false}
-      withFileNameOverlay
-    />
+    <div className="relative h-full min-w-0" style={style}>
+      <SelectionToggle item={item} />
+      <ThumbnailButton
+        variant="tile"
+        item={item}
+        onOpenPreview={onOpenPreview}
+        withBadges
+        withFileBadge={false}
+        withFileNameOverlay
+      />
+    </div>
   );
 }
 
@@ -231,7 +239,10 @@ function ListTableHeader() {
 function ListTableRow({ item, onOpenPreview }: { item: EagleItem; onOpenPreview: (item: EagleItem) => void }) {
   return (
     <article className={listTableRowClassName}>
-      <ThumbnailButton variant="row" item={item} onOpenPreview={onOpenPreview} />
+      <div className="relative h-[42px] w-[70px]">
+        <SelectionToggle item={item} />
+        <ThumbnailButton variant="row" item={item} onOpenPreview={onOpenPreview} />
+      </div>
       <ListTableNameCell item={item} />
       <ExtensionPill item={item} />
       <ListTableCell value={formatBytes(item.size) || "-"} className={listTableHiddenOnMobileClassName} />
@@ -270,6 +281,29 @@ function ExtensionPill({ item }: { item: EagleItem }) {
     <Badge variant="outline" className={`ext-pill inline-flex h-auto w-fit min-w-11 justify-center rounded-md px-[7px] py-[3px] text-[11px] font-[760] max-[540px]:hidden ${extensionColorClassNames[ext] || "border-[#bfdbfe] bg-[#eff6ff] text-[#1d4ed8]"}`} data-ext={ext}>
       {String(ext).toUpperCase()}
     </Badge>
+  );
+}
+
+function SelectionToggle({ item }: { item: EagleItem }) {
+  const selection = useSyncExternalStore(subscribeSelectionState, getSelectionState, getSelectionState);
+  const itemId = String(item.id || "").trim();
+  if (!itemId) return null;
+  const selected = selection.ids.has(itemId);
+
+  return (
+    <button
+      className="selection-toggle absolute right-1.5 top-1.5 z-[5] inline-grid size-7 place-items-center rounded-md border border-white/80 bg-background/90 text-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[selected=true]:bg-primary data-[selected=true]:text-primary-foreground"
+      type="button"
+      aria-label={`${selected ? "Deselect" : "Select"} ${originalFileName(item)}`}
+      aria-pressed={selected}
+      data-selected={selected}
+      onClick={(event) => {
+        event.stopPropagation();
+        toggleSelection(item);
+      }}
+    >
+      {selected ? <CheckIcon className="size-4" aria-hidden="true" /> : <span className="size-3.5 rounded-sm border-2 border-muted-foreground/70" aria-hidden="true" />}
+    </button>
   );
 }
 
