@@ -44,6 +44,7 @@ import {
 import { setPagerState } from "./viewer/pagerState";
 import { setSearchControlsState } from "./viewer/searchControlsState";
 import { setResultSurfaceState } from "./viewer/resultSurfaceState";
+import { clearSelection } from "./viewer/selectionState";
 import { setPreviewInfoState, clearPreviewInfoState } from "./viewer/previewInfoState";
 import { setPreviewTextState } from "./viewer/previewTextState";
 import { type PreviewBodyKind } from "./viewer/components/PreviewBody";
@@ -410,6 +411,7 @@ function clearViewerSessionState() {
 
 function resetViewerResults({ resetOffset = false }: { resetOffset?: boolean } = {}) {
   pendingRatingItemIds.clear();
+  clearSelection();
   state.tilesLoadingMore = false;
   state.items = [];
   state.folders = [];
@@ -682,6 +684,7 @@ function applyControlsFromState() {
 }
 
 function applyFilterChange(patch: Partial<Pick<typeof state, "query" | "tags" | "folderId" | "smartFolderId" | "ext" | "rating" | "limit">>) {
+  clearSelection();
   Object.assign(state, patch, { offset: 0 });
   resetPreviewState();
   syncResetFiltersButton();
@@ -1109,6 +1112,7 @@ function renderEmptyState() {
 
 function resetFilters() {
   if (!hasResettableFilters(state)) return;
+  clearSelection();
   Object.assign(state, resetFilterState(state));
   renderTagChips();
   syncResetFiltersButton();

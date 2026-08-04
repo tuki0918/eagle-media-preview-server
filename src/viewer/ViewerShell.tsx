@@ -25,6 +25,7 @@ export function ViewerAppShell() {
 }
 
 export { AccountSideMenu } from "./components/AccountSideMenu";
+export { BatchDownloadBar } from "./components/BatchDownloadBar";
 export { CardTemplate } from "./components/CardTemplate";
 export { FolderOptions } from "./components/FolderOptions";
 export { LibraryFooter } from "./components/LibraryFooter";
