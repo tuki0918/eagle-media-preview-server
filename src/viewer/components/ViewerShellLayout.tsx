@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { SIDEBAR_OPEN_STORAGE_KEY, UNCATEGORIZED_FOLDER_ID, UNTAGGED_FOLDER_ID } from "../constants";
-import { getLibraryFooterName, subscribeLibraryFooterName } from "../libraryFooterState";
+import { getLibraryName, subscribeLibraryName } from "../libraryNameState";
 import { getResultsStatusState, subscribeResultsStatusState } from "../resultsStatusState";
 import { getSearchControlsState, subscribeSearchControlsState } from "../searchControlsState";
 import { getZoomLevel, gridColumnWidth, subscribeZoomLevel, tileRowHeight } from "../zoomState";
@@ -34,14 +34,14 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
     "--grid-col-w": `${gridColumnWidth(zoomLevel)}px`,
     "--tile-h": `${tileRowHeight(zoomLevel)}px`,
   } as CSSProperties;
-  const libraryName = useSyncExternalStore(subscribeLibraryFooterName, getLibraryFooterName, getLibraryFooterName);
+  const libraryName = useSyncExternalStore(subscribeLibraryName, getLibraryName, getLibraryName);
   const headerHidden = useHeaderHiddenOnScroll();
   const folderName = selectedFolderName(
     searchState.selectedFolderId,
     searchState.folders,
     searchState.selectedSmartFolderId,
     searchState.smartFolders,
-    libraryNameFromFooter(libraryName),
+    libraryName,
   );
   const setSidebarOpen = useCallback((open: boolean) => {
     setSidebarOpenState(open);
@@ -153,10 +153,6 @@ function useHeaderHiddenOnScroll() {
 
 function scrollToTop() {
   window.scrollTo({ top: 0, behavior: "smooth" });
-}
-
-function libraryNameFromFooter(footerName: string) {
-  return footerName.match(/^(.*?)\s+-\s+Eagle\s+.+$/)?.[1] || "";
 }
 
 function readSavedSidebarOpen() {

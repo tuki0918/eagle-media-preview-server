@@ -37,6 +37,7 @@ import {
   tagSuggestionItems as buildTagSuggestionItems,
 } from "./viewer/metadata";
 import { setLibraryFooterName } from "./viewer/libraryFooterState";
+import { setLibraryName } from "./viewer/libraryNameState";
 import {
   currentFetchLimit as getCurrentFetchLimit,
   pageButtonList,
@@ -385,6 +386,7 @@ function showLogin() {
 function showViewer(data: ConnectResponse) {
   setShellView("viewer");
   setLibraryFooterName(libraryLabel(data));
+  setLibraryName(data.library?.name || "");
   document.title = libraryTitle(data);
   resetViewerResults();
   renderSearchControlButtons();
@@ -406,6 +408,7 @@ function clearViewerSessionState() {
   closePreview({ skipHistory: true });
   syncUrlState({ replace: true });
   setLibraryFooterName("");
+  setLibraryName("");
   renderTagChips();
   renderSearchControlButtons();
   updateStatus();
