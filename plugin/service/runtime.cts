@@ -121,7 +121,7 @@ function createSettingsStore({ filePath = defaultSettingsPath() }: { filePath?: 
     async load() {
       try {
         const raw = await readFile(filePath, "utf8");
-        const input = JSON.parse(raw);
+        const input = withLoadableCustomDomain(JSON.parse(raw));
         const settings = normalizeSettings(input);
         if (needsSettingsMigration(input, settings)) {
           const migrated = withSessionSecret(settings);
@@ -190,6 +190,16 @@ async function writeSettingsFile(filePath: string, settings: PluginSettings) {
 
 function createDefaultSettings(): PluginSettings {
   return withSessionSecret({ ...DEFAULT_SETTINGS });
+}
+
+// A hand-edited invalid hostname must not block startup or saving; fall back to the automatic URL.
+function withLoadableCustomDomain(input: SettingsInput) {
+  try {
+    normalizeCustomDomain(input?.customDomain);
+    return input;
+  } catch {
+    return { ...input, customDomain: "" };
+  }
 }
 
 function normalizeSettings(input: SettingsInput = {}): PluginSettings {

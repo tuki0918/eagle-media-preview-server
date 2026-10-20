@@ -83,6 +83,21 @@ test("settings persist, reject invalid changes, and clear custom domains", async
   assert.equal((await store.load()).customDomain, "");
 });
 
+test("settings load falls back to no custom domain when the stored hostname is invalid", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-domain-invalid-"));
+  const filePath = join(dir, "settings.json");
+  const store = createSettingsStore({ filePath });
+  await store.save({ port: 4321 });
+  const stored = JSON.parse(await readFile(filePath, "utf8"));
+  await writeFile(filePath, JSON.stringify({ ...stored, customDomain: "http://bad host:1/path" }));
+  const loaded = await store.load();
+  assert.equal(loaded.customDomain, "");
+  assert.equal(loaded.port, 4321);
+  await store.save({ customDomain: "fixed.local" });
+  assert.equal((await store.load()).customDomain, "fixed.local");
+  await assert.rejects(() => store.save({ customDomain: "bad host" }), /Custom hostname/);
+});
+
 test("server manager applies domain changes and removal to the listener and displayed URL", async () => {
   const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-domain-manager-"));
   const store = createSettingsStore({ filePath: join(dir, "settings.json") });

@@ -97,7 +97,7 @@ export function SettingsForm({
         </div>
 
         <div id="generalSettingsPanel" role="tabpanel" aria-labelledby="generalSettingsTab" hidden={settingsTab !== "general"}>
-          <SettingRow label="Custom hostname" help={serverRunning ? "Stop the server before changing the hostname." : "Optional. Access the server using your own hostname."}>
+          <SettingRow label="Custom hostname" help="Optional. Used for the endpoint URL and QR code.">
             <input
               className={`${settingInputClassName} w-full`}
               type="text"
