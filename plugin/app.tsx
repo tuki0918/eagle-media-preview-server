@@ -44,6 +44,7 @@ function App() {
   const [busyFrame, setBusyFrame] = useState(0);
   const [message, setMessageState] = useState("");
   const [messageIsError, setMessageIsError] = useState(false);
+  const [urlCopied, setUrlCopied] = useState(false);
   const [passwordVisibleByIndex, setPasswordVisibleByIndex] = useState<Record<string, boolean>>({});
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
   const [settingsExpanded, setSettingsExpanded] = useState(true);
@@ -102,6 +103,18 @@ function App() {
       setErrorMessage(error);
     }
   }, []);
+
+  useEffect(() => {
+    if (!message || messageIsError) return;
+    const timer = window.setTimeout(() => setMessage(""), 3000);
+    return () => window.clearTimeout(timer);
+  }, [message, messageIsError]);
+
+  useEffect(() => {
+    if (!urlCopied) return;
+    const timer = window.setTimeout(() => setUrlCopied(false), 1500);
+    return () => window.clearTimeout(timer);
+  }, [urlCopied]);
 
   useEffect(() => {
     if (!busy) return;
@@ -317,6 +330,7 @@ function App() {
       }
       await globalThis.eagle.clipboard.writeText(status.url);
       setMessage("");
+      setUrlCopied(true);
     } catch (error) {
       setErrorMessage(error);
     }
@@ -364,88 +378,92 @@ function App() {
   }
 
   return (
-    <main className="h-screen min-h-screen w-full overflow-auto bg-white text-[#111]">
-      <header className="[-webkit-app-region:drag] flex h-[46px] items-center justify-between gap-2.5 border-b border-[#e1e3e7] bg-[rgba(255,255,255,0.86)] px-3">
+    <main className="h-screen min-h-screen w-full overflow-auto bg-[#f5f5f7] text-[#171717]">
+      <header className="[-webkit-app-region:drag] sticky top-0 z-10 flex h-[46px] items-center justify-between gap-2.5 border-b border-[#e6e6e9] bg-[rgba(255,255,255,0.86)] px-3.5 backdrop-blur-xl">
         <div className="inline-flex min-w-0 items-center gap-2.5">
           <img className="block h-6 w-6 rounded-md object-cover" src={serverState === "running" ? "./assets/icon_on.svg" : "./assets/icon_off.svg"} alt="" aria-hidden="true" />
-          <h1 className="m-0 text-[15px] font-[760] leading-none">Media Preview Server</h1>
+          <h1 className="m-0 text-[14px] font-semibold leading-none">Media Preview Server</h1>
         </div>
-        <button className="[-webkit-app-region:no-drag] grid h-[26px] w-[26px] place-items-center rounded-md border-0 bg-transparent p-[5px] text-[#555b65] hover:bg-[#f1f2f4] hover:text-[#111]" type="button" aria-label="Close" title="Close" onClick={closeWindow}>
+        <button className="[-webkit-app-region:no-drag] grid h-7 w-7 place-items-center rounded-full border-0 bg-transparent p-[7px] text-[#555b65] hover:bg-[#ececef] hover:text-[#171717]" type="button" aria-label="Close" title="Close" onClick={closeWindow}>
           <CloseIcon className="h-[13px] w-[13px]" />
         </button>
       </header>
 
-      <ServerStatusPanel
-        authEnabled={authEnabled}
-        formDisabled={formDisabled}
-        httpsEnabled={httpsEnabled}
-        publicNetwork={publicNetwork}
-        qrSrc={qrSrc}
-        serverState={serverState}
-        settings={settings}
-        statusLabel={statusLabel}
-        url={status.url || ""}
-        onAutoStartChange={(checked) => {
-          updateSettings({ autoStart: checked });
-          saveSettings({ patch: { autoStart: checked } });
-        }}
-        onCopyAccessUrl={copyAccessUrl}
-        onHttpsDocsOpen={openHttpsDocs}
-        onHttpsEnabledChange={(checked) => {
-          if (checked && (!String(settings.httpsCertPath || "").trim() || !String(settings.httpsKeyPath || "").trim())) {
-            setMessage(HTTPS_CERTIFICATE_REQUIRED_MESSAGE, true);
-            return;
-          }
-          updateSettings({ httpsEnabled: checked });
-          saveSettings({ patch: { httpsEnabled: checked } });
-        }}
-        onOpenEndpointUrl={openEndpointUrl}
-        onPasswordProtectionChange={(checked) => {
-          if (checked && authUsersMissingPassword(authUsers, userPasswordsRef.current)) {
-            setMessage(AUTH_PASSWORD_REQUIRED_MESSAGE, true);
-            return;
-          }
-          const patch = { authEnabled: checked };
-          updateSettings(patch);
-          saveSettings({ patch });
-        }}
-        onPublicNetworkChange={(checked) => {
-          const host = checked ? "0.0.0.0" : "127.0.0.1";
-          updateSettings({ host });
-          saveSettings({ patch: { host } });
-        }}
-        onServerPowerChange={startOrStopServer}
-      />
+      <div className="grid gap-3 p-3">
+        <ServerStatusPanel
+          authEnabled={authEnabled}
+          formDisabled={formDisabled}
+          httpsEnabled={httpsEnabled}
+          publicNetwork={publicNetwork}
+          qrSrc={qrSrc}
+          serverState={serverState}
+          settings={settings}
+          statusLabel={statusLabel}
+          url={status.url || ""}
+          urlCopied={urlCopied}
+          settingsLocked={serverState === "running"}
+          onAutoStartChange={(checked) => {
+            updateSettings({ autoStart: checked });
+            saveSettings({ patch: { autoStart: checked } });
+          }}
+          onCopyAccessUrl={copyAccessUrl}
+          onHttpsDocsOpen={openHttpsDocs}
+          onHttpsEnabledChange={(checked) => {
+            if (checked && (!String(settings.httpsCertPath || "").trim() || !String(settings.httpsKeyPath || "").trim())) {
+              setMessage(HTTPS_CERTIFICATE_REQUIRED_MESSAGE, true);
+              return;
+            }
+            updateSettings({ httpsEnabled: checked });
+            saveSettings({ patch: { httpsEnabled: checked } });
+          }}
+          onOpenEndpointUrl={openEndpointUrl}
+          onPasswordProtectionChange={(checked) => {
+            if (checked && authUsersMissingPassword(authUsers, userPasswordsRef.current)) {
+              setMessage(AUTH_PASSWORD_REQUIRED_MESSAGE, true);
+              return;
+            }
+            const patch = { authEnabled: checked };
+            updateSettings(patch);
+            saveSettings({ patch });
+          }}
+          onPublicNetworkChange={(checked) => {
+            const host = checked ? "0.0.0.0" : "127.0.0.1";
+            updateSettings({ host });
+            saveSettings({ patch: { host } });
+          }}
+          onServerPowerChange={startOrStopServer}
+        />
 
-      <SettingsForm
-        authEnabled={authEnabled}
-        authUsers={authUsers}
-        busy={busy}
-        httpsEnabled={httpsEnabled}
-        message={message}
-        messageIsError={messageIsError}
-        passwordDraftRevision={passwordDraftRevision}
-        passwordVisibleByIndex={passwordVisibleByIndex}
-        serverRunning={serverState === "running"}
-        settings={settings}
-        settingsExpanded={settingsExpanded}
-        settingsInputDisabled={settingsInputDisabled}
-        settingsTab={settingsTab}
-        userPasswords={userPasswordsRef.current}
-        onAddAuthUser={addAuthUser}
-        onCustomDomainChange={(value) => updateSettings({ customDomain: value })}
-        onHttpsCertPathChange={(value) => updateSettings({ httpsCertPath: value })}
-        onHttpsKeyPathChange={(value) => updateSettings({ httpsKeyPath: value })}
-        onPortChange={(value) => updateSettings({ port: value })}
-        onRemoveAuthUser={removeAuthUser}
-        onSaveSettings={() => saveSettings({ forceSave: true, successMessage: "Saved" })}
-        onSessionDurationDaysChange={(value) => updateSettings({ sessionDurationDays: value })}
-        onSettingsExpandedChange={setSettingsExpanded}
-        onSettingsTabChange={setSettingsTab}
-        onTogglePasswordVisible={togglePasswordVisible}
-        onUpdateAuthUser={updateAuthUser}
-        onUserPasswordDraftChange={setUserPasswordDraft}
-      />
+        <SettingsForm
+          authEnabled={authEnabled}
+          authUsers={authUsers}
+          busy={busy}
+          httpsEnabled={httpsEnabled}
+          message={message}
+          messageIsError={messageIsError}
+          passwordDraftRevision={passwordDraftRevision}
+          passwordVisibleByIndex={passwordVisibleByIndex}
+          serverRunning={serverState === "running"}
+          settings={settings}
+          settingsExpanded={settingsExpanded}
+          settingsInputDisabled={settingsInputDisabled}
+          settingsTab={settingsTab}
+          userPasswords={userPasswordsRef.current}
+          onAddAuthUser={addAuthUser}
+          onCustomDomainChange={(value) => updateSettings({ customDomain: value })}
+          onHttpsCertPathChange={(value) => updateSettings({ httpsCertPath: value })}
+          onHttpsKeyPathChange={(value) => updateSettings({ httpsKeyPath: value })}
+          onPortChange={(value) => updateSettings({ port: value })}
+          onRemoveAuthUser={removeAuthUser}
+          onSaveSettings={() => saveSettings({ forceSave: true, successMessage: "Saved" })}
+          onSessionDurationDaysChange={(value) => updateSettings({ sessionDurationDays: value })}
+          onSettingsExpandedChange={setSettingsExpanded}
+          onSettingsTabChange={setSettingsTab}
+          onTogglePasswordVisible={togglePasswordVisible}
+          onUpdateAuthUser={updateAuthUser}
+          onUserPasswordDraftChange={setUserPasswordDraft}
+        />
+      </div>
     </main>
   );
 }

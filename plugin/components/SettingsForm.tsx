@@ -34,8 +34,9 @@ interface SettingsFormProps {
 
 const MIN_SESSION_DURATION_DAYS = 1;
 const MAX_SESSION_DURATION_DAYS = 365;
-const settingInputClassName = "h-7 min-w-0 rounded-md border border-[#d7d9de] bg-white px-2 text-[11px] text-[#111] outline-0 focus:border-[rgba(31,116,255,0.58)] focus:shadow-[0_0_0_3px_rgba(31,116,255,0.12)] disabled:cursor-not-allowed disabled:bg-[#f4f5f7] disabled:text-[#8a8f99]";
-const authActionButtonClassName = "border border-[#d7d9de] bg-white text-[#555c66] hover:bg-[#f4f5f7] disabled:cursor-not-allowed disabled:opacity-45";
+const settingInputClassName = "h-8 min-w-0 rounded-lg border border-[#e1e2e6] bg-white px-2.5 text-[12px] text-[#171717] outline-0 transition-shadow placeholder:text-[#a3a7ae] focus:border-[#171717] focus:shadow-[0_0_0_3px_rgba(23,23,23,0.08)] disabled:cursor-not-allowed disabled:bg-[#f4f5f7] disabled:text-[#8a8f99]";
+const authActionButtonClassName = "border border-[#e1e2e6] bg-white text-[#555c66] hover:bg-[#f4f4f6] disabled:cursor-not-allowed disabled:opacity-45";
+const primaryButtonClassName = "border border-[#171717] bg-[#171717] text-white hover:bg-[#2b2b2b] disabled:cursor-not-allowed disabled:opacity-35";
 
 export function SettingsForm({
   authEnabled,
@@ -68,14 +69,14 @@ export function SettingsForm({
 }: SettingsFormProps) {
   return (
     <form
-      className="m-[9px] rounded-[10px] border border-[#d7d9de] bg-white px-3.5 pb-2.5 pt-3"
+      className="rounded-2xl border border-[#e6e6e9] bg-white px-4 pb-3 pt-3.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)]"
       onSubmit={(event) => {
         event.preventDefault();
         if (!busy) onSaveSettings();
       }}
     >
       <button
-        className={`${settingsExpanded ? "mb-2.5 border-b border-[#e1e3e7] pb-2.5" : ""} flex w-full items-center justify-between gap-3 border-0 bg-transparent p-0 text-left`}
+        className={`${settingsExpanded ? "mb-1" : ""} flex w-full items-center justify-between gap-3 border-0 bg-transparent p-0 text-left`}
         type="button"
         aria-controls="settingsPanel"
         aria-expanded={settingsExpanded}
@@ -83,14 +84,14 @@ export function SettingsForm({
         id="settingsToggleButton"
         onClick={() => onSettingsExpandedChange((current) => !current)}
       >
-        <span className="inline-flex items-center gap-1.5">
+        <span className="inline-flex items-center gap-2">
           <span className="inline-flex items-center text-[#5f6670] [&_svg]:h-4 [&_svg]:w-4" aria-hidden="true"><SettingsIcon /></span>
-          <span className="m-0 text-base font-[420] leading-none text-[#111]">Settings</span>
+          <span className="m-0 text-[15px] font-semibold leading-none text-[#171717]">Settings</span>
         </span>
-        <ChevronIcon className={`h-[12px] w-[12px] text-[#555c66] transition-transform ${settingsExpanded ? "rotate-180" : ""}`} />
+        <ChevronIcon className={`h-[14px] w-[14px] text-[#555c66] transition-transform ${settingsExpanded ? "rotate-180" : ""}`} />
       </button>
       <div id="settingsPanel" className="mt-2.5 grid gap-2.5" hidden={!settingsExpanded}>
-        <div className="grid grid-cols-3 rounded-md border border-[#d7d9de] bg-[#f4f5f7] p-0.5" role="tablist" aria-label="Settings sections">
+        <div className="grid grid-cols-3 rounded-full bg-[#f1f1f3] p-1" role="tablist" aria-label="Settings sections">
           <SettingsTabButton active={settingsTab === "general"} controls="generalSettingsPanel" id="generalSettingsTab" onClick={() => onSettingsTabChange("general")}>General</SettingsTabButton>
           <SettingsTabButton active={settingsTab === "access"} controls="accessSettingsPanel" id="accessSettingsTab" onClick={() => onSettingsTabChange("access")}>Access</SettingsTabButton>
           <SettingsTabButton active={settingsTab === "security"} controls="securitySettingsPanel" id="securitySettingsTab" onClick={() => onSettingsTabChange("security")}>Security</SettingsTabButton>
@@ -127,7 +128,7 @@ export function SettingsForm({
         <div id="accessSettingsPanel" role="tabpanel" aria-labelledby="accessSettingsTab" hidden={settingsTab !== "access"}>
           <SettingRow label="Users" help={authEnabled ? "Viewer can browse. Editor can edit metadata. Admin has all permissions." : "Saved users apply when password protection is enabled."}>
             <div className="grid gap-2">
-              <div className="grid grid-cols-[minmax(80px,1fr)_86px_minmax(76px,0.8fr)_28px_28px] gap-1.5 px-0.5 text-[9px] font-medium uppercase leading-none text-[#8a8f99]">
+              <div className="grid grid-cols-[minmax(80px,1fr)_86px_minmax(76px,0.8fr)_32px_32px] gap-1.5 px-0.5 text-[10px] font-semibold uppercase leading-none tracking-[0.06em] text-[#8a8f99]">
                 <span>Username</span>
                 <span>Role</span>
                 <span>Password</span>
@@ -138,7 +139,7 @@ export function SettingsForm({
                 const canTogglePasswordVisible = !user.passwordHash;
                 const passwordVisible = canTogglePasswordVisible && passwordVisibleByIndex[String(index)];
                 return (
-                  <div key={index} className="grid grid-cols-[minmax(80px,1fr)_86px_minmax(76px,0.8fr)_28px_28px] items-center gap-1.5">
+                  <div key={index} className="grid grid-cols-[minmax(80px,1fr)_86px_minmax(76px,0.8fr)_32px_32px] items-center gap-1.5">
                     <input
                       className={settingInputClassName}
                       type="text"
@@ -171,7 +172,7 @@ export function SettingsForm({
                       onChange={(event) => onUserPasswordDraftChange(index, event.currentTarget.value)}
                     />
                     <button
-                      className={`grid h-7 w-7 place-items-center rounded-md p-1 ${authActionButtonClassName}`}
+                      className={`grid h-8 w-8 place-items-center rounded-lg p-1 ${authActionButtonClassName}`}
                       type="button"
                       aria-label={canTogglePasswordVisible ? (passwordVisible ? `Hide password for ${user.username || `user ${index + 1}`}` : `Show password for ${user.username || `user ${index + 1}`}`) : `Saved password for ${user.username || `user ${index + 1}`} is hidden`}
                       title={canTogglePasswordVisible ? (passwordVisible ? "Hide password" : "Show password") : "Saved password is hidden"}
@@ -180,14 +181,14 @@ export function SettingsForm({
                     >
                       {passwordVisible ? <EyeIcon className="h-[13px] w-[13px]" /> : <EyeOffIcon className="h-[13px] w-[13px]" />}
                     </button>
-                    <button className={`grid h-7 w-7 place-items-center rounded-md ${authActionButtonClassName}`} type="button" aria-label={`Remove ${user.username || "user"}`} title="Remove user" disabled={settingsInputDisabled || authUsers.length <= 1} onClick={() => onRemoveAuthUser(index)}>
+                    <button className={`grid h-8 w-8 place-items-center rounded-lg ${authActionButtonClassName}`} type="button" aria-label={`Remove ${user.username || "user"}`} title="Remove user" disabled={settingsInputDisabled || authUsers.length <= 1} onClick={() => onRemoveAuthUser(index)}>
                       <CloseIcon className="h-[11px] w-[11px]" />
                     </button>
                   </div>
                 );
               })}
               <div className="flex items-center justify-start gap-2">
-                <button className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium text-[#111] ${authActionButtonClassName}`} type="button" disabled={settingsInputDisabled} onClick={onAddAuthUser}>
+                <button className={`inline-flex h-8 items-center gap-1.5 rounded-full border-dashed px-3 text-[12px] font-medium text-[#171717] ${authActionButtonClassName}`} type="button" disabled={settingsInputDisabled} onClick={onAddAuthUser}>
                   <PlusIcon className="h-[12px] w-[12px]" />
                   <span>Add user</span>
                 </button>
@@ -234,11 +235,11 @@ export function SettingsForm({
           </SettingRow>
         </div>
 
-        <div className="flex min-h-8 items-center justify-between gap-3 border-t border-[#e1e3e7] pt-2">
+        <div className="flex min-h-9 items-center justify-between gap-3 border-t border-[#efeff1] pt-3">
           <p className={`min-w-0 flex-1 truncate px-0.5 text-[10px] ${messageIsError ? "text-[#d92d20]" : "text-[#178c35]"}`} aria-live="polite" hidden={!message}>
             {message}
           </p>
-          <button className={`ml-auto inline-flex h-7 items-center rounded-md px-2 text-[11px] font-medium text-[#111] ${authActionButtonClassName}`} type="submit" disabled={settingsInputDisabled}>
+          <button className={`ml-auto inline-flex h-8 items-center rounded-full px-4 text-[12px] font-semibold ${primaryButtonClassName}`} type="submit" disabled={settingsInputDisabled}>
             Save settings
           </button>
         </div>
@@ -250,7 +251,7 @@ export function SettingsForm({
 function SettingsTabButton({ active, children, controls, id, onClick }: { active: boolean; children: ReactNode; controls: string; id: string; onClick: () => void }) {
   return (
     <button
-      className={`h-7 rounded-[5px] border-0 px-2 text-[11px] font-medium transition-colors ${active ? "bg-white text-[#111] shadow-[0_1px_2px_rgba(16,24,40,0.08)]" : "bg-transparent text-[#626975] hover:bg-white/70 hover:text-[#111]"}`}
+      className={`h-7 rounded-full border-0 px-2 text-[12px] font-medium transition-colors ${active ? "bg-white text-[#171717] shadow-[0_1px_3px_rgba(16,24,40,0.12)]" : "bg-transparent text-[#6b7079] hover:text-[#171717]"}`}
       type="button"
       role="tab"
       id={id}
@@ -265,11 +266,11 @@ function SettingsTabButton({ active, children, controls, id, onClick }: { active
 
 function SettingRow({ children, help, label }: { children: ReactNode; help: string; label: string }) {
   return (
-    <div className="grid grid-cols-[72px_minmax(0,1fr)] gap-2.5 border-t border-[#e1e3e7] py-2 first:border-t-0 max-[520px]:grid-cols-1">
-      <span className="pt-[7px] text-[11px] font-medium text-[#111]">{label}</span>
-      <span className="grid gap-1">
+    <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-3 border-t border-[#efeff1] py-3 first:border-t-0 max-[520px]:grid-cols-1">
+      <span className="pt-[7px] text-[12px] font-medium text-[#171717]">{label}</span>
+      <span className="grid gap-1.5">
         {children}
-        <small className="text-[9px] text-[#8a8f99]">{help}</small>
+        <small className="text-[10.5px] leading-snug text-[#7a808a]">{help}</small>
       </span>
     </div>
   );
