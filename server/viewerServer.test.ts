@@ -2449,6 +2449,41 @@ test("createViewerServer bounds search item limit and offset before forwarding t
   }
 });
 
+test("createViewerServer serves cached item types for the current library", async () => {
+  let scans = 0;
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    viewerPassword: "",
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/tmp/Test.library", name: "Test Library" };
+      },
+      async itemExtensions() {
+        scans += 1;
+        return [{ ext: "jpg", count: 3 }, { ext: "mp4", count: 1 }];
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const first = await fetch(`http://127.0.0.1:${status.port}/api/item-types`);
+    const second = await fetch(`http://127.0.0.1:${status.port}/api/item-types`);
+
+    assert.equal(first.status, 200);
+    assert.deepEqual(await first.json(), { items: [{ ext: "jpg", count: 3 }, { ext: "mp4", count: 1 }] });
+    assert.equal(second.status, 200);
+    assert.equal(scans, 1);
+  } finally {
+    await viewer.stop();
+  }
+});
+
 test("createViewerServer serves tag autocomplete suggestions", async () => {
   const calls: TagListOptions[] = [];
   const viewer = createViewerServer({

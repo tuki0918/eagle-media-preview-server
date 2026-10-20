@@ -111,6 +111,7 @@ interface EagleClient {
   appInfo(): Promise<unknown>;
   folders(): Promise<unknown>;
   itemById(id: string): Promise<EagleItem>;
+  itemExtensions(): Promise<Array<{ count: number; ext: string }>>;
   legacyThumbnailPath(id: string): Promise<unknown>;
   libraryHistory(): Promise<unknown[]>;
   listItems(options: {
@@ -155,6 +156,8 @@ const MAX_JSON_BODY_BYTES = 1024 * 1024;
 const DEFAULT_ITEMS_LIMIT = 30;
 const MAX_ITEMS_LIMIT = 1000;
 const MAX_ITEMS_OFFSET = 1000000;
+const ITEM_TYPES_CACHE_MS = 60 * 1000;
+const itemTypesCache = new WeakMap<object, { expiresAt: number; libraryPath: string; value: Promise<Array<{ count: number; ext: string }>> }>();
 const LOGIN_FAILURE_LIMIT = 5;
 const LOGIN_FAILURE_MAX_ENTRIES = 500;
 const LOGIN_FAILURE_WINDOW_MS = 10 * 60 * 1000;
@@ -337,6 +340,17 @@ function createProtocolServer({ httpsCertPath = "", httpsEnabled = false, httpsK
   }, handler);
 }
 
+async function cachedItemTypes(session: { client: EagleClient; libraryInfo(): Promise<unknown> }) {
+  const library = await session.libraryInfo().catch(() => null);
+  const libraryPath = String((library as { path?: unknown } | null)?.path || "");
+  const cached = itemTypesCache.get(session.client);
+  if (cached && cached.libraryPath === libraryPath && cached.expiresAt > Date.now()) return cached.value;
+  const value = session.client.itemExtensions();
+  itemTypesCache.set(session.client, { expiresAt: Date.now() + ITEM_TYPES_CACHE_MS, libraryPath, value });
+  value.catch(() => itemTypesCache.delete(session.client));
+  return value;
+}
+
 async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { auth, getSession, setSession }: ApiContext & { auth: AuthContext }) {
   if (url.pathname === "/api/connect") {
     if (req.method !== "POST") {
@@ -455,6 +469,15 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
           tags,
         });
     sendJson(res, 200, result);
+    return;
+  }
+
+  if (url.pathname === "/api/item-types") {
+    if (req.method !== "GET") {
+      sendMethodNotAllowed(res, ["GET"]);
+      return;
+    }
+    sendJson(res, 200, { items: await cachedItemTypes(session) });
     return;
   }
 

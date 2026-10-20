@@ -104,6 +104,8 @@ const ITEM_FIELDS = [
 
 const MAX_ERROR_BODY_LENGTH = 240;
 const MAX_SMART_FOLDER_ITEMS_PAGE_SIZE = 1000;
+const EXTENSION_SCAN_PAGE_SIZE = 1000;
+const MAX_EXTENSION_SCAN_ITEMS = 200_000;
 const DEFAULT_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 
@@ -427,6 +429,26 @@ function createEagleClient({
           },
         }),
       );
+    },
+
+    async itemExtensions({ maxItems = MAX_EXTENSION_SCAN_ITEMS }: { maxItems?: number } = {}) {
+      const counts = new Map<string, number>();
+      for (let offset = 0; offset < maxItems; offset += EXTENSION_SCAN_PAGE_SIZE) {
+        const page = normalizePaginatedResponse(
+          await request("/api/v2/item/get", {
+            method: "POST",
+            body: { offset, limit: EXTENSION_SCAN_PAGE_SIZE, fields: ["ext"] },
+          }),
+        );
+        for (const item of page.items) {
+          const ext = isRecord(item) ? String(item.ext || "").trim().toLowerCase() : "";
+          if (ext) counts.set(ext, (counts.get(ext) || 0) + 1);
+        }
+        if (page.items.length < EXTENSION_SCAN_PAGE_SIZE || offset + page.items.length >= page.total) break;
+      }
+      return [...counts.entries()]
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([ext, count]) => ({ ext, count }));
     },
 
     async itemById(id: string) {
