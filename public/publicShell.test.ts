@@ -113,7 +113,7 @@ test("public login no longer renders advanced Eagle connection settings", async 
   assert.match(login, /src="(?:[^"]*icon_on\.svg|data:image\/svg\+xml,)/);
   assert.match(login, /<h1 class="[^"]*">Media Preview Server<\/h1>/);
   assert.match(login, /A local media server for your Eagle library\./);
-  assert.match(login, /Connect this browser to the media server\./);
+  assert.doesNotMatch(login, /Connect this browser to the media server\./);
   assert.doesNotMatch(login, /Connect this browser to the local Eagle media server\./);
   assert.doesNotMatch(login, /Start the server from the Eagle plugin panel/);
   assert.doesNotMatch(login, /Use an account configured in the Eagle plugin panel\./);
@@ -202,7 +202,7 @@ test("public viewer exposes sign out when authenticated", async () => {
   assert.match(accountMenu, /id="authRoleLabel"/);
   assert.match(accountMenu, />Editor</);
   assert.match(accountMenu, /aria-haspopup="menu"/);
-  assert.match(accountMenu, /lucide-user-round/);
+  assert.match(accountMenu, /id="authAvatarFallback"[^>]*>E</);
   assert.match(accountMenu, /data-slot="sidebar"/);
   assert.match(accountMenu, /data-sidebar="menu-button"/);
   assert.match(accountMenu, /hidden=""/);
@@ -261,7 +261,7 @@ test("public viewer exposes sign out when authenticated", async () => {
   });
 });
 
-test("public login shows compact server status and session duration", () => {
+test("public login shows session duration without a server status block", () => {
   setLoginConnectState({
     authenticated: false,
     authRequired: true,
@@ -273,15 +273,12 @@ test("public login shows compact server status and session duration", () => {
   });
   const login = renderToStaticMarkup(createElement(LoginView, { hidden: false }));
 
-  assert.match(login, /Server status/);
+  assert.doesNotMatch(login, /Server status/);
   assert.match(login, />Sign in<\/h2>/);
   assert.doesNotMatch(login, /Authenticate viewer access/);
-  assert.match(login, /id="serverStatusDivider"/);
-  assert.ok(login.indexOf('id="serverStatusDivider"') < login.indexOf("Server status"));
-  assert.match(login, /id="serverStatusDot"/);
-  assert.match(login, /aria-label="Server status: Online"/);
-  assert.match(login, /title="Online"/);
-  assert.match(login, /127\.0\.0\.1:5173/);
+  assert.doesNotMatch(login, /id="serverStatusDivider"/);
+  assert.doesNotMatch(login, /id="serverStatusDot"/);
+  assert.doesNotMatch(login, /127\.0\.0\.1:5173/);
   assert.match(login, /Session expires after 14 days\./);
   assert.doesNotMatch(login, /Session expires after 7 days\./);
   assert.match(login, /login-primary[^"]*\bgap-7\b/);
@@ -318,8 +315,7 @@ test("public login shows auth errors above the submit button", () => {
   assert.match(message, /text-left/);
   assert.match(message, /lucide-circle-alert/);
   assert.ok(login.indexOf('id="connectMessage"') < login.indexOf('id="connectButton"'));
-  assert.match(login, /aria-label="Server status: Online"/);
-  assert.doesNotMatch(login, /aria-label="Server status: Error"/);
+  assert.doesNotMatch(login, /Server status/);
 
   setLoginConnectState({
     authenticated: false,
@@ -342,7 +338,7 @@ test("public login treats failed credentials as form errors, not expired session
   assert.match(app, /setConnectMessage\("Your session expired\. Sign in again\.", true\);/);
 });
 
-test("public login marks server status as error for Eagle connection failures", async () => {
+test("public login reports Eagle connection failures through the error message", async () => {
   const app = await readViewerSources();
 
   assert.match(app, /if \(isEagleConnectionError\(error\)\) serverReachable = false;/);
@@ -359,8 +355,8 @@ test("public login marks server status as error for Eagle connection failures", 
   });
   const login = renderToStaticMarkup(createElement(LoginView, { hidden: false }));
 
-  assert.match(login, /aria-label="Server status: Error"/);
-  assert.match(login, /title="Error"/);
+  assert.doesNotMatch(login, /Server status/);
+  assert.match(login, /Cannot connect to Eagle\. Make sure Eagle is running/);
 
   setLoginConnectState({
     authenticated: false,
@@ -467,8 +463,8 @@ test("public UI no longer shows connect lock icon or connection settings button"
   assert.doesNotMatch(html, /id="showHeaderButton"/);
   assert.doesNotMatch(app, /setHeaderHidden/);
   assert.doesNotMatch(app, /setConnectionStatus/);
-  assert.match(login, /max-w-\[760px\]/);
-  assert.match(login, /min-\[720px\]:grid-cols-\[minmax\(0,0\.84fr\)_minmax\(320px,1fr\)\]/);
+  assert.match(login, /login-panel grid w-full max-w-\[400px\]/);
+  assert.doesNotMatch(login, /min-\[720px\]:grid-cols-\[minmax\(0,0\.84fr\)_minmax\(320px,1fr\)\]/);
   assert.match(message, /min-h-\[18px\]/);
   assert.doesNotMatch(message, /fixed/);
   assert.match(message, /empty:hidden/);
@@ -498,7 +494,7 @@ test("public thumbnails lazy-load with visible loading states", async () => {
   assert.match(html, /onLoad=\{\(\) => \{\s*setLoading\(false\);\s*setMissing\(false\);\s*\}\}/);
   assert.match(html, /if \(sourceKind === "thumb" && canUseOriginalImage\) \{[\s\S]*setSourceKind\("file"\);/);
   assert.match(html, /setSourceKind\("file"\);[\s\S]*return;[\s\S]*setLoading\(false\);\s*setMissing\(true\);/);
-  assert.match(html, /const gridThumbButtonClassName =[\s\S]*aspect-\[3\/2\]/);
+  assert.match(html, /const gridThumbButtonClassName =[\s\S]*aspect-square/);
   assert.match(html, /function LoadingIndicator\(\{ variant \}/);
   assert.match(html, /animate-spin rounded-full border-2/);
   assert.match(html, /NO PREVIEW/);
@@ -548,7 +544,7 @@ test("public video preview reserves top space for floating action buttons", asyn
   assert.match(videoPreview, /class="preview-video h-full w-full max-h-full cursor-pointer bg-\[#05070a\] object-contain/);
 });
 
-test("public audio preview uses video-style dark action buttons", async () => {
+test("public audio preview uses a dark card with a primary play button", async () => {
   const html = await readAppSources();
   const audioPreview = renderToStaticMarkup(createElement(PreviewBody, {
     item: { id: "audio-1", name: "Audio.mp3", ext: "mp3" },
@@ -557,7 +553,8 @@ test("public audio preview uses video-style dark action buttons", async () => {
 
   assert.match(html, /if \(kind === "audio"\) return `\$\{base\} place-items-center bg-\[#05070a\]`;/);
   assert.match(audioPreview, /class="audio-player-shell[^"]*text-white/);
-  assert.match(audioPreview, /class="[^"]*bg-\[rgba\(255,255,255,0\.12\)\][^"]*hover:bg-\[rgba\(255,255,255,0\.2\)\]/);
+  assert.match(audioPreview, /class="[^"]*hover:bg-\[rgba\(255,255,255,0\.14\)\]/);
+  assert.match(audioPreview, /class="[^"]*size-14[^"]*bg-white text-\[#0a0a0e\][^"]*"[^>]*aria-label="Play"/);
 });
 
 test("public UI exposes direct original file URLs for each media item", async () => {
@@ -621,7 +618,7 @@ test("public preview renders text-like files and PDFs inline", async () => {
   assert.match(html, /<iframe/);
   assert.match(html, /className=\{pdfPreviewClassName\}/);
   assert.match(html, /src=\{mediaUrl\(String\(item\.id \|\| ""\), "file"\)\}/);
-  assert.match(html, /function ImagePreview\(\{ item, srcKind \}/);
+  assert.match(html, /function ImagePreview\(\{ item, srcKind: requestedSrcKind \}/);
   assert.match(html, /src=\{mediaUrl\(String\(item\.id \|\| ""\), srcKind\)\}/);
   assert.doesNotMatch(app, /function renderPdfPreview\(item\) \{/);
   assert.doesNotMatch(app, /viewer\.src = directFileUrl\(item\);/);
@@ -694,7 +691,7 @@ test("public grid hover icons remain while tiles hover shows file names", async 
   assert.doesNotMatch(tilesList, /<span class="[^"]*thumb-file-name-overlay[\s\S]*Tile\.jpg/);
   assert.doesNotMatch(tilesList, /M8 5v14l11-7z/);
   assert.doesNotMatch(tilesList, /13 5 19 5 19 11/);
-  assert.match(html, /<ThumbnailButton variant="grid" item=\{item\} onOpenPreview=\{onOpenPreview\} withBadges withOverlay>/);
+  assert.match(html, /<ThumbnailButton variant="grid" item=\{item\} onOpenPreview=\{onOpenPreview\} withBadges withFileBadge=\{false\} withOverlay>/);
   assert.match(html, /<ThumbnailButton[\s\S]*variant="tile"[\s\S]*withFileNameOverlay/);
 });
 
@@ -736,7 +733,7 @@ test("public ratings are static in grid and list but editable in the preview mod
 
   assert.match(html, /function RatingStars\(\{ className, disabled = false, disabledLabel, id, interactive = false, item, onSelect \}/);
   assert.match(html, /const ratingStarBaseClassName =[\s\S]*rating-star[\s\S]*data-\[active=true\]:text-yellow-500/);
-  assert.match(html, /const interactiveRatingStarClassName = `\$\{ratingStarBaseClassName\} cursor-pointer`/);
+  assert.match(html, /const interactiveRatingStarClassName = `\$\{ratingStarBaseClassName\} cursor-pointer/);
   assert.match(html, /const cardRatingClassName =[\s\S]*\[&_\.rating-star\[data-active=true\]\]:text-yellow-300/);
   assert.match(html, /const canSelect = interactive && !disabled;/);
   assert.match(html, /const label = interactive && disabled && disabledLabel \? disabledLabel : interactive \? "Rating" : "Rating \(read only\)";/);
@@ -786,8 +783,8 @@ test("public file names expose original names in truncated views and preview inf
   assert.match(app, /setPreviewTextState\(\{[\s\S]*displayName: displayFileName\(item\),[\s\S]*originalName: originalFileName\(item\),[\s\S]*\}\);/);
   assert.match(html, /<PreviewOriginalName source="display" \/>/);
   assert.doesNotMatch(app, /els\.previewOriginalName\.textContent/);
-  assert.match(html, /<div className="min-w-0 truncate text-sm font-normal text-foreground/);
-  assert.match(html, /preview-rating-section mx-2 grid min-h-8 grid-cols-\[minmax\(82px,104px\)_minmax\(0,1fr\)\]/);
+  assert.match(html, /<div className="min-w-0 truncate text-sm font-medium text-foreground/);
+  assert.match(html, /preview-rating-section flex min-h-12 items-center justify-between/);
   assert.match(html, /preview-original-name-value w-full min-w-0 whitespace-normal/);
 });
 
@@ -853,26 +850,26 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.doesNotMatch(app, /Date Created/);
   assert.doesNotMatch(app, /preview-date-section/);
   assert.match(app, /function formatItemDate\(item[^,]*,\s*keys[^)]*\) \{/);
-  assert.match(html, /<div id="previewDetails" className="preview-details grid gap-2\.5">/);
+  assert.match(html, /<div id="previewDetails" className="preview-details grid gap-6">/);
   assert.match(html, /\{previewInfoState \? <PreviewDetailsPanel key=\{String\(previewInfoState\.item\.id \|\| ""\)\} \{\.\.\.previewInfoState\} \/> : null\}/);
   assert.match(html, /<div id="previewActions" className="preview-info-actions/);
   assert.match(html, /<PreviewActions key=\{String\(previewInfoState\.item\.id \|\| ""\)\} canEditMetadata=\{previewInfoState\.canEditMetadata\} canManageLibrary=\{previewInfoState\.canManageLibrary\}/);
-  assert.match(html, /const previewDetailsSectionClassName =[\s\S]*gap-1\.5/);
+  assert.match(html, /const previewDetailsSectionClassName =[\s\S]*gap-6/);
   assert.doesNotMatch(css, /\.preview-detail-row-divider\s*\{/);
-  assert.match(html, /preview-rating-section mx-2 grid min-h-8/);
-  assert.match(html, /const previewDetailRowClassName =[\s\S]*min-h-7/);
+  assert.match(html, /preview-rating-section flex min-h-12/);
+  assert.match(html, /const previewDetailRowClassName =[\s\S]*min-h-10/);
   assert.match(html, /const previewChipListClassName = "preview-chip-list/);
-  assert.match(html, /const previewChipClassName =[\s\S]*min-h-\[28px\][\s\S]*bg-secondary[\s\S]*text-\[12px\][\s\S]*font-medium/);
-  assert.match(html, /className="rating-control inline-flex items-center gap-2\.5 \[&_\.rating-star\]:h-6 \[&_\.rating-star\]:w-6 \[&_\.rating-star\]:text-xl"/);
-  assert.match(html, /const previewLabelClassName = "preview-detail-label text-xs font-normal text-muted-foreground"/);
-  assert.match(html, /const previewDetailValueClassName =[\s\S]*text-sm[\s\S]*max-\[540px\]:text-\[13px\]/);
+  assert.match(html, /const previewChipClassName =[\s\S]*min-h-7[\s\S]*rounded-full[\s\S]*bg-secondary[\s\S]*text-xs[\s\S]*font-medium/);
+  assert.match(html, /className="rating-control inline-flex items-center gap-1 \[&_\.rating-star\]:h-7 \[&_\.rating-star\]:w-7 \[&_\.rating-star\]:text-xl"/);
+  assert.match(html, /const previewLabelClassName = "preview-detail-label text-\[13px\] font-normal text-muted-foreground"/);
+  assert.match(html, /const previewDetailValueClassName =[\s\S]*text-right[\s\S]*text-\[13px\]/);
   assert.doesNotMatch(css, /\.preview-chip-empty/);
-  assert.match(html, /className="preview-info-actions mx-2 border-t border-border pt-3"/);
+  assert.match(html, /className="preview-info-actions sticky bottom-0[^"]*border-t border-border bg-card/);
   assert.match(html, /preview-admin-actions relative grid gap-2/);
   assert.match(html, /className="preview-metadata-input grid gap-0\.5"/);
-  assert.match(html, /const previewMetadataRowClassName = "preview-metadata-row grid gap-2/);
+  assert.match(html, /const previewMetadataRowClassName = "preview-metadata-row grid gap-2\.5/);
   assert.match(html, /const previewEditChipListClassName = "preview-edit-chip-list/);
-  assert.match(html, /preview-metadata-add size-\[30px\] rounded-md/);
+  assert.match(html, /preview-metadata-add h-7 gap-1 rounded-full border-dashed/);
   assert.match(html, /aria-label=\{addLabel\}/);
   assert.doesNotMatch(html, /preview-folder-current-badge/);
   assert.doesNotMatch(html, /preview-folder-option-meta/);
@@ -885,9 +882,7 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.doesNotMatch(html, /Save changes/);
   assert.match(html, /const directFileLinkClassName =[\s\S]*min-h-11 w-full[\s\S]*bg-primary[\s\S]*text-primary-foreground/);
   assert.match(html, /max-\[540px\]:max-h-\[min\(72dvh,560px\)\]/);
-  assert.match(html, /max-\[540px\]:gap-3/);
-  assert.match(html, /<div id="previewDetails" className="preview-details grid gap-2\.5">/);
-  assert.match(html, /const previewDetailsSectionClassName =[\s\S]*gap-1\.5/);
+  assert.match(html, /preview-info-title grid gap-1\.5/);
   assert.doesNotMatch(html, /preview-info-cta[^"]*linear-gradient/);
 });
 
@@ -1089,8 +1084,8 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   assert.doesNotMatch(app, /pageButtons: document\.querySelector\("#pageButtons"\),/);
   assert.match(app, /state\.viewMode === "tiles"/);
   assert.match(html, /export function ResultList\(\{ items, viewMode, onOpenPreview \}[^)]*\) \{/);
-  assert.match(html, /aspectRatio: width > 0 && height > 0 \? `\$\{width\} \/ \$\{height\}` : "1 \/ 1"/);
-  assert.match(html, /gridRowEnd: `span \$\{tileMasonrySpan\(width, height\)\}`/);
+  assert.match(html, /aspectRatio: String\(ratio\)/);
+  assert.match(html, /flexBasis: `calc\(var\(--tile-h, 190px\) \* var\(--tile-scale, 1\) \* \$\{ratio\}\)`/);
   assert.match(html, /onPointerDown=\{trigger\.onPointerDown\}/);
   assert.match(html, /onClick=\{trigger\.onClick\}/);
   assert.match(app, /setResultSurfaceState\(\{[\s\S]*kind: "list",/);
@@ -1111,38 +1106,30 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   assert.match(app, /if \(viewMode !== "tiles" \|\| tags\.length\) return limit;/);
   assert.match(app, /return Math\.min\(limit \* TILE_PREFETCH_PAGES, MAX_PAGE_SIZE\);/);
   assert.match(app, /viewModeParam === "tiles"/);
-  assert.match(html, /media-tiles grid content-start gap-1 \[grid-auto-flow:dense\] \[grid-auto-rows:4px\] \[grid-template-columns:repeat\(auto-fill,minmax\(180px,1fr\)\)\]/);
-  assert.match(html, /const tileButtonClassName =[\s\S]*tile-item[\s\S]*\[contain:layout_paint\]/);
+  assert.match(html, /media-tiles flex flex-wrap content-start/);
+  assert.match(html, /const tileButtonClassName =[\s\S]*tile-item[\s\S]*object-cover/);
   assert.match(html, /animate-pulse rounded-none bg-muted/);
-  assert.match(html, /gridRowEnd: `span \$\{tileMasonrySpan\(width, height\)\}`/);
-  assert.match(html, /max-\[540px\]:grid-cols-3 max-\[540px\]:gap-\[3px\]/);
+  assert.match(html, /tile-filler h-0 grow-\[999999\]/);
+  assert.match(html, /max-\[540px\]:\[--tile-scale:0\.6\]/);
   assert.match(html, /className="tiles-sentinel mt-3 grid min-h-\[52px\] place-items-center text-\[13px\] font-\[680\] text-muted-foreground"/);
 });
 
-test("public extension pills use varied colors for common text formats", async () => {
+test("public extension pills and file badges use a monochrome palette", async () => {
   const html = await readAppSources();
 
-  assert.match(html, /const extensionColorClassNames: Record<string, string> = \{/);
-  assert.match(html, /html: "border-\[#fed7aa\] bg-\[#fff7ed\] text-\[#c2410c\]"/);
-  assert.match(html, /css: "border-\[#bfdbfe\] bg-\[#eff6ff\] text-\[#2563eb\]"/);
-  assert.match(html, /js: "border-\[#fde68a\] bg-\[#fefce8\] text-\[#a16207\]"/);
-  assert.match(html, /md: "border-\[#cbd5e1\] bg-\[#f8fafc\] text-\[#475569\]"/);
-  assert.match(html, /txt: "border-\[#cbd5e1\] bg-\[#f1f5f9\] text-\[#334155\]"/);
-  assert.match(html, /const fileBadgeColorClassNames: Record<string, string> = \{/);
-  assert.match(html, /html: "bg-\[#fff7ed\] text-\[#c2410c\]"/);
-  assert.match(html, /css: "bg-\[#eff6ff\] text-\[#2563eb\]"/);
-  assert.match(html, /js: "bg-\[#fefce8\] text-\[#a16207\]"/);
-  assert.match(html, /md: "bg-\[#f8fafc\] text-\[#475569\]"/);
-  assert.match(html, /txt: "bg-\[#f1f5f9\] text-\[#334155\]"/);
+  assert.doesNotMatch(html, /const extensionColorClassNames/);
+  assert.doesNotMatch(html, /const fileBadgeColorClassNames/);
+  assert.match(html, /ext-pill inline-flex[\s\S]*bg-muted[\s\S]*text-muted-foreground/);
+  assert.match(html, /const fileBadgeClassName = "bg-\[rgba\(10,10,12,0\.55\)\] text-white backdrop-blur";/);
 });
 
 test("public list rows left align filenames and ratings", async () => {
   const html = await readAppSources();
 
   assert.match(html, /const listTableRowClassName =[\s\S]*\[&>span:not\(\.row-name-cell\)\]:justify-self-center/);
-  assert.match(html, /const listTableHeaderClassName =[\s\S]*!min-h-8 !py-1/);
+  assert.match(html, /const listTableHeaderClassName =[\s\S]*!min-h-9 !py-1/);
   assert.match(html, /const rowNameCellClassName =[\s\S]*text-left justify-self-stretch/);
-  assert.match(html, /const listTableRatingClassName = "rating-control inline-flex items-center justify-self-start gap-px text-left"/);
+  assert.match(html, /const listTableRatingClassName = "rating-control inline-flex items-center justify-self-start gap-px text-left/);
 });
 
 test("public UI syncs filters, pagination, and preview state into the URL history", async () => {
@@ -1177,14 +1164,14 @@ test("public results status and empty states stay concise and consistent across 
   assert.doesNotMatch(app, /resultGridHost: document\.querySelector\("#resultGridHost"\),/);
   assert.doesNotMatch(app, /els\.grid\.classList\.toggle/);
   assert.match(html, /function resultSurfaceClassName\(viewMode:[\s\S]*isEmpty/);
-  assert.match(html, /media-grid grid content-start gap-3/);
+  assert.match(html, /media-grid grid content-start gap-x-4 gap-y-6/);
   assert.match(html, /media-list grid content-start gap-0/);
   assert.doesNotMatch(css, /\.media-grid\s*\{[^}]*min-height:\s*320px;/s);
   assert.doesNotMatch(css, /\.media-list\s*\{[^}]*min-height:\s*320px;/s);
-  assert.match(html, /is-empty block overflow-visible !rounded-none !border-0 !bg-transparent !shadow-none/);
+  assert.match(html, /is-empty !block overflow-visible !rounded-none !border-0 !bg-transparent !shadow-none/);
   assert.doesNotMatch(html, /min-h-\[320px\]/);
   assert.match(html, /min-h-\[clamp\(280px,calc\(100dvh-220px\),460px\)\]/);
-  assert.match(html, /min-h-\[clamp\(260px,calc\(100dvh-300px\),420px\)\]/);
+  assert.match(html, /min-h-\[clamp\(280px,calc\(100dvh-220px\),460px\)\]/);
 });
 
 test("public UI exposes collapsible advanced filters without sort controls", async () => {

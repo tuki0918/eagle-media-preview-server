@@ -19,6 +19,7 @@ export interface ViewerShellActions {
   goToNextPage: () => void;
   setViewMode: (mode: ViewerMode) => void;
   closePreview: () => void;
+  stepPreview: (delta: number) => void;
   togglePreviewInfo: () => void;
   previewPointerDown: (target: EventTarget | null) => void;
   previewClosed: () => void;
@@ -46,6 +47,7 @@ let actions: ViewerShellActions = {
   goToNextPage: noop,
   setViewMode: noop,
   closePreview: noop,
+  stepPreview: noop,
   togglePreviewInfo: noop,
   previewPointerDown: noop,
   previewClosed: noop,
@@ -133,6 +135,10 @@ export function selectViewMode(mode: ViewerMode) {
 
 export function closePreview() {
   actions.closePreview();
+}
+
+export function stepPreview(delta: number) {
+  actions.stepPreview(delta);
 }
 
 export function togglePreviewInfo() {

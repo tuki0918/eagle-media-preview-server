@@ -109,6 +109,7 @@ export interface LoadItemsOptions {
 }
 
 export interface OpenPreviewOptions {
+  replaceHistory?: boolean;
   skipHistory?: boolean;
 }
 

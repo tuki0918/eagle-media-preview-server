@@ -40,6 +40,17 @@ import { changeFolder, changeSmartFolder, submitLogout } from "../shellActions";
 import { getThemeState, setThemePreference, subscribeThemeState, type ThemePreference } from "../themeState";
 import type { EagleFolder, EagleSmartFolder } from "../types";
 
+// Puts the resize handle on the floating card's edge; hovering it outlines the whole card (see sidebar-inner).
+const floatingSidebarRailClassName = [
+  "group-data-[state=expanded]:!inset-y-2.5 group-data-[state=expanded]:!right-0.5 group-data-[state=expanded]:hover:!bg-transparent",
+  // The global `button { cursor: pointer }` rule outranks the rail's own cursor classes.
+  "group-data-[state=expanded]:!cursor-col-resize group-data-[state=collapsed]:!cursor-e-resize",
+  "group-data-[state=expanded]:after:!hidden",
+].join(" ");
+
+const GUEST_USERNAME = "Guest";
+const GUEST_ROLE_LABEL = "No sign-in";
+
 export function AccountSideMenu() {
   const displayName = useSyncExternalStore(subscribeLibraryFooterName, getLibraryFooterName, getLibraryFooterName);
   const libraryHeader = libraryHeaderLabels(displayName);
@@ -51,17 +62,18 @@ export function AccountSideMenu() {
   const accountLabel = [username, roleLabel].filter(Boolean).join(" - ");
   const accountStatusLabel = [accountLabel, roleDescription].filter(Boolean).join(". ");
   const authError = loginState.isError ? loginState.message.trim() : "";
+  const signedIn = loginState.authRequired && loginState.authenticated;
 
   return (
     <>
       <Sidebar
         id="accountSideMenu"
-        variant="inset"
+        variant="floating"
         collapsible="offcanvas"
         className="border-sidebar-border"
         aria-label="Account menu"
       >
-        <SidebarHeader className="justify-center p-2 pt-[calc(14px+env(safe-area-inset-top))]">
+        <SidebarHeader className="justify-center p-3 pb-1 pt-[calc(14px+env(safe-area-inset-top))]">
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton
@@ -70,16 +82,13 @@ export function AccountSideMenu() {
                 className="pointer-events-none h-12 px-2 hover:bg-transparent hover:text-sidebar-foreground active:bg-transparent active:text-sidebar-foreground"
               >
                 <div>
-                  <Avatar className="size-8 rounded-lg" aria-hidden="true">
-                    <AvatarFallback className="rounded-lg">
+                  <Avatar className="size-8 rounded-xl" aria-hidden="true">
+                    <AvatarFallback className="rounded-xl bg-foreground text-background">
                       <RouterIcon className="size-5" />
                     </AvatarFallback>
                   </Avatar>
                   <span className="grid min-w-0 group-data-[collapsible=icon]:hidden">
-                    <span className="truncate text-sm font-[720] leading-tight text-sidebar-foreground">{libraryHeader.name}</span>
-                    {libraryHeader.version ? (
-                      <span className="truncate text-[11px] leading-tight text-muted-foreground">{libraryHeader.version}</span>
-                    ) : null}
+                    <span className="truncate text-sm font-semibold leading-tight text-sidebar-foreground">{libraryHeader.name}</span>
                   </span>
                 </div>
               </SidebarMenuButton>
@@ -103,26 +112,35 @@ export function AccountSideMenu() {
               selectedFolderId={searchState.selectedFolderId}
             />
           </div>
-          <ThemeSideNav />
         </SidebarContent>
 
-        {loginState.authRequired && loginState.authenticated ? (
-          <SidebarFooter className="p-2">
+        <SidebarFooter className="p-2">
+          {signedIn ? (
             <AccountDropdown
               disabled={loginState.disabled}
               roleDescription={roleDescription}
               roleLabel={roleLabel}
+              signedIn
               statusLabel={accountStatusLabel || accountLabel || "Account"}
               username={username}
             />
-            {authError ? (
-              <p id="authFooterMessage" className="m-0 rounded-md bg-destructive/10 px-2.5 py-2 text-xs leading-[1.35] text-destructive group-data-[collapsible=icon]:hidden" role="alert">
-                {authError}
-              </p>
-            ) : null}
-          </SidebarFooter>
-        ) : null}
-        <SidebarRail />
+          ) : (
+            <AccountDropdown
+              disabled={loginState.disabled}
+              roleDescription=""
+              roleLabel={GUEST_ROLE_LABEL}
+              signedIn={false}
+              statusLabel={`${GUEST_USERNAME} - ${GUEST_ROLE_LABEL}`}
+              username={GUEST_USERNAME}
+            />
+          )}
+          {signedIn && authError ? (
+            <p id="authFooterMessage" className="m-0 rounded-md bg-destructive/10 px-2.5 py-2 text-xs leading-[1.35] text-destructive group-data-[collapsible=icon]:hidden" role="alert">
+              {authError}
+            </p>
+          ) : null}
+        </SidebarFooter>
+        <SidebarRail className={floatingSidebarRailClassName} />
       </Sidebar>
     </>
   );
@@ -151,15 +169,15 @@ function FolderShortcutSideNav({
   };
 
   return (
-    <SidebarGroup className="shrink-0 px-2 pb-1 pt-1">
+    <SidebarGroup className="shrink-0 px-3 pb-2 pt-2">
       <SidebarGroupContent>
-        <SidebarMenu className="gap-0.5" aria-label="Folder shortcuts">
+        <SidebarMenu className="gap-1" aria-label="Folder shortcuts">
           <FolderNavItem
             active={!selectedFolderId && !selectedSmartFolderId}
             count={allFoldersTotal}
             depth={0}
             icon="open"
-            label="All folders"
+            label="All"
             treeLayout={false}
             onSelect={() => selectFolder("")}
           />
@@ -203,7 +221,7 @@ function FolderSideNav({
   };
 
   return (
-    <SidebarGroup className="shrink-0 px-2 pb-2 pt-1">
+    <SidebarGroup className="shrink-0 px-3 pb-2 pt-1">
       <FolderSectionHeader
         label={label}
         open={open}
@@ -248,7 +266,7 @@ function SmartFolderSideNav({
   };
 
   return (
-    <SidebarGroup className="shrink-0 px-2 pb-1 pt-1">
+    <SidebarGroup className="shrink-0 px-3 pb-1 pt-1">
       <FolderSectionHeader
         label={label}
         open={open}
@@ -287,10 +305,10 @@ function FolderSectionHeader({
   onToggle: () => void;
 }) {
   return (
-    <SidebarGroupLabel className="h-7 px-0 text-[11px] uppercase tracking-normal">
+    <SidebarGroupLabel className="h-8 px-0 text-[11px] uppercase tracking-[0.08em]">
       <button
         className={[
-          "flex h-7 min-w-0 flex-1 items-center rounded-md px-2 text-left text-[11px] font-medium uppercase tracking-normal transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+          "flex h-8 min-w-0 flex-1 items-center rounded-lg px-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
           open ? "folder-section-heading-open" : "folder-section-heading-closed",
         ].join(" ")}
         type="button"
@@ -459,7 +477,7 @@ function collectFolderExpansionSignature(folders: readonly EagleFolder[], parts:
   }
 }
 
-function ThemeSideNav() {
+function ThemeMenuSection() {
   const themeState = useSyncExternalStore(subscribeThemeState, getThemeState, getThemeState);
   const themeOptions: { icon: typeof SunIcon; label: string; value: ThemePreference }[] = [
     { icon: SunIcon, label: "Light", value: "light" },
@@ -467,36 +485,68 @@ function ThemeSideNav() {
   ];
 
   return (
-    <SidebarGroup className="shrink-0 px-2 pb-2 pt-1">
-      <SidebarGroupLabel className="h-7 px-2 text-[11px] uppercase tracking-normal">
-        Theme
-      </SidebarGroupLabel>
-      <SidebarGroupContent>
-        <Tabs
-          id="themeModeGroup"
-          value={themeState.preference}
-          className="w-full group-data-[collapsible=icon]:hidden"
-          aria-label="Theme color"
-          onValueChange={(value) => {
-            setThemePreference(value as ThemePreference);
-          }}
+    <div className="grid gap-2 px-2 pb-1.5 pt-2">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Theme</span>
+      <Tabs
+        id="themeModeGroup"
+        value={themeState.preference}
+        className="w-full"
+        aria-label="Theme color"
+        onValueChange={(value) => {
+          setThemePreference(value as ThemePreference);
+        }}
+      >
+        <TabsList className="grid h-9 w-full grid-cols-2 rounded-xl bg-muted p-1 shadow-none" aria-label="Theme color">
+          {themeOptions.map(({ icon: Icon, label, value }) => (
+            <TabsTrigger
+              key={value}
+              value={value}
+              className="h-7 gap-1.5 rounded-lg px-2 text-xs font-medium text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:hover:text-foreground data-active:bg-background data-active:text-foreground data-active:shadow-sm data-active:hover:text-foreground"
+              aria-label={label}
+              title={label}
+            >
+              <Icon data-icon="inline-start" aria-hidden="true" />
+              <span>{label}</span>
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+    </div>
+  );
+}
+
+function RoleChip({ description, label }: { description: string; label: string }) {
+  return (
+    <span className="group/role relative inline-flex shrink-0">
+      <span
+        className="inline-flex cursor-default items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
+        tabIndex={description ? 0 : undefined}
+        aria-describedby={description ? "authRoleDescription" : undefined}
+      >
+        {label}
+      </span>
+      {description ? (
+        <span
+          id="authRoleDescription"
+          role="tooltip"
+          className="pointer-events-none absolute right-0 top-full z-10 mt-1.5 w-max max-w-[220px] rounded-lg bg-foreground px-2.5 py-1.5 text-[11px] font-medium leading-snug text-background opacity-0 shadow-md transition-opacity group-hover/role:opacity-100 group-focus-within/role:opacity-100"
         >
-          <TabsList className="grid w-full grid-cols-2 rounded-lg bg-muted shadow-none" aria-label="Theme color">
-            {themeOptions.map(({ icon: Icon, label, value }) => (
-              <TabsTrigger
-                key={value}
-                value={value}
-                className="min-h-[30px] rounded-md px-[9px] text-xs font-[680] text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:hover:text-foreground data-active:bg-background data-active:text-foreground data-active:shadow-sm data-active:hover:text-foreground"
-                aria-label={label}
-                title={label}
-              >
-                <Icon data-icon="inline-start" aria-hidden="true" />
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
-      </SidebarGroupContent>
-    </SidebarGroup>
+          {description}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+function AccountAvatar({ id, large = false, signedIn, username }: { id?: string; large?: boolean; signedIn: boolean; username: string | undefined }) {
+  const initial = signedIn ? (username || "").trim().slice(0, 1).toUpperCase() : "";
+  const sizeClassName = large ? "size-10 text-base" : "size-8 text-sm";
+  return (
+    <Avatar className={`${sizeClassName} rounded-full`}>
+      <AvatarFallback id={id} className={`rounded-full font-semibold ${signedIn ? "bg-foreground text-background" : "bg-sidebar-accent text-muted-foreground"}`}>
+        {initial || <UserRoundIcon className="size-4" aria-hidden="true" />}
+      </AvatarFallback>
+    </Avatar>
   );
 }
 
@@ -583,7 +633,7 @@ function FolderNavItem({
           </div>
         ) : null}
         <SidebarMenuButton
-          className="h-8 min-w-0 gap-2 px-1 text-[13px] font-normal data-active:bg-transparent data-active:font-[650] data-active:text-sidebar-foreground group-data-[collapsible=icon]:!pl-2"
+          className={`h-9 min-w-0 gap-2.5 rounded-xl text-[13.5px] font-normal data-[active=true]:bg-[var(--sidebar-active)] data-[active=true]:font-semibold data-[active=true]:text-[var(--sidebar-active-foreground)] data-[active=true]:hover:bg-[var(--sidebar-active)] data-[active=true]:hover:text-[var(--sidebar-active-foreground)] group-data-[collapsible=icon]:!pl-2 ${treeLayout ? "px-1.5" : "px-2.5"}`}
           isActive={active}
           tooltip={label}
           type="button"
@@ -591,10 +641,10 @@ function FolderNavItem({
           title={label}
           onClick={onSelect}
         >
-          <Icon className={active ? "text-sidebar-primary" : "text-muted-foreground"} aria-hidden="true" />
+          <Icon className={active ? "text-[var(--sidebar-active-foreground)]" : "text-muted-foreground"} aria-hidden="true" />
           <span className="min-w-0 truncate">{label}</span>
           {displayCount === undefined ? null : (
-            <span className="ml-auto shrink-0 text-[11px] font-normal text-muted-foreground [font-variant-numeric:tabular-nums] group-data-[collapsible=icon]:hidden">
+            <span className={`ml-auto shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium leading-none [font-variant-numeric:tabular-nums] group-data-[collapsible=icon]:hidden ${active ? "bg-background text-sidebar-foreground" : "bg-sidebar-accent text-muted-foreground"}`}>
               {displayCount.toLocaleString()}
             </span>
           )}
@@ -617,12 +667,14 @@ function AccountDropdown({
   disabled,
   roleDescription,
   roleLabel,
+  signedIn,
   statusLabel,
   username,
 }: {
   disabled: boolean;
   roleDescription: string;
   roleLabel: string;
+  signedIn: boolean;
   statusLabel: string;
   username: string | undefined;
 }) {
@@ -660,7 +712,7 @@ function AccountDropdown({
         <SidebarMenuButton
           id="authAccountLabel"
           size="lg"
-          className="h-14 aria-expanded:bg-sidebar-accent aria-expanded:text-sidebar-accent-foreground"
+          className="h-14 rounded-xl px-2 hover:bg-sidebar-accent aria-expanded:bg-sidebar-accent aria-expanded:text-sidebar-foreground"
           tooltip={statusLabel}
           aria-label={statusLabel}
           aria-haspopup="menu"
@@ -672,20 +724,16 @@ function AccountDropdown({
             setOpen((current) => !current);
           }}
         >
-          <Avatar className="size-8 rounded-lg">
-            <AvatarFallback id="authAvatarFallback" className="rounded-lg">
-              <UserRoundIcon className="size-4" aria-hidden="true" />
-            </AvatarFallback>
-          </Avatar>
-          <span className="grid min-w-0 flex-1 text-left text-sm leading-tight">
-            <span id="authUserLabel" className="truncate font-medium">
+          <AccountAvatar id="authAvatarFallback" signedIn={signedIn} username={username} />
+          <span className="grid min-w-0 flex-1 gap-0.5 text-left text-sm leading-tight">
+            <span id="authUserLabel" className="truncate font-semibold">
               {displayUsername}
             </span>
             <span id="authRoleLabel" className="truncate text-xs text-muted-foreground">
               {displayRole}
             </span>
           </span>
-          <ChevronsUpDownIcon className="ml-auto" aria-hidden="true" />
+          <ChevronsUpDownIcon className="ml-auto text-muted-foreground" aria-hidden="true" />
         </SidebarMenuButton>
 
         {open ? (
@@ -696,39 +744,41 @@ function AccountDropdown({
             aria-labelledby="authAccountLabel"
             className={
               isMobile
-                ? "absolute bottom-full left-0 right-0 z-50 mb-2 rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg"
-                : "absolute bottom-0 left-full z-50 ml-2 w-64 rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg"
+                ? "absolute bottom-full left-0 right-0 z-50 mb-2 rounded-2xl border border-border bg-popover p-1.5 text-popover-foreground shadow-[0_18px_48px_-16px_rgba(15,23,42,0.35)]"
+                : "absolute bottom-0 left-full z-50 ml-3 w-72 rounded-2xl border border-border bg-popover p-1.5 text-popover-foreground shadow-[0_18px_48px_-16px_rgba(15,23,42,0.35)]"
             }
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-              <Avatar className="size-8 rounded-lg">
-                <AvatarFallback className="rounded-lg">
-                  <UserRoundIcon className="size-4" aria-hidden="true" />
-                </AvatarFallback>
-              </Avatar>
-              <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">{displayUsername}</span>
-                <span className="truncate text-xs text-muted-foreground">{displayRole}</span>
+            <div className="flex items-center gap-3 px-2 pb-2.5 pt-2 text-left text-sm">
+              <AccountAvatar signedIn={signedIn} username={username} large />
+              <div className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left text-sm leading-tight">
+                <span className="min-w-0 truncate font-semibold">{displayUsername}</span>
+                <RoleChip description={roleDescription} label={displayRole} />
               </div>
             </div>
-            <div className="-mx-1 my-1 h-px bg-border" />
-            <button
-              id="logoutButton"
-              type="button"
-              role="menuitem"
-              className="relative flex w-full cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0"
-              disabled={disabled}
-              onClick={() => {
-                if (disabled) return;
-                setOpen(false);
-                if (isMobile) setOpenMobile(false);
-                submitLogout();
-              }}
-            >
-              <LogOutIcon />
-              <span>Sign out</span>
-            </button>
+            <div className="-mx-1.5 my-1 h-px bg-border" />
+            <ThemeMenuSection />
+            {signedIn ? (
+              <>
+                <div className="-mx-1.5 my-1 h-px bg-border" />
+                <button
+                  id="logoutButton"
+                  type="button"
+                  role="menuitem"
+                  className="relative flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 text-sm text-foreground outline-hidden select-none hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0"
+                  disabled={disabled}
+                  onClick={() => {
+                    if (disabled) return;
+                    setOpen(false);
+                    if (isMobile) setOpenMobile(false);
+                    submitLogout();
+                  }}
+                >
+                  <LogOutIcon />
+                  <span>Sign out</span>
+                </button>
+              </>
+            ) : null}
           </div>
         ) : null}
       </SidebarMenuItem>

@@ -273,14 +273,14 @@ describe("ViewerAppShell", () => {
     const body = renderToStaticMarkup(<PreviewBody item={{ id: "item-1", name: "Sample.jpg" }} kind="image" />);
 
     expect(dialog).toContain("preview-header");
-    expect(dialog).toContain("rounded-lg");
+    expect(dialog).toContain("rounded-full");
     expect(dialog).not.toContain("bg-[rgba(15,23,42,0.48)]");
     expect(body).toContain("image-toolbar");
     expect(body).toMatch(/image-toolbar[^"]*right-\[calc\(14px\+env\(safe-area-inset-right\)\)\]/);
     expect(body).toContain("100%");
     expect(body).not.toMatch(/image-toolbar[^"]*left-1\/2/);
     expect(body).not.toMatch(/image-toolbar[^"]*-translate-x-1\/2/);
-    expect(body).toContain("bg-card");
+    expect(body).toContain("var(--card)_86%");
     expect(body).toContain("text-muted-foreground");
   });
 
@@ -414,16 +414,15 @@ describe("ViewerAppShell", () => {
 
     expect(html).toContain('id="accountSideMenu"');
     expect(html).toContain("My Library");
-    expect(html).toContain("Eagle 4.0.0");
+    expect(html).not.toContain("Eagle 4.0.0");
     expect(html).not.toContain("Media Preview");
     expect(html).toContain('id="authAccountLabel"');
     expect(html).toContain('id="authUserLabel"');
     expect(html).toContain('id="authRoleLabel"');
     expect(html).toContain('aria-haspopup="menu"');
-    expect(html).toContain("lucide-user-round");
+    expect(html).toMatch(/id="authAvatarFallback"[^>]*>E</);
     expect(html).toContain("Smart Folders");
     expect(html).toContain("Folders");
-    expect(html).toContain("Theme");
     const allFoldersIndex = html.indexOf("All folders");
     const uncategorizedIndex = html.indexOf("Uncategorized");
     const smartFoldersIndex = html.indexOf("Smart Folders");
@@ -431,22 +430,12 @@ describe("ViewerAppShell", () => {
     expect(allFoldersIndex).toBeLessThan(smartFoldersIndex);
     expect(uncategorizedIndex).toBeLessThan(smartFoldersIndex);
     expect(smartFoldersIndex).toBeLessThan(foldersIndex);
-    expect(html).toContain('id="themeModeGroup"');
-    expect(html).toContain('aria-label="Theme color"');
-    expect(html).toContain("Light");
-    expect(html).toContain("Dark");
-    expect(html).not.toContain("Auto");
-    expect(html).not.toContain("lucide-monitor");
-    expect(html).toContain("lucide-sun");
-    expect(html).toContain("lucide-moon");
-    expect(html.indexOf("Theme")).toBeGreaterThan(html.indexOf("Folders"));
-    expect(html).toContain('data-slot="tabs-list"');
-    expect(html).toContain('data-slot="tabs-trigger"');
+    expect(html).not.toContain('id="themeModeGroup"');
     expect(html).toContain('aria-label="Folder tree"');
-    expect(html).toContain("All folders");
+    expect(html).toContain(">All<");
     expect(html).toContain(">99</span>");
-    expect(html).toContain('title="All folders"');
-    expect(html).not.toContain('title="All folders (99)"');
+    expect(html).toContain('title="All"');
+    expect(html).not.toContain('title="All (99)"');
     expect(html).toContain("Uncategorized");
     expect(html).toContain("Untagged");
     expect(html.indexOf("Uncategorized")).toBeLessThan(html.indexOf("Untagged"));
@@ -474,16 +463,16 @@ describe("ViewerAppShell", () => {
     expect(html).toContain("sidebar-tree-depth-1");
     expect(html).not.toContain("calc(0.125rem + 1 * 0.875rem)");
     expect(html).toContain('data-slot="sidebar"');
-    expect(html).toContain('data-variant="inset"');
+    expect(html).toContain('data-variant="floating"');
     expect(html).toContain('data-sidebar="menu-button"');
-    expect(html).toContain("data-active:bg-transparent");
-    expect(html).toContain("data-active:text-sidebar-foreground");
-    expect(html).toContain("text-sidebar-primary");
+    expect(html).toContain("data-[active=true]:bg-[var(--sidebar-active)]");
+    expect(html).toContain("data-[active=true]:text-[var(--sidebar-active-foreground)]");
+    expect(html).toContain("rounded-[22px]");
     expect(html).toContain("group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4)))]");
     expect(html).toContain("group-data-[collapsible=icon]:!size-8");
     expect(html).toContain("no-scrollbar min-h-0 flex-1 overflow-y-auto");
     expect(html).not.toContain("min-h-0 flex-1 overflow-y-auto px-2 pb-2 pt-1");
-    expect(html).toContain("shrink-0 px-2 pb-2 pt-1");
+    expect(html).toContain("shrink-0 px-3 pb-2 pt-1");
     expect(html).not.toContain("md:hidden");
     expect(html).not.toContain("fixed left-3");
 
@@ -569,7 +558,7 @@ describe("ViewerAppShell", () => {
     expect(html).toContain("sidebar-tree-branch-mid");
     expect(html).toContain("sidebar-tree-branch-last");
     expect(html).toContain("bg-sidebar-border");
-    expect(html).not.toContain("bg-sidebar-primary");
+    expect(html).not.toMatch(/sidebar-tree-branch[^"]*bg-sidebar-primary/);
   });
 
   test("renders collapsible folder section labels with belonging folder counts", () => {
@@ -643,6 +632,14 @@ describe("ViewerAppShell", () => {
     globalThis.HTMLElement = dom.window.HTMLElement;
     testGlobal.IS_REACT_ACT_ENVIRONMENT = true;
     dom.window.localStorage.setItem("eagleFolderSectionsOpen", JSON.stringify({ folders: false, smartFolders: false }));
+    setLoginConnectState({
+      authenticated: false,
+      authRequired: false,
+      disabled: false,
+      isError: false,
+      message: "",
+      user: null,
+    });
     setSearchControlsState({
       allFoldersTotal: 0,
       filtersOpen: false,
@@ -694,6 +691,22 @@ describe("ViewerAppShell", () => {
         folders: false,
         smartFolders: true,
       });
+
+      const accountButton = container.querySelector("#authAccountLabel");
+      if (!(accountButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing account menu button");
+      expect(accountButton.textContent).toContain("Guest");
+      expect(container.querySelector("#themeModeGroup")).toBeNull();
+
+      await act(async () => {
+        accountButton.click();
+      });
+
+      const themeGroup = container.querySelector("#themeModeGroup");
+      expect(themeGroup).not.toBeNull();
+      expect(themeGroup?.getAttribute("aria-label")).toBe("Theme color");
+      expect(container.querySelector('#authAccountMenu [aria-label="Light"]')).not.toBeNull();
+      expect(container.querySelector('#authAccountMenu [aria-label="Dark"]')).not.toBeNull();
+      expect(container.querySelector("#logoutButton")).toBeNull();
     } finally {
       if (root) {
         await act(async () => {
@@ -961,7 +974,7 @@ describe("ViewerAppShell", () => {
     expect(empty).toContain("lucide-search-x");
     expect(empty).toContain("text-muted-foreground");
     expect(empty).toContain('stroke-width="1.5"');
-    expect(empty).toContain("min-h-[clamp(260px,calc(100dvh-300px),420px)]");
+    expect(empty).toContain("min-h-[clamp(280px,calc(100dvh-220px),460px)]");
     expect(libraryEmpty).toContain("Library is empty");
     expect(libraryEmpty).toContain("lucide-inbox");
     expect(libraryEmpty).toContain("min-h-[clamp(280px,calc(100dvh-220px),460px)]");
@@ -982,10 +995,8 @@ describe("ViewerAppShell", () => {
     );
 
     expect(html).toContain("media-tiles");
-    expect(html).toContain("grid");
-    expect(html).toContain("[grid-auto-flow:dense]");
-    expect(html).toContain("[grid-auto-rows:4px]");
-    expect(html).toContain("max-[540px]:grid-cols-3");
+    expect(html).toContain("flex-wrap");
+    expect(html).toContain("max-[540px]:[--tile-scale:0.6]");
     expect(html).toContain("is-empty");
     expect(html).toContain("min-h-[clamp(280px,calc(100dvh-220px),460px)]");
     expect(html).not.toContain("column-count");
@@ -1014,9 +1025,9 @@ describe("ViewerAppShell", () => {
     );
 
     expect(grid).toContain("media-grid");
-    expect(grid).toContain("min-h-[clamp(260px,calc(100dvh-300px),420px)]");
+    expect(grid).toContain("min-h-[clamp(280px,calc(100dvh-220px),460px)]");
     expect(list).toContain("media-list");
-    expect(list).toContain("min-h-[clamp(260px,calc(100dvh-300px),420px)]");
+    expect(list).toContain("min-h-[clamp(280px,calc(100dvh-220px),460px)]");
   });
 
   test("renders result list as reusable media items", () => {
@@ -1030,7 +1041,7 @@ describe("ViewerAppShell", () => {
 
     expect(html).toContain("tile-item");
     expect(html).toContain("thumb-loading");
-    expect(html).toContain("grid-row-end:span");
+    expect(html).toContain("flex-basis:calc(var(--tile-h, 190px) * var(--tile-scale, 1) * 1.5)");
     expect(html).toContain("2:05");
     expect(html).not.toContain("file-badge");
     expect(html).not.toContain("rating-star");
@@ -1938,11 +1949,13 @@ describe("ViewerAppShell", () => {
 
     expect(video).toContain("video-player");
     expect(video).toContain("Playback position");
-    expect(video).toContain("Sample");
     expect(video).not.toContain("Sample.mp4");
     expect(video).toContain("transition-opacity");
     expect(video).toContain("cursor-pointer");
-    expect(video).toContain("Toggle video controls");
+    expect(video).toContain('aria-label="Video player"');
+    expect(video).toContain('aria-label="Full screen"');
+    expect(video).toContain('aria-label="Volume"');
+    expect(video).toContain('aria-label="Playback speed 1x"');
     expect(audio).toContain("audio-player-shell");
     expect(audio).toContain("audio-artwork");
     expect(audio).toContain("Sample");

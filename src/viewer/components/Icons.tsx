@@ -16,6 +16,14 @@ export function ChevronLeftIcon() {
   );
 }
 
+export function ChevronRightIcon() {
+  return (
+    <Icon>
+      <path d="m9 18 6-6-6-6" />
+    </Icon>
+  );
+}
+
 export function InfoIcon() {
   return (
     <Icon>

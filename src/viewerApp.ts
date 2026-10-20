@@ -4,6 +4,7 @@ import {
   LIBRARY_EMPTY_LABEL,
   RECENT_FOLDERS_STORAGE_KEY,
   RECENT_TAGS_STORAGE_KEY,
+  browserImageExts,
   pdfPreviewExts,
   playableAudioExts,
   playableVideoExts,
@@ -108,6 +109,7 @@ let authUser: NonNullable<AuthStatusResponse["user"]> | null = null;
 let serverReachable = true;
 let sessionMaxAgeSeconds = 7 * 24 * 60 * 60;
 let allFoldersTotal = 0;
+let availableExts: string[] = [];
 let allFoldersTotalRequestId = 0;
 const pendingRatingItemIds = new Set<string>();
 const DEFAULT_DOCUMENT_TITLE = "Media Preview Server";
@@ -182,6 +184,7 @@ async function init() {
     },
     setViewMode,
     closePreview,
+    stepPreview,
     togglePreviewInfo,
     previewPointerDown: closePreviewInfoFromOutside,
     previewClosed: () => {
@@ -227,7 +230,7 @@ async function connect(credentials?: { password: string; username: string }) {
     const data = await postJson<ConnectResponse>("/api/connect", connection);
     serverReachable = true;
     showViewer(data);
-    await Promise.all([loadFolders(), loadSmartFolders(), loadItems(), loadAllFoldersTotal()]);
+    await Promise.all([loadFolders(), loadSmartFolders(), loadItems(), loadAllFoldersTotal(), loadItemTypes()]);
   } catch (error) {
     if (signedInThisAttempt && handlePostLoginAuthError(error)) return;
     if (loginAttempted && !signedInThisAttempt && isLoginAuthFailure(error)) {
@@ -395,6 +398,7 @@ function clearViewerSessionState() {
   state.requestId += 1;
   allFoldersTotalRequestId += 1;
   allFoldersTotal = 0;
+  availableExts = [];
   resetViewerResults({ resetOffset: true });
   Object.assign(state, resetFilterState());
   hideTagSuggestions();
@@ -465,6 +469,17 @@ async function loadFolders() {
   }
 }
 
+async function loadItemTypes() {
+  try {
+    const data = await getJson<{ items?: Array<{ ext?: string }> }>("/api/item-types");
+    availableExts = (data.items || []).map((entry) => String(entry.ext || "").toLowerCase()).filter(Boolean);
+  } catch (error) {
+    if (handleAuthError(error)) return;
+    availableExts = [];
+  }
+  renderSearchControlButtons();
+}
+
 async function loadSmartFolders() {
   try {
     const data = await getJson<LoadSmartFoldersResponse>("/api/smart-folders");
@@ -485,7 +500,7 @@ async function loadItems({ append = false }: LoadItemsOptions = {}) {
     resetTileAutoLoading();
     state.tilesLoadingMore = false;
     state.items = [];
-    renderMessage("Loading");
+    renderMessage("Loading", "loading");
   }
   updatePager();
 
@@ -582,7 +597,7 @@ function render() {
   setupTileAutoLoading();
 }
 
-function openPreview(item: EagleItem, { skipHistory = false }: OpenPreviewOptions = {}) {
+function openPreview(item: EagleItem, { replaceHistory = false, skipHistory = false }: OpenPreviewOptions = {}) {
   state.previewItemId = String(item.id || "");
   setPreviewTextState({
     displayName: displayFileName(item),
@@ -594,14 +609,24 @@ function openPreview(item: EagleItem, { skipHistory = false }: OpenPreviewOption
   renderPreviewDetails(item);
 
   const { kind, srcKind } = previewBodyForItem(item);
+  const index = state.items.findIndex((entry) => entry.id === item.id);
   setPreviewDialogState({
+    hasNext: index >= 0 && index < state.items.length - 1,
+    hasPrevious: index > 0,
     infoOpen: state.previewInfoOpen,
     mode: kind,
     open: true,
   });
   setPreviewBodyState({ item, kind, srcKind });
 
-  if (!skipHistory) syncUrlState();
+  if (!skipHistory) syncUrlState({ replace: replaceHistory });
+}
+
+function stepPreview(delta: number) {
+  if (!state.previewItemId) return;
+  const index = state.items.findIndex((entry) => entry.id === state.previewItemId);
+  const next = index >= 0 ? state.items[index + delta] : undefined;
+  if (next) openPreview(next, { replaceHistory: true });
 }
 
 function previewBodyForItem(item: EagleItem): { kind: PreviewBodyKind; srcKind?: "file" | "thumb" } {
@@ -612,7 +637,7 @@ function previewBodyForItem(item: EagleItem): { kind: PreviewBodyKind; srcKind?:
   if (pdfPreviewExts.has(ext)) return { kind: "pdf" };
   if (urlPreviewExts.has(ext)) return { kind: "url" };
   if (isTimedMedia(item)) return { kind: "unsupported" };
-  return { kind: "image" };
+  return { kind: "image", srcKind: browserImageExts.has(ext) ? "file" : "thumb" };
 }
 
 function setViewMode(mode: string) {
@@ -772,6 +797,7 @@ function syncResetFiltersButton() {
 function renderSearchControlButtons() {
   setSearchControlsState({
     allFoldersTotal,
+    availableExts,
     filtersOpen: state.filtersOpen,
     folders: state.folders,
     hasActiveFilters: hasActiveFilters(state),
@@ -890,12 +916,13 @@ function updatePager() {
   const isTiles = state.viewMode === "tiles";
   renderTilesSentinel(isTiles ? tileSentinelText(tileLoadingState()) : "Loading more");
   const current = currentPage(state);
+  const pageCount = totalPages(state.total, state.limit);
   setPagerState({
     current,
-    hidden: isTiles,
+    hidden: isTiles || (pageCount <= 1 && state.offset <= 0),
     nextDisabled: state.offset + state.limit >= state.total,
     onSelectPage: goToPage,
-    pages: pageButtonList(current, totalPages(state.total, state.limit)),
+    pages: pageButtonList(current, pageCount),
     previousDisabled: state.offset <= 0,
   });
 }

@@ -28,6 +28,7 @@ import { TagChips } from "./TagChips";
 import { TagSuggestions } from "./TagSuggestions";
 
 interface SearchControlsProps {
+  availableExts?: readonly string[];
   filtersOpen?: boolean;
   hasActiveFilters?: boolean;
   hasResettableFilters?: boolean;
@@ -38,7 +39,7 @@ interface SearchControlsProps {
 }
 
 const selectClassName =
-  "select-arrow h-12 w-full appearance-none rounded-lg border border-input bg-card py-0 pl-3 pr-10 text-base text-foreground shadow-sm hover:bg-muted/30 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 min-[720px]:text-sm";
+  "select-arrow h-11 w-full appearance-none rounded-xl border border-input bg-card py-0 pl-3 pr-10 text-base text-foreground shadow-sm hover:bg-muted/30 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 min-[720px]:text-sm";
 
 export function SearchControls({
   filtersOpen,
@@ -67,9 +68,9 @@ export function SearchControls({
   }, []);
 
   return (
-    <section className="controls grid gap-4 rounded-lg border border-border bg-popover p-3 text-popover-foreground shadow-sm max-[540px]:rounded-none max-[540px]:border-x-0 max-[540px]:px-3" aria-label="Search and filters" hidden={!displayFiltersOpen}>
+    <section className="controls mb-4 grid w-full gap-3 rounded-2xl border border-border bg-popover p-3 text-popover-foreground shadow-[0_12px_32px_-18px_rgba(15,23,42,0.25)]" aria-label="Search and filters" hidden={!displayFiltersOpen}>
       <div className="search-row grid items-stretch gap-3 max-[540px]:gap-2">
-        <InputGroup className="search-box min-h-[46px] transition-colors hover:bg-muted/20 max-[540px]:min-h-11">
+        <InputGroup className="search-box min-h-[46px] rounded-xl transition-colors hover:bg-muted/20 max-[540px]:min-h-11">
           <SearchInput value={displaySearchQuery} />
           <InputGroupAddon>
             <Search />
@@ -80,6 +81,7 @@ export function SearchControls({
       </div>
 
       <AdvancedFilters
+        availableExts={state.availableExts}
         filtersOpen={displayFiltersOpen}
         hasActiveFilters={displayHasActiveFilters}
         hasResettableFilters={displayHasResettableFilters}
@@ -118,26 +120,28 @@ export function SearchInput({ value = "" }: { value?: string }) {
 }
 
 export function AdvancedFilters({
+  availableExts = [],
   filtersOpen = false,
   hasActiveFilters = false,
   hasResettableFilters = hasActiveFilters,
   selectedExt = "",
   selectedLimit = 30,
   selectedRating = "",
-}: Pick<SearchControlsProps, "filtersOpen" | "hasActiveFilters" | "hasResettableFilters" | "selectedExt" | "selectedLimit" | "selectedRating">) {
+}: Pick<SearchControlsProps, "availableExts" | "filtersOpen" | "hasActiveFilters" | "hasResettableFilters" | "selectedExt" | "selectedLimit" | "selectedRating">) {
+  const extOptions = mediaTypeOptions(availableExts, selectedExt);
   return (
-    <div id="advancedFilters" className="filter-row grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-4 max-[540px]:grid-cols-1" hidden={!filtersOpen}>
-      <label className="grid gap-2">
+    <div id="advancedFilters" className="filter-row grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-4 max-[540px]:grid-cols-[minmax(0,1fr)_auto] max-[540px]:gap-3" hidden={!filtersOpen}>
+      <label className="grid gap-2 max-[540px]:col-span-2">
         <select id="extSelect" className={selectClassName} aria-label="Type" value={selectedExt} onChange={changeMediaType}>
           <option value="">All types</option>
-          {MEDIA_TYPE_OPTIONS.map((type) => (
+          {extOptions.map((type) => (
             <option key={type} value={type}>
               {type.toUpperCase()}
             </option>
           ))}
         </select>
       </label>
-      <label className="grid gap-2">
+      <label className="grid gap-2 max-[540px]:col-span-2">
         <select id="ratingSelect" className={selectClassName} aria-label="Rating" value={selectedRating} onChange={changeRating}>
           <option value="">All ratings</option>
           <option value="0">No rating</option>
@@ -164,11 +168,18 @@ export function AdvancedFilters({
   );
 }
 
+// Only offer extensions that exist in the library; fall back to the defaults until they load.
+function mediaTypeOptions(availableExts: readonly string[], selectedExt: string): readonly string[] {
+  const options = availableExts.length ? [...availableExts] : [...MEDIA_TYPE_OPTIONS];
+  if (selectedExt && !options.includes(selectedExt)) options.push(selectedExt);
+  return options;
+}
+
 function ResetFiltersButton({ hasResettableFilters = false }: Pick<SearchControlsProps, "hasResettableFilters">) {
   return (
     <Button
       id="resetFiltersButton"
-      className="icon-button filter-reset-button size-10 min-w-10 rounded-lg disabled:opacity-[0.42] max-[540px]:size-11 max-[540px]:min-w-11"
+      className="icon-button filter-reset-button size-10 min-w-10 rounded-full disabled:opacity-[0.42] max-[540px]:size-11 max-[540px]:min-w-11"
       variant="outline"
       size="icon-sm"
       type="button"
@@ -188,7 +199,7 @@ export function SearchFiltersButton({ filtersOpen = false }: Pick<SearchControls
     <Button
       id="toggleFiltersButton"
       className={cn(
-        "icon-button filter-toggle-button size-9 rounded-lg",
+        "icon-button filter-toggle-button size-9 rounded-full text-muted-foreground hover:text-foreground",
         filtersOpen && "bg-muted text-foreground",
       )}
       variant="ghost"

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent, type ReactNode, type TouchEvent } from "react";
 import { mediaUrl } from "../../api";
 import { hasNoThumbnail } from "../../media";
-import { closePreview } from "../../shellActions";
+import { closePreview, stepPreview } from "../../shellActions";
 import {
   getImageOverlayControlsVisible,
   setImageOverlayControlsVisible,
@@ -30,13 +30,16 @@ const imageViewportClassName = "image-viewport relative grid h-full min-h-0 w-fu
 const previewImageClassName =
   "preview-image absolute left-1/2 top-1/2 block max-h-none max-w-none select-none object-contain [transform-origin:center] [will-change:transform] [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:bg-[#05070a] [&:fullscreen]:object-contain";
 const imageToolbarClassName =
-  "image-toolbar absolute bottom-[calc(14px+env(safe-area-inset-bottom))] right-[calc(14px+env(safe-area-inset-right))] z-[2] inline-flex items-center gap-1.5 rounded-lg border border-border bg-card p-1.5 shadow-sm";
+  "image-toolbar absolute bottom-[calc(14px+env(safe-area-inset-bottom))] right-[calc(14px+env(safe-area-inset-right))] z-[2] inline-flex items-center gap-1 rounded-full border border-border bg-[color-mix(in_srgb,var(--card)_86%,transparent)] p-1.5 shadow-[0_10px_30px_-12px_rgba(15,23,42,0.28)] backdrop-blur-xl";
 const toolbarButtonClassName =
-  "inline-grid min-h-[38px] w-[38px] touch-manipulation select-none place-items-center rounded-md border-0 bg-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground [&_svg]:h-[18px] [&_svg]:w-[18px] [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-linecap:round] [&_svg]:[stroke-linejoin:round] [&_svg]:[stroke-width:2]";
+  "inline-grid min-h-9 w-9 touch-manipulation select-none place-items-center rounded-full border-0 bg-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground [&_svg]:h-[18px] [&_svg]:w-[18px] [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-linecap:round] [&_svg]:[stroke-linejoin:round] [&_svg]:[stroke-width:2]";
 const imageZoomLabelClassName =
   "min-w-[44px] rounded-md px-1.5 text-center text-[11px] font-[680] tabular-nums text-muted-foreground";
 
-export function ImagePreview({ item, srcKind }: { item: EagleItem; srcKind: "file" | "thumb" }) {
+export function ImagePreview({ item, srcKind: requestedSrcKind }: { item: EagleItem; srcKind: "file" | "thumb" }) {
+  // Fall back to the Eagle thumbnail when the browser cannot decode the original file.
+  const [srcKind, setSrcKind] = useState(requestedSrcKind);
+  const [loadFailed, setLoadFailed] = useState(false);
   const thumbnailUnavailable = srcKind === "thumb" && hasNoThumbnail(item);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
@@ -53,6 +56,11 @@ export function ImagePreview({ item, srcKind }: { item: EagleItem; srcKind: "fil
     ...initialPreviewScales(),
     naturalSize: null,
   }));
+
+  useEffect(() => {
+    setSrcKind(requestedSrcKind);
+    setLoadFailed(false);
+  }, [item.id, requestedSrcKind]);
 
   useEffect(() => {
     dragRef.current = null;
@@ -201,15 +209,18 @@ export function ImagePreview({ item, srcKind }: { item: EagleItem; srcKind: "fil
       if (pointersRef.current.size < 2) pinchRef.current = null;
     }
     if (event && tap?.pointerId === event.pointerId) {
-      const deltaX = Math.abs(event.clientX - tap.startX);
+      const signedDeltaX = event.clientX - tap.startX;
+      const deltaX = Math.abs(signedDeltaX);
       const deltaY = event.clientY - tap.startY;
-      const canCloseFromSwipe = event.pointerType === "touch"
+      const canSwipe = event.pointerType === "touch"
         && pointersRef.current.size <= 1
-        && imageState.transform.scale <= imageState.fitScale * 1.05
-        && deltaY > 80
-        && deltaY > deltaX * 1.6;
+        && imageState.transform.scale <= imageState.fitScale * 1.05;
+      const canCloseFromSwipe = canSwipe && deltaY > 80 && deltaY > deltaX * 1.6;
+      const canStepFromSwipe = canSwipe && deltaX > 64 && deltaX > Math.abs(deltaY) * 1.6;
       if (canCloseFromSwipe) {
         closePreview();
+      } else if (canStepFromSwipe) {
+        stepPreview(signedDeltaX < 0 ? 1 : -1);
       } else if (!tap.moved && pointersRef.current.size <= 1) {
         toggleImageOverlayControls();
       }
@@ -239,11 +250,15 @@ export function ImagePreview({ item, srcKind }: { item: EagleItem; srcKind: "fil
       >
         <img
           ref={imageRef}
-          className={previewImageClassName}
+          className={`${previewImageClassName}${imageState.naturalSize ? "" : " opacity-0"}`}
           src={mediaUrl(String(item.id || ""), srcKind)}
           alt={item.name || item.id || ""}
           draggable={false}
           style={imageStyle}
+          onError={() => {
+            if (srcKind === "file") setSrcKind("thumb");
+            else setLoadFailed(true);
+          }}
           onLoad={(event) => {
             const image = event.currentTarget;
             const viewport = viewportRef.current;
@@ -265,6 +280,12 @@ export function ImagePreview({ item, srcKind }: { item: EagleItem; srcKind: "fil
           }}
         />
       </div>
+      {!imageState.naturalSize && !loadFailed ? (
+        <span className="pointer-events-none absolute inset-0 z-[1] grid place-items-center" aria-hidden="true">
+          <span className="loading-spinner block size-8 animate-spin rounded-full border-[3px] border-[color-mix(in_srgb,var(--muted-foreground)_25%,transparent)] border-t-muted-foreground" />
+        </span>
+      ) : null}
+      {loadFailed ? <PreviewNotice message="Preview is unavailable" /> : null}
       <ImageToolbar
         visible={imageOverlayControlsVisible}
         onActualSize={() => setImageZoom(imageState.naturalScale, { x: 0, y: 0 })}

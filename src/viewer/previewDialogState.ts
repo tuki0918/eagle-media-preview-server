@@ -1,6 +1,8 @@
 export type PreviewDialogMode = "" | "audio" | "image" | "pdf" | "text" | "unsupported" | "url" | "video";
 
 interface PreviewDialogState {
+  hasNext?: boolean;
+  hasPrevious?: boolean;
   infoOpen: boolean;
   mode: PreviewDialogMode;
   open: boolean;
@@ -8,6 +10,8 @@ interface PreviewDialogState {
 
 const listeners = new Set<() => void>();
 let currentPreviewDialogState: PreviewDialogState = {
+  hasNext: false,
+  hasPrevious: false,
   infoOpen: false,
   mode: "",
   open: false,
@@ -19,7 +23,9 @@ export function getPreviewDialogState() {
 
 export function setPreviewDialogState(nextState: PreviewDialogState) {
   if (
-    currentPreviewDialogState.infoOpen === nextState.infoOpen
+    Boolean(currentPreviewDialogState.hasNext) === Boolean(nextState.hasNext)
+    && Boolean(currentPreviewDialogState.hasPrevious) === Boolean(nextState.hasPrevious)
+    && currentPreviewDialogState.infoOpen === nextState.infoOpen
     && currentPreviewDialogState.mode === nextState.mode
     && currentPreviewDialogState.open === nextState.open
   ) return;
@@ -36,6 +42,8 @@ export function setPreviewDialogInfoOpen(infoOpen: boolean) {
 
 export function resetPreviewDialogState() {
   setPreviewDialogState({
+    hasNext: false,
+    hasPrevious: false,
     infoOpen: false,
     mode: "",
     open: false,

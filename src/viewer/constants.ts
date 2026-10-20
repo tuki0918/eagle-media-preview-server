@@ -26,6 +26,7 @@ export const textPreviewExts = new Set([
   "txt", "md", "js", "css", "html", "json", "xml", "csv", "log",
   "ts", "tsx", "jsx", "mjs", "cjs", "yml", "yaml",
 ]);
+export const browserImageExts = new Set(["jpg", "jpeg", "png", "gif", "webp", "avif", "svg", "bmp", "ico", "apng"]);
 export const pdfPreviewExts = new Set(["pdf"]);
 export const urlPreviewExts = new Set(["url"]);
 export const videoExts = new Set([...playableVideoExts, "avi", "mkv"]);

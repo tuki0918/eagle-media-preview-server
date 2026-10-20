@@ -15,7 +15,7 @@ interface PagerProps {
 }
 
 const pagerButtonClassName =
-  "min-h-11 w-auto rounded-lg px-[18px] text-sm font-[720] max-[540px]:row-start-2 max-[540px]:w-full max-[540px]:px-3.5 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-linecap:round] [&_svg]:[stroke-linejoin:round] [&_svg]:[stroke-width:2]";
+  "min-h-10 w-auto rounded-full px-[18px] text-sm font-medium max-[540px]:row-start-2 max-[540px]:w-full max-[540px]:px-3.5 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-linecap:round] [&_svg]:[stroke-linejoin:round] [&_svg]:[stroke-width:2]";
 
 export function Pager({
   current,

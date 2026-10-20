@@ -14,8 +14,8 @@ export interface RatingStarsProps {
 }
 
 const ratingStarBaseClassName =
-  "rating-star inline-grid h-6 w-[22px] place-items-center border-0 bg-transparent p-0 text-[17px] leading-none text-muted-foreground shadow-none data-[active=true]:text-yellow-500 disabled:cursor-not-allowed disabled:opacity-70";
-const interactiveRatingStarClassName = `${ratingStarBaseClassName} cursor-pointer`;
+  "rating-star inline-grid h-6 w-[22px] place-items-center border-0 bg-transparent p-0 text-[17px] leading-none text-[color-mix(in_srgb,var(--muted-foreground)_35%,transparent)] shadow-none transition-colors data-[active=true]:text-yellow-500 disabled:cursor-not-allowed disabled:opacity-70";
+const interactiveRatingStarClassName = `${ratingStarBaseClassName} cursor-pointer hover:text-yellow-500/60`;
 const staticRatingStarClassName = `${ratingStarBaseClassName} rating-star-static cursor-default`;
 
 export function RatingStars({ className, disabled = false, disabledLabel, id, interactive = false, item, onSelect }: RatingStarsProps) {
@@ -55,12 +55,12 @@ export function nextStarValue(current: number, selected: number) {
 export function PreviewRating() {
   const state = useSyncExternalStore(subscribePreviewRatingState, getPreviewRatingState, getPreviewRatingState);
   if (!state.item) {
-    return <div id="previewRating" className="rating-control inline-flex items-center gap-2.5 [&_.rating-star]:h-6 [&_.rating-star]:w-6 [&_.rating-star]:text-xl" aria-label="Rating" />;
+    return <div id="previewRating" className="rating-control inline-flex items-center gap-1 [&_.rating-star]:h-7 [&_.rating-star]:w-7 [&_.rating-star]:text-xl" aria-label="Rating" />;
   }
   return (
     <RatingStars
       id="previewRating"
-      className="rating-control inline-flex items-center gap-2.5 [&_.rating-star]:h-6 [&_.rating-star]:w-6 [&_.rating-star]:text-xl"
+      className="rating-control inline-flex items-center gap-1 [&_.rating-star]:h-7 [&_.rating-star]:w-7 [&_.rating-star]:text-xl"
       disabled={state.saving}
       disabledLabel={state.saving ? "Saving rating" : undefined}
       interactive={state.canEdit}

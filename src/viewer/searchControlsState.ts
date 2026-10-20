@@ -2,6 +2,8 @@ import type { EagleFolder, EagleSmartFolder } from "./types";
 
 export interface SearchControlsState {
   allFoldersTotal: number;
+  /** File extensions present in the current library; empty until loaded. */
+  availableExts?: readonly string[];
   filtersOpen: boolean;
   folders: readonly EagleFolder[];
   hasActiveFilters: boolean;

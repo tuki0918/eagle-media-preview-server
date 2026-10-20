@@ -15,9 +15,6 @@ export interface PreviewBodyProps {
   srcKind?: "file" | "thumb";
 }
 
-const checkerboardClassName =
-  "bg-muted bg-[linear-gradient(45deg,#7373732e_25%,transparent_25%),linear-gradient(-45deg,#7373732e_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#7373732e_75%),linear-gradient(-45deg,transparent_75%,#7373732e_75%)] [background-position:0_0,0_12px,12px_-12px,-12px_0] [background-size:24px_24px]";
-
 export function PreviewBody({ item, kind, srcKind = "file" }: PreviewBodyProps) {
   if (kind === "video") return <VideoPreview item={item} />;
   if (kind === "audio") return <AudioPreview item={item} />;
@@ -49,5 +46,5 @@ function previewBodyClassName(kind?: PreviewBodyKind) {
   if (kind === "pdf") return `${base} bg-background`;
   if (kind === "url") return `${base} bg-background`;
   if (kind === "unsupported") return `${base} content-center justify-items-center gap-4 bg-[#05070a] p-8 [&_.preview-notice]:text-white`;
-  return `${base} ${checkerboardClassName}`;
+  return `${base} bg-muted`;
 }

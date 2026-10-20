@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { EllipsisIcon, ExternalLinkIcon as LucideExternalLinkIcon, FolderIcon, PlusIcon, RotateCcwIcon, TagIcon, Trash2Icon, XIcon } from "lucide-react";
+import { EllipsisIcon, ExternalLinkIcon as LucideExternalLinkIcon, FolderIcon, LinkIcon, PlusIcon, RotateCcwIcon, TagIcon, Trash2Icon, XIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { errorMessage } from "../api";
@@ -28,33 +28,39 @@ export interface PreviewInfoProps {
   onToggleTrash?: (item: EagleItem, isDeleted: boolean) => Promise<void>;
 }
 
-const previewLabelClassName = "preview-detail-label text-xs font-normal text-muted-foreground";
+const previewLabelClassName = "preview-detail-label text-[13px] font-normal text-muted-foreground";
+const previewSectionHeadingClassName = "preview-section-heading m-0 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground";
+const previewSectionCountClassName = "rounded-full bg-muted px-1.5 py-px text-[10px] font-medium tabular-nums tracking-normal text-muted-foreground";
 const directFileLinkClassName =
-  "direct-file-link preview-info-cta min-h-11 w-full cursor-pointer gap-2.5 whitespace-nowrap rounded-md bg-primary px-2 text-[14px] font-[720] leading-none text-primary-foreground no-underline shadow-none hover:bg-primary hover:text-primary-foreground [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-width:2]";
+  "direct-file-link preview-info-cta min-h-11 w-full cursor-pointer gap-2 whitespace-nowrap rounded-full bg-primary px-4 text-sm font-semibold leading-none text-primary-foreground no-underline shadow-none hover:bg-primary/90 hover:text-primary-foreground [&_svg]:size-4 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-width:2]";
 const adminMenuTriggerClassName =
-  "preview-admin-menu-trigger size-11 rounded-md border-border bg-background text-foreground hover:bg-muted hover:text-foreground [&_svg]:size-5";
-const previewDetailsSectionClassName = "preview-details-section grid gap-1.5 px-2";
+  "preview-admin-menu-trigger size-11 rounded-full border-border bg-background text-foreground hover:bg-muted hover:text-foreground [&_svg]:size-5";
+const previewDetailsSectionClassName = "preview-details-section grid gap-6";
+const previewDetailTableClassName = "preview-detail-table grid rounded-xl border border-border px-3.5";
 const previewDetailRowClassName =
-  "preview-detail-row grid min-h-7 grid-cols-[minmax(82px,104px)_minmax(0,1fr)] items-start gap-4 max-[540px]:gap-3";
-const previewDetailValueClassName = "preview-detail-value min-w-0 text-sm leading-[1.35] text-foreground [overflow-wrap:anywhere] max-[540px]:text-[13px]";
-const previewChipListClassName = "preview-chip-list flex flex-wrap gap-x-2 gap-y-1.5";
-const previewChipClassName = "preview-chip inline-flex h-auto min-h-[28px] items-center gap-1.5 rounded-md border border-border bg-secondary px-2 text-[12px] font-medium text-secondary-foreground [&_svg]:size-3.5";
+  "preview-detail-row grid min-h-10 grid-cols-[minmax(0,auto)_minmax(0,1fr)] items-center gap-4 border-b border-border py-2 last:border-b-0";
+const previewDetailValueClassName = "preview-detail-value min-w-0 text-right text-[13px] font-medium leading-[1.35] text-foreground tabular-nums [overflow-wrap:anywhere]";
+const previewChipListClassName = "preview-chip-list flex flex-wrap justify-end gap-1.5";
+const previewChipClassName = "preview-chip inline-flex h-auto min-h-7 items-center gap-1.5 rounded-full border border-border bg-secondary px-2.5 text-xs font-medium text-secondary-foreground [&_svg]:size-3.5 [&_svg]:text-muted-foreground";
 const previewEditChipListClassName = "preview-edit-chip-list flex min-h-0 flex-wrap gap-1.5";
-const previewEditChipClassName = "preview-edit-chip inline-flex h-auto min-h-[30px] max-w-full items-center gap-1.5 rounded-md border border-border bg-secondary py-0 pl-2 pr-1 text-xs font-[560] text-secondary-foreground [&_svg]:size-3.5";
-const previewChipInputClassName = "preview-chip-input min-h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-base text-foreground min-[720px]:text-sm";
-const previewChipSuggestionsClassName = "preview-chip-suggestions mt-1 grid max-h-[220px] overflow-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-sm max-[540px]:max-h-[28dvh]";
-const previewChipSuggestionClassName = "preview-chip-suggestion flex min-h-9 cursor-pointer items-center justify-between gap-3 rounded-md border-0 bg-transparent px-2.5 text-left text-[13px] text-popover-foreground hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-popover-foreground";
-const previewMetadataRowClassName = "preview-metadata-row grid gap-2 border-b border-border pb-3 last:border-b-0 last:pb-0";
-const previewMetadataLabelClassName = "text-xs font-normal text-muted-foreground";
+const previewEditChipClassName = "preview-edit-chip inline-flex h-auto min-h-7 max-w-full items-center gap-1.5 rounded-full border border-border bg-secondary py-0 pl-2.5 pr-1 text-xs font-medium text-secondary-foreground [&_svg]:size-3.5";
+const previewChipInputClassName = "preview-chip-input min-h-10 w-full min-w-0 rounded-xl border border-input bg-background px-3 text-base text-foreground min-[720px]:text-sm";
+const previewChipSuggestionsClassName = "preview-chip-suggestions mt-1 grid max-h-[220px] overflow-auto rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-lg max-[540px]:max-h-[28dvh]";
+const previewChipSuggestionClassName = "preview-chip-suggestion flex min-h-9 cursor-pointer items-center justify-between gap-3 rounded-lg border-0 bg-transparent px-2.5 text-left text-[13px] text-popover-foreground hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-popover-foreground";
+const previewMetadataRowClassName = "preview-metadata-row grid gap-2.5";
+const previewMetadataEmptyClassName = "preview-metadata-empty m-0 text-[13px] text-muted-foreground";
 
 export function PreviewDetailsPanel({ canEditMetadata = false, detailRows, folders, item, onFolderSuggestions, onSaveMetadata, onTagSuggestions }: PreviewInfoProps) {
   return (
     <section className={previewDetailsSectionClassName}>
       <PreviewItemText item={item} />
-      <section className="preview-detail-group grid gap-1.5 border-b border-border pb-3 pt-3 first:pt-0">
-        {detailRows.map((row) => (
-          <PreviewDetail key={row.label} {...row} />
-        ))}
+      <section className="preview-detail-group grid gap-2.5" aria-label="Information">
+        <h3 className={previewSectionHeadingClassName}>Information</h3>
+        <div className={previewDetailTableClassName}>
+          {detailRows.map((row) => (
+            <PreviewDetail key={row.label} {...row} />
+          ))}
+        </div>
       </section>
       {canEditMetadata ? (
         <PreviewMetadataEditor
@@ -77,33 +83,49 @@ function PreviewItemText({ item }: { item: EagleItem }) {
   const url = itemTextValue(item.url);
   if (!annotation && !url) return null;
   return (
-    <section className="preview-item-text grid gap-2 border-b border-border pb-3">
+    <>
       {annotation ? (
-        <p className="preview-item-annotation whitespace-pre-wrap text-sm leading-[1.45] text-foreground [overflow-wrap:anywhere] max-[540px]:text-[13px]">
-          {annotation}
-        </p>
+        <section className="preview-item-text grid gap-2.5" aria-label="Notes">
+          <h3 className={previewSectionHeadingClassName}>Notes</h3>
+          <p className="preview-item-annotation m-0 whitespace-pre-wrap rounded-xl bg-[color-mix(in_srgb,var(--muted)_70%,transparent)] px-3.5 py-3 text-[13px] leading-[1.6] text-foreground [overflow-wrap:anywhere]">
+            {annotation}
+          </p>
+        </section>
       ) : null}
       {url ? (
-        <a
-          className="preview-item-url grid min-h-7 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md text-sm leading-[1.35] text-foreground no-underline hover:text-foreground max-[540px]:text-[13px]"
-          href={url}
-          target="_blank"
-          rel="noopener"
-          title={url}
-          onClick={(event) => event.stopPropagation()}
-        >
-          <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{url}</span>
-          <LucideExternalLinkIcon className="size-4 flex-none text-muted-foreground" aria-hidden="true" />
-        </a>
+        <section className="preview-item-source grid gap-2.5" aria-label="Source">
+          <h3 className={previewSectionHeadingClassName}>Source</h3>
+          <a
+            className="preview-item-url grid min-h-10 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2.5 rounded-xl border border-border px-3.5 text-[13px] leading-[1.35] text-foreground no-underline transition-colors hover:bg-muted hover:text-foreground"
+            href={url}
+            target="_blank"
+            rel="noopener"
+            title={url}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <LinkIcon className="size-4 flex-none text-muted-foreground" aria-hidden="true" />
+            <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{urlLabel(url)}</span>
+            <LucideExternalLinkIcon className="size-4 flex-none text-muted-foreground" aria-hidden="true" />
+          </a>
+        </section>
       ) : null}
-    </section>
+    </>
   );
+}
+
+function urlLabel(url: string) {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.host}${parsed.pathname === "/" ? "" : parsed.pathname}`;
+  } catch {
+    return url;
+  }
 }
 
 export function PreviewInfoDetails() {
   const previewInfoState = useSyncExternalStore(subscribePreviewInfoState, getPreviewInfoState, getPreviewInfoState);
   return (
-    <div id="previewDetails" className="preview-details grid gap-2.5">
+    <div id="previewDetails" className="preview-details grid gap-6">
       {previewInfoState ? <PreviewDetailsPanel key={String(previewInfoState.item.id || "")} {...previewInfoState} /> : null}
     </div>
   );
@@ -112,7 +134,7 @@ export function PreviewInfoDetails() {
 export function PreviewInfoActions() {
   const previewInfoState = useSyncExternalStore(subscribePreviewInfoState, getPreviewInfoState, getPreviewInfoState);
   return (
-    <div id="previewActions" className="preview-info-actions mx-2 border-t border-border pt-3">
+    <div id="previewActions" className="preview-info-actions sticky bottom-0 z-[1] -mx-5 mt-auto border-t border-border bg-card px-5 pb-[calc(16px+env(safe-area-inset-bottom))] pt-4">
       {previewInfoState ? <PreviewActions key={String(previewInfoState.item.id || "")} canEditMetadata={previewInfoState.canEditMetadata} canManageLibrary={previewInfoState.canManageLibrary} item={previewInfoState.item} onToggleTrash={previewInfoState.onToggleTrash} /> : null}
     </div>
   );
@@ -193,14 +215,14 @@ export function PreviewActions({ canEditMetadata = false, canManageLibrary = fal
               ref={menuRef}
               id="previewAdminMenu"
               role="menu"
-              className="absolute bottom-full right-0 z-50 mb-2 min-w-48 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-lg"
+              className="absolute bottom-full right-0 z-50 mb-2 min-w-48 rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-lg"
               onClick={(event) => event.stopPropagation()}
             >
               {canToggleTrash ? (
                 <button
                   type="button"
                   role="menuitem"
-                  className="preview-trash-action relative flex w-full cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm text-destructive outline-hidden select-none hover:bg-destructive/10 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0"
+                  className="preview-trash-action relative flex w-full cursor-default items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-destructive outline-hidden select-none hover:bg-destructive/10 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0"
                   disabled={trashSaving}
                   onClick={() => {
                     void handleToggleTrash();
@@ -243,7 +265,7 @@ function PreviewMetadataSummary({ folders, item }: { folders: readonly EagleFold
   const tags = tagValues(item.tags);
   const categories = categoryValues(item.folders).map((value) => folderLabel(value, folders));
   return (
-    <section className="preview-metadata-summary grid gap-3 pb-3 pt-3 min-[900px]:mx-0">
+    <section className="preview-metadata-summary grid gap-6">
       <MetadataReadOnlyRow icon={<TagIcon aria-hidden="true" />} label="Tags" values={tags} />
       <MetadataReadOnlyRow icon={<FolderIcon aria-hidden="true" />} label="Folders" values={categories} />
     </section>
@@ -348,7 +370,7 @@ function PreviewMetadataEditor({
   };
 
   return (
-    <section className="preview-metadata-summary grid gap-3 pb-3 pt-3 min-[900px]:mx-0" aria-busy={saving}>
+    <section className="preview-metadata-summary grid gap-6" aria-busy={saving}>
       <EditableMetadataRow
         icon={<TagIcon aria-hidden="true" />}
         label="Tags"
@@ -392,9 +414,22 @@ function PreviewMetadataEditor({
 function MetadataReadOnlyRow({ icon, label, values }: { icon: ReactNode; label: string; values: string[] }) {
   return (
     <div className={previewMetadataRowClassName}>
-      <span className={previewMetadataLabelClassName}>{label}</span>
-      {values.length ? <MetadataChipList icon={icon} values={values.map((value) => ({ label: value, value }))} /> : null}
+      <MetadataHeading label={label} count={values.length} />
+      {values.length ? (
+        <MetadataChipList icon={icon} values={values.map((value) => ({ label: value, value }))} />
+      ) : (
+        <p className={previewMetadataEmptyClassName} aria-label={`${label}: none`}>—</p>
+      )}
     </div>
+  );
+}
+
+function MetadataHeading({ count, label }: { count: number; label: string }) {
+  return (
+    <h3 className={previewSectionHeadingClassName}>
+      <span>{label}</span>
+      {count > 0 ? <span className={previewSectionCountClassName}>{count.toLocaleString()}</span> : null}
+    </h3>
   );
 }
 
@@ -429,7 +464,7 @@ function EditableMetadataRow({
 }) {
   return (
     <div className={previewMetadataRowClassName}>
-      <span className={previewMetadataLabelClassName}>{label}</span>
+      <MetadataHeading label={label} count={values.length} />
       <MetadataChipList editable disabled={disabled} icon={icon} values={values} onAdd={onAdd} onRemove={onRemove} addLabel={`Add ${label}`} />
       {inputOpen ? (
         <MetadataInlineInput
@@ -553,7 +588,7 @@ function MetadataInlineInput({
           autoComplete="off"
           disabled={disabled}
         />
-        <Button type="button" variant="ghost" size="icon-xs" className="absolute right-2 top-1/2 size-6 -translate-y-1/2 rounded-md text-muted-foreground hover:text-foreground" title="Close" aria-label="Close" disabled={disabled} onClick={onCloseInput}>
+        <Button type="button" variant="ghost" size="icon-xs" className="absolute right-2 top-1/2 size-6 -translate-y-1/2 rounded-full text-muted-foreground hover:text-foreground" title="Close" aria-label="Close" disabled={disabled} onClick={onCloseInput}>
           <XIcon aria-hidden="true" />
         </Button>
       </label>
@@ -607,15 +642,16 @@ function MetadataChipList({
           {icon}
           <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{item.label}</span>
           {editable ? (
-            <Button className="size-[18px] cursor-pointer rounded-md text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45 [&_svg]:h-[13px] [&_svg]:w-[13px]" variant="ghost" size="icon-xs" type="button" title={`Remove ${item.label}`} aria-label={`Remove ${item.label}`} disabled={disabled} onClick={() => onRemove?.(item.value)}>
+            <Button className="size-[18px] cursor-pointer rounded-full text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45 [&_svg]:h-[13px] [&_svg]:w-[13px]" variant="ghost" size="icon-xs" type="button" title={`Remove ${item.label}`} aria-label={`Remove ${item.label}`} disabled={disabled} onClick={() => onRemove?.(item.value)}>
               <XIcon aria-hidden="true" />
             </Button>
           ) : null}
         </Badge>
       ))}
       {editable ? (
-        <Button type="button" variant="outline" size="icon-sm" className="preview-metadata-add size-[30px] rounded-md" title={addLabel} aria-label={addLabel} disabled={disabled} onClick={onAdd}>
+        <Button type="button" variant="outline" size="sm" className="preview-metadata-add h-7 gap-1 rounded-full border-dashed px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground [&_svg]:size-3.5" title={addLabel} aria-label={addLabel} disabled={disabled} onClick={onAdd}>
           <PlusIcon aria-hidden="true" />
+          <span>Add</span>
         </Button>
       ) : null}
     </div>
