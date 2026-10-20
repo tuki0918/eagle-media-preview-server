@@ -47,6 +47,76 @@ test("generated runtime builds HTTPS access URLs when enabled", () => {
   }), "https://localhost:4443");
 });
 
+test("custom domains are normalized and validated as hostnames", () => {
+  assert.equal(normalizeSettings({}).customDomain, "");
+  assert.equal(normalizeSettings({ customDomain: " Windows-PC.LOCAL " }).customDomain, "windows-pc.local");
+  assert.equal(normalizeSettings({ customDomain: "DESKTOP-ABC123" }).customDomain, "desktop-abc123");
+  assert.equal(normalizeSettings({ customDomain: "メディア.example" }).customDomain, "xn--cckb1i8d.example");
+  for (const customDomain of [
+    "http://dummy.local", "dummy.local:41532", "dummy.local/path", "dummy.local?x=1",
+    "dummy.local#hash", "user@dummy.local", "*.local", "dummy..local", "-dummy.local",
+    "dummy_.local", "dummy.local\\path", "dummy%2elocal", "dummy local",
+    `${"a".repeat(64)}.local`, Array(5).fill("a".repeat(63)).join("."),
+  ]) {
+    assert.throws(() => normalizeSettings({ customDomain }), /Custom hostname must be a hostname/, customDomain);
+  }
+});
+
+test("custom domain access URLs use the configured protocol and port with automatic fallback", () => {
+  const options = { host: "0.0.0.0", port: 41532, lanAddresses: [{ label: "eth0", address: "192.168.1.20" }] };
+  assert.equal(buildAccessUrl({ ...options, customDomain: "DUMMY.local" }), "http://dummy.local:41532");
+  assert.equal(buildAccessUrl({ ...options, customDomain: "media.example.com", httpsEnabled: true, port: 4443 }), "https://media.example.com:4443");
+  assert.equal(buildAccessUrl({ ...options, customDomain: "" }), "http://192.168.1.20:41532");
+  assert.equal(buildAccessUrl({ ...options, customDomain: "", host: "127.0.0.1" }), "http://localhost:41532");
+});
+
+test("settings persist, reject invalid changes, and clear custom domains", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-domain-"));
+  const filePath = join(dir, "settings.json");
+  const store = createSettingsStore({ filePath });
+  await store.save({ customDomain: " DUMMY.LOCAL " });
+  assert.equal((await store.load()).customDomain, "dummy.local");
+  assert.equal(JSON.parse(await readFile(filePath, "utf8")).customDomain, "dummy.local");
+  await assert.rejects(() => store.save({ customDomain: "https://other.local" }), /Custom hostname/);
+  assert.equal((await store.load()).customDomain, "dummy.local");
+  await store.save({ customDomain: "" });
+  assert.equal((await store.load()).customDomain, "");
+});
+
+test("server manager applies domain changes and removal to the listener and displayed URL", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-domain-manager-"));
+  const store = createSettingsStore({ filePath: join(dir, "settings.json") });
+  await store.save({ host: "0.0.0.0" });
+  const calls: unknown[] = [];
+  const manager = createServerManager({
+    settingsStore: store,
+    lanAddressProvider: () => [{ label: "eth0", address: "192.168.1.20" }],
+    viewerServerFactory(options: { customDomain: string; host: string; port: number }) {
+      calls.push(["create", options.customDomain, options.host]);
+      return {
+        async start() {},
+        async stop() { calls.push(["stop", options.customDomain]); },
+        status: () => ({ state: "running", host: options.host, port: options.port }),
+      };
+    },
+  });
+  try {
+    assert.equal((await manager.start()).url, "http://192.168.1.20:41532");
+    const saved = await manager.saveSettings({ customDomain: "dummy.local" });
+    assert.equal(saved.url, "http://dummy.local:41532");
+    assert.equal(saved.state, "running");
+    const cleared = await manager.saveSettings({ customDomain: "" });
+    assert.equal(cleared.url, "http://192.168.1.20:41532");
+    assert.deepEqual(calls, [
+      ["create", "", "0.0.0.0"], ["stop", ""],
+      ["create", "dummy.local", "0.0.0.0"], ["stop", "dummy.local"],
+      ["create", "", "0.0.0.0"],
+    ]);
+  } finally {
+    await manager.stop();
+  }
+});
+
 test("generated settings store uses the product settings directory by default", () => {
   const store = createSettingsStore();
   assert.match(store.filePath, /[\\/]\.eagle-media-preview-server[\\/]settings\.json$/);

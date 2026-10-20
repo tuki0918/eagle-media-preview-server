@@ -46,11 +46,11 @@ function isAuthorized(req: AuthenticatedRequest, auth: AuthContext) {
   return Boolean(authenticatedUser(req, auth));
 }
 
-function isTrustedUnsafeRequest(req: IncomingMessage, requestUrl: URL) {
+function isTrustedUnsafeRequest(req: IncomingMessage, requestUrl: URL, customDomain = "") {
   if (!isUnsafeMethod(req.method)) return true;
   const expectedOrigin = `${requestUrl.protocol}//${requestUrl.host}`;
   const origin = headerValue(req.headers.origin);
-  return Boolean(origin) && origin === expectedOrigin && isTrustedOriginHost(requestUrl.hostname);
+  return Boolean(origin) && origin === expectedOrigin && isTrustedOriginHost(requestUrl.hostname, customDomain);
 }
 
 function isUnsafeMethod(method: string | undefined) {
@@ -61,9 +61,9 @@ function headerValue(value: IncomingHttpHeaders[string]) {
   return Array.isArray(value) ? value[0] : String(value || "");
 }
 
-function isTrustedOriginHost(hostname: string) {
+function isTrustedOriginHost(hostname: string, customDomain: string) {
   const normalized = hostname.toLowerCase();
-  return normalized === "localhost" || isIP(normalized) !== 0;
+  return normalized === "localhost" || isIP(normalized) !== 0 || Boolean(customDomain && normalized === customDomain);
 }
 
 function hasMetadataWriteAccess(req: AuthenticatedRequest, auth: AuthContext) {

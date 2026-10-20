@@ -4,6 +4,7 @@ const { dirname, join } = require("path");
 const { homedir, networkInterfaces } = require("os");
 const { createViewerServer } = require("./viewerServer.cjs");
 const { serverRestartSettingsChanged } = require("./settingsChange.cjs");
+const { normalizeCustomDomain } = require("./customDomain.cjs");
 
 type ServerStatus = "error" | "running" | "stopped";
 type UserRole = "admin" | "editor" | "viewer";
@@ -15,6 +16,7 @@ interface AuthUser {
 }
 
 interface PluginSettings {
+  customDomain: string;
   allowMetadataEditing: boolean;
   authUsers: AuthUser[];
   autoStart: boolean;
@@ -65,6 +67,7 @@ interface ServerManagerOptions {
   lanAddressProvider?: () => LanAddress[];
   settingsStore?: SettingsStore;
   viewerServerFactory?: (settings: {
+    customDomain: string;
     authUsers: AuthUser[];
     host: string;
     httpsCertPath: string;
@@ -83,6 +86,7 @@ interface NetworkEntry {
 }
 
 const DEFAULT_SETTINGS: PluginSettings = {
+  customDomain: "",
   allowMetadataEditing: false,
   authUsers: [],
   autoStart: false,
@@ -199,6 +203,7 @@ function normalizeSettings(input: SettingsInput = {}): PluginSettings {
   const firstAuthUser = authUsers[0];
   const sessionDurationDays = normalizeSessionDurationDays(input.sessionDurationDays);
   return {
+    customDomain: normalizeCustomDomain(input.customDomain),
     autoStart: Boolean(input.autoStart ?? DEFAULT_SETTINGS.autoStart),
     allowMetadataEditing: authEnabled && authUsersCanEditMetadata(authUsers),
     authUsers,
@@ -222,6 +227,7 @@ function normalizeSettings(input: SettingsInput = {}): PluginSettings {
 function canonicalSettings(settings: PluginSettings) {
   return {
     settingsVersion: CURRENT_SETTINGS_VERSION,
+    customDomain: settings.customDomain,
     authUsers: settings.authUsers,
     autoStart: settings.autoStart,
     authEnabled: settings.authEnabled,
@@ -419,13 +425,14 @@ function getLanAddresses() {
   return output;
 }
 
-function buildAccessUrl({ host = "0.0.0.0", httpsEnabled = false, port = 41532, lanAddresses = [] }: {
+function buildAccessUrl({ customDomain = "", host = "0.0.0.0", httpsEnabled = false, port = 41532, lanAddresses = [] }: {
+  customDomain?: string;
   host?: string;
   httpsEnabled?: boolean;
   lanAddresses?: LanAddress[];
   port?: number;
 } = {}) {
-  const address = selectLanAddress({ lanAddresses, host });
+  const address = normalizeCustomDomain(customDomain) || selectLanAddress({ lanAddresses, host });
   return `${httpsEnabled ? "https" : "http"}://${address}:${port}`;
 }
 
@@ -462,6 +469,7 @@ function createServerManager({
       settings: loadedSettings,
       lanAddresses,
       url: buildAccessUrl({
+        customDomain: loadedSettings.customDomain,
         host: loadedSettings.host,
         httpsEnabled: loadedSettings.httpsEnabled,
         port: status.port || loadedSettings.port,
@@ -473,6 +481,7 @@ function createServerManager({
 
   async function createViewer(settings: PluginSettings) {
     return viewerServerFactory({
+      customDomain: settings.customDomain,
       host: settings.host,
       httpsCertPath: settings.httpsCertPath,
       httpsEnabled: settings.httpsEnabled,

@@ -51,6 +51,7 @@ function App() {
   const userPasswordsRef = useRef<Record<string, string>>({});
   const [status, setStatus] = useState<PluginStatus>(() => ({
     settings: {
+      customDomain: "",
       autoStart: false,
       allowMetadataEditing: false,
       authUsers: [],
@@ -150,6 +151,7 @@ function App() {
       return false;
     }
     const payload: Record<string, unknown> = {
+      customDomain: settings.customDomain || "",
       autoStart: settings.autoStart,
       host: nextHost,
       httpsCertPath: settings.httpsCertPath || "",
@@ -431,6 +433,7 @@ function App() {
         settingsTab={settingsTab}
         userPasswords={userPasswordsRef.current}
         onAddAuthUser={addAuthUser}
+        onCustomDomainChange={(value) => updateSettings({ customDomain: value })}
         onHttpsCertPathChange={(value) => updateSettings({ httpsCertPath: value })}
         onHttpsKeyPathChange={(value) => updateSettings({ httpsKeyPath: value })}
         onPortChange={(value) => updateSettings({ port: value })}

@@ -14,6 +14,18 @@ const baseSettings = {
 };
 
 describe("settingsChange", () => {
+  test("persists and restarts for custom domain changes including removal", () => {
+    expect(settingsPayloadChanged(baseSettings, { customDomain: "" })).toBe(false);
+    expect(serverRestartSettingsChanged(baseSettings, { customDomain: "" })).toBe(false);
+    expect(settingsPayloadChanged(baseSettings, { customDomain: "dummy.local" })).toBe(true);
+    expect(serverRestartSettingsChanged(baseSettings, { customDomain: "dummy.local" })).toBe(true);
+    const configured = { ...baseSettings, customDomain: "dummy.local" };
+    expect(settingsPayloadChanged(configured, { customDomain: "" })).toBe(true);
+    expect(serverRestartSettingsChanged(configured, { customDomain: "" })).toBe(true);
+    expect(serverRestartSettingsChanged(configured, { customDomain: "other.local" })).toBe(true);
+    expect(serverRestartSettingsChanged(configured, { customDomain: "dummy.local" })).toBe(false);
+  });
+
   test("treats auto start as a persisted setting that does not restart the server", () => {
     expect(settingsPayloadChanged(baseSettings, { autoStart: true })).toBe(true);
     expect(serverRestartSettingsChanged(baseSettings, { autoStart: true })).toBe(false);

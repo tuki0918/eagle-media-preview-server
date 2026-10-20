@@ -736,6 +736,93 @@ test("createViewerServer rejects unsafe requests from non-localhost hostnames ev
   }
 });
 
+for (const httpsEnabled of [false, true]) {
+  test(`custom domains allow same-origin login and writes over ${httpsEnabled ? "HTTPS" : "HTTP"} only for the configured hostname`, async () => {
+    const calls: unknown[] = [];
+    const tls = httpsEnabled ? await writeTlsFixture("custom-domain") : null;
+    const viewer = createViewerServer({
+      customDomain: " DUMMY.LOCAL ",
+      host: "127.0.0.1",
+      port: 0,
+      httpsEnabled,
+      httpsCertPath: tls?.certPath,
+      httpsKeyPath: tls?.keyPath,
+      authUsers: [{ username: "editor", role: "editor", passwordHash: sha256("secret") }],
+      eagleClient: {
+        async updateItemStar(id: string, star: number) {
+          calls.push({ id, star });
+          return { id, star };
+        },
+      },
+    });
+    await viewer.start();
+    try {
+      const { port } = viewer.status();
+      const protocol = httpsEnabled ? "https" : "http";
+      const endpoint = `${protocol}://127.0.0.1:${port}`;
+      const request = httpsEnabled ? httpsJson : httpJson;
+      const headers = { Host: `dummy.local:${port}`, Origin: `${protocol}://dummy.local:${port}` };
+      const login = await request(`${endpoint}/api/auth/login`, {
+        method: "POST", headers, body: { username: "editor", password: "secret" },
+      });
+      assert.equal(login.status, 200);
+      const cookies = login.headers["set-cookie"];
+      assert.ok(Array.isArray(cookies));
+      const Cookie = cookies.map((cookie) => cookie.split(";")[0]).join("; ");
+      const allowed = await request(`${endpoint}/api/items/ITEM123/star`, {
+        method: "POST", headers: { ...headers, Cookie }, body: { star: 4 },
+      });
+      assert.equal(allowed.status, 200);
+      assert.deepEqual(calls, [{ id: "ITEM123", star: 4 }]);
+
+      for (const deniedHeaders of [
+        { Host: `other.local:${port}`, Origin: `${protocol}://other.local:${port}` },
+        { Host: `sub.dummy.local:${port}`, Origin: `${protocol}://sub.dummy.local:${port}` },
+        { Host: `dummy.local.evil.example:${port}`, Origin: `${protocol}://dummy.local.evil.example:${port}` },
+        { Host: headers.Host, Origin: `${protocol}://other.local:${port}` },
+        { Host: headers.Host, Origin: `${protocol}://dummy.local:${port + 1}` },
+        { Host: headers.Host, Origin: `${httpsEnabled ? "http" : "https"}://dummy.local:${port}` },
+        { Host: headers.Host, Origin: "" },
+        { Host: headers.Host, Origin: "null" },
+      ]) {
+        for (const route of ["/api/auth/login", "/api/items/ITEM123/star"]) {
+          const denied = await request(`${endpoint}${route}`, {
+            method: "POST", headers: { ...deniedHeaders, Cookie },
+            body: { username: "editor", password: "secret", star: 1 },
+          });
+          assert.equal(denied.status, 403);
+          assert.deepEqual(denied.body, { error: "Cross-origin writes are not allowed" });
+        }
+      }
+      assert.equal(calls.length, 1);
+      for (const hostname of ["localhost", "127.0.0.1"]) {
+        const localLogin = await request(`${endpoint}/api/auth/login`, {
+          method: "POST", body: { username: "editor", password: "secret" },
+          headers: { Host: `${hostname}:${port}`, Origin: `${protocol}://${hostname}:${port}` },
+        });
+        assert.equal(localLogin.status, 200);
+      }
+    } finally {
+      await viewer.stop();
+    }
+  });
+}
+
+test("custom domains require explicit configuration for login", async () => {
+  const viewer = createViewerServer({ host: "127.0.0.1", port: 0, viewerPassword: "secret" });
+  await viewer.start();
+  try {
+    const { port } = viewer.status();
+    const denied = await httpJson(`http://127.0.0.1:${port}/api/auth/login`, {
+      method: "POST", body: { username: "eagle", password: "secret" },
+      headers: { Host: `dummy.local:${port}`, Origin: `http://dummy.local:${port}` },
+    });
+    assert.equal(denied.status, 403);
+  } finally {
+    await viewer.stop();
+  }
+});
+
 test("createViewerServer requires Origin for unsafe requests", async () => {
   const calls: unknown[] = [];
   const viewer = createViewerServer({
