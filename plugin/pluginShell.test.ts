@@ -453,6 +453,95 @@ test("plugin port input persists after explicit settings save", async () => {
   assert.match(dom.window.document.body.textContent || "", /Saved/);
 });
 
+test("plugin saves a custom domain and uses the resulting URL for display, QR, copy, and open", async () => {
+  const bundle = await esbuild({
+    bundle: true,
+    define: { "process.env.NODE_ENV": JSON.stringify("test") },
+    entryPoints: [new URL("./app.tsx", import.meta.url).pathname],
+    format: "iife", platform: "browser", write: false,
+  });
+  const dom = new JSDOM('<!doctype html><div id="root"></div>', {
+    runScripts: "outside-only", url: "file:///tmp/eagle-plugin/plugin/index.html",
+  } as unknown as ConstructorParameters<typeof JSDOM>[1]);
+  const pluginWindow = dom.window as unknown as Window & {
+    eval: (source: string) => unknown;
+    require: (id: string) => unknown;
+    eagle: unknown;
+  };
+  const saves: Record<string, unknown>[] = [];
+  const copied: string[] = [];
+  const opened: string[] = [];
+  let status = {
+    settings: { customDomain: "", host: "127.0.0.1", port: 41532 },
+    state: "stopped", url: "http://localhost:41532",
+  };
+  pluginWindow.eagle = {
+    clipboard: { async writeText(url: string) { copied.push(url); } },
+    shell: { async openExternal(url: string) { opened.push(url); } },
+  };
+  pluginWindow.require = (id: string) => id === "path" ? path : {
+    createServerManager: () => ({
+      async init() { return status; },
+      async saveSettings(payload: Record<string, unknown>) {
+        saves.push(payload);
+        status = {
+          ...status,
+          settings: { ...status.settings, ...payload },
+          url: `http://${payload.customDomain || "localhost"}:41532`,
+        };
+        return status;
+      },
+      async start() { status = { ...status, state: "running" }; return status; },
+      async stop() { status = { ...status, state: "stopped" }; return status; },
+    }),
+  };
+  try {
+    pluginWindow.eval(bundle.outputFiles[0].text);
+    const doc = dom.window.document;
+    await waitFor(() => doc.querySelector<HTMLInputElement>('[aria-label="Custom hostname"]')?.disabled === false);
+    const domainInput = doc.querySelector('[aria-label="Custom hostname"]');
+    assert.ok(domainInput instanceof dom.window.HTMLInputElement);
+    const valueSetter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")?.set;
+    valueSetter?.call(domainInput, "dummy.local");
+    domainInput.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+    await waitFor(() => domainInput.getAttribute("value") === "dummy.local");
+    assert.equal(saves.length, 0);
+    doc.querySelector("form")?.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }));
+    await waitFor(() => saves.length === 1 && doc.querySelector<HTMLInputElement>("#accessUrl")?.value === "http://dummy.local:41532");
+    assert.equal(saves[0].customDomain, "dummy.local");
+
+    const powerSwitch = doc.querySelector('label[aria-label="Start or stop server"] input');
+    assert.ok(powerSwitch instanceof dom.window.HTMLInputElement);
+    powerSwitch.click();
+    await waitFor(() => Boolean(doc.querySelector('[aria-label="QR code"] img')));
+    assert.equal(domainInput.disabled, true);
+    const qr = doc.querySelector('[aria-label="QR code"] img');
+    assert.ok(qr instanceof dom.window.HTMLImageElement);
+    const svg = decodeURIComponent(qr.src.split(",")[1]);
+    assert.match(svg, /http:\/\/dummy\.local:41532/);
+    const copyButton = doc.querySelector('[aria-label="Copy endpoint URL"]');
+    assert.ok(copyButton instanceof dom.window.HTMLButtonElement);
+    copyButton.click();
+    const endpoint = doc.querySelector("#accessUrl");
+    assert.ok(endpoint instanceof dom.window.HTMLInputElement);
+    endpoint.click();
+    await waitFor(() => copied.length === 1 && opened.length === 1);
+    assert.deepEqual(copied, ["http://dummy.local:41532"]);
+    assert.deepEqual(opened, ["http://dummy.local:41532"]);
+
+    powerSwitch.click();
+    await waitFor(() => !domainInput.disabled);
+    valueSetter?.call(domainInput, "");
+    domainInput.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+    await waitFor(() => domainInput.getAttribute("value") === "");
+    doc.querySelector("form")?.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }));
+    await waitFor(() => endpoint.value === "http://localhost:41532");
+    assert.equal(saves.at(-1)?.customDomain, "");
+  } finally {
+    dom.window.close();
+  }
+});
+
 test("plugin asks before starting public network without password protection", async () => {
   const bundle = await esbuild({
     bundle: true,
@@ -978,6 +1067,7 @@ test("plugin CommonJS runtime avoids node protocol requires for older Eagle runt
     "connection.cjs",
     "media.cjs",
     "static.cjs",
+    "customDomain.cjs",
   ];
 
   for (const file of files) {

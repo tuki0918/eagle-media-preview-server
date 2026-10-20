@@ -1,4 +1,5 @@
 export interface ServerRestartSettings {
+  customDomain?: unknown;
   authEnabled?: unknown;
   authUsers?: unknown;
   autoStart?: unknown;
@@ -19,6 +20,7 @@ export function settingsPayloadChanged(current: ServerRestartSettings | undefine
 }
 
 export function serverSettingsChanged(current: ServerRestartSettings, nextSettings: SettingsPatch) {
+  if ((nextSettings.customDomain ?? current.customDomain ?? "") !== (current.customDomain ?? "")) return true;
   if ((nextSettings.host ?? current.host) !== current.host) return true;
   if (Boolean(nextSettings.httpsEnabled ?? current.httpsEnabled) !== Boolean(current.httpsEnabled)) return true;
   if ((nextSettings.httpsCertPath ?? current.httpsCertPath ?? "") !== (current.httpsCertPath ?? "")) return true;
@@ -31,6 +33,7 @@ export function serverSettingsChanged(current: ServerRestartSettings, nextSettin
 }
 
 export function serverRestartSettingsChanged(current: ServerRestartSettings, nextSettings: SettingsPatch) {
+  if ((nextSettings.customDomain ?? current.customDomain ?? "") !== (current.customDomain ?? "")) return true;
   const currentAuthEnabled = Boolean(current.authEnabled);
   const nextAuthEnabled = Boolean(nextSettings.authEnabled ?? current.authEnabled);
   if ((nextSettings.host ?? current.host) !== current.host) return true;

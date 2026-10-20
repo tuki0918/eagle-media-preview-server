@@ -18,6 +18,7 @@ interface SettingsFormProps {
   settingsTab: SettingsTab;
   userPasswords: Record<string, string>;
   onAddAuthUser: () => void;
+  onCustomDomainChange: (value: string) => void;
   onHttpsCertPathChange: (value: string) => void;
   onHttpsKeyPathChange: (value: string) => void;
   onPortChange: (value: string) => void;
@@ -52,6 +53,7 @@ export function SettingsForm({
   settingsTab,
   userPasswords,
   onAddAuthUser,
+  onCustomDomainChange,
   onHttpsCertPathChange,
   onHttpsKeyPathChange,
   onPortChange,
@@ -95,6 +97,20 @@ export function SettingsForm({
         </div>
 
         <div id="generalSettingsPanel" role="tabpanel" aria-labelledby="generalSettingsTab" hidden={settingsTab !== "general"}>
+          <SettingRow label="Custom hostname" help="Optional. Used for the endpoint URL and QR code.">
+            <input
+              className={`${settingInputClassName} w-full`}
+              type="text"
+              aria-label="Custom hostname"
+              autoCapitalize="none"
+              autoComplete="off"
+              spellCheck={false}
+              disabled={settingsInputDisabled}
+              placeholder="hostname.local"
+              value={settings.customDomain || ""}
+              onChange={(event) => onCustomDomainChange(event.currentTarget.value)}
+            />
+          </SettingRow>
           <SettingRow label="Port" help={serverRunning ? "Stop the server before changing the port." : "The port the server listens on."}>
             <input
               className={`${settingInputClassName} w-full`}

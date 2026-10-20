@@ -2,6 +2,7 @@ const { readFileSync } = require("fs");
 const { createServer: createHttpServer } = require("http");
 const { createServer: createHttpsServer } = require("https");
 const { randomBytes } = require("crypto");
+const { normalizeCustomDomain } = require("./customDomain.cjs");
 const { EagleRequestError, createEagleClient, normalizeStringArray } = require("./eagleClient.cjs");
 const { buildConnectionCandidates, createConnectionContext } = require("./connection.cjs");
 const { readInternetShortcutUrl, streamItemMedia } = require("./media.cjs");
@@ -31,6 +32,7 @@ import type { IncomingMessage, RequestListener, ServerResponse } from "http";
 import type { Server as NetServer } from "net";
 
 interface ViewerServerOptions {
+  customDomain?: string;
   allowMetadataEditing?: boolean;
   authUsers?: AuthUser[];
   basicAuthUsername?: string;
@@ -168,6 +170,7 @@ class HttpError extends Error {
 }
 
 function createViewerServer({
+  customDomain = "",
   host = "0.0.0.0",
   allowMetadataEditing = false,
   authUsers = [],
@@ -190,6 +193,7 @@ function createViewerServer({
   let lastError = "";
   let requestCount = 0;
   const resolvedAuthUsers = resolveAuthUsers({ allowMetadataEditing, authUsers, basicAuthUsername, passwordHash, viewerPassword });
+  const trustedCustomDomain = normalizeCustomDomain(customDomain);
   const resolvedSessionSecret = String(sessionSecret || "").trim() || randomBytes(32).toString("base64url");
   const authSessions = new Map<string, AuthSession>();
   const revokedAuthSessions = new Set<string>();
@@ -208,7 +212,7 @@ function createViewerServer({
     try {
       const url = new URL(req.url || "/", `${httpsEnabled ? "https" : "http"}://${req.headers.host}`);
       const auth = { authSessions, loginFailures, revokedAuthSessions, secureCookies: httpsEnabled, sessionMaxAgeSeconds, sessionSecret: resolvedSessionSecret, users: resolvedAuthUsers };
-      if (!isTrustedUnsafeRequest(req, url)) {
+      if (!isTrustedUnsafeRequest(req, url, trustedCustomDomain)) {
         sendJson(res, 403, { error: "Cross-origin writes are not allowed" });
         return;
       }

@@ -9,6 +9,7 @@ export interface AuthUser {
 }
 
 export interface PluginSettings {
+  customDomain?: string;
   allowMetadataEditing?: boolean;
   authUsers?: AuthUser[];
   authEnabled?: boolean;

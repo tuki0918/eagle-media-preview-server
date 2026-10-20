@@ -128,6 +128,7 @@ Build output is created under `dist`:
 - `Settings`
   - Collapsible settings panel
   - Port
+  - Custom hostname (optional hostname for access URLs, QR, and trusted same-origin writes)
   - TLS certificate path
   - TLS key path
   - Users
@@ -145,6 +146,7 @@ type Settings = {
     passwordHash: string;
   }>;
   autoStart: boolean;
+  customDomain: string;
   host: string;
   httpsCertPath: string;
   httpsEnabled: boolean;
@@ -158,6 +160,8 @@ type Settings = {
 ```
 
 Legacy settings with `basicAuthUser`, `passwordHash`, and `allowMetadataEditing` are read for migration, converted into `authUsers`, and rewritten with `settingsVersion: 2`.
+
+`customDomain` defaults to an empty string for existing settings. A configured hostname is normalized to lowercase ASCII (including IDN conversion), validated, and persisted. It overrides the hostname in the management panel's endpoint URL and QR; the listener host, protocol, and port remain independently configured. Clearing it restores automatic localhost/LAN IP selection. Changes require a server restart to update the trusted hostname. Unsafe requests require an exact Origin match and either localhost, an IP address, or the configured custom domain; no wildcard or implicit `.local` trust is granted. DNS/mDNS registration and TLS certificate issuance are managed outside the plugin.
 
 Settings path:
 
