@@ -3,7 +3,7 @@
 Media Preview Server is a tool that starts a local preview server for your Eagle library with one click.
 You can preview your media from other devices on the same network.
 
-![](docs/concept.png)
+![](docs/screenshot.png)
 ![](docs/server_panel.png)
 
 ## Features
