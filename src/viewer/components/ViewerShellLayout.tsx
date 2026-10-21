@@ -60,38 +60,45 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
       >
         <AccountSideMenu />
         <SidebarInset className="min-w-0 bg-background">
-          <header className={`sticky top-0 z-10 grid h-14 shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 bg-[color-mix(in_srgb,var(--background)_82%,transparent)] px-3 backdrop-blur-xl transition-transform duration-200 ease-out min-[720px]:h-[72px] min-[720px]:px-5 ${headerHidden ? "-translate-y-full" : "translate-y-0"}`}>
-            <div className="flex min-w-0 items-center">
-              <SidebarTrigger
-                id="accountMenuButton"
-                className="icon-button size-9 rounded-full text-muted-foreground hover:text-foreground"
-                aria-controls="accountSideMenu"
-              />
-            </div>
-            <button
-              type="button"
-              className="flex min-w-0 max-w-[60vw] items-center justify-center gap-2 border-0 bg-transparent p-0 text-inherit focus-visible:shadow-none"
-              title="Scroll to top"
-              onClick={scrollToTop}
-            >
-              <h1 className="m-0 min-w-0 truncate text-[13px] font-semibold uppercase leading-none tracking-[0.08em] text-foreground min-[720px]:text-sm">
-                {folderName}
-              </h1>
-              <span
-                className="shrink-0 rounded-full bg-muted px-2 py-[3px] text-[11px] font-semibold leading-none text-muted-foreground [font-variant-numeric:tabular-nums]"
-                aria-live="polite"
-                aria-label={`${resultsStatus.total.toLocaleString()} ${resultsStatus.total === 1 ? "item" : "items"}`}
-                title={`${resultsStatus.total.toLocaleString()} ${resultsStatus.total === 1 ? "item" : "items"}`}
+          <div className={`sticky top-0 z-10 transition-transform duration-200 ease-out ${headerHidden && !searchState.filtersOpen ? "-translate-y-full" : "translate-y-0"}`}>
+            <header className="grid h-14 shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 bg-[color-mix(in_srgb,var(--background)_82%,transparent)] px-3 backdrop-blur-xl min-[720px]:h-[72px] min-[720px]:px-5">
+              <div className="flex min-w-0 items-center">
+                <SidebarTrigger
+                  id="accountMenuButton"
+                  className="icon-button size-9 rounded-full text-muted-foreground hover:text-foreground"
+                  aria-controls="accountSideMenu"
+                />
+              </div>
+              <button
+                type="button"
+                className="flex min-w-0 max-w-[60vw] items-center justify-center gap-2 border-0 bg-transparent p-0 text-inherit focus-visible:shadow-none"
+                title="Scroll to top"
+                onClick={scrollToTop}
               >
-                {resultsStatus.total.toLocaleString()}
-              </span>
-            </button>
-            <div className="flex min-w-0 items-center justify-end">
-              <SearchFiltersButton filtersOpen={searchState.filtersOpen} />
+                <h1 className="m-0 min-w-0 truncate text-[13px] font-semibold uppercase leading-none tracking-[0.08em] text-foreground min-[720px]:text-sm">
+                  {folderName}
+                </h1>
+                <span
+                  className="shrink-0 rounded-full bg-muted px-2 py-[3px] text-[11px] font-semibold leading-none text-muted-foreground [font-variant-numeric:tabular-nums]"
+                  aria-live="polite"
+                  aria-label={`${resultsStatus.total.toLocaleString()} ${resultsStatus.total === 1 ? "item" : "items"}`}
+                  title={`${resultsStatus.total.toLocaleString()} ${resultsStatus.total === 1 ? "item" : "items"}`}
+                >
+                  {resultsStatus.total.toLocaleString()}
+                </span>
+              </button>
+              <div className="flex min-w-0 items-center justify-end">
+                <SearchFiltersButton filtersOpen={searchState.filtersOpen} />
+              </div>
+            </header>
+            {/* Overlay the filters below the header so opening them never shifts the results. The panel
+                hugs the header and overhangs the content edges by its corner radius, so thumbnails
+                scrolling underneath can't peek through a gap or around the rounded corners. */}
+            <div className="pointer-events-none absolute inset-x-1 top-full min-[720px]:inset-x-2">
+              <SearchControls />
             </div>
-          </header>
+          </div>
           <div className="flex w-full flex-col gap-3 px-2 pb-28 pt-1 min-[720px]:px-6 min-[720px]:pt-2" style={contentStyle}>
-            <SearchControls />
             <ResultSurface />
             <TilesSentinel />
             <Pager />

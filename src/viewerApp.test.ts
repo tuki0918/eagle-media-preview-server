@@ -260,6 +260,32 @@ describe("viewer app data refresh", () => {
     expect(requests.some((url) => url.includes("q=stale+query"))).toBe(false);
   });
 
+  test("closes the filter panel on a pointer down outside it", async () => {
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: vi.fn(async () => jsonResponse({ authenticated: false, required: true })) });
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      '<section class="controls"><select id="extSelect"></select></section><button id="toggleFiltersButton"></button><div id="outside"></div>',
+    );
+
+    const { initViewer } = await import("./viewerApp");
+    const { handleSearchOutsidePointerDown, toggleFilters } = await import("./viewer/shellActions");
+    const { getSearchControlsState } = await import("./viewer/searchControlsState");
+    initViewer();
+
+    await vi.waitFor(() => {
+      toggleFilters();
+      expect(getSearchControlsState().filtersOpen).toBe(true);
+    });
+
+    handleSearchOutsidePointerDown(document.querySelector("#extSelect"));
+    handleSearchOutsidePointerDown(document.querySelector("#toggleFiltersButton"));
+    expect(getSearchControlsState().filtersOpen).toBe(true);
+
+    handleSearchOutsidePointerDown(document.querySelector("#outside"));
+    expect(getSearchControlsState().filtersOpen).toBe(false);
+    expect(new URLSearchParams(window.location.search).get("filters")).toBeNull();
+  });
+
   test("cancels a pending search as soon as logout starts", async () => {
     const requests: string[] = [];
     let resolveLogout: ((response: Response) => void) | undefined;

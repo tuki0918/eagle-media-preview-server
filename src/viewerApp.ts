@@ -147,8 +147,14 @@ async function init() {
       }
     },
     searchOutsidePointerDown: (target) => {
-      if ((target as Element | null)?.closest(".search-box")) return;
+      const element = target as Element | null;
+      if (element?.closest(".search-box")) return;
       hideTagSuggestions();
+      // The toggle button handles its own click, so closing here would just reopen the panel.
+      if (!state.filtersOpen || element?.closest(".controls, #toggleFiltersButton")) return;
+      state.filtersOpen = false;
+      syncAdvancedFiltersUi();
+      syncUrlState();
     },
     folderChanged: (folderId: string) => {
       applyFilterChange({ folderId, smartFolderId: "" });

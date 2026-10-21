@@ -68,7 +68,11 @@ export function SearchControls({
   }, []);
 
   return (
-    <section className="controls mb-4 grid w-full gap-3 rounded-2xl border border-border bg-popover p-3 text-popover-foreground shadow-[0_12px_32px_-18px_rgba(15,23,42,0.25)]" aria-label="Search and filters" hidden={!displayFiltersOpen}>
+    <section
+      className="controls pointer-events-auto grid w-full gap-3 rounded-lg border border-border bg-[color-mix(in_srgb,var(--popover)_80%,transparent)] p-3 text-popover-foreground shadow-[0_18px_48px_-16px_rgba(15,23,42,0.35)] backdrop-blur-xl backdrop-saturate-150 min-[720px]:rounded-2xl"
+      aria-label="Search and filters"
+      hidden={!displayFiltersOpen}
+    >
       <div className="search-row grid items-stretch gap-3 max-[540px]:gap-2">
         <InputGroup className="search-box min-h-[46px] rounded-xl transition-colors hover:bg-muted/20 max-[540px]:min-h-11">
           <SearchInput value={displaySearchQuery} />
