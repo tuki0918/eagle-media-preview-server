@@ -7,6 +7,19 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-21
+
+### Added
+
+- Added an All Tags page, opened from the sidebar, that lists tags with thumbnails: starred tags first, then each tag group, then ungrouped tags.
+- Tag sections can be collapsed, and the collapsed sections are remembered.
+- Selecting a tag opens the items with that tag.
+
+### Changed
+
+- The search and filter panel now overlays the results and closes when clicking outside it.
+- Adjusted the preview dialog layout for touch and desktop devices.
+
 ## [0.4.0] - 2026-10-20
 
 ### Added
@@ -195,7 +208,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 - Initial release of Eagle Media Preview Server.
 
-[Unreleased]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.3.7...v0.4.0
 [0.3.7]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/tuki0918/eagle-media-preview-server/compare/cdcbd86...v0.3.6
