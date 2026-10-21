@@ -129,6 +129,8 @@ interface EagleClient {
   searchItems(options: { limit?: string | number; offset?: string | number; query: string }): Promise<unknown>;
   smartFolderItems(options: { limit?: string | number; offset?: string | number; smartFolderId: string }): Promise<unknown>;
   smartFolders(): Promise<unknown>;
+  tagCoverItem(tag: string): Promise<unknown>;
+  tagOverview(): Promise<{ groups: unknown[]; starred: unknown[]; tags: unknown[] }>;
   switchLibrary(libraryPath: string): Promise<unknown>;
   updateItemMetadata(id: string, input: { folders?: unknown; tags?: unknown }): Promise<EagleItem>;
   updateItemStar(id: string, star: unknown): Promise<EagleItem>;
@@ -490,6 +492,29 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
     const limit = url.searchParams.get("limit") || 20;
     const result = await session.client.listTags({ query, limit });
     sendJson(res, 200, result);
+    return;
+  }
+
+  if (url.pathname === "/api/tag-overview") {
+    if (req.method !== "GET") {
+      sendMethodNotAllowed(res, ["GET"]);
+      return;
+    }
+    sendJson(res, 200, await session.client.tagOverview());
+    return;
+  }
+
+  if (url.pathname === "/api/tag-cover") {
+    if (req.method !== "GET") {
+      sendMethodNotAllowed(res, ["GET"]);
+      return;
+    }
+    const tag = url.searchParams.get("tag")?.trim();
+    if (!tag) {
+      sendJson(res, 400, { error: "tag is required" });
+      return;
+    }
+    sendJson(res, 200, { item: await session.client.tagCoverItem(tag) });
     return;
   }
 

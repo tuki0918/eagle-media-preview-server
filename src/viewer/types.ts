@@ -33,6 +33,8 @@ export interface EagleItem {
 
 export type ViewerMode = "grid" | "tiles" | "list";
 
+export type ViewerSection = "items" | "tags";
+
 export interface PreviewTransform {
   scale: number;
   x: number;
@@ -125,6 +127,7 @@ export interface ViewerState {
   tagSuggestionsRequestId: number;
   folderId: string;
   smartFolderId: string;
+  section: ViewerSection;
   ext: string;
   rating: string;
   filtersOpen: boolean;

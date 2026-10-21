@@ -2484,6 +2484,48 @@ test("createViewerServer serves cached item types for the current library", asyn
   }
 });
 
+test("createViewerServer serves the tag overview and tag covers", async () => {
+  const coverTags: string[] = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    viewerPassword: "",
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/tmp/Test.library", name: "Test Library" };
+      },
+      async tagOverview() {
+        return { tags: [{ name: "tree", imageCount: 1 }], groups: [], starred: [] };
+      },
+      async tagCoverItem(tag: string) {
+        coverTags.push(tag);
+        return { id: "item-1", ext: "jpg" };
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const { port } = viewer.status();
+    const overview = await fetch(`http://127.0.0.1:${port}/api/tag-overview`);
+    assert.equal(overview.status, 200);
+    assert.deepEqual(await overview.json(), { tags: [{ name: "tree", imageCount: 1 }], groups: [], starred: [] });
+
+    const cover = await fetch(`http://127.0.0.1:${port}/api/tag-cover?tag=${encodeURIComponent(" tree ")}`);
+    assert.equal(cover.status, 200);
+    assert.deepEqual(await cover.json(), { item: { id: "item-1", ext: "jpg" } });
+    assert.deepEqual(coverTags, ["tree"]);
+
+    const missing = await fetch(`http://127.0.0.1:${port}/api/tag-cover`);
+    assert.equal(missing.status, 400);
+  } finally {
+    await viewer.stop();
+  }
+});
+
 test("createViewerServer serves tag autocomplete suggestions", async () => {
   const calls: TagListOptions[] = [];
   const viewer = createViewerServer({

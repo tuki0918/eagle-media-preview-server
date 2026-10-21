@@ -45,6 +45,8 @@ import { MEDIA_TYPE_OPTIONS, PAGE_SIZE_OPTIONS, RATING_OPTIONS } from "./shellCo
 import { setLoginConnectState } from "./loginConnectState";
 import { setLibraryFooterName } from "./libraryFooterState";
 import { setSearchControlsState } from "./searchControlsState";
+import { setTagListState } from "./tagListState";
+import { TagList } from "./components/TagList";
 import { getThemeState, initializeThemeState, setThemePreference } from "./themeState";
 import { safeExternalUrl } from "./components/PreviewBody";
 
@@ -440,6 +442,8 @@ describe("ViewerAppShell", () => {
     expect(html).toContain("Untagged");
     expect(html.indexOf("Uncategorized")).toBeLessThan(html.indexOf("Untagged"));
     expect(html.indexOf("Untagged")).toBeLessThan(smartFoldersIndex);
+    expect(html.indexOf("Untagged")).toBeLessThan(html.indexOf("All Tags"));
+    expect(html.indexOf("All Tags")).toBeLessThan(smartFoldersIndex);
     const accountMenuDocument = new JSDOM(html, { url: "http://localhost" }).window.document;
     const folderShortcuts = accountMenuDocument.querySelector('[aria-label="Folder shortcuts"]');
     expect(folderShortcuts?.querySelector(".sidebar-tree-depth-0")).toBeNull();
@@ -2030,5 +2034,115 @@ describe("ViewerAppShell", () => {
     expect(disabled).toContain("disabled");
     expect(saving).toContain('aria-label="Saving rating"');
     expect(saving).toContain('title="Saving rating"');
+  });
+});
+
+describe("tag list", () => {
+  test("renders starred tags above grouped and ungrouped tags", () => {
+    setTagListState({
+      error: "",
+      status: "ready",
+      overview: {
+        tags: [
+          { name: "tree", imageCount: 1 },
+          { name: "vtuber", imageCount: 3 },
+          { name: "@work: xxx", imageCount: 0 },
+        ],
+        groups: [{ id: "g1", name: "Nature", tags: ["tree"] }],
+        starred: [{ name: "@work: xxx" }],
+      },
+    });
+
+    const html = renderToStaticMarkup(<TagList />);
+
+    expect(html).toContain('placeholder="Search tags"');
+    expect(html.indexOf("Starred Tags")).toBeLessThan(html.indexOf("Nature"));
+    expect(html.indexOf("Nature")).toBeLessThan(html.indexOf("Ungrouped"));
+    expect(html.indexOf("@work: xxx")).toBeLessThan(html.indexOf("tree"));
+    expect(html.indexOf("tree")).toBeLessThan(html.indexOf("vtuber"));
+    expect(html).toContain("3 items");
+    expect(html).toContain("1 item<");
+    expect(html.match(/aria-label="Starred"/g)).toHaveLength(1);
+  });
+
+  test("shows load errors and empty libraries", () => {
+    setTagListState({ error: "Eagle is offline", overview: null, status: "error" });
+    expect(renderToStaticMarkup(<TagList />)).toContain("Eagle is offline");
+
+    setTagListState({ error: "", overview: { tags: [], groups: [], starred: [] }, status: "ready" });
+    expect(renderToStaticMarkup(<TagList />)).toContain("No tags yet");
+  });
+
+  test("collapses tag sections and remembers the choice", async () => {
+    const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
+    const testGlobal = globalThis as typeof globalThis & {
+      IS_REACT_ACT_ENVIRONMENT?: boolean;
+    };
+    const previousWindow = globalThis.window;
+    const previousDocument = globalThis.document;
+    const previousNode = globalThis.Node;
+    const previousHTMLElement = globalThis.HTMLElement;
+    const previousIS_REACT_ACT_ENVIRONMENT = testGlobal.IS_REACT_ACT_ENVIRONMENT;
+    globalThis.window = dom.window;
+    globalThis.document = dom.window.document;
+    globalThis.Node = dom.window.Node;
+    globalThis.HTMLElement = dom.window.HTMLElement;
+    testGlobal.IS_REACT_ACT_ENVIRONMENT = true;
+    dom.window.localStorage.setItem("eagleTagSectionsCollapsed", JSON.stringify(["ungrouped"]));
+    setTagListState({
+      error: "",
+      status: "ready",
+      overview: {
+        tags: [{ name: "tree", imageCount: 1 }, { name: "vtuber", imageCount: 3 }],
+        groups: [{ id: "g1", name: "Nature", tags: ["tree"] }],
+        starred: [],
+      },
+    });
+
+    const { createRoot } = await import("react-dom/client");
+    let root: import("react-dom/client").Root | null = null;
+    try {
+      const container = dom.window.document.querySelector("#root");
+      if (!(container instanceof dom.window.HTMLElement)) throw new Error("Missing test root");
+      root = createRoot(container);
+
+      await act(async () => {
+        root?.render(<TagList />);
+      });
+
+      expect(container.textContent).toContain("tree");
+      expect(container.textContent).not.toContain("vtuber");
+      expect(container.querySelector('[aria-label="Expand Ungrouped"]')?.getAttribute("aria-expanded")).toBe("false");
+
+      const natureToggle = container.querySelector('[aria-label="Collapse Nature"]');
+      if (!(natureToggle instanceof dom.window.HTMLButtonElement)) throw new Error("Missing Nature toggle");
+      await act(async () => {
+        natureToggle.click();
+      });
+
+      expect(container.textContent).not.toContain("tree");
+      expect(container.textContent).toContain("Nature1");
+      expect(JSON.parse(dom.window.localStorage.getItem("eagleTagSectionsCollapsed") || "[]")).toEqual(["ungrouped", "group:g1"]);
+
+      const ungroupedToggle = container.querySelector('[aria-label="Expand Ungrouped"]');
+      if (!(ungroupedToggle instanceof dom.window.HTMLButtonElement)) throw new Error("Missing Ungrouped toggle");
+      await act(async () => {
+        ungroupedToggle.click();
+      });
+
+      expect(container.textContent).toContain("vtuber");
+      expect(JSON.parse(dom.window.localStorage.getItem("eagleTagSectionsCollapsed") || "[]")).toEqual(["group:g1"]);
+    } finally {
+      if (root) {
+        await act(async () => {
+          root?.unmount();
+        });
+      }
+      globalThis.window = previousWindow;
+      globalThis.document = previousDocument;
+      globalThis.Node = previousNode;
+      globalThis.HTMLElement = previousHTMLElement;
+      testGlobal.IS_REACT_ACT_ENVIRONMENT = previousIS_REACT_ACT_ENVIRONMENT;
+    }
   });
 });

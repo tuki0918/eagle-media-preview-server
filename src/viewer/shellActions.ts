@@ -10,6 +10,7 @@ export interface ViewerShellActions {
   searchOutsidePointerDown: (target: EventTarget | null) => void;
   folderChanged: (folderId: string) => void;
   smartFolderChanged: (smartFolderId: string) => void;
+  tagsOpened: () => void;
   mediaTypeChanged: (mediaType: string) => void;
   ratingChanged: (rating: string) => void;
   pageSizeChanged: (pageSize: number) => void;
@@ -38,6 +39,7 @@ let actions: ViewerShellActions = {
   searchOutsidePointerDown: noop,
   folderChanged: noop,
   smartFolderChanged: noop,
+  tagsOpened: noop,
   mediaTypeChanged: noop,
   ratingChanged: noop,
   pageSizeChanged: noop,
@@ -99,6 +101,10 @@ export function changeFolder(event: { currentTarget: { value: string } }) {
 
 export function changeSmartFolder(event: { currentTarget: { value: string } }) {
   actions.smartFolderChanged(event.currentTarget.value);
+}
+
+export function openTags() {
+  actions.tagsOpened();
 }
 
 export function changeMediaType(event: { currentTarget: { value: string } }) {

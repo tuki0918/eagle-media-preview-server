@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useState, useSyncExternalStore, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { SIDEBAR_OPEN_STORAGE_KEY, UNCATEGORIZED_FOLDER_ID, UNTAGGED_FOLDER_ID } from "../constants";
 import { getLibraryName, subscribeLibraryName } from "../libraryNameState";
 import { getResultsStatusState, subscribeResultsStatusState } from "../resultsStatusState";
 import { getSearchControlsState, subscribeSearchControlsState } from "../searchControlsState";
+import { getTagListState, subscribeTagListState } from "../tagListState";
+import { buildTagSections } from "../tagOverview";
 import { getZoomLevel, gridColumnWidth, subscribeZoomLevel, tileRowHeight } from "../zoomState";
 import { AccountSideMenu } from "./AccountSideMenu";
 import { CardTemplate } from "./CardTemplate";
@@ -11,6 +13,7 @@ import { Pager } from "./Pager";
 import { PreviewDialog } from "./PreviewDialog";
 import { ResultSurface } from "./ResultSurface";
 import { SearchControls, SearchFiltersButton } from "./SearchControls";
+import { TagList } from "./TagList";
 import { TilesSentinel } from "./TilesSentinel";
 import { ViewerDock } from "./ViewerDock";
 
@@ -36,7 +39,14 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
   } as CSSProperties;
   const libraryName = useSyncExternalStore(subscribeLibraryName, getLibraryName, getLibraryName);
   const headerHidden = useHeaderHiddenOnScroll();
-  const folderName = selectedFolderName(
+  const tagListState = useSyncExternalStore(subscribeTagListState, getTagListState, getTagListState);
+  const showingTags = searchState.section === "tags";
+  const tagTotal = useMemo(() => buildTagSections(tagListState.overview).total, [tagListState.overview]);
+  const headerCount = showingTags ? tagTotal : resultsStatus.total;
+  const headerCountLabel = showingTags
+    ? `${headerCount.toLocaleString()} ${headerCount === 1 ? "tag" : "tags"}`
+    : `${headerCount.toLocaleString()} ${headerCount === 1 ? "item" : "items"}`;
+  const folderName = showingTags ? "All Tags" : selectedFolderName(
     searchState.selectedFolderId,
     searchState.folders,
     searchState.selectedSmartFolderId,
@@ -81,29 +91,37 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
                 <span
                   className="shrink-0 rounded-full bg-muted px-2 py-[3px] text-[11px] font-semibold leading-none text-muted-foreground [font-variant-numeric:tabular-nums]"
                   aria-live="polite"
-                  aria-label={`${resultsStatus.total.toLocaleString()} ${resultsStatus.total === 1 ? "item" : "items"}`}
-                  title={`${resultsStatus.total.toLocaleString()} ${resultsStatus.total === 1 ? "item" : "items"}`}
+                  aria-label={headerCountLabel}
+                  title={headerCountLabel}
                 >
-                  {resultsStatus.total.toLocaleString()}
+                  {headerCount.toLocaleString()}
                 </span>
               </button>
               <div className="flex min-w-0 items-center justify-end">
-                <SearchFiltersButton filtersOpen={searchState.filtersOpen} />
+                {showingTags ? null : <SearchFiltersButton filtersOpen={searchState.filtersOpen} />}
               </div>
             </header>
             {/* Overlay the filters below the header so opening them never shifts the results. The panel
                 hugs the header and overhangs the content edges by its corner radius, so thumbnails
                 scrolling underneath can't peek through a gap or around the rounded corners. */}
-            <div className="pointer-events-none absolute inset-x-1 top-full min-[720px]:inset-x-2">
-              <SearchControls />
+            {showingTags ? null : (
+              <div className="pointer-events-none absolute inset-x-1 top-full min-[720px]:inset-x-2">
+                <SearchControls />
+              </div>
+            )}
+          </div>
+          {showingTags ? (
+            <div className="flex w-full flex-col gap-3 px-3 pb-16 pt-1 min-[720px]:px-6 min-[720px]:pt-2">
+              <TagList />
             </div>
-          </div>
-          <div className="flex w-full flex-col gap-3 px-2 pb-28 pt-1 min-[720px]:px-6 min-[720px]:pt-2" style={contentStyle}>
-            <ResultSurface />
-            <TilesSentinel />
-            <Pager />
-          </div>
-          <ViewerDock />
+          ) : (
+            <div className="flex w-full flex-col gap-3 px-2 pb-28 pt-1 min-[720px]:px-6 min-[720px]:pt-2" style={contentStyle}>
+              <ResultSurface />
+              <TilesSentinel />
+              <Pager />
+            </div>
+          )}
+          {showingTags ? null : <ViewerDock />}
         </SidebarInset>
       </SidebarProvider>
       <PreviewDialog />

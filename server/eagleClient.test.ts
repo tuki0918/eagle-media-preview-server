@@ -241,6 +241,62 @@ test("listTags uses V2 tag/get with a bounded name query", async () => {
   assert.equal(calls[0].init.method, "GET");
 });
 
+test("tagOverview pages through tags, tag groups, and starred tags", async () => {
+  const calls: RequestCall[] = [];
+  const client = createEagleClient({
+    baseUrl: "http://localhost:41595",
+    fetchImpl: async (url: string, init: { method?: string; body: string }) => {
+      calls.push({ url, init });
+      const { pathname, searchParams } = new URL(url);
+      const offset = Number(searchParams.get("offset"));
+      if (pathname === "/api/v2/tag/get") {
+        const data = offset === 0
+          ? Array.from({ length: 1000 }, (_, index) => ({ name: `tag-${index}`, imageCount: 1 }))
+          : [{ name: "last", imageCount: 2 }];
+        return jsonResponse({ status: "success", data: { data, total: 1001, offset, limit: 1000 } });
+      }
+      if (pathname === "/api/v2/tagGroup/get") {
+        return jsonResponse({ status: "success", data: { data: [{ id: "g1", name: "Group", tags: ["last"] }], total: 1, offset, limit: 1000 } });
+      }
+      return jsonResponse({ status: "success", data: { data: [{ name: "last", imageCount: 2 }], total: 1, offset, limit: 1000 } });
+    },
+  });
+
+  const result = await client.tagOverview();
+
+  assert.equal(result.tags.length, 1001);
+  assert.deepEqual(result.tags.at(-1), { name: "last", imageCount: 2 });
+  assert.deepEqual(result.groups, [{ id: "g1", name: "Group", tags: ["last"] }]);
+  assert.deepEqual(result.starred, [{ name: "last", imageCount: 2 }]);
+  assert.deepEqual(calls.map((call) => call.url).sort(), [
+    "http://localhost:41595/api/v2/tag/get?offset=0&limit=1000",
+    "http://localhost:41595/api/v2/tag/get?offset=1000&limit=1000",
+    "http://localhost:41595/api/v2/tag/getStarredTags?offset=0&limit=1000",
+    "http://localhost:41595/api/v2/tagGroup/get?offset=0&limit=1000",
+  ]);
+});
+
+test("tagCoverItem fetches the first item for a tag with minimal fields", async () => {
+  const calls: RequestCall[] = [];
+  const client = createEagleClient({
+    baseUrl: "http://localhost:41595",
+    fetchImpl: async (url: string, init: { method?: string; body: string }) => {
+      calls.push({ url, init });
+      return jsonResponse({ status: "success", data: { data: [{ id: "item-1", ext: "png" }], total: 4, offset: 0, limit: 1 } });
+    },
+  });
+
+  assert.deepEqual(await client.tagCoverItem(" tree "), { id: "item-1", ext: "png" });
+  assert.equal(calls[0].url, "http://localhost:41595/api/v2/item/get");
+  assert.deepEqual(JSON.parse(calls[0].init.body), {
+    tags: ["tree"],
+    offset: 0,
+    limit: 1,
+    fields: ["id", "name", "ext", "noThumbnail"],
+  });
+  await assert.rejects(client.tagCoverItem(" "), /tag is required/);
+});
+
 test("smartFolders lists V2 smart folders", async () => {
   const calls: RequestCall[] = [];
   const client = createEagleClient({

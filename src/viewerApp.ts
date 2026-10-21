@@ -1,3 +1,6 @@
+import { clearTagCovers } from "./viewer/tagCovers";
+import { setTagListState } from "./viewer/tagListState";
+import type { TagOverviewResponse } from "./viewer/tagOverview";
 import {
   DEFAULT_EAGLE_CONNECTION,
   EAGLE_UNAVAILABLE_LABEL,
@@ -162,6 +165,7 @@ async function init() {
     smartFolderChanged: (smartFolderId: string) => {
       applyFilterChange({ folderId: "", smartFolderId });
     },
+    tagsOpened: openTagList,
     mediaTypeChanged: (ext: string) => {
       applyFilterChange({ ext });
     },
@@ -395,6 +399,7 @@ function showViewer(data: ConnectResponse) {
   setLibraryName(data.library?.name || "");
   document.title = libraryTitle(data);
   resetViewerResults();
+  resetTagList();
   renderSearchControlButtons();
   applyControlsFromState();
   updateStatus();
@@ -502,6 +507,10 @@ async function loadSmartFolders() {
 }
 
 async function loadItems({ append = false }: LoadItemsOptions = {}) {
+  if (state.section === "tags") {
+    await Promise.all([loadTagOverview(), loadAllFoldersTotal()]);
+    return;
+  }
   const requestId = ++state.requestId;
   if (append) {
     state.tilesLoadingMore = true;
@@ -564,7 +573,7 @@ async function loadItems({ append = false }: LoadItemsOptions = {}) {
 }
 
 async function loadAllFoldersTotal() {
-  if (allFoldersTotal > 0 || !hasActiveFilters(state)) return;
+  if (allFoldersTotal > 0 || (!hasActiveFilters(state) && state.section !== "tags")) return;
   const requestId = ++allFoldersTotalRequestId;
   try {
     const params = new URLSearchParams({ offset: "0", limit: "1" });
@@ -716,7 +725,7 @@ function applyControlsFromState() {
 }
 
 function applyFilterChange(patch: Partial<Pick<typeof state, "query" | "tags" | "folderId" | "smartFolderId" | "ext" | "rating" | "limit">>) {
-  Object.assign(state, patch, { offset: 0 });
+  Object.assign(state, patch, { offset: 0, section: "items" });
   resetPreviewState();
   syncResetFiltersButton();
   syncUrlState();
@@ -812,6 +821,7 @@ function renderSearchControlButtons() {
     hasActiveFilters: hasActiveFilters(state),
     hasResettableFilters: hasResettableFilters(state),
     searchQuery: state.query,
+    section: state.section,
     selectedExt: state.ext,
     selectedFolderId: state.folderId,
     selectedLimit: state.limit,
@@ -1141,6 +1151,50 @@ function renderEmptyState() {
     onClearFilters: resetFilters,
     viewMode: state.viewMode,
   });
+}
+
+function openTagList() {
+  changeSearch.cancel();
+  hideTagSuggestions();
+  state.requestId += 1;
+  Object.assign(state, resetFilterState(), { section: "tags", filtersOpen: false });
+  resetPreviewState();
+  resetTileAutoLoading();
+  renderTagChips();
+  renderSearchControlButtons();
+  syncUrlState();
+  void loadTagOverview();
+}
+
+function selectTagFromList(tag: string) {
+  applyFilterChange({ query: "", tags: [tag], folderId: "", smartFolderId: "" });
+  renderTagChips();
+  renderSearchControlButtons();
+  window.scrollTo({ top: 0 });
+}
+
+let tagOverviewRequestId = 0;
+
+async function loadTagOverview() {
+  const requestId = ++tagOverviewRequestId;
+  renderSearchControlButtons();
+  setTagListState({ error: "", onSelectTag: selectTagFromList, status: "loading" });
+  try {
+    const overview = await getJson<TagOverviewResponse>("/api/tag-overview");
+    if (requestId !== tagOverviewRequestId) return;
+    clearTagCovers();
+    setTagListState({ overview, status: "ready" });
+  } catch (error) {
+    if (requestId !== tagOverviewRequestId) return;
+    if (handleAuthError(error)) return;
+    setTagListState({ error: errorMessage(error), status: "error" });
+  }
+}
+
+function resetTagList() {
+  tagOverviewRequestId += 1;
+  clearTagCovers();
+  setTagListState({ error: "", overview: null, status: "idle" });
 }
 
 function resetFilters() {

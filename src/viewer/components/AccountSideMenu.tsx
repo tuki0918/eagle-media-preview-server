@@ -12,6 +12,7 @@ import {
   RouterIcon,
   SunIcon,
   TagIcon,
+  TagsIcon,
   UserRoundIcon,
 } from "lucide-react";
 import { Fragment, useEffect, useRef, useState, useSyncExternalStore } from "react";
@@ -36,7 +37,7 @@ import { displayFolderCount } from "../format";
 import { getLibraryFooterName, subscribeLibraryFooterName } from "../libraryFooterState";
 import { getLoginConnectState, subscribeLoginConnectState } from "../loginConnectState";
 import { getSearchControlsState, subscribeSearchControlsState } from "../searchControlsState";
-import { changeFolder, changeSmartFolder, submitLogout } from "../shellActions";
+import { changeFolder, changeSmartFolder, openTags, submitLogout } from "../shellActions";
 import { getThemeState, setThemePreference, subscribeThemeState, type ThemePreference } from "../themeState";
 import type { EagleFolder, EagleSmartFolder } from "../types";
 
@@ -102,6 +103,7 @@ export function AccountSideMenu() {
               allFoldersTotal={searchState.allFoldersTotal}
               selectedFolderId={searchState.selectedFolderId}
               selectedSmartFolderId={searchState.selectedSmartFolderId}
+              showingTags={searchState.section === "tags"}
             />
             <SmartFolderSideNav
               selectedSmartFolderId={searchState.selectedSmartFolderId}
@@ -156,10 +158,12 @@ function FolderShortcutSideNav({
   allFoldersTotal,
   selectedFolderId,
   selectedSmartFolderId,
+  showingTags = false,
 }: {
   allFoldersTotal: number;
   selectedFolderId: string;
   selectedSmartFolderId: string;
+  showingTags?: boolean;
 }) {
   const { isMobile, setOpenMobile } = useSidebar();
 
@@ -168,12 +172,17 @@ function FolderShortcutSideNav({
     if (isMobile) setOpenMobile(false);
   };
 
+  const selectTags = () => {
+    openTags();
+    if (isMobile) setOpenMobile(false);
+  };
+
   return (
     <SidebarGroup className="shrink-0 px-3 pb-2 pt-2">
       <SidebarGroupContent>
         <SidebarMenu className="gap-1" aria-label="Folder shortcuts">
           <FolderNavItem
-            active={!selectedFolderId && !selectedSmartFolderId}
+            active={!showingTags && !selectedFolderId && !selectedSmartFolderId}
             count={allFoldersTotal}
             depth={0}
             icon="open"
@@ -196,6 +205,14 @@ function FolderShortcutSideNav({
             label="Untagged"
             treeLayout={false}
             onSelect={() => selectFolder(UNTAGGED_FOLDER_ID)}
+          />
+          <FolderNavItem
+            active={showingTags}
+            depth={0}
+            icon="tags"
+            label="All Tags"
+            treeLayout={false}
+            onSelect={selectTags}
           />
         </SidebarMenu>
       </SidebarGroupContent>
@@ -377,7 +394,7 @@ function isSmartFolderGroup(folder: EagleSmartFolder) {
   return folder.icon === "grid";
 }
 
-type FolderNavIconName = "folder" | "inbox" | "open" | "smart" | "smartGroup" | "tag";
+type FolderNavIconName = "folder" | "inbox" | "open" | "smart" | "smartGroup" | "tag" | "tags";
 
 function FolderTreeNavItems({
   expandedIds,
@@ -660,6 +677,7 @@ function folderNavIcon(icon: FolderNavIconName) {
   if (icon === "smart") return FolderCogIcon;
   if (icon === "smartGroup") return LayoutGridIcon;
   if (icon === "tag") return TagIcon;
+  if (icon === "tags") return TagsIcon;
   return FolderIcon;
 }
 

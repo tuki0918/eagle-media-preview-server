@@ -11,6 +11,7 @@ export const state: ViewerState = {
   tagSuggestionsRequestId: 0,
   folderId: "",
   smartFolderId: "",
+  section: "items",
   ext: "",
   rating: "",
   filtersOpen: false,

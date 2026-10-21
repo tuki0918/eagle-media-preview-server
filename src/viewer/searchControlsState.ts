@@ -1,4 +1,4 @@
-import type { EagleFolder, EagleSmartFolder } from "./types";
+import type { EagleFolder, EagleSmartFolder, ViewerSection } from "./types";
 
 export interface SearchControlsState {
   allFoldersTotal: number;
@@ -9,6 +9,7 @@ export interface SearchControlsState {
   hasActiveFilters: boolean;
   hasResettableFilters: boolean;
   searchQuery: string;
+  section?: ViewerSection;
   selectedExt: string;
   selectedFolderId: string;
   selectedLimit: number;
@@ -25,6 +26,7 @@ let currentSearchControls: SearchControlsState = {
   hasActiveFilters: false,
   hasResettableFilters: false,
   searchQuery: "",
+  section: "items",
   selectedExt: "",
   selectedFolderId: "",
   selectedLimit: 30,

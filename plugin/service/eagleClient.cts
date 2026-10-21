@@ -106,6 +106,9 @@ const MAX_ERROR_BODY_LENGTH = 240;
 const MAX_SMART_FOLDER_ITEMS_PAGE_SIZE = 1000;
 const EXTENSION_SCAN_PAGE_SIZE = 1000;
 const MAX_EXTENSION_SCAN_ITEMS = 200_000;
+const TAG_OVERVIEW_PAGE_SIZE = 1000;
+const MAX_TAG_OVERVIEW_ITEMS = 50_000;
+const TAG_COVER_FIELDS = ["id", "name", "ext", "noThumbnail"];
 const DEFAULT_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 
@@ -264,6 +267,18 @@ function createEagleClient({
     }
 
     return parsed.payload;
+  }
+
+  async function allPages(pathname: string) {
+    const items: unknown[] = [];
+    for (let offset = 0; offset < MAX_TAG_OVERVIEW_ITEMS; offset += TAG_OVERVIEW_PAGE_SIZE) {
+      const page = normalizePaginatedResponse(
+        await request(pathname, { searchParams: { offset, limit: TAG_OVERVIEW_PAGE_SIZE } }),
+      );
+      items.push(...page.items);
+      if (page.items.length < TAG_OVERVIEW_PAGE_SIZE || items.length >= page.total) break;
+    }
+    return items;
   }
 
   return {
@@ -429,6 +444,28 @@ function createEagleClient({
           },
         }),
       );
+    },
+
+    // Starred tags and tag groups are read-only here: the HTTP API has no endpoint to change them.
+    async tagOverview() {
+      const [tags, groups, starred] = await Promise.all([
+        allPages("/api/v2/tag/get"),
+        allPages("/api/v2/tagGroup/get"),
+        allPages("/api/v2/tag/getStarredTags"),
+      ]);
+      return { tags, groups, starred };
+    },
+
+    async tagCoverItem(tag: string) {
+      const name = String(tag || "").trim();
+      if (!name) throw new Error("tag is required");
+      const page = normalizePaginatedResponse(
+        await request("/api/v2/item/get", {
+          method: "POST",
+          body: { tags: [name], offset: 0, limit: 1, fields: TAG_COVER_FIELDS },
+        }),
+      );
+      return page.items[0] ?? null;
     },
 
     async itemExtensions({ maxItems = MAX_EXTENSION_SCAN_ITEMS }: { maxItems?: number } = {}) {

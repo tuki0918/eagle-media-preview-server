@@ -15,6 +15,7 @@ function urlState(overrides: Partial<ViewerUrlState> = {}): ViewerUrlState {
     tags: [],
     folderId: "",
     smartFolderId: "",
+    section: "items",
     ext: "",
     rating: "",
     filtersOpen: false,
@@ -34,6 +35,7 @@ describe("viewer URL state", () => {
       tags: ["alpha", "beta"],
       folderId: "f1",
       smartFolderId: "s1",
+      section: "items",
       ext: "jpg",
       rating: "4",
       filtersOpen: true,
@@ -77,5 +79,11 @@ describe("viewer URL state", () => {
   test("computes current page and deduplicates normalized tags", () => {
     expect(currentPage({ offset: 60, limit: 30 })).toBe(3);
     expect(uniqueTags([" alpha ", "alpha", "", null, "beta"])).toEqual(["alpha", "beta"]);
+  });
+
+  test("keeps only the section in the URL while the tag list is open", () => {
+    expect(buildViewerSearch(urlState({ section: "tags", query: "cat", folderId: "f1", viewMode: "grid" }))).toBe("section=tags");
+    expect(parseViewerUrlState("?section=tags").section).toBe("tags");
+    expect(parseViewerUrlState("?section=other").section).toBe("items");
   });
 });
