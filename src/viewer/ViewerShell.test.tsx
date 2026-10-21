@@ -216,8 +216,8 @@ describe("ViewerAppShell", () => {
     expect(html).toContain('id="previewOriginalName"');
     expect(html).not.toContain('id="previewHeaderOriginalName"');
     expect(html).toContain("border-l border-border");
-    expect(html).toContain("min-[900px]:hidden");
-    expect(html).toContain("min-[900px]:col-start-1");
+    expect(html).toContain("desktop:hidden");
+    expect(html).toContain("desktop:col-start-1");
     expect(html).toContain("m15 18-6-6 6-6");
     expect(html).not.toContain("preview-original-name-section");
     expect(html).not.toContain("preview-original-meta");
@@ -228,8 +228,8 @@ describe("ViewerAppShell", () => {
     const html = renderToStaticMarkup(<PreviewDialog />);
 
     expect(html).toContain('id="toggleInfoPreview"');
-    expect(html).toContain("min-[900px]:hidden");
-    expect(html).toContain("hidden min-[900px]:block");
+    expect(html).toContain("desktop:hidden");
+    expect(html).toContain("hidden desktop:block");
     expect(html).toContain('cx="12"');
     expect(html).toContain('cy="12"');
     expect(html).toContain('r="10"');
@@ -246,10 +246,10 @@ describe("ViewerAppShell", () => {
     expect(html).toContain("right-0");
     expect(html).toContain("z-[6]");
     expect(html).toContain("border-l");
-    expect(html).toContain("min-[900px]:relative");
-    expect(html).toContain("min-[900px]:col-start-2");
-    expect(html).toContain("min-[900px]:row-span-2");
-    expect(html).toContain("min-[900px]:translate-x-0");
+    expect(html).toContain("desktop:relative");
+    expect(html).toContain("desktop:col-start-2");
+    expect(html).toContain("desktop:row-span-2");
+    expect(html).toContain("desktop:translate-x-0");
     expect(html).toContain("translate-x-full");
     expect(html).toContain("shadow-none");
   });

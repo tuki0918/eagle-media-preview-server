@@ -1,3 +1,5 @@
+import plugin from "tailwindcss/plugin";
+
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ["./index.html", "./src/**/*.{ts,tsx}", "./plugin/**/*.{ts,tsx}"],
@@ -83,5 +85,12 @@ export default {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    // Touch-first devices (phones and tablets) versus wide pointer devices, regardless of orientation.
+    // Defined as variants rather than raw screens, which would disable the arbitrary min-[…]/max-[…] variants.
+    plugin(({ addVariant }) => {
+      addVariant("touch", "@media (hover: none) and (pointer: coarse)");
+      addVariant("desktop", "@media (min-width: 900px) and (hover: hover), (min-width: 900px) and (pointer: fine)");
+    }),
+  ],
 };

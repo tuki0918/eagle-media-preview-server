@@ -29,27 +29,27 @@ export function PreviewDialog() {
   const closeSwipeRef = useRef<{ pointerId: number; startX: number; startY: number } | null>(null);
   const [desktopInfoOpen, setDesktopInfoOpen] = useState(true);
   const [desktopViewport, setDesktopViewport] = useState(false);
-  const [phoneViewport, setPhoneViewport] = useState(false);
+  const [touchViewport, setTouchViewport] = useState(false);
   const previewDialogState = useSyncExternalStore(subscribePreviewDialogState, getPreviewDialogState, getPreviewDialogState);
   const videoControlsVisible = useSyncExternalStore(subscribeVideoOverlayControls, getVideoOverlayControlsVisible, getVideoOverlayControlsVisible);
   const videoMode = previewDialogState.mode === "video";
-  // On phones the video fills the screen and the header overlays it, fading with the player controls.
+  // On touch devices (phones and tablets) the video fills the screen and the header overlays it, fading with the player controls.
   const previewHeaderClassName = [
-    "preview-header grid h-12 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 bg-background px-2 min-[720px]:h-14 min-[720px]:px-3 min-[900px]:col-start-1 min-[900px]:row-start-1",
+    "preview-header grid h-12 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 bg-background px-2 min-[720px]:h-14 min-[720px]:px-3 desktop:col-start-1 desktop:row-start-1",
     videoMode
-      ? "max-[719px]:absolute max-[719px]:inset-x-0 max-[719px]:top-0 max-[719px]:z-[5] max-[719px]:h-[calc(3rem+env(safe-area-inset-top)+1.5rem)] max-[719px]:bg-transparent max-[719px]:bg-[linear-gradient(180deg,rgba(5,7,10,0.78),transparent)] max-[719px]:pb-6 max-[719px]:pt-[env(safe-area-inset-top)] max-[719px]:text-white max-[719px]:transition-opacity max-[719px]:duration-200 max-[719px]:[&_.icon-button]:!text-white max-[719px]:[&_.preview-original-name-value]:!text-white max-[719px]:[&_[data-slot=separator]]:!border-white/30"
+      ? "touch:absolute touch:inset-x-0 touch:top-0 touch:z-[5] touch:!h-[calc(3rem+env(safe-area-inset-top)+1.5rem)] touch:bg-transparent touch:bg-[linear-gradient(180deg,rgba(5,7,10,0.78),transparent)] touch:pb-6 touch:pt-[env(safe-area-inset-top)] touch:!pl-[max(0.5rem,env(safe-area-inset-left))] touch:!pr-[max(0.5rem,env(safe-area-inset-right))] touch:text-white touch:transition-opacity touch:duration-200 touch:[&_.icon-button]:!text-white touch:[&_.preview-original-name-value]:!text-white touch:[&_[data-slot=separator]]:!border-white/30"
       : "",
-    videoMode && !videoControlsVisible ? "max-[719px]:pointer-events-none max-[719px]:opacity-0" : "",
-    // The header sits on the black video on phones, so it always uses the dark palette (hover colours included).
-    videoMode && phoneViewport ? "dark" : "",
+    videoMode && !videoControlsVisible ? "touch:pointer-events-none touch:opacity-0" : "",
+    // The header sits on the black video on touch devices, so it always uses the dark palette (hover colours included).
+    videoMode && touchViewport ? "dark" : "",
   ].filter(Boolean).join(" ");
   const dialogClassName = [
-    "fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none touch-none grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] overscroll-none rounded-none border-0 bg-background p-0 text-foreground open:grid min-[900px]:transition-[grid-template-columns] min-[900px]:duration-200 min-[900px]:ease-out",
-    desktopInfoOpen ? "min-[900px]:grid-cols-[minmax(0,1fr)_380px]" : "min-[900px]:grid-cols-[minmax(0,1fr)_0px]",
+    "fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none touch-none grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] overscroll-none rounded-none border-0 bg-background p-0 text-foreground open:grid desktop:transition-[grid-template-columns] desktop:duration-200 desktop:ease-out",
+    desktopInfoOpen ? "desktop:grid-cols-[minmax(0,1fr)_380px]" : "desktop:grid-cols-[minmax(0,1fr)_0px]",
     "backdrop:bg-foreground/30",
     previewDialogState.mode ? `${previewDialogState.mode}-mode` : "",
     previewDialogState.infoOpen ? "info-open" : "",
-    videoMode ? "bg-[#05070a] max-[719px]:grid-rows-[minmax(0,1fr)]" : "",
+    videoMode ? "bg-[#05070a] touch:grid-rows-[minmax(0,1fr)]" : "",
   ].filter(Boolean).join(" ");
   const previewBodyColumnClassName = [
     "preview-layout relative min-h-0 overflow-hidden",
@@ -58,8 +58,8 @@ export function PreviewDialog() {
   const previewInfoClassName = [
     "preview-info absolute inset-y-0 right-0 z-[6] flex w-[min(380px,calc(100vw-56px))] max-w-full flex-col gap-6 overflow-auto border-0 border-l border-border bg-card px-5 pt-5 text-card-foreground transition-[box-shadow,opacity,transform] duration-200 max-[540px]:rounded-t-[24px]",
     desktopInfoOpen
-      ? "min-[900px]:pointer-events-auto min-[900px]:relative min-[900px]:inset-auto min-[900px]:z-auto min-[900px]:col-start-2 min-[900px]:row-span-2 min-[900px]:row-start-1 min-[900px]:h-full min-[900px]:w-[380px] min-[900px]:translate-x-0 min-[900px]:opacity-100 min-[900px]:shadow-none"
-      : "min-[900px]:pointer-events-none min-[900px]:relative min-[900px]:inset-auto min-[900px]:z-auto min-[900px]:col-start-2 min-[900px]:row-span-2 min-[900px]:row-start-1 min-[900px]:h-full min-[900px]:w-[380px] min-[900px]:translate-x-3 min-[900px]:opacity-0 min-[900px]:shadow-none",
+      ? "desktop:pointer-events-auto desktop:relative desktop:inset-auto desktop:z-auto desktop:col-start-2 desktop:row-span-2 desktop:row-start-1 desktop:h-full desktop:w-[380px] desktop:translate-x-0 desktop:opacity-100 desktop:shadow-none"
+      : "desktop:pointer-events-none desktop:relative desktop:inset-auto desktop:z-auto desktop:col-start-2 desktop:row-span-2 desktop:row-start-1 desktop:h-full desktop:w-[380px] desktop:translate-x-3 desktop:opacity-0 desktop:shadow-none",
     previewDialogState.infoOpen
       ? "translate-x-0 shadow-[-18px_0_44px_rgba(15,23,42,0.14)] max-[540px]:translate-y-0 max-[540px]:shadow-[0_-18px_44px_rgba(15,23,42,0.14)]"
       : "translate-x-full shadow-none max-[540px]:translate-x-0 max-[540px]:translate-y-full",
@@ -148,18 +148,18 @@ export function PreviewDialog() {
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
-    const mediaQuery = window.matchMedia("(min-width: 900px)");
-    const phoneQuery = window.matchMedia("(max-width: 719px)");
+    const mediaQuery = window.matchMedia("(min-width: 900px) and (hover: hover), (min-width: 900px) and (pointer: fine)");
+    const touchQuery = window.matchMedia("(hover: none) and (pointer: coarse)");
     const syncViewport = () => {
       setDesktopViewport(mediaQuery.matches);
-      setPhoneViewport(phoneQuery.matches);
+      setTouchViewport(touchQuery.matches);
     };
     syncViewport();
     mediaQuery.addEventListener("change", syncViewport);
-    phoneQuery.addEventListener("change", syncViewport);
+    touchQuery.addEventListener("change", syncViewport);
     return () => {
       mediaQuery.removeEventListener("change", syncViewport);
-      phoneQuery.removeEventListener("change", syncViewport);
+      touchQuery.removeEventListener("change", syncViewport);
     };
   }, []);
 
@@ -231,10 +231,10 @@ export function PreviewDialog() {
             className="mx-1 h-4 w-0 border-l border-border bg-transparent data-[orientation=vertical]:h-4 data-[orientation=vertical]:w-0"
           />
           <button id="toggleInfoPreview" className="icon-button inline-grid size-9 shrink-0 touch-manipulation select-none place-items-center rounded-full border border-transparent bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground" type="button" aria-label="Media information" aria-expanded={desktopViewport ? desktopInfoOpen : previewDialogState.infoOpen} title="Media information" onClick={handleTogglePreviewInfo}>
-            <span className="min-[900px]:hidden">
+            <span className="desktop:hidden">
               <InfoIcon />
             </span>
-            <span className="hidden min-[900px]:block" aria-hidden="true">
+            <span className="hidden desktop:block" aria-hidden="true">
               {desktopInfoOpen ? <PanelLeftOpenIcon /> : <PanelRightOpenIcon />}
             </span>
           </button>
