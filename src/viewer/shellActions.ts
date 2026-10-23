@@ -115,8 +115,8 @@ export function changeRating(event: { currentTarget: { value: string } }) {
   actions.ratingChanged(event.currentTarget.value);
 }
 
-export function changePageSize(event: { currentTarget: { value: string } }) {
-  actions.pageSizeChanged(Number(event.currentTarget.value));
+export function changePageSize(pageSize: number) {
+  actions.pageSizeChanged(pageSize);
 }
 
 export function toggleFilters() {

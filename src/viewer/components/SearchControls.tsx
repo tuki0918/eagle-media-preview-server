@@ -7,14 +7,13 @@ import {
   InputGroupInput,
 } from "@/components/ui/input-group";
 import { cn } from "@/lib/utils";
-import { MEDIA_TYPE_OPTIONS, PAGE_SIZE_OPTIONS, RATING_OPTIONS } from "../shellConfig";
+import { MEDIA_TYPE_OPTIONS, RATING_OPTIONS } from "../shellConfig";
 import {
   getSearchControlsState,
   subscribeSearchControlsState,
 } from "../searchControlsState";
 import {
   changeMediaType,
-  changePageSize,
   changeRating,
   changeSearchQuery,
   focusSearch,
@@ -34,7 +33,6 @@ interface SearchControlsProps {
   hasResettableFilters?: boolean;
   searchQuery?: string;
   selectedExt?: string;
-  selectedLimit?: number;
   selectedRating?: string;
 }
 
@@ -47,7 +45,6 @@ export function SearchControls({
   hasResettableFilters,
   searchQuery,
   selectedExt,
-  selectedLimit,
   selectedRating,
 }: SearchControlsProps) {
   const state = useSyncExternalStore(subscribeSearchControlsState, getSearchControlsState, getSearchControlsState);
@@ -56,7 +53,6 @@ export function SearchControls({
   const displayHasResettableFilters = hasResettableFilters ?? (hasActiveFilters === undefined ? state.hasResettableFilters : displayHasActiveFilters);
   const displaySearchQuery = searchQuery ?? state.searchQuery;
   const displaySelectedExt = selectedExt ?? state.selectedExt;
-  const displaySelectedLimit = selectedLimit ?? state.selectedLimit;
   const displaySelectedRating = selectedRating ?? state.selectedRating;
 
   useEffect(() => {
@@ -90,7 +86,6 @@ export function SearchControls({
         hasActiveFilters={displayHasActiveFilters}
         hasResettableFilters={displayHasResettableFilters}
         selectedExt={displaySelectedExt}
-        selectedLimit={displaySelectedLimit}
         selectedRating={displaySelectedRating}
       />
     </section>
@@ -129,12 +124,11 @@ export function AdvancedFilters({
   hasActiveFilters = false,
   hasResettableFilters = hasActiveFilters,
   selectedExt = "",
-  selectedLimit = 30,
   selectedRating = "",
-}: Pick<SearchControlsProps, "availableExts" | "filtersOpen" | "hasActiveFilters" | "hasResettableFilters" | "selectedExt" | "selectedLimit" | "selectedRating">) {
+}: Pick<SearchControlsProps, "availableExts" | "filtersOpen" | "hasActiveFilters" | "hasResettableFilters" | "selectedExt" | "selectedRating">) {
   const extOptions = mediaTypeOptions(availableExts, selectedExt);
   return (
-    <div id="advancedFilters" className="filter-row grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-4 max-[540px]:grid-cols-[minmax(0,1fr)_auto] max-[540px]:gap-3" hidden={!filtersOpen}>
+    <div id="advancedFilters" className="filter-row grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-4 max-[540px]:grid-cols-[minmax(0,1fr)_auto] max-[540px]:gap-3" hidden={!filtersOpen}>
       <label className="grid gap-2 max-[540px]:col-span-2">
         <select id="extSelect" className={selectClassName} aria-label="Type" value={selectedExt} onChange={changeMediaType}>
           <option value="">All types</option>
@@ -145,22 +139,13 @@ export function AdvancedFilters({
           ))}
         </select>
       </label>
-      <label className="grid gap-2 max-[540px]:col-span-2">
+      <label className="grid gap-2">
         <select id="ratingSelect" className={selectClassName} aria-label="Rating" value={selectedRating} onChange={changeRating}>
           <option value="">All ratings</option>
           <option value="0">No rating</option>
           {RATING_OPTIONS.map((rating) => (
             <option key={rating} value={rating}>
               ★ {rating}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="grid gap-2">
-        <select id="pageSizeSelect" className={selectClassName} aria-label="Page size" value={selectedLimit} onChange={changePageSize}>
-          {PAGE_SIZE_OPTIONS.map((pageSize) => (
-            <option key={pageSize} value={pageSize}>
-              {pageSize} items
             </option>
           ))}
         </select>

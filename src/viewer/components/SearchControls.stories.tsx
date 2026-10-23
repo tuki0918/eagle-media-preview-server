@@ -11,7 +11,6 @@ const meta = {
     hasActiveFilters: true,
     searchQuery: "landing page",
     selectedExt: "jpg",
-    selectedLimit: 30,
     selectedRating: "4",
   },
 } satisfies Meta<typeof SearchControls>;
@@ -38,7 +37,7 @@ export const InputOnly: Story = {
 export const AdvancedFiltersOnly: Story = {
   render: () => (
     <div className={storyCanvasClassName}>
-      <AdvancedFilters filtersOpen hasActiveFilters selectedExt="mp4" selectedLimit={60} selectedRating="3" />
+      <AdvancedFilters filtersOpen hasActiveFilters selectedExt="mp4" selectedRating="3" />
     </div>
   ),
 };

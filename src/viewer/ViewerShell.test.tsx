@@ -41,7 +41,7 @@ import {
 import { resetPreviewDialogState, setPreviewDialogState } from "./previewDialogState";
 import { setImageOverlayControlsVisible } from "./imageOverlayState";
 import { setVideoOverlayControlsVisible } from "./videoOverlayState";
-import { MEDIA_TYPE_OPTIONS, PAGE_SIZE_OPTIONS, RATING_OPTIONS } from "./shellConfig";
+import { MEDIA_TYPE_OPTIONS, RATING_OPTIONS } from "./shellConfig";
 import { setLoginConnectState } from "./loginConnectState";
 import { setLibraryFooterName } from "./libraryFooterState";
 import { setEagleStatus } from "./eagleStatusState";
@@ -70,7 +70,6 @@ const REQUIRED_ELEMENT_IDS = [
   "viewerShell",
   "extSelect",
   "ratingSelect",
-  "pageSizeSelect",
   "searchInput",
   "tagChips",
   "tagSuggestions",
@@ -142,10 +141,6 @@ describe("ViewerAppShell", () => {
       expect(html).toContain(`★ ${rating}`);
     }
 
-    for (const pageSize of PAGE_SIZE_OPTIONS) {
-      expect(html).toContain(`value="${pageSize}"`);
-      expect(html).toContain(`${pageSize} items`);
-    }
   });
 
   test("renders selected view mode with shadcn active styling", () => {
@@ -723,6 +718,11 @@ describe("ViewerAppShell", () => {
       expect(themeGroup?.getAttribute("aria-label")).toBe("Theme color");
       expect(container.querySelector('#authAccountMenu [aria-label="Light"]')).not.toBeNull();
       expect(container.querySelector('#authAccountMenu [aria-label="Dark"]')).not.toBeNull();
+      expect(container.querySelector('#authAccountMenu [aria-label="System"]')).not.toBeNull();
+      const pageSizeGroup = container.querySelector("#pageSizeGroup");
+      expect(pageSizeGroup?.getAttribute("aria-label")).toBe("Items per page");
+      expect(container.querySelector('#authAccountMenu [aria-label="30 items per page"]')?.getAttribute("data-state")).toBe("active");
+      expect(container.querySelector('#authAccountMenu [aria-label="240 items per page"]')?.getAttribute("data-state")).toBe("inactive");
       expect(container.querySelector("#logoutButton")).toBeNull();
     } finally {
       if (root) {
@@ -758,9 +758,9 @@ describe("ViewerAppShell", () => {
     try {
       initializeThemeState();
 
-      expect(getThemeState()).toEqual({ preference: "dark", resolved: "dark" });
+      expect(getThemeState()).toEqual({ preference: "system", resolved: "dark" });
       expect(dom.window.document.documentElement.classList.contains("dark")).toBe(true);
-      expect(dom.window.localStorage.getItem("eagle-media-preview-theme")).toBe("dark");
+      expect(dom.window.localStorage.getItem("eagle-media-preview-theme")).toBeNull();
 
       setThemePreference("light");
       expect(getThemeState()).toEqual({ preference: "light", resolved: "light" });
@@ -770,6 +770,11 @@ describe("ViewerAppShell", () => {
       initializeThemeState();
       expect(getThemeState()).toEqual({ preference: "light", resolved: "light" });
       expect(dom.window.document.documentElement.classList.contains("dark")).toBe(false);
+
+      setThemePreference("system");
+      expect(getThemeState()).toEqual({ preference: "system", resolved: "dark" });
+      expect(dom.window.document.documentElement.classList.contains("dark")).toBe(true);
+      expect(dom.window.localStorage.getItem("eagle-media-preview-theme")).toBe("system");
     } finally {
       setThemePreference("light");
       globalThis.window = previousWindow;
@@ -927,7 +932,6 @@ describe("ViewerAppShell", () => {
         filtersOpen
         hasActiveFilters
         selectedExt="jpg"
-        selectedLimit={60}
         selectedRating="3"
       />,
     );
@@ -935,7 +939,7 @@ describe("ViewerAppShell", () => {
     expect(html).toContain('id="advancedFilters"');
     expect(html).not.toContain('hidden=""');
     expect(html).not.toContain('id="folderSelect"');
-    expect(html).toContain('id="pageSizeSelect"');
+    expect(html).not.toContain('id="pageSizeSelect"');
     expect(html).toContain('id="resetFiltersButton"');
     expect(html).toContain('aria-label="Reset filters"');
   });

@@ -21,7 +21,6 @@ import {
 } from "../src/viewer/ViewerShell";
 import { setLoginConnectState } from "../src/viewer/loginConnectState";
 import { setPreviewDialogState, resetPreviewDialogState } from "../src/viewer/previewDialogState";
-import { PAGE_SIZE_OPTIONS } from "../src/viewer/shellConfig";
 
 function accountSideMenuElement() {
   return createElement(TooltipProvider, null, createElement(SidebarProvider, null, [
@@ -409,7 +408,6 @@ test("public UI no longer shows connect lock icon or connection settings button"
     hasActiveFilters: true,
     searchQuery: "alpha",
     selectedExt: "jpg",
-    selectedLimit: 60,
     selectedRating: "3",
   }));
 
@@ -475,10 +473,7 @@ test("public UI no longer shows connect lock icon or connection settings button"
   assert.match(html, /className="view-toggle w-fit"/);
   assert.doesNotMatch(css, /\.status-line\s*\{/);
   assert.doesNotMatch(css, /\.status-actions\s*\{/);
-  assert.match(controls, /id="pageSizeSelect"[^>]*aria-label="Page size"/);
-  for (const pageSize of PAGE_SIZE_OPTIONS) {
-    assert.match(controls, new RegExp(`value="${pageSize}"[\\s\\S]*${pageSize} items`));
-  }
+  assert.doesNotMatch(controls, /id="pageSizeSelect"/);
   assert.match(app, /limit:\s*30,/);
   assert.match(app, /if \(state\.limit !== DEFAULT_PAGE_SIZE\) params\.set\("limit", String\(state\.limit\)\);/);
   assert.match(app, /const parsed = Number\.parseInt\(value \|\| String\(DEFAULT_PAGE_SIZE\), 10\);/);
@@ -935,7 +930,6 @@ test("public UI labels media extensions as type", async () => {
     filtersOpen: true,
     hasActiveFilters: true,
     selectedExt: "jpg",
-    selectedLimit: 60,
     selectedRating: "3",
   }));
 
@@ -944,11 +938,8 @@ test("public UI labels media extensions as type", async () => {
   assert.match(filters, /<option value="">All types<\/option>/);
   assert.match(filters, /id="ratingSelect"[^>]*aria-label="Rating"/);
   assert.match(filters, /<option value="">All ratings<\/option>/);
-  assert.match(filters, /id="pageSizeSelect"[^>]*aria-label="Page size"/);
+  assert.doesNotMatch(filters, /id="pageSizeSelect"/);
   assert.match(filters, /id="resetFiltersButton"[^>]*aria-label="Reset filters"/);
-  for (const pageSize of PAGE_SIZE_OPTIONS) {
-    assert.match(filters, new RegExp(`value="${pageSize}"[\\s\\S]*${pageSize} items`));
-  }
   assert.doesNotMatch(filters, /<span>Folder<\/span>/);
   assert.doesNotMatch(filters, /<span>Type<\/span>\s*<select id="extSelect"/);
   assert.doesNotMatch(filters, /<span>Rating<\/span>/);
@@ -969,7 +960,6 @@ test("public UI supports tag filter chips", async () => {
     hasActiveFilters: true,
     searchQuery: "alpha",
     selectedExt: "jpg",
-    selectedLimit: 60,
     selectedRating: "3",
   }));
 

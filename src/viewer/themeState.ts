@@ -1,13 +1,16 @@
-export type ThemePreference = "light" | "dark";
+export type ThemePreference = "light" | "dark" | "system";
+type ResolvedTheme = Exclude<ThemePreference, "system">;
 
 interface ThemeState {
   preference: ThemePreference;
-  resolved: ThemePreference;
+  resolved: ResolvedTheme;
 }
 
 const THEME_STORAGE_KEY = "eagle-media-preview-theme";
 const THEME_CLASS = "dark";
+const SYSTEM_DARK_QUERY = "(prefers-color-scheme: dark)";
 const listeners = new Set<() => void>();
+let systemThemeQuery: MediaQueryList | null = null;
 
 let currentThemeState: ThemeState = {
   preference: "light",
@@ -19,7 +22,7 @@ function hasBrowserApis() {
 }
 
 function isThemePreference(value: string | null): value is ThemePreference {
-  return value === "light" || value === "dark";
+  return value === "light" || value === "dark" || value === "system";
 }
 
 function normalizeStoredPreference(value: string | null): ThemePreference | null {
@@ -40,9 +43,31 @@ function readStoredPreference(): ThemePreference | null {
   }
 }
 
-function getSystemResolvedTheme() {
+function getSystemResolvedTheme(): ResolvedTheme {
   if (!hasBrowserApis() || typeof window.matchMedia !== "function") return "light";
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  return window.matchMedia(SYSTEM_DARK_QUERY).matches ? "dark" : "light";
+}
+
+function resolveTheme(preference: ThemePreference): ResolvedTheme {
+  return preference === "system" ? getSystemResolvedTheme() : preference;
+}
+
+function handleSystemThemeChange() {
+  if (currentThemeState.preference !== "system") return;
+  setCurrentThemeState({ preference: "system", resolved: getSystemResolvedTheme() });
+}
+
+// Only follow OS changes while the viewer is set to System.
+function syncSystemThemeListener(preference: ThemePreference) {
+  if (!hasBrowserApis() || typeof window.matchMedia !== "function") return;
+  if (preference === "system") {
+    if (systemThemeQuery) return;
+    systemThemeQuery = window.matchMedia(SYSTEM_DARK_QUERY);
+    systemThemeQuery.addEventListener?.("change", handleSystemThemeChange);
+    return;
+  }
+  systemThemeQuery?.removeEventListener?.("change", handleSystemThemeChange);
+  systemThemeQuery = null;
 }
 
 function writeStoredPreference(preference: ThemePreference) {
@@ -74,12 +99,12 @@ function setCurrentThemeState(nextState: ThemeState) {
 }
 
 export function initializeThemeState() {
-  const preference = readStoredPreference() ?? getSystemResolvedTheme();
-  writeStoredPreference(preference);
+  const preference = readStoredPreference() ?? "system";
   currentThemeState = {
     preference,
-    resolved: preference,
+    resolved: resolveTheme(preference),
   };
+  syncSystemThemeListener(preference);
   applyThemeToDocument(currentThemeState.resolved);
 }
 
@@ -89,9 +114,10 @@ export function getThemeState() {
 
 export function setThemePreference(preference: ThemePreference) {
   writeStoredPreference(preference);
+  syncSystemThemeListener(preference);
   setCurrentThemeState({
     preference,
-    resolved: preference,
+    resolved: resolveTheme(preference),
   });
 }
 

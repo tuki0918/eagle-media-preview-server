@@ -8,6 +8,7 @@ import {
   InboxIcon,
   LayoutGridIcon,
   LogOutIcon,
+  MonitorIcon,
   MoonIcon,
   RouterIcon,
   SunIcon,
@@ -38,7 +39,8 @@ import { displayFolderCount } from "../format";
 import { getLibraryFooterName, subscribeLibraryFooterName } from "../libraryFooterState";
 import { getLoginConnectState, subscribeLoginConnectState } from "../loginConnectState";
 import { getSearchControlsState, subscribeSearchControlsState } from "../searchControlsState";
-import { changeFolder, changeSmartFolder, openTags, submitLogout } from "../shellActions";
+import { PAGE_SIZE_OPTIONS } from "../shellConfig";
+import { changeFolder, changePageSize, changeSmartFolder, openTags, submitLogout } from "../shellActions";
 import { getThemeState, setThemePreference, subscribeThemeState, type ThemePreference } from "../themeState";
 import type { EagleFolder, EagleSmartFolder } from "../types";
 
@@ -511,11 +513,15 @@ function collectFolderExpansionSignature(folders: readonly EagleFolder[], parts:
   }
 }
 
+const menuTabTriggerClassName =
+  "h-7 gap-1.5 rounded-lg px-2 text-xs font-medium text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:hover:text-foreground data-active:bg-background data-active:text-foreground data-active:shadow-sm data-active:hover:text-foreground";
+
 function ThemeMenuSection() {
   const themeState = useSyncExternalStore(subscribeThemeState, getThemeState, getThemeState);
   const themeOptions: { icon: typeof SunIcon; label: string; value: ThemePreference }[] = [
     { icon: SunIcon, label: "Light", value: "light" },
     { icon: MoonIcon, label: "Dark", value: "dark" },
+    { icon: MonitorIcon, label: "System", value: "system" },
   ];
 
   return (
@@ -530,17 +536,49 @@ function ThemeMenuSection() {
           setThemePreference(value as ThemePreference);
         }}
       >
-        <TabsList className="grid h-9 w-full grid-cols-2 rounded-xl bg-muted p-1 shadow-none" aria-label="Theme color">
+        <TabsList className="grid h-9 w-full grid-cols-3 rounded-xl bg-muted p-1 shadow-none" aria-label="Theme color">
           {themeOptions.map(({ icon: Icon, label, value }) => (
             <TabsTrigger
               key={value}
               value={value}
-              className="h-7 gap-1.5 rounded-lg px-2 text-xs font-medium text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:hover:text-foreground data-active:bg-background data-active:text-foreground data-active:shadow-sm data-active:hover:text-foreground"
+              className={menuTabTriggerClassName}
               aria-label={label}
               title={label}
             >
               <Icon data-icon="inline-start" aria-hidden="true" />
               <span>{label}</span>
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+    </div>
+  );
+}
+
+function PageSizeMenuSection() {
+  const { selectedLimit } = useSyncExternalStore(subscribeSearchControlsState, getSearchControlsState, getSearchControlsState);
+
+  return (
+    <div className="grid gap-2 px-2 pb-1.5 pt-2">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Items per page</span>
+      <Tabs
+        id="pageSizeGroup"
+        value={String(selectedLimit)}
+        className="w-full"
+        aria-label="Items per page"
+        onValueChange={(value) => {
+          changePageSize(Number(value));
+        }}
+      >
+        <TabsList className="grid h-9 w-full grid-cols-4 rounded-xl bg-muted p-1 shadow-none" aria-label="Items per page">
+          {PAGE_SIZE_OPTIONS.map((pageSize) => (
+            <TabsTrigger
+              key={pageSize}
+              value={String(pageSize)}
+              className={menuTabTriggerClassName}
+              aria-label={`${pageSize} items per page`}
+            >
+              {pageSize}
             </TabsTrigger>
           ))}
         </TabsList>
@@ -821,6 +859,7 @@ function AccountDropdown({
             </div>
             <div className="-mx-1.5 my-1 h-px bg-border" />
             <ThemeMenuSection />
+            <PageSizeMenuSection />
             {signedIn ? (
               <>
                 <div className="-mx-1.5 my-1 h-px bg-border" />
