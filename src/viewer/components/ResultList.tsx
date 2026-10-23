@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -50,6 +50,8 @@ const overlayIconPaths = {
 
 const mediaCardClassName = "media-card group/card grid min-w-0 content-start gap-2 border-0 bg-transparent p-0 py-0 shadow-none ring-0";
 const cardMetaClassName = "card-meta grid min-w-0 gap-0.5 px-0.5 [&>span]:block [&>span]:min-w-0 [&>span]:truncate [&>span]:text-[11px] [&>span]:uppercase [&>span]:tracking-[0.04em] [&>span]:text-muted-foreground [&>strong]:block [&>strong]:min-w-0 [&>strong]:truncate [&>strong]:text-[13px] [&>strong]:font-medium [&>strong]:leading-[1.3] [&>strong]:text-foreground";
+const cardMetaDetailsClassName =
+  "flex min-w-0 items-center justify-between gap-2 text-[11px] uppercase tracking-[0.04em] text-muted-foreground [&>span]:min-w-0 [&>span]:truncate [&>span:last-child]:shrink-0";
 const tileButtonClassName =
   "tile-item relative block min-w-0 cursor-zoom-in overflow-hidden rounded-md border-0 bg-muted p-0 shadow-none [&>img]:block [&>img]:h-full [&>img]:w-full [&>img]:object-cover [&>img]:transition-[transform,filter] [&>img]:duration-300 hover:[&>img]:scale-[1.02] hover:[&>img]:brightness-[0.97]";
 const gridThumbButtonClassName =
@@ -84,15 +86,18 @@ const listTableRatingClassName = "rating-control inline-flex items-center justif
 const fileBadgeClassName = "bg-[rgba(10,10,12,0.55)] text-white backdrop-blur";
 const TILE_MIN_RATIO = 0.4;
 const TILE_MAX_RATIO = 3;
+const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 export function ResultList({ items, viewMode, onOpenPreview }: ResultListProps) {
+  const tileFillerRef = useRef<HTMLSpanElement>(null);
+  useLastTileRowFit(tileFillerRef, viewMode === "tiles" ? items : null);
   return (
     <>
       {viewMode === "list" && items.length ? <ListTableHeader /> : null}
       {items.map((item, index) => (
         <ResultItem key={String(item.id || item.name || index)} item={item} viewMode={viewMode} onOpenPreview={onOpenPreview} />
       ))}
-      {viewMode === "tiles" && items.length ? <span className="tile-filler h-0 grow-[999999]" aria-hidden="true" /> : null}
+      {viewMode === "tiles" && items.length ? <span ref={tileFillerRef} className="tile-filler h-0 grow-[999999]" aria-hidden="true" /> : null}
     </>
   );
 }
@@ -111,7 +116,10 @@ function GridCard({ item, onOpenPreview }: { item: EagleItem; onOpenPreview: (it
       </ThumbnailButton>
       <div className={cardMetaClassName}>
         <strong title={originalFileName(item)}>{item.name || item.id || ""}</strong>
-        <span>{[(item.ext || "").toUpperCase(), formatBytes(item.size)].filter(Boolean).join(" · ")}</span>
+        <div className={cardMetaDetailsClassName}>
+          <span>{(item.ext || "").toUpperCase()}</span>
+          <span>{formatBytes(item.size)}</span>
+        </div>
       </div>
     </Card>
   );
@@ -126,7 +134,7 @@ function TileItem({ item, onOpenPreview }: { item: EagleItem; onOpenPreview: (it
       onOpenPreview={onOpenPreview}
       style={{
         aspectRatio: String(ratio),
-        flexBasis: `calc(var(--tile-h, 190px) * var(--tile-scale, 1) * ${ratio})`,
+        flexBasis: `calc(var(--tile-h, 190px) * var(--tile-scale, 1) * var(--tile-fit, 1) * ${ratio})`,
         flexGrow: ratio,
       }}
       withBadges
@@ -134,6 +142,55 @@ function TileItem({ item, onOpenPreview }: { item: EagleItem; onOpenPreview: (it
       withFileNameOverlay
     />
   );
+}
+
+// The filler keeps the last row from stretching, which leaves it smaller than the
+// justified rows above. Scale it up to the previous row's height while it still fits.
+function useLastTileRowFit(fillerRef: { current: HTMLSpanElement | null }, items: readonly EagleItem[] | null) {
+  useIsomorphicLayoutEffect(() => {
+    const filler = fillerRef.current;
+    const container = filler?.parentElement;
+    if (!items || !filler || !container) return;
+    const fit = () => fitLastTileRow(container, filler);
+    fit();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(fit);
+    observer.observe(container);
+    return () => {
+      observer.disconnect();
+      resetTileRowFit(container, filler);
+    };
+  }, [fillerRef, items]);
+}
+
+function resetTileRowFit(container: HTMLElement, filler: HTMLElement) {
+  const tiles = Array.from(container.querySelectorAll<HTMLElement>(":scope > .tile-item"));
+  for (const tile of tiles) tile.style.removeProperty("--tile-fit");
+  filler.style.removeProperty("display");
+  return tiles;
+}
+
+function fitLastTileRow(container: HTMLElement, filler: HTMLElement) {
+  const tiles = resetTileRowFit(container, filler);
+  if (tiles.length < 2) return;
+  const lastTop = tiles[tiles.length - 1].offsetTop;
+  const lastRow = tiles.filter((tile) => tile.offsetTop === lastTop);
+  const previousTile = tiles[tiles.length - lastRow.length - 1];
+  if (!previousTile) return;
+  const lastHeight = lastRow[0].getBoundingClientRect().height;
+  const previousHeight = previousTile.getBoundingClientRect().height;
+  if (!(lastHeight > 0) || !(previousHeight > lastHeight)) return;
+  const gap = Number.parseFloat(getComputedStyle(container).columnGap) || 0;
+  const rowWidth = lastRow.reduce((sum, tile) => sum + tile.getBoundingClientRect().width, 0);
+  // The filler sits after the last tile, so it takes one more gap.
+  const maxScale = (container.clientWidth - gap * lastRow.length - 1) / rowWidth;
+  const scale = previousHeight / lastHeight;
+  if (scale > maxScale) {
+    // The row is effectively full: drop the filler and let it justify like the rows above.
+    filler.style.display = "none";
+    return;
+  }
+  for (const tile of lastRow) tile.style.setProperty("--tile-fit", String(scale));
 }
 
 function tileAspectRatio(width: number, height: number) {
