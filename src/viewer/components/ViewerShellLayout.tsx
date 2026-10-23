@@ -85,7 +85,7 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
                 title="Scroll to top"
                 onClick={scrollToTop}
               >
-                <h1 className="m-0 min-w-0 truncate text-[13px] font-semibold uppercase leading-none tracking-[0.08em] text-foreground min-[720px]:text-sm">
+                <h1 className="m-0 min-w-0 truncate text-[13px] font-semibold leading-none text-foreground min-[720px]:text-sm">
                   {folderName}
                 </h1>
                 <span

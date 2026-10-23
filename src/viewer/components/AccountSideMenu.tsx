@@ -334,10 +334,10 @@ function FolderSectionHeader({
   onToggle: () => void;
 }) {
   return (
-    <SidebarGroupLabel className="h-8 px-0 text-[11px] uppercase tracking-[0.08em]">
+    <SidebarGroupLabel className="h-8 px-0 text-[11px]">
       <button
         className={[
-          "flex h-8 min-w-0 flex-1 items-center rounded-lg px-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+          "flex h-8 min-w-0 flex-1 items-center rounded-lg px-2.5 text-left text-[11px] font-semibold transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
           open ? "folder-section-heading-open" : "folder-section-heading-closed",
         ].join(" ")}
         type="button"
