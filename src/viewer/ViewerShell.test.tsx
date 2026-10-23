@@ -44,6 +44,7 @@ import { setVideoOverlayControlsVisible } from "./videoOverlayState";
 import { MEDIA_TYPE_OPTIONS, PAGE_SIZE_OPTIONS, RATING_OPTIONS } from "./shellConfig";
 import { setLoginConnectState } from "./loginConnectState";
 import { setLibraryFooterName } from "./libraryFooterState";
+import { setEagleStatus } from "./eagleStatusState";
 import { setSearchControlsState } from "./searchControlsState";
 import { setTagListState } from "./tagListState";
 import { TagList } from "./components/TagList";
@@ -423,6 +424,18 @@ describe("ViewerAppShell", () => {
     expect(html).toContain('id="authRoleLabel"');
     expect(html).toContain('aria-haspopup="menu"');
     expect(html).toMatch(/id="authAvatarFallback"[^>]*>E</);
+    expect(html).toMatch(/id="eagleStatusDot"[^>]*data-status="checking"/);
+
+    setEagleStatus("online");
+    const onlineHtml = renderAccountSideMenu();
+    expect(onlineHtml).toMatch(/id="eagleStatusDot"[^>]*data-status="online"[^>]*title="Connected to Eagle 4.0.0"/);
+    expect(onlineHtml).toContain("bg-emerald-500");
+
+    setEagleStatus("offline");
+    const offlineHtml = renderAccountSideMenu();
+    expect(offlineHtml).toMatch(/id="eagleStatusDot"[^>]*data-status="offline"[^>]*title="Eagle unavailable"/);
+    expect(offlineHtml).toContain("bg-destructive");
+    setEagleStatus("checking");
     expect(html).toContain("Smart Folders");
     expect(html).toContain("Folders");
     const allFoldersIndex = html.indexOf("All folders");

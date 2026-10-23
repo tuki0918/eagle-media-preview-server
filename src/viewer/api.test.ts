@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { ApiError, debounce, errorMessage, getJson, postJson } from "./api";
+import { ApiError, debounce, errorMessage, getJson, postJson, subscribeRequestOutcome, type RequestOutcome } from "./api";
 
 describe("viewer API helpers", () => {
   afterEach(() => {
@@ -19,6 +19,28 @@ describe("viewer API helpers", () => {
       name: "ApiError",
       status: 401,
     } satisfies Partial<ApiError>);
+  });
+
+  test("notifies request outcomes, including network failures", async () => {
+    const outcomes: RequestOutcome[] = [];
+    const unsubscribe = subscribeRequestOutcome((outcome) => outcomes.push(outcome));
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({}) } as Response);
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 502, json: async () => ({ error: "Unable to connect to Eagle API" }) } as Response);
+    fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+
+    await getJson("/api/items");
+    await expect(getJson("/api/folders")).rejects.toBeInstanceOf(ApiError);
+    await expect(getJson("/api/tags")).rejects.toThrow("Failed to fetch");
+    unsubscribe();
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({}) } as Response);
+    await getJson("/api/items");
+
+    expect(outcomes).toEqual([
+      { ok: true, status: 200, url: "/api/items" },
+      { ok: false, status: 502, url: "/api/folders" },
+      { ok: false, status: 0, url: "/api/tags" },
+    ]);
   });
 
   test("sends same-origin credentials with JSON requests", async () => {

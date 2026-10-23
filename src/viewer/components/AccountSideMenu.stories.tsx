@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AccountSideMenu } from "./AccountSideMenu";
+import { setEagleStatus, type EagleStatus } from "../eagleStatusState";
 import { setLibraryFooterName } from "../libraryFooterState";
 import { setLoginConnectState } from "../loginConnectState";
 import { setSearchControlsState, type SearchControlsState } from "../searchControlsState";
@@ -42,6 +43,18 @@ export const AuthError: Story = {
   },
 };
 
+export const EagleUnavailable: Story = {
+  args: {
+    eagleStatus: "offline",
+  },
+};
+
+export const EagleChecking: Story = {
+  args: {
+    eagleStatus: "checking",
+  },
+};
+
 export const PublicAccess: Story = {
   args: {
     authenticated: false,
@@ -67,6 +80,7 @@ interface AccountMenuStoryArgs {
   authenticated?: boolean;
   authRequired?: boolean;
   disabled?: boolean;
+  eagleStatus?: EagleStatus;
   isError?: boolean;
   message?: string;
   role?: string;
@@ -78,6 +92,7 @@ interface AccountMenuStoryArgs {
 
 function AccountSideMenuStory(args: AccountMenuStoryArgs) {
   setLibraryFooterName("My Eagle Library - Eagle 4.0.0");
+  setEagleStatus(args.eagleStatus ?? "online");
   setThemePreference(args.theme ?? "light");
   setLoginConnectState({
     authenticated: args.authenticated ?? true,

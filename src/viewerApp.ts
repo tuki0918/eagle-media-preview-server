@@ -16,7 +16,7 @@ import {
   UNTAGGED_FOLDER_ID,
   urlPreviewExts,
 } from "./viewer/constants";
-import { ApiError, debounce, errorMessage, getJson, postJson } from "./viewer/api";
+import { ApiError, debounce, errorMessage, getJson, postJson, subscribeRequestOutcome, type RequestOutcome } from "./viewer/api";
 import {
   displayFileName,
   applyFolderCountChanges,
@@ -42,6 +42,7 @@ import {
   tagSuggestionItems as buildTagSuggestionItems,
 } from "./viewer/metadata";
 import { setLibraryFooterName } from "./viewer/libraryFooterState";
+import { getEagleStatus, setEagleStatus } from "./viewer/eagleStatusState";
 import { setLibraryName } from "./viewer/libraryNameState";
 import {
   currentFetchLimit as getCurrentFetchLimit,
@@ -121,6 +122,11 @@ let uncategorizedTotal = 0;
 let untaggedTotal = 0;
 let tagsTotal = 0;
 let shortcutCountsRequestId = 0;
+let eagleStatusTimer: ReturnType<typeof setInterval> | null = null;
+let eagleStatusRequestId = 0;
+let eagleStatusCheckInFlight = false;
+let unsubscribeEagleStatusRequests: (() => void) | null = null;
+const EAGLE_STATUS_POLL_INTERVAL_MS = 30_000;
 const pendingRatingItemIds = new Set<string>();
 const DEFAULT_DOCUMENT_TITLE = "Media Preview Server";
 const changeSearch = debounce((query: string) => {
@@ -397,12 +403,15 @@ function isEagleConnectionError(error: unknown, message = errorMessage(error)) {
 function showLogin() {
   document.title = DEFAULT_DOCUMENT_TITLE;
   setShellView("login");
+  stopEagleStatusPolling();
 }
 
 function showViewer(data: ConnectResponse) {
   setShellView("viewer");
   setLibraryFooterName(libraryLabel(data));
   setLibraryName(data.library?.name || "");
+  setEagleStatus(data.app ? "online" : "offline");
+  startEagleStatusPolling();
   document.title = libraryTitle(data);
   resetViewerResults();
   resetTagList();
@@ -430,6 +439,7 @@ function clearViewerSessionState() {
   syncUrlState({ replace: true });
   setLibraryFooterName("");
   setLibraryName("");
+  stopEagleStatusPolling();
   renderTagChips();
   renderSearchControlButtons();
   updateStatus();
@@ -468,6 +478,58 @@ function renderLoginConnect() {
     sessionMaxAgeSeconds,
     user: authUser,
   });
+}
+
+function startEagleStatusPolling() {
+  if (eagleStatusTimer) return;
+  eagleStatusTimer = setInterval(checkEagleStatus, EAGLE_STATUS_POLL_INTERVAL_MS);
+  unsubscribeEagleStatusRequests = subscribeRequestOutcome(recheckEagleStatusAfterRequest);
+  document.addEventListener("visibilitychange", checkEagleStatusWhenVisible);
+  window.addEventListener("online", checkEagleStatus);
+}
+
+function stopEagleStatusPolling() {
+  eagleStatusRequestId += 1;
+  eagleStatusCheckInFlight = false;
+  if (eagleStatusTimer) clearInterval(eagleStatusTimer);
+  eagleStatusTimer = null;
+  unsubscribeEagleStatusRequests?.();
+  unsubscribeEagleStatusRequests = null;
+  document.removeEventListener("visibilitychange", checkEagleStatusWhenVisible);
+  window.removeEventListener("online", checkEagleStatus);
+  setEagleStatus("checking");
+}
+
+function checkEagleStatusWhenVisible() {
+  if (document.visibilityState === "visible") void checkEagleStatus();
+}
+
+// Reacts to regular API traffic so the dot changes without waiting for the next poll.
+function recheckEagleStatusAfterRequest({ ok, status, url }: RequestOutcome) {
+  if (url.startsWith("/api/health")) return;
+  const failedLikeOffline = !ok && (status === 0 || status >= 500);
+  const current = getEagleStatus();
+  if ((failedLikeOffline && current !== "offline") || (ok && current === "offline")) {
+    void checkEagleStatus();
+  }
+}
+
+async function checkEagleStatus() {
+  if (document.visibilityState === "hidden" || eagleStatusCheckInFlight) return;
+  const requestId = ++eagleStatusRequestId;
+  eagleStatusCheckInFlight = true;
+  try {
+    const data = await getJson<{ app?: unknown }>("/api/health");
+    if (requestId !== eagleStatusRequestId) return;
+    setEagleStatus(data.app ? "online" : "offline");
+  } catch (error) {
+    if (requestId !== eagleStatusRequestId) return;
+    if (handleAuthError(error)) return;
+    // The preview server itself being unreachable also means Eagle cannot be reached.
+    setEagleStatus("offline");
+  } finally {
+    if (requestId === eagleStatusRequestId) eagleStatusCheckInFlight = false;
+  }
 }
 
 function libraryLabel(data: ConnectResponse) {

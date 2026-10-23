@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FOLDER_SECTIONS_OPEN_STORAGE_KEY, UNCATEGORIZED_FOLDER_ID, UNTAGGED_FOLDER_ID } from "../constants";
+import { getEagleStatus, subscribeEagleStatus, type EagleStatus } from "../eagleStatusState";
 import { displayFolderCount } from "../format";
 import { getLibraryFooterName, subscribeLibraryFooterName } from "../libraryFooterState";
 import { getLoginConnectState, subscribeLoginConnectState } from "../loginConnectState";
@@ -56,6 +57,7 @@ export function AccountSideMenu() {
   const displayName = useSyncExternalStore(subscribeLibraryFooterName, getLibraryFooterName, getLibraryFooterName);
   const libraryHeader = libraryHeaderLabels(displayName);
   const loginState = useSyncExternalStore(subscribeLoginConnectState, getLoginConnectState, getLoginConnectState);
+  const eagleStatus = useSyncExternalStore(subscribeEagleStatus, getEagleStatus, getEagleStatus);
   const searchState = useSyncExternalStore(subscribeSearchControlsState, getSearchControlsState, getSearchControlsState);
   const username = loginState.user?.username?.trim();
   const roleLabel = authRoleLabel(loginState.user?.role);
@@ -83,11 +85,14 @@ export function AccountSideMenu() {
                 className="pointer-events-none h-12 px-2 hover:bg-transparent hover:text-sidebar-foreground active:bg-transparent active:text-sidebar-foreground"
               >
                 <div>
-                  <Avatar className="size-8 rounded-xl" aria-hidden="true">
-                    <AvatarFallback className="rounded-xl bg-foreground text-background">
-                      <RouterIcon className="size-5" />
-                    </AvatarFallback>
-                  </Avatar>
+                  <span className="relative shrink-0">
+                    <Avatar className="size-8 rounded-xl" aria-hidden="true">
+                      <AvatarFallback className="rounded-xl bg-foreground text-background">
+                        <RouterIcon className="size-5" />
+                      </AvatarFallback>
+                    </Avatar>
+                    <EagleStatusDot status={eagleStatus} version={libraryHeader.version} />
+                  </span>
                   <span className="grid min-w-0 group-data-[collapsible=icon]:hidden">
                     <span className="truncate text-sm font-semibold leading-tight text-sidebar-foreground">{libraryHeader.name}</span>
                   </span>
@@ -563,6 +568,34 @@ function RoleChip({ description, label }: { description: string; label: string }
           {description}
         </span>
       ) : null}
+    </span>
+  );
+}
+
+const eagleStatusDotClassNames: Record<EagleStatus, string> = {
+  checking: "bg-muted-foreground",
+  offline: "bg-destructive",
+  online: "bg-emerald-500",
+};
+
+function eagleStatusLabel(status: EagleStatus, version: string) {
+  if (status === "online") return version ? `Connected to ${version}` : "Connected to Eagle";
+  if (status === "offline") return "Eagle unavailable";
+  return "Checking Eagle connection";
+}
+
+function EagleStatusDot({ status, version }: { status: EagleStatus; version: string }) {
+  const label = eagleStatusLabel(status, version);
+  return (
+    <span
+      id="eagleStatusDot"
+      role="status"
+      data-status={status}
+      title={label}
+      className="pointer-events-auto absolute -bottom-0.5 -right-0.5 flex size-3 items-center justify-center rounded-full bg-sidebar"
+    >
+      <span className={`size-2 rounded-full ${eagleStatusDotClassNames[status]}`} aria-hidden="true" />
+      <span className="sr-only">{label}</span>
     </span>
   );
 }

@@ -8,6 +8,28 @@ export class ApiError extends Error {
   }
 }
 
+export interface RequestOutcome {
+  ok: boolean;
+  /** 0 when the request never got a response (network failure). */
+  status: number;
+  url: string;
+}
+
+const requestOutcomeListeners = new Set<(outcome: RequestOutcome) => void>();
+
+export function subscribeRequestOutcome(listener: (outcome: RequestOutcome) => void) {
+  requestOutcomeListeners.add(listener);
+  return () => {
+    requestOutcomeListeners.delete(listener);
+  };
+}
+
+function notifyRequestOutcome(outcome: RequestOutcome) {
+  for (const listener of requestOutcomeListeners) {
+    listener(outcome);
+  }
+}
+
 export function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
@@ -29,7 +51,14 @@ async function requestJson<T>(url: string, options?: RequestInit): Promise<T> {
     ...options,
     credentials: options?.credentials ?? "same-origin",
   };
-  const response = await fetch(url, requestOptions);
+  let response: Response;
+  try {
+    response = await fetch(url, requestOptions);
+  } catch (error) {
+    notifyRequestOutcome({ ok: false, status: 0, url });
+    throw error;
+  }
+  notifyRequestOutcome({ ok: response.ok, status: response.status, url });
   const data = await safeJson(response);
   if (!response.ok) throw new ApiError(response.status, responseErrorMessage(data, response.status));
   return data as T;
