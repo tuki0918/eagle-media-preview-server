@@ -12,6 +12,8 @@ import {
   playableAudioExts,
   playableVideoExts,
   textPreviewExts,
+  UNCATEGORIZED_FOLDER_ID,
+  UNTAGGED_FOLDER_ID,
   urlPreviewExts,
 } from "./viewer/constants";
 import { ApiError, debounce, errorMessage, getJson, postJson } from "./viewer/api";
@@ -115,6 +117,10 @@ let sessionMaxAgeSeconds = 7 * 24 * 60 * 60;
 let allFoldersTotal = 0;
 let availableExts: string[] = [];
 let allFoldersTotalRequestId = 0;
+let uncategorizedTotal = 0;
+let untaggedTotal = 0;
+let tagsTotal = 0;
+let shortcutCountsRequestId = 0;
 const pendingRatingItemIds = new Set<string>();
 const DEFAULT_DOCUMENT_TITLE = "Media Preview Server";
 const changeSearch = debounce((query: string) => {
@@ -241,7 +247,7 @@ async function connect(credentials?: { password: string; username: string }) {
     const data = await postJson<ConnectResponse>("/api/connect", connection);
     serverReachable = true;
     showViewer(data);
-    await Promise.all([loadFolders(), loadSmartFolders(), loadItems(), loadAllFoldersTotal(), loadItemTypes()]);
+    await Promise.all([loadFolders(), loadSmartFolders(), loadItems(), loadAllFoldersTotal(), loadShortcutCounts(), loadItemTypes()]);
   } catch (error) {
     if (signedInThisAttempt && handlePostLoginAuthError(error)) return;
     if (loginAttempted && !signedInThisAttempt && isLoginAuthFailure(error)) {
@@ -411,6 +417,10 @@ function clearViewerSessionState() {
   state.requestId += 1;
   allFoldersTotalRequestId += 1;
   allFoldersTotal = 0;
+  shortcutCountsRequestId += 1;
+  uncategorizedTotal = 0;
+  untaggedTotal = 0;
+  tagsTotal = 0;
   availableExts = [];
   resetViewerResults({ resetOffset: true });
   Object.assign(state, resetFilterState());
@@ -585,6 +595,26 @@ async function loadAllFoldersTotal() {
   } catch (error) {
     if (requestId === allFoldersTotalRequestId) handleAuthError(error);
   }
+}
+
+// Totals for the sidebar shortcuts; each request asks for a single item and reads only `total`.
+async function loadShortcutCounts() {
+  const requestId = ++shortcutCountsRequestId;
+  const itemsTotal = (folderId: string) =>
+    getJson<LoadItemsResponse>(`/api/items?${new URLSearchParams({ offset: "0", limit: "1", folderId }).toString()}`);
+  const [uncategorized, untagged, tags] = await Promise.allSettled([
+    itemsTotal(UNCATEGORIZED_FOLDER_ID),
+    itemsTotal(UNTAGGED_FOLDER_ID),
+    getJson<{ total?: number }>(`/api/tags?${new URLSearchParams({ limit: "1" }).toString()}`),
+  ]);
+  if (requestId !== shortcutCountsRequestId) return;
+  for (const result of [uncategorized, untagged, tags]) {
+    if (result.status === "rejected" && handleAuthError(result.reason)) return;
+  }
+  uncategorizedTotal = uncategorized.status === "fulfilled" ? Number(uncategorized.value.total || 0) : 0;
+  untaggedTotal = untagged.status === "fulfilled" ? Number(untagged.value.total || 0) : 0;
+  tagsTotal = tags.status === "fulfilled" ? Number(tags.value.total || 0) : 0;
+  renderSearchControlButtons();
 }
 
 function refreshOpenedFolderCounts() {
@@ -816,6 +846,9 @@ function renderSearchControlButtons() {
   setSearchControlsState({
     allFoldersTotal,
     availableExts,
+    tagsTotal,
+    uncategorizedTotal,
+    untaggedTotal,
     filtersOpen: state.filtersOpen,
     folders: state.folders,
     hasActiveFilters: hasActiveFilters(state),
@@ -1074,6 +1107,7 @@ async function savePreviewMetadata(item: EagleItem, { tags, folders }: { tags: s
     render();
     await loadFolders();
     applyMetadataFolderCountChanges(previousFolderIds, patch.folders, folderBaselines);
+    void loadShortcutCounts();
     if (isCurrentPreviewItem(itemId)) renderPreviewDetails(item);
     return patch;
   } catch (error) {

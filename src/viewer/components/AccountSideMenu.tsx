@@ -104,6 +104,9 @@ export function AccountSideMenu() {
               selectedFolderId={searchState.selectedFolderId}
               selectedSmartFolderId={searchState.selectedSmartFolderId}
               showingTags={searchState.section === "tags"}
+              tagsTotal={searchState.tagsTotal}
+              uncategorizedTotal={searchState.uncategorizedTotal}
+              untaggedTotal={searchState.untaggedTotal}
             />
             <SmartFolderSideNav
               selectedSmartFolderId={searchState.selectedSmartFolderId}
@@ -159,11 +162,17 @@ function FolderShortcutSideNav({
   selectedFolderId,
   selectedSmartFolderId,
   showingTags = false,
+  tagsTotal,
+  uncategorizedTotal,
+  untaggedTotal,
 }: {
   allFoldersTotal: number;
   selectedFolderId: string;
   selectedSmartFolderId: string;
   showingTags?: boolean;
+  tagsTotal?: number;
+  uncategorizedTotal?: number;
+  untaggedTotal?: number;
 }) {
   const { isMobile, setOpenMobile } = useSidebar();
 
@@ -192,6 +201,7 @@ function FolderShortcutSideNav({
           />
           <FolderNavItem
             active={selectedFolderId === UNCATEGORIZED_FOLDER_ID}
+            count={uncategorizedTotal}
             depth={0}
             icon="inbox"
             label="Uncategorized"
@@ -200,6 +210,7 @@ function FolderShortcutSideNav({
           />
           <FolderNavItem
             active={selectedFolderId === UNTAGGED_FOLDER_ID}
+            count={untaggedTotal}
             depth={0}
             icon="tag"
             label="Untagged"
@@ -208,6 +219,7 @@ function FolderShortcutSideNav({
           />
           <FolderNavItem
             active={showingTags}
+            count={tagsTotal}
             depth={0}
             icon="tags"
             label="All Tags"

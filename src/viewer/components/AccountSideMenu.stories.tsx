@@ -119,6 +119,9 @@ function storySearchState(overrides: Partial<SearchControlsState> = {}): SearchC
     selectedRating: "",
     selectedSmartFolderId: "",
     smartFolders: sampleSmartFolders,
+    tagsTotal: 86,
+    uncategorizedTotal: 12,
+    untaggedTotal: 34,
     ...overrides,
   };
 }

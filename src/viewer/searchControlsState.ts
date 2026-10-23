@@ -16,6 +16,10 @@ export interface SearchControlsState {
   selectedRating: string;
   selectedSmartFolderId: string;
   smartFolders: readonly EagleSmartFolder[];
+  /** Sidebar shortcut totals; 0 hides the count. */
+  tagsTotal?: number;
+  uncategorizedTotal?: number;
+  untaggedTotal?: number;
 }
 
 const listeners = new Set<() => void>();
