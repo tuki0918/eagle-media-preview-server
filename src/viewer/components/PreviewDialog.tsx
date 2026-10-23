@@ -35,7 +35,9 @@ export function PreviewDialog() {
   const videoMode = previewDialogState.mode === "video";
   // On touch devices (phones and tablets) the video fills the screen and the header overlays it, fading with the player controls.
   const previewHeaderClassName = [
-    "preview-header grid h-12 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 bg-background px-2 min-[720px]:h-14 min-[720px]:px-3 desktop:col-start-1 desktop:row-start-1",
+    "preview-header grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 bg-background desktop:col-start-1 desktop:row-start-1",
+    // On desktop match the results header (height and px-5) so the back button sits where the menu button was.
+    desktopViewport ? "h-[72px] px-5" : "h-12 px-2 min-[720px]:h-14 min-[720px]:px-3",
     videoMode
       ? "touch:absolute touch:inset-x-0 touch:top-0 touch:z-[5] touch:!h-[calc(3rem+env(safe-area-inset-top)+1.5rem)] touch:bg-transparent touch:bg-[linear-gradient(180deg,rgba(5,7,10,0.78),transparent)] touch:pb-6 touch:pt-[env(safe-area-inset-top)] touch:!pl-[max(0.5rem,env(safe-area-inset-left))] touch:!pr-[max(0.5rem,env(safe-area-inset-right))] touch:text-white touch:transition-opacity touch:duration-200 touch:[&_.icon-button]:!text-white touch:[&_.preview-original-name-value]:!text-white touch:[&_[data-slot=separator]]:!border-white/30"
       : "",
