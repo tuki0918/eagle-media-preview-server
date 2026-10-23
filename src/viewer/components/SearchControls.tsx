@@ -197,14 +197,21 @@ function ResetFiltersButton({ hasResettableFilters = false }: Pick<SearchControl
   );
 }
 
-export function SearchFiltersButton({ filtersOpen = false }: Pick<SearchControlsProps, "filtersOpen">) {
-  const label = filtersOpen ? "Hide advanced search options" : "Show advanced search options";
+export function SearchFiltersButton({
+  activeFilters = [],
+  filtersOpen = false,
+}: Pick<SearchControlsProps, "filtersOpen"> & { activeFilters?: readonly string[] }) {
+  const baseLabel = filtersOpen ? "Hide advanced search options" : "Show advanced search options";
+  const activeCount = activeFilters.length;
+  const label = activeCount
+    ? `${baseLabel} (${activeCount} ${activeCount === 1 ? "filter" : "filters"} active: ${activeFilters.join(", ")})`
+    : baseLabel;
   return (
     <Button
       id="toggleFiltersButton"
       className={cn(
-        "icon-button filter-toggle-button size-9 rounded-full text-muted-foreground hover:text-foreground",
-        filtersOpen && "bg-muted text-foreground",
+        "icon-button filter-toggle-button relative size-9 rounded-full text-muted-foreground hover:text-foreground",
+        (filtersOpen || activeCount > 0) && "bg-muted text-foreground",
       )}
       variant="ghost"
       size="icon-sm"
@@ -216,6 +223,14 @@ export function SearchFiltersButton({ filtersOpen = false }: Pick<SearchControls
       onClick={toggleFilters}
     >
       <SearchIcon />
+      {activeCount ? (
+        <span
+          className="pointer-events-none absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-primary-foreground [font-variant-numeric:tabular-nums]"
+          aria-hidden="true"
+        >
+          {activeCount}
+        </span>
+      ) : null}
     </Button>
   );
 }

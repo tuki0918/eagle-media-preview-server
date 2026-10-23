@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { SIDEBAR_OPEN_STORAGE_KEY, UNCATEGORIZED_FOLDER_ID, UNTAGGED_FOLDER_ID } from "../constants";
+import { activeFilterLabels } from "../filters";
 import { getLibraryName, subscribeLibraryName } from "../libraryNameState";
 import { getResultsStatusState, subscribeResultsStatusState } from "../resultsStatusState";
 import { getSearchControlsState, subscribeSearchControlsState } from "../searchControlsState";
+import { getTagChipsState, subscribeTagChipsState } from "../tagChipsState";
 import { getTagListState, subscribeTagListState } from "../tagListState";
 import { buildTagSections } from "../tagOverview";
 import { getZoomLevel, gridColumnWidth, subscribeZoomLevel, tileRowHeight } from "../zoomState";
@@ -40,6 +42,13 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
   const libraryName = useSyncExternalStore(subscribeLibraryName, getLibraryName, getLibraryName);
   const headerHidden = useHeaderHiddenOnScroll();
   const tagListState = useSyncExternalStore(subscribeTagListState, getTagListState, getTagListState);
+  const tagChips = useSyncExternalStore(subscribeTagChipsState, getTagChipsState, getTagChipsState);
+  const activeFilters = activeFilterLabels({
+    query: searchState.searchQuery,
+    tags: [...tagChips.tags],
+    ext: searchState.selectedExt,
+    rating: searchState.selectedRating,
+  });
   const showingTags = searchState.section === "tags";
   const tagTotal = useMemo(() => buildTagSections(tagListState.overview).total, [tagListState.overview]);
   const headerCount = showingTags ? tagTotal : resultsStatus.total;
@@ -98,7 +107,7 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
                 </span>
               </button>
               <div className="flex min-w-0 items-center justify-end">
-                {showingTags ? null : <SearchFiltersButton filtersOpen={searchState.filtersOpen} />}
+                {showingTags ? null : <SearchFiltersButton activeFilters={activeFilters} filtersOpen={searchState.filtersOpen} />}
               </div>
             </header>
             {/* Overlay the filters below the header so opening them never shifts the results. The panel

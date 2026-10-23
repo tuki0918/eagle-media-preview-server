@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { hasActiveFilters, hasResettableFilters, resetFilterState, type FilterState } from "./filters";
+import { activeFilterLabels, hasActiveFilters, hasResettableFilters, resetFilterState, type FilterState } from "./filters";
 
 const emptyFilters = (overrides: Partial<FilterState> = {}): FilterState => ({
   query: "",
@@ -12,6 +12,18 @@ const emptyFilters = (overrides: Partial<FilterState> = {}): FilterState => ({
 });
 
 describe("filter state helpers", () => {
+  test("labels the filters hidden in the search panel", () => {
+    expect(activeFilterLabels(emptyFilters({ folderId: "folder" }))).toEqual([]);
+    expect(activeFilterLabels(emptyFilters({ query: "cat", tags: ["a", "b"], ext: "jpg", rating: "3" }))).toEqual([
+      '"cat"',
+      "#a",
+      "#b",
+      "JPG",
+      "★ 3",
+    ]);
+    expect(activeFilterLabels(emptyFilters({ rating: "0" }))).toEqual(["No rating"]);
+  });
+
   test("detects active search filters", () => {
     expect(hasActiveFilters(emptyFilters())).toBe(false);
     expect(hasActiveFilters(emptyFilters({ query: "cat" }))).toBe(true);

@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { AdvancedFilters, SearchControls, SearchInput } from "./SearchControls";
+import { AdvancedFilters, SearchControls, SearchFiltersButton, SearchInput } from "./SearchControls";
 import { storyCanvasClassName, storyPanelClassName } from "./storyFixtures";
 
 const meta = {
@@ -39,6 +39,18 @@ export const AdvancedFiltersOnly: Story = {
   render: () => (
     <div className={storyCanvasClassName}>
       <AdvancedFilters filtersOpen hasActiveFilters selectedExt="mp4" selectedLimit={60} selectedRating="3" />
+    </div>
+  ),
+};
+
+export const FiltersButtonWithActiveFilters: Story = {
+  render: () => (
+    <div className={storyPanelClassName}>
+      <div className="flex items-center gap-3">
+        <SearchFiltersButton />
+        <SearchFiltersButton activeFilters={['"landing page"', "#web", "JPG"]} />
+        <SearchFiltersButton activeFilters={["★ 4"]} filtersOpen />
+      </div>
     </div>
   ),
 };
