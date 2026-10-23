@@ -1,12 +1,19 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { FunnelXIcon, Search } from "lucide-react";
+import { CheckIcon, FunnelXIcon, Search } from "lucide-react";
+import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui";
 import { Button } from "@/components/ui/button";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
 } from "@/components/ui/input-group";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { parseRatingFilter, ratingFilterSummary, toggleRatingFilter } from "../filters";
 import { MEDIA_TYPE_OPTIONS, RATING_OPTIONS } from "../shellConfig";
 import {
   getSearchControlsState,
@@ -139,21 +146,81 @@ export function AdvancedFilters({
           ))}
         </select>
       </label>
-      <label className="grid gap-2">
-        <select id="ratingSelect" className={selectClassName} aria-label="Rating" value={selectedRating} onChange={changeRating}>
-          <option value="">All ratings</option>
-          <option value="0">No rating</option>
-          {RATING_OPTIONS.map((rating) => (
-            <option key={rating} value={rating}>
-              ★ {rating}
-            </option>
-          ))}
-        </select>
-      </label>
+      <RatingFilter selectedRating={selectedRating} />
       <div className="flex justify-end">
         <ResetFiltersButton hasResettableFilters={hasResettableFilters} />
       </div>
     </div>
+  );
+}
+
+function RatingFilter({ selectedRating }: { selectedRating: string }) {
+  const selected = parseRatingFilter(selectedRating);
+  const summary = ratingFilterSummary(selectedRating);
+  return (
+    <DropdownMenu modal={false}>
+      <DropdownMenuTrigger asChild>
+        <button
+          id="ratingSelect"
+          type="button"
+          className={cn(selectClassName, "flex min-w-0 items-center text-left")}
+          aria-label={`Rating: ${summary}`}
+          title={summary}
+        >
+          <RatingFilterSummary ratings={selected} summary={summary} />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent id="ratingFilterMenu" align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] rounded-xl p-1.5">
+        {RATING_OPTIONS.map((rating) => (
+          <DropdownMenuPrimitive.CheckboxItem
+            key={rating}
+            data-slot="dropdown-menu-checkbox-item"
+            className="group/rating flex cursor-default items-center gap-2.5 rounded-lg px-2 py-2 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground"
+            checked={selected.includes(rating)}
+            aria-label={rating === 0 ? "No rating" : `${rating} stars`}
+            // Keep the menu open so several ratings can be picked in one go.
+            onSelect={(event) => event.preventDefault()}
+            onCheckedChange={() => changeRating(toggleRatingFilter(selectedRating, rating))}
+          >
+            <span
+              className="flex size-4 shrink-0 items-center justify-center rounded-[5px] border border-input bg-background text-primary-foreground transition-colors group-data-[state=checked]/rating:border-primary group-data-[state=checked]/rating:bg-primary"
+              aria-hidden="true"
+            >
+              <DropdownMenuPrimitive.ItemIndicator>
+                <CheckIcon className="size-3" strokeWidth={3} />
+              </DropdownMenuPrimitive.ItemIndicator>
+            </span>
+            <RatingFilterLabel rating={rating} />
+          </DropdownMenuPrimitive.CheckboxItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function RatingFilterSummary({ ratings, summary }: { ratings: readonly number[]; summary: string }) {
+  if (ratings.length === 1) return <RatingFilterLabel rating={ratings[0]} />;
+  if (ratings.length > 1 && summary.startsWith("★")) {
+    return (
+      <span className="truncate">
+        <span className="mr-1.5 text-foreground">★</span>
+        {summary.slice(1)}
+      </span>
+    );
+  }
+  return <span className="truncate">{summary}</span>;
+}
+
+function RatingFilterLabel({ rating }: { rating: number }) {
+  if (rating === 0) return <span className="shrink-0">None</span>;
+  return (
+    <span className="shrink-0 tracking-[0.08em]" aria-hidden="true">
+      {[1, 2, 3, 4, 5].map((value) => (
+        <span key={value} className={value <= rating ? "text-foreground" : "text-[color-mix(in_srgb,var(--muted-foreground)_35%,transparent)]"}>
+          ★
+        </span>
+      ))}
+    </span>
   );
 }
 

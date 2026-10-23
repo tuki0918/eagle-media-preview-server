@@ -20,6 +20,18 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
 
+export const MultipleRatings: Story = {
+  args: {
+    selectedRating: "5,4,0",
+  },
+};
+
+export const NoRatingFilter: Story = {
+  args: {
+    selectedRating: "",
+  },
+};
+
 export const Collapsed: Story = {
   args: {
     filtersOpen: false,
@@ -48,7 +60,7 @@ export const FiltersButtonWithActiveFilters: Story = {
       <div className="flex items-center gap-3">
         <SearchFiltersButton />
         <SearchFiltersButton activeFilters={['"landing page"', "#web", "JPG"]} />
-        <SearchFiltersButton activeFilters={["★ 4"]} filtersOpen />
+        <SearchFiltersButton activeFilters={["★★★★☆"]} filtersOpen />
       </div>
     </div>
   ),

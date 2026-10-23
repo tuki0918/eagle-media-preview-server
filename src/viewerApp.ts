@@ -166,7 +166,7 @@ async function init() {
       if (element?.closest(".search-box")) return;
       hideTagSuggestions();
       // The toggle button handles its own click, so closing here would just reopen the panel.
-      if (!state.filtersOpen || element?.closest(".controls, #toggleFiltersButton")) return;
+      if (!state.filtersOpen || element?.closest(".controls, #toggleFiltersButton, #ratingFilterMenu")) return;
       state.filtersOpen = false;
       syncAdvancedFiltersUi();
       syncUrlState();

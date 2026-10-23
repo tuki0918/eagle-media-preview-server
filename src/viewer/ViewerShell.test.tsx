@@ -41,7 +41,7 @@ import {
 import { resetPreviewDialogState, setPreviewDialogState } from "./previewDialogState";
 import { setImageOverlayControlsVisible } from "./imageOverlayState";
 import { setVideoOverlayControlsVisible } from "./videoOverlayState";
-import { MEDIA_TYPE_OPTIONS, RATING_OPTIONS } from "./shellConfig";
+import { MEDIA_TYPE_OPTIONS } from "./shellConfig";
 import { setLoginConnectState } from "./loginConnectState";
 import { setLibraryFooterName } from "./libraryFooterState";
 import { setEagleStatus } from "./eagleStatusState";
@@ -136,10 +136,8 @@ describe("ViewerAppShell", () => {
       expect(html).toContain(type.toUpperCase());
     }
 
-    for (const rating of RATING_OPTIONS) {
-      expect(html).toContain(`value="${rating}"`);
-      expect(html).toContain(`★ ${rating}`);
-    }
+    expect(html).toMatch(/id="ratingSelect"[^>]*aria-label="Rating: All ratings"/);
+    expect(html).toContain(">All ratings<");
 
   });
 

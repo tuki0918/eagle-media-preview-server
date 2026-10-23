@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { activeFilterLabels, hasActiveFilters, hasResettableFilters, resetFilterState, type FilterState } from "./filters";
+import { activeFilterLabels, formatRatingFilter, hasActiveFilters, hasResettableFilters, parseRatingFilter, ratingFilterSummary, resetFilterState, toggleRatingFilter, type FilterState } from "./filters";
 
 const emptyFilters = (overrides: Partial<FilterState> = {}): FilterState => ({
   query: "",
@@ -19,9 +19,29 @@ describe("filter state helpers", () => {
       "#a",
       "#b",
       "JPG",
-      "★ 3",
+      "★★★☆☆",
     ]);
-    expect(activeFilterLabels(emptyFilters({ rating: "0" }))).toEqual(["No rating"]);
+    expect(activeFilterLabels(emptyFilters({ rating: "0" }))).toEqual(["None"]);
+    expect(activeFilterLabels(emptyFilters({ rating: "5,0,4" }))).toEqual(["★5,4, None"]);
+  });
+
+  test("parses, formats, and toggles multi-select ratings", () => {
+    expect(parseRatingFilter("")).toEqual([]);
+    expect(parseRatingFilter("3")).toEqual([3]);
+    expect(parseRatingFilter("0, 2,5,2,9,x")).toEqual([5, 2, 0]);
+    expect(formatRatingFilter([0, 4, 5])).toBe("5,4,0");
+    expect(toggleRatingFilter("", 4)).toBe("4");
+    expect(toggleRatingFilter("4", 0)).toBe("4,0");
+    expect(toggleRatingFilter("5,4,0", 4)).toBe("5,0");
+    expect(toggleRatingFilter("4", 4)).toBe("");
+  });
+
+  test("summarizes the selected ratings for the field", () => {
+    expect(ratingFilterSummary("")).toBe("All ratings");
+    expect(ratingFilterSummary("5")).toBe("★★★★★");
+    expect(ratingFilterSummary("0")).toBe("None");
+    expect(ratingFilterSummary("4,5")).toBe("★5,4");
+    expect(ratingFilterSummary("5,4,0")).toBe("★5,4, None");
   });
 
   test("detects active search filters", () => {

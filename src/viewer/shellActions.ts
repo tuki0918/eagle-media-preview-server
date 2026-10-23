@@ -111,8 +111,8 @@ export function changeMediaType(event: { currentTarget: { value: string } }) {
   actions.mediaTypeChanged(event.currentTarget.value);
 }
 
-export function changeRating(event: { currentTarget: { value: string } }) {
-  actions.ratingChanged(event.currentTarget.value);
+export function changeRating(rating: string) {
+  actions.ratingChanged(rating);
 }
 
 export function changePageSize(pageSize: number) {

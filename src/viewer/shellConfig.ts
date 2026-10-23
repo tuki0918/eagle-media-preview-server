@@ -14,6 +14,7 @@ export const MEDIA_TYPE_OPTIONS = [
   "m4a",
 ] as const;
 
-export const RATING_OPTIONS = [1, 2, 3, 4, 5] as const;
+// Rating filter choices, highest first; 0 means "no rating".
+export const RATING_OPTIONS = [5, 4, 3, 2, 1, 0] as const;
 
 export const PAGE_SIZE_OPTIONS = [30, 60, 120, 240] as const;

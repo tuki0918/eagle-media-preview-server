@@ -1,4 +1,5 @@
 import { DEFAULT_PAGE_SIZE, DEFAULT_VIEW_MODE, MAX_PAGE_SIZE } from "./constants";
+import { formatRatingFilter, parseRatingFilter } from "./filters";
 import { clamp, normalizeTag } from "./format";
 import type { ViewerState } from "./types";
 
@@ -31,7 +32,7 @@ export function parseViewerUrlState(search: string): ViewerUrlState {
     smartFolderId: params.get("smartFolder") || "",
     section: params.get("section") === "tags" ? "tags" : "items",
     ext: params.get("ext") || "",
-    rating: params.get("rating") || "",
+    rating: formatRatingFilter(parseRatingFilter(params.get("rating") || "")),
     filtersOpen: params.get("filters") === "1",
     limit,
     viewMode,

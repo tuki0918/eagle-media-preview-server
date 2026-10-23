@@ -128,6 +128,20 @@ function clampLimit(value: unknown, fallback = 60) {
   return Math.min(Math.max(parsed, 30), 1000);
 }
 
+// Accepts "4", "5,4,0" or [5, 4]; returns unique 0-5 ratings, highest first with "no rating" (0) last.
+function parseRatingFilter(value: unknown): number[] {
+  if (value === undefined || value === null || value === "") return [];
+  const parts = Array.isArray(value) ? value : String(value).split(",");
+  const ratings = new Set<number>();
+  for (const part of parts) {
+    const text = String(part).trim();
+    if (!text) continue;
+    const rating = Number(text);
+    if (Number.isInteger(rating) && rating >= 0 && rating <= 5) ratings.add(rating);
+  }
+  return [...ratings].sort((left, right) => (left === 0 ? 1 : right === 0 ? -1 : right - left));
+}
+
 function normalizeOffset(value: unknown) {
   const parsed = Number.parseInt(String(value), 10);
   if (!Number.isFinite(parsed) || parsed < 0) return 0;
@@ -281,6 +295,31 @@ function createEagleClient({
     return items;
   }
 
+  // Eagle's item/get accepts a single rating, so a multi-rating filter is served as
+  // consecutive groups (highest rating first) and paginated across them.
+  async function listItemsForRatings(baseBody: { limit: number; offset: number } & Record<string, unknown>, ratings: number[]) {
+    const { offset, limit } = baseBody;
+    const totals = await Promise.all(ratings.map(async (rating) => {
+      const page = normalizePaginatedResponse(
+        await request("/api/v2/item/get", { method: "POST", body: { ...baseBody, rating, offset: 0, limit: 1, fields: ["id"] } }),
+      );
+      return page.total;
+    }));
+    const slices: Array<{ limit: number; offset: number; rating: number }> = [];
+    let groupStart = 0;
+    for (const [index, rating] of ratings.entries()) {
+      const groupEnd = groupStart + totals[index];
+      const start = Math.max(offset, groupStart);
+      const end = Math.min(offset + limit, groupEnd);
+      if (start < end) slices.push({ rating, offset: start - groupStart, limit: end - start });
+      groupStart = groupEnd;
+    }
+    const pages = await Promise.all(slices.map(async (slice) => normalizePaginatedResponse(
+      await request("/api/v2/item/get", { method: "POST", body: { ...baseBody, ...slice } }),
+    ).items.slice(0, slice.limit)));
+    return { items: pages.flat(), total: groupStart, offset, limit };
+  }
+
   return {
     async appInfo() {
       return unwrapData(await request("/api/v2/app/info"));
@@ -340,10 +379,13 @@ function createEagleClient({
         body.folders = [folderId];
       }
       if (ext) body.ext = ext;
-      if (rating !== undefined && rating !== null && rating !== "") body.rating = Number(rating);
       if (keywords) body.keywords = Array.isArray(keywords) ? keywords : [keywords];
       const cleanTags = (Array.isArray(tags) ? tags : [tags]).map((tag) => String(tag || "").trim()).filter(Boolean);
       if (cleanTags.length) body.tags = cleanTags;
+
+      const ratings = parseRatingFilter(rating);
+      if (ratings.length > 1) return listItemsForRatings(body, ratings);
+      if (ratings.length === 1) body.rating = ratings[0];
 
       return normalizePaginatedResponse(
         await request("/api/v2/item/get", { method: "POST", body }),
@@ -711,4 +753,4 @@ function resolveLibraryItemDir(libraryPath: string, itemId: unknown) {
   if (relativePath.startsWith("..") || isAbsolute(relativePath)) return "";
   return itemDir;
 }
-module.exports = { EagleRequestError, ITEM_FIELDS, clampLimit, normalizeOffset, normalizeStringArray, createEagleClient, normalizePaginatedResponse, unwrapData, pathFromFileValue, resolveLibraryItemFile };
+module.exports = { EagleRequestError, ITEM_FIELDS, clampLimit, normalizeOffset, normalizeStringArray, createEagleClient, normalizePaginatedResponse, parseRatingFilter, unwrapData, pathFromFileValue, resolveLibraryItemFile };

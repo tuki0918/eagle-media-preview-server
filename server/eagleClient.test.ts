@@ -12,6 +12,7 @@ const {
   clampLimit,
   createEagleClient,
   normalizePaginatedResponse,
+  parseRatingFilter,
   pathFromFileValue,
   resolveLibraryItemFile,
 } = require("../dist/.generated/plugin-service/eagleClient.cjs");
@@ -101,6 +102,46 @@ test("listItems omits rating when the filter is not specified", async () => {
   await client.listItems({ rating: null });
 
   assert.equal(Object.hasOwn(JSON.parse(calls[0].init.body), "rating"), false);
+});
+
+test("parseRatingFilter normalizes multi-select ratings", () => {
+  assert.deepEqual(parseRatingFilter(null), []);
+  assert.deepEqual(parseRatingFilter("4"), [4]);
+  assert.deepEqual(parseRatingFilter("0,3,5,3,7,x"), [5, 3, 0]);
+  assert.deepEqual(parseRatingFilter([1, "2"]), [2, 1]);
+});
+
+test("listItems pages across rating groups when several ratings are selected", async () => {
+  const totals: Record<number, number> = { 5: 2, 3: 40, 0: 100 };
+  const bodies: Array<Record<string, unknown>> = [];
+  const client = createEagleClient({
+    baseUrl: "http://eagle.local:41595",
+    fetchImpl: async (_url: string, init: { method?: string; body: string }) => {
+      const body = JSON.parse(init.body);
+      bodies.push(body);
+      const total = totals[body.rating as number];
+      const start = Math.min(body.offset, total);
+      const end = Math.min(body.offset + body.limit, total);
+      const data = Array.from({ length: end - start }, (_, index) => ({ id: `r${body.rating}-${start + index}` }));
+      return jsonResponse({ status: "success", data: { data, total, offset: body.offset, limit: body.limit } });
+    },
+  });
+
+  const result = await client.listItems({ offset: 30, limit: 30, ext: "jpg", rating: "0,5,3" });
+
+  assert.equal(result.total, 142);
+  assert.equal(result.offset, 30);
+  assert.equal(result.items.length, 30);
+  // ★5 holds items 0-1, ★3 holds 2-41, "no rating" starts at 42.
+  assert.equal(result.items[0].id, "r3-28");
+  assert.equal(result.items[11].id, "r3-39");
+  assert.equal(result.items[12].id, "r0-0");
+  assert.equal(result.items[29].id, "r0-17");
+  assert.ok(bodies.every((body) => body.ext === "jpg"));
+  assert.deepEqual(
+    bodies.filter((body) => body.limit !== 1).map((body) => [body.rating, body.offset, body.limit]),
+    [[3, 28, 12], [0, 0, 18]],
+  );
 });
 
 test("listItems sends multiple tag filters with keywords", async () => {
