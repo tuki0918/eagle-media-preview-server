@@ -50,6 +50,7 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
     rating: searchState.selectedRating,
   });
   const showingTags = searchState.section === "tags";
+  const inSmartFolder = Boolean(searchState.selectedSmartFolderId);
   const tagTotal = useMemo(() => buildTagSections(tagListState.overview).total, [tagListState.overview]);
   const headerCount = showingTags ? tagTotal : resultsStatus.total;
   const headerCountLabel = showingTags
@@ -79,7 +80,7 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
       >
         <AccountSideMenu />
         <SidebarInset className="min-w-0 bg-background">
-          <div className={`sticky top-0 z-10 transition-transform duration-200 ease-out ${headerHidden && !searchState.filtersOpen ? "-translate-y-full" : "translate-y-0"}`}>
+          <div className={`sticky top-0 z-10 transition-transform duration-200 ease-out ${headerHidden && !(searchState.filtersOpen && !inSmartFolder) ? "-translate-y-full" : "translate-y-0"}`}>
             <header className="grid h-14 shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 bg-[color-mix(in_srgb,var(--background)_82%,transparent)] px-3 backdrop-blur-xl min-[720px]:h-[72px] min-[720px]:px-5">
               <div className="flex min-w-0 items-center">
                 <SidebarTrigger
@@ -107,13 +108,13 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
                 </span>
               </button>
               <div className="flex min-w-0 items-center justify-end">
-                {showingTags ? null : <SearchFiltersButton activeFilters={activeFilters} filtersOpen={searchState.filtersOpen} />}
+                {showingTags ? null : <SearchFiltersButton activeFilters={activeFilters} filtersOpen={searchState.filtersOpen} unavailable={inSmartFolder} />}
               </div>
             </header>
             {/* Overlay the filters below the header so opening them never shifts the results. The panel
                 hugs the header and overhangs the content edges by its corner radius, so thumbnails
                 scrolling underneath can't peek through a gap or around the rounded corners. */}
-            {showingTags ? null : (
+            {showingTags || inSmartFolder ? null : (
               <div className="pointer-events-none absolute inset-x-1 top-full min-[720px]:inset-x-2">
                 <SearchControls />
               </div>

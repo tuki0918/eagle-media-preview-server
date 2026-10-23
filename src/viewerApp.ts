@@ -175,6 +175,8 @@ async function init() {
       applyFilterChange({ folderId, smartFolderId: "" });
     },
     smartFolderChanged: (smartFolderId: string) => {
+      // Smart folders ignore search and filters, so their panel can't stay open.
+      if (smartFolderId) state.filtersOpen = false;
       applyFilterChange({ folderId: "", smartFolderId });
     },
     tagsOpened: openTagList,
@@ -188,6 +190,7 @@ async function init() {
       applyFilterChange({ limit });
     },
     toggleFilters: () => {
+      if (state.smartFolderId) return;
       state.filtersOpen = !state.filtersOpen;
       syncAdvancedFiltersUi();
       syncUrlState();

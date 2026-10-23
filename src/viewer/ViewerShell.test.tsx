@@ -37,6 +37,7 @@ import {
   TilesSentinel,
   ViewerAppShell,
   ViewerShellLayout,
+  SearchFiltersButton,
 } from "./ViewerShell";
 import { resetPreviewDialogState, setPreviewDialogState } from "./previewDialogState";
 import { setImageOverlayControlsVisible } from "./imageOverlayState";
@@ -940,6 +941,17 @@ describe("ViewerAppShell", () => {
     expect(html).not.toContain('id="pageSizeSelect"');
     expect(html).toContain('id="resetFiltersButton"');
     expect(html).toContain('aria-label="Reset filters"');
+  });
+
+  test("disables the search filters button in smart folders", () => {
+    const html = renderToStaticMarkup(<SearchFiltersButton activeFilters={["JPG"]} filtersOpen unavailable />);
+
+    expect(html).toContain('id="toggleFiltersButton"');
+    expect(html).toContain('aria-disabled="true"');
+    expect(html).toContain("aria-label=\"Search and filters aren&#x27;t available in smart folders\"");
+    expect(html).toContain("lucide-search-slash");
+    expect(html).not.toContain(" aria-expanded=");
+    expect(html).not.toContain(">1<");
   });
 
   test("renders search input as a reusable component", () => {

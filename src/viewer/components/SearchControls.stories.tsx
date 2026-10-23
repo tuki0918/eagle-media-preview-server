@@ -61,6 +61,7 @@ export const FiltersButtonWithActiveFilters: Story = {
         <SearchFiltersButton />
         <SearchFiltersButton activeFilters={['"landing page"', "#web", "JPG"]} />
         <SearchFiltersButton activeFilters={["★★★★☆"]} filtersOpen />
+        <SearchFiltersButton activeFilters={["★★★★☆"]} unavailable />
       </div>
     </div>
   ),

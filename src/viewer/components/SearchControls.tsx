@@ -1,5 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { CheckIcon, FunnelXIcon, Search } from "lucide-react";
+import { CheckIcon, FunnelXIcon, Search, SearchSlashIcon } from "lucide-react";
 import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui";
 import { Button } from "@/components/ui/button";
 import {
@@ -249,10 +249,34 @@ function ResetFiltersButton({ hasResettableFilters = false }: Pick<SearchControl
   );
 }
 
+export const SMART_FOLDER_FILTERS_UNAVAILABLE_LABEL = "Search and filters aren't available in smart folders";
+
 export function SearchFiltersButton({
   activeFilters = [],
   filtersOpen = false,
-}: Pick<SearchControlsProps, "filtersOpen"> & { activeFilters?: readonly string[] }) {
+  unavailable = false,
+}: Pick<SearchControlsProps, "filtersOpen"> & {
+  activeFilters?: readonly string[];
+  /** Smart folders return their own saved results, so search and filters would have no effect. */
+  unavailable?: boolean;
+}) {
+  if (unavailable) {
+    return (
+      <Button
+        id="toggleFiltersButton"
+        className="icon-button filter-toggle-button size-9 cursor-not-allowed rounded-full text-muted-foreground opacity-45 hover:bg-transparent hover:text-muted-foreground"
+        variant="ghost"
+        size="icon-sm"
+        type="button"
+        // aria-disabled (not disabled) keeps the hover title explaining why it can't be used.
+        aria-disabled="true"
+        aria-label={SMART_FOLDER_FILTERS_UNAVAILABLE_LABEL}
+        title={SMART_FOLDER_FILTERS_UNAVAILABLE_LABEL}
+      >
+        <SearchSlashIcon className="size-[18px]" aria-hidden="true" />
+      </Button>
+    );
+  }
   const baseLabel = filtersOpen ? "Hide advanced search options" : "Show advanced search options";
   const activeCount = activeFilters.length;
   const label = activeCount
