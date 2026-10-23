@@ -24,6 +24,8 @@ Optional:
 ## Future Plans
 
 - Expand support for additional file extensions
+- Sort results by date, rating, name, or size (on hold: waiting for Eagle API support)
+- Add or remove favorite tags (on hold: waiting for Eagle API support)
 - Add AI-related capabilities
 
 ## PWA Installation
