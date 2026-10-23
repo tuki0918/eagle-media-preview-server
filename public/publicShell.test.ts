@@ -1085,7 +1085,7 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   assert.match(app, /state\.viewMode === "tiles"/);
   assert.match(html, /export function ResultList\(\{ items, viewMode, onOpenPreview \}[^)]*\) \{/);
   assert.match(html, /aspectRatio: String\(ratio\)/);
-  assert.match(html, /flexBasis: `calc\(var\(--tile-h, 190px\) \* var\(--tile-scale, 1\) \* \$\{ratio\}\)`/);
+  assert.match(html, /flexBasis: `calc\(var\(--tile-h, 190px\) \* var\(--tile-scale, 1\) \* var\(--tile-fit, 1\) \* \$\{ratio\}\)`/);
   assert.match(html, /onPointerDown=\{trigger\.onPointerDown\}/);
   assert.match(html, /onClick=\{trigger\.onClick\}/);
   assert.match(app, /setResultSurfaceState\(\{[\s\S]*kind: "list",/);

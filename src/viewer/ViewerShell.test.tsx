@@ -1045,7 +1045,7 @@ describe("ViewerAppShell", () => {
 
     expect(html).toContain("tile-item");
     expect(html).toContain("thumb-loading");
-    expect(html).toContain("flex-basis:calc(var(--tile-h, 190px) * var(--tile-scale, 1) * 1.5)");
+    expect(html).toContain("flex-basis:calc(var(--tile-h, 190px) * var(--tile-scale, 1) * var(--tile-fit, 1) * 1.5)");
     expect(html).toContain("2:05");
     expect(html).not.toContain("file-badge");
     expect(html).not.toContain("rating-star");
