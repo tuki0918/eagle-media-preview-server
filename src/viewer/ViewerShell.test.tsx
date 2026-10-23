@@ -39,6 +39,7 @@ import {
   ViewerShellLayout,
   SearchFiltersButton,
 } from "./ViewerShell";
+import { TagSearchControls } from "./components/SearchControls";
 import { resetPreviewDialogState, setPreviewDialogState } from "./previewDialogState";
 import { setImageOverlayControlsVisible } from "./imageOverlayState";
 import { setVideoOverlayControlsVisible } from "./videoOverlayState";
@@ -944,7 +945,9 @@ describe("ViewerAppShell", () => {
   });
 
   test("disables the search filters button in smart folders", () => {
-    const html = renderToStaticMarkup(<SearchFiltersButton activeFilters={["JPG"]} filtersOpen unavailable />);
+    const html = renderToStaticMarkup(
+      <SearchFiltersButton activeFilters={["JPG"]} filtersOpen unavailableLabel="Search and filters aren't available in smart folders" />,
+    );
 
     expect(html).toContain('id="toggleFiltersButton"');
     expect(html).toContain('aria-disabled="true"');
@@ -952,6 +955,30 @@ describe("ViewerAppShell", () => {
     expect(html).toContain("lucide-search-slash");
     expect(html).not.toContain(" aria-expanded=");
     expect(html).not.toContain(">1<");
+    expect(html).toContain("opacity-50");
+  });
+
+  test("renders the All Tags search panel as a single search box with its own clear button", () => {
+    const closed = renderToStaticMarkup(<TagSearchControls filtersOpen={false} query="" />);
+    expect(closed).toContain('id="tagSearchControls"');
+    expect(closed).toContain('hidden=""');
+
+    const empty = renderToStaticMarkup(<TagSearchControls filtersOpen query="" />);
+    expect(empty).not.toContain('hidden=""');
+    expect(empty).toContain('id="tagSearchInput"');
+    expect(empty).not.toContain('id="clearTagSearchButton"');
+    expect(empty).not.toContain('filter-reset-button');
+    expect(empty).not.toContain('id="extSelect"');
+    expect(empty).not.toContain('id="ratingSelect"');
+
+    const searching = renderToStaticMarkup(<TagSearchControls filtersOpen query="cat" />);
+    expect(searching).toContain('value="cat"');
+    expect(searching).toMatch(/id="clearTagSearchButton"[^>]*aria-label="Clear tag search"/);
+  });
+
+  test("shows a clear button in the item search only while it has text", () => {
+    expect(renderToStaticMarkup(<SearchInput value="" />)).not.toContain('id="clearSearchButton"');
+    expect(renderToStaticMarkup(<SearchInput value="alpha" />)).toMatch(/id="clearSearchButton"[^>]*aria-label="Clear search text"/);
   });
 
   test("renders search input as a reusable component", () => {
@@ -2082,7 +2109,7 @@ describe("tag list", () => {
 
     const html = renderToStaticMarkup(<TagList />);
 
-    expect(html).toContain('placeholder="Search tags"');
+    expect(html).not.toContain('id="tagSearchInput"');
     expect(html.indexOf("Starred Tags")).toBeLessThan(html.indexOf("Nature"));
     expect(html.indexOf("Nature")).toBeLessThan(html.indexOf("Ungrouped"));
     expect(html.indexOf("@work: xxx")).toBeLessThan(html.indexOf("tree"));

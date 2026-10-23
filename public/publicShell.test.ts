@@ -1031,11 +1031,12 @@ test("public UI supports tag filter chips", async () => {
   assert.match(app, /Object\.assign\(state, resetFilterState\(\)\);/);
   assert.match(controls, /data-slot="input-group"/);
   assert.match(controls, /data-slot="input-group-addon" data-align="inline-start"/);
-  assert.doesNotMatch(controls, /data-slot="input-group-addon" data-align="inline-end"/);
+  // The only right-aligned addon is our own clear button, shown while there is search text.
+  assert.match(controls, /data-slot="input-group-addon" data-align="inline-end"[^>]*>\s*<button[^>]*id="clearSearchButton"/);
   assert.match(controls, /search-row[^"]*grid items-stretch gap-3/);
   assert.match(controls, /tag-chips[^"]*flex flex-wrap gap-1\.5 empty:hidden/);
   assert.match(controls, /filter-reset-button[^"]*max-\[540px\]:size-11/);
-  assert.match(controls, /filter-reset-button[^"]*disabled:opacity-\[0\.42\]/);
+  assert.match(controls, /filter-reset-button[^"]*disabled:opacity-50/);
   assert.match(controls, /unified-search-input min-w-0/);
   assert.doesNotMatch(css, /\.tag-input\s*\{/);
   assert.doesNotMatch(css, /\.tag-suggestions\s*\{/);

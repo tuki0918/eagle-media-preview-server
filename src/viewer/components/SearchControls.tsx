@@ -1,5 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { CheckIcon, FunnelXIcon, Search, SearchSlashIcon } from "lucide-react";
+import { CheckIcon, FunnelXIcon, Search, SearchSlashIcon, XIcon } from "lucide-react";
 import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,6 +15,7 @@ import {
 import { cn } from "@/lib/utils";
 import { parseRatingFilter, ratingFilterSummary, toggleRatingFilter } from "../filters";
 import { MEDIA_TYPE_OPTIONS, RATING_OPTIONS } from "../shellConfig";
+import { getTagListState, setTagSearchQuery, subscribeTagListState } from "../tagListState";
 import {
   getSearchControlsState,
   subscribeSearchControlsState,
@@ -107,22 +108,60 @@ export function SearchInput({ value = "" }: { value?: string }) {
   }, [value]);
 
   return (
-    <InputGroupInput
-      id="searchInput"
-      className="unified-search-input min-w-0 pl-10 pr-3"
-      type="search"
-      placeholder="Search title or tag"
-      autoComplete="off"
-      aria-label="Search text or tag"
-      value={inputValue}
-      onChange={(event) => {
-        setInputValue(event.currentTarget.value);
-        changeSearchQuery(event);
-      }}
-      onFocus={focusSearch}
-      onKeyDown={handleSearchKeyDown}
-    />
+    <>
+      <InputGroupInput
+        id="searchInput"
+        className={cn("unified-search-input min-w-0 pl-10", inputValue ? "pr-12" : "pr-3")}
+        type="search"
+        placeholder="Search title or tag"
+        autoComplete="off"
+        aria-label="Search text or tag"
+        value={inputValue}
+        onChange={(event) => {
+          setInputValue(event.currentTarget.value);
+          changeSearchQuery(event);
+        }}
+        onFocus={focusSearch}
+        onKeyDown={handleSearchKeyDown}
+      />
+      {inputValue ? (
+        <SearchClearButton
+          id="clearSearchButton"
+          label="Clear search text"
+          onClear={() => {
+            setInputValue("");
+            changeSearchQuery({ currentTarget: { value: "" } });
+            focusInputById("searchInput");
+          }}
+        />
+      ) : null}
+    </>
   );
+}
+
+// Our own clear button replaces the browser's "×" (missing in Firefox, tiny on touch screens) so every search box behaves the same.
+function SearchClearButton({ id, label, onClear }: { id: string; label: string; onClear: () => void }) {
+  return (
+    <InputGroupAddon align="inline-end" className="right-1.5">
+      <Button
+        id={id}
+        className="size-8 rounded-full text-muted-foreground hover:text-foreground max-[540px]:size-9"
+        variant="ghost"
+        size="icon-sm"
+        type="button"
+        aria-label={label}
+        title={label}
+        onClick={onClear}
+      >
+        <XIcon />
+      </Button>
+    </InputGroupAddon>
+  );
+}
+
+// The shared Input primitive doesn't forward refs (React 18), so look the box up by id.
+function focusInputById(id: string) {
+  document.getElementById(id)?.focus();
 }
 
 export function AdvancedFilters({
@@ -235,7 +274,7 @@ function ResetFiltersButton({ hasResettableFilters = false }: Pick<SearchControl
   return (
     <Button
       id="resetFiltersButton"
-      className="icon-button filter-reset-button size-10 min-w-10 rounded-full disabled:opacity-[0.42] max-[540px]:size-11 max-[540px]:min-w-11"
+      className="icon-button filter-reset-button size-10 min-w-10 rounded-full disabled:opacity-50 max-[540px]:size-11 max-[540px]:min-w-11"
       variant="outline"
       size="icon-sm"
       type="button"
@@ -251,27 +290,82 @@ function ResetFiltersButton({ hasResettableFilters = false }: Pick<SearchControl
 
 export const SMART_FOLDER_FILTERS_UNAVAILABLE_LABEL = "Search and filters aren't available in smart folders";
 
+// All Tags only has a text search, so its panel is just the search box (with its clear button).
+export function TagSearchControls({ filtersOpen, query }: { filtersOpen?: boolean; query?: string }) {
+  const tagState = useSyncExternalStore(subscribeTagListState, getTagListState, getTagListState);
+  const searchState = useSyncExternalStore(subscribeSearchControlsState, getSearchControlsState, getSearchControlsState);
+  const displayFiltersOpen = filtersOpen ?? searchState.filtersOpen;
+  const displayQuery = query ?? tagState.query;
+  // Opening the panel is a request to search, so put the caret straight in the box.
+  useEffect(() => {
+    if (displayFiltersOpen) focusInputById("tagSearchInput");
+  }, [displayFiltersOpen]);
+
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      handleSearchOutsidePointerDown(event.target);
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, []);
+
+  return (
+    <section
+      id="tagSearchControls"
+      className="controls pointer-events-auto grid w-full rounded-lg border border-border bg-[color-mix(in_srgb,var(--popover)_80%,transparent)] p-3 text-popover-foreground shadow-[0_18px_48px_-16px_rgba(15,23,42,0.35)] backdrop-blur-xl backdrop-saturate-150 min-[720px]:rounded-2xl"
+      aria-label="Search tags"
+      hidden={!displayFiltersOpen}
+    >
+      <InputGroup className="search-box min-h-[46px] rounded-xl transition-colors hover:bg-muted/20 max-[540px]:min-h-11">
+        <InputGroupInput
+          id="tagSearchInput"
+          className={cn("min-w-0 pl-10", displayQuery ? "pr-12" : "pr-3")}
+          type="search"
+          placeholder="Search tags"
+          aria-label="Search tags"
+          autoComplete="off"
+          value={displayQuery}
+          onChange={(event) => setTagSearchQuery(event.currentTarget.value)}
+        />
+        <InputGroupAddon>
+          <Search />
+        </InputGroupAddon>
+        {displayQuery ? (
+          <SearchClearButton
+            id="clearTagSearchButton"
+            label="Clear tag search"
+            onClear={() => {
+              setTagSearchQuery("");
+              focusInputById("tagSearchInput");
+            }}
+          />
+        ) : null}
+      </InputGroup>
+    </section>
+  );
+}
+
 export function SearchFiltersButton({
   activeFilters = [],
   filtersOpen = false,
-  unavailable = false,
+  unavailableLabel,
 }: Pick<SearchControlsProps, "filtersOpen"> & {
   activeFilters?: readonly string[];
-  /** Smart folders return their own saved results, so search and filters would have no effect. */
-  unavailable?: boolean;
+  /** Set where search and filters have no effect (smart folders, All Tags); explains why the button is disabled. */
+  unavailableLabel?: string;
 }) {
-  if (unavailable) {
+  if (unavailableLabel) {
     return (
       <Button
         id="toggleFiltersButton"
-        className="icon-button filter-toggle-button size-9 cursor-not-allowed rounded-full text-muted-foreground opacity-45 hover:bg-transparent hover:text-muted-foreground"
+        className="icon-button filter-toggle-button size-9 cursor-not-allowed rounded-full text-muted-foreground opacity-50 hover:bg-transparent hover:text-muted-foreground"
         variant="ghost"
         size="icon-sm"
         type="button"
         // aria-disabled (not disabled) keeps the hover title explaining why it can't be used.
         aria-disabled="true"
-        aria-label={SMART_FOLDER_FILTERS_UNAVAILABLE_LABEL}
-        title={SMART_FOLDER_FILTERS_UNAVAILABLE_LABEL}
+        aria-label={unavailableLabel}
+        title={unavailableLabel}
       >
         <SearchSlashIcon className="size-[18px]" aria-hidden="true" />
       </Button>

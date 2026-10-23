@@ -1277,7 +1277,7 @@ let tagOverviewRequestId = 0;
 async function loadTagOverview() {
   const requestId = ++tagOverviewRequestId;
   renderSearchControlButtons();
-  setTagListState({ error: "", onSelectTag: selectTagFromList, status: "loading" });
+  setTagListState({ error: "", onSelectTag: selectTagFromList, query: "", status: "loading" });
   try {
     const overview = await getJson<TagOverviewResponse>("/api/tag-overview");
     if (requestId !== tagOverviewRequestId) return;

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { ChevronDownIcon, Search, StarIcon, TagIcon, TagsIcon } from "lucide-react";
-import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
+import { ChevronDownIcon, StarIcon, TagIcon, TagsIcon } from "lucide-react";
 import { mediaUrl } from "../api";
 import { TAG_SECTIONS_COLLAPSED_STORAGE_KEY } from "../constants";
 import { thumbnailMediaType } from "../media";
@@ -14,8 +13,7 @@ const tagGridClassName = "grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] g
 
 export function TagList() {
   const state = useSyncExternalStore(subscribeTagListState, getTagListState, getTagListState);
-  const [query, setQuery] = useState("");
-  const sections = useMemo(() => buildTagSections(state.overview, query), [state.overview, query]);
+  const sections = useMemo(() => buildTagSections(state.overview, state.query), [state.overview, state.query]);
   const { isCollapsed, toggle } = useCollapsedTagSections();
 
   if (state.status === "loading" && !state.overview) return <ResultStateView kind="message" text="Loading tags" className="loading" />;
@@ -26,22 +24,6 @@ export function TagList() {
 
   return (
     <div id="tagList" className="flex flex-col gap-6">
-      <InputGroup className="min-h-[46px] rounded-xl transition-colors hover:bg-muted/20 max-[540px]:min-h-11">
-        <InputGroupInput
-          id="tagSearchInput"
-          className="min-w-0 pl-10 pr-3"
-          type="search"
-          placeholder="Search tags"
-          aria-label="Search tags"
-          autoComplete="off"
-          value={query}
-          onChange={(event) => setQuery(event.currentTarget.value)}
-        />
-        <InputGroupAddon>
-          <Search />
-        </InputGroupAddon>
-      </InputGroup>
-
       {!hasTags ? (
         <EmptyTags title="No tags yet" text="Tags you add to items in Eagle show up here." />
       ) : !sections.total ? (

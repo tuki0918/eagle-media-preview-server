@@ -14,7 +14,12 @@ import { CardTemplate } from "./CardTemplate";
 import { Pager } from "./Pager";
 import { PreviewDialog } from "./PreviewDialog";
 import { ResultSurface } from "./ResultSurface";
-import { SearchControls, SearchFiltersButton } from "./SearchControls";
+import {
+  SMART_FOLDER_FILTERS_UNAVAILABLE_LABEL,
+  SearchControls,
+  SearchFiltersButton,
+  TagSearchControls,
+} from "./SearchControls";
 import { TagList } from "./TagList";
 import { TilesSentinel } from "./TilesSentinel";
 import { ViewerDock } from "./ViewerDock";
@@ -51,6 +56,7 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
   });
   const showingTags = searchState.section === "tags";
   const inSmartFolder = Boolean(searchState.selectedSmartFolderId);
+  const tagSearchFilters = tagListState.query.trim() ? [`"${tagListState.query.trim()}"`] : [];
   const tagTotal = useMemo(() => buildTagSections(tagListState.overview).total, [tagListState.overview]);
   const headerCount = showingTags ? tagTotal : resultsStatus.total;
   const headerCountLabel = showingTags
@@ -108,15 +114,20 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
                 </span>
               </button>
               <div className="flex min-w-0 items-center justify-end">
-                {showingTags ? null : <SearchFiltersButton activeFilters={activeFilters} filtersOpen={searchState.filtersOpen} unavailable={inSmartFolder} />}
+                {/* Kept in place (disabled) where filters don't apply, so the header layout never shifts. */}
+                <SearchFiltersButton
+                  activeFilters={showingTags ? tagSearchFilters : activeFilters}
+                  filtersOpen={searchState.filtersOpen}
+                  unavailableLabel={!showingTags && inSmartFolder ? SMART_FOLDER_FILTERS_UNAVAILABLE_LABEL : undefined}
+                />
               </div>
             </header>
             {/* Overlay the filters below the header so opening them never shifts the results. The panel
                 hugs the header and overhangs the content edges by its corner radius, so thumbnails
                 scrolling underneath can't peek through a gap or around the rounded corners. */}
-            {showingTags || inSmartFolder ? null : (
+            {inSmartFolder && !showingTags ? null : (
               <div className="pointer-events-none absolute inset-x-1 top-full min-[720px]:inset-x-2">
-                <SearchControls />
+                {showingTags ? <TagSearchControls /> : <SearchControls />}
               </div>
             )}
           </div>

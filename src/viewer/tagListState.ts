@@ -4,6 +4,8 @@ export interface TagListState {
   error: string;
   onSelectTag: (tag: string) => void;
   overview: TagOverviewResponse | null;
+  /** Text typed into the tag search panel; filters the list locally. */
+  query: string;
   status: "idle" | "loading" | "ready" | "error";
 }
 
@@ -12,6 +14,7 @@ let currentTagList: TagListState = {
   error: "",
   onSelectTag: () => {},
   overview: null,
+  query: "",
   status: "idle",
 };
 
@@ -31,4 +34,9 @@ export function subscribeTagListState(listener: () => void) {
   return () => {
     listeners.delete(listener);
   };
+}
+
+export function setTagSearchQuery(query: string) {
+  if (currentTagList.query === query) return;
+  setTagListState({ query });
 }

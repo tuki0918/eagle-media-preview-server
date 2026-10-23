@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { AdvancedFilters, SearchControls, SearchFiltersButton, SearchInput } from "./SearchControls";
+import { AdvancedFilters, SMART_FOLDER_FILTERS_UNAVAILABLE_LABEL, SearchControls, SearchFiltersButton, SearchInput, TagSearchControls } from "./SearchControls";
 import { storyCanvasClassName, storyPanelClassName } from "./storyFixtures";
 
 const meta = {
@@ -54,6 +54,14 @@ export const AdvancedFiltersOnly: Story = {
   ),
 };
 
+export const TagSearchPanel: Story = {
+  render: () => (
+    <div className={storyCanvasClassName}>
+      <TagSearchControls filtersOpen query="landscape" />
+    </div>
+  ),
+};
+
 export const FiltersButtonWithActiveFilters: Story = {
   render: () => (
     <div className={storyPanelClassName}>
@@ -61,7 +69,7 @@ export const FiltersButtonWithActiveFilters: Story = {
         <SearchFiltersButton />
         <SearchFiltersButton activeFilters={['"landing page"', "#web", "JPG"]} />
         <SearchFiltersButton activeFilters={["★★★★☆"]} filtersOpen />
-        <SearchFiltersButton activeFilters={["★★★★☆"]} unavailable />
+        <SearchFiltersButton activeFilters={["★★★★☆"]} unavailableLabel={SMART_FOLDER_FILTERS_UNAVAILABLE_LABEL} />
       </div>
     </div>
   ),

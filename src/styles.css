@@ -83,6 +83,13 @@
     font: inherit;
   }
 
+  /* Search boxes render their own clear button (consistent across browsers and touch-sized), so hide the built-in "×". */
+  input[type="search"]::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+    appearance: none;
+    display: none;
+  }
+
   button {
     -webkit-tap-highlight-color: transparent;
   }
