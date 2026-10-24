@@ -11,7 +11,7 @@ function normalizeCustomDomain(value: unknown = ""): string {
     !hostname.split(".").every((label: string) =>
       /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))
   ) {
-    throw new Error("Custom hostname must be a hostname only (e.g. hostname.local), without a protocol, port, or path");
+    throw new Error("Hostname must be a hostname only (e.g. hostname.local), without a protocol, port, or path");
   }
   return hostname;
 }

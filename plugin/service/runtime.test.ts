@@ -58,7 +58,7 @@ test("custom domains are normalized and validated as hostnames", () => {
     "dummy_.local", "dummy.local\\path", "dummy%2elocal", "dummy local",
     `${"a".repeat(64)}.local`, Array(5).fill("a".repeat(63)).join("."),
   ]) {
-    assert.throws(() => normalizeSettings({ customDomain }), /Custom hostname must be a hostname/, customDomain);
+    assert.throws(() => normalizeSettings({ customDomain }), /Hostname must be a hostname/, customDomain);
   }
 });
 
@@ -77,7 +77,7 @@ test("settings persist, reject invalid changes, and clear custom domains", async
   await store.save({ customDomain: " DUMMY.LOCAL " });
   assert.equal((await store.load()).customDomain, "dummy.local");
   assert.equal(JSON.parse(await readFile(filePath, "utf8")).customDomain, "dummy.local");
-  await assert.rejects(() => store.save({ customDomain: "https://other.local" }), /Custom hostname/);
+  await assert.rejects(() => store.save({ customDomain: "https://other.local" }), /Hostname must be/);
   assert.equal((await store.load()).customDomain, "dummy.local");
   await store.save({ customDomain: "" });
   assert.equal((await store.load()).customDomain, "");
@@ -95,7 +95,7 @@ test("settings load falls back to no custom domain when the stored hostname is i
   assert.equal(loaded.port, 4321);
   await store.save({ customDomain: "fixed.local" });
   assert.equal((await store.load()).customDomain, "fixed.local");
-  await assert.rejects(() => store.save({ customDomain: "bad host" }), /Custom hostname/);
+  await assert.rejects(() => store.save({ customDomain: "bad host" }), /Hostname must be/);
 });
 
 test("server manager applies domain changes and removal to the listener and displayed URL", async () => {

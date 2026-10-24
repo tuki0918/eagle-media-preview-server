@@ -219,7 +219,8 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(app, /saveSettings\(\{ forceSave: true, successMessage: "Saved" \}\)/);
   assert.doesNotMatch(uiSource, /onBlur=\{[^}]*saveSettings/);
   assert.doesNotMatch(app, /saveSettings\(\{ forceSave: true, patch: \{ port:/);
-  assert.match(uiSource, /<SettingRow label="Port" help=\{serverRunning \? "Stop the server before changing the port\." : "The port the server listens on\."\}>/);
+  assert.match(uiSource, /<SettingRow label="Port" help=\{serverRunning \? "Stop the server before changing the port\." : `The port the server listens on\. Default: \$\{DEFAULT_PORT\}\.`\}>/);
+  assert.match(uiSource, /value=\{settings\.port \?\? DEFAULT_PORT\}/);
   assert.match(uiSource, /disabled=\{settingsInputDisabled\}/);
   assert.match(uiSource, /flex min-h-9 items-center justify-between gap-3 border-t border-\[#efeff1\] pt-3/);
   assert.match(uiSource, /<p className=\{`min-w-0 flex-1 truncate px-0\.5 text-\[10px\] \$\{messageIsError \? "text-\[#d92d20\]" : "text-\[#178c35\]"\}`\} aria-live="polite" hidden=\{!message\}>/);
@@ -505,8 +506,8 @@ test("plugin saves a custom domain and uses the resulting URL for display, QR, c
   try {
     pluginWindow.eval(bundle.outputFiles[0].text);
     const doc = dom.window.document;
-    await waitFor(() => doc.querySelector<HTMLInputElement>('[aria-label="Custom hostname"]')?.disabled === false);
-    const domainInput = doc.querySelector('[aria-label="Custom hostname"]');
+    await waitFor(() => doc.querySelector<HTMLInputElement>('[aria-label="Hostname"]')?.disabled === false);
+    const domainInput = doc.querySelector('[aria-label="Hostname"]');
     assert.ok(domainInput instanceof dom.window.HTMLInputElement);
     const valueSetter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")?.set;
     valueSetter?.call(domainInput, "dummy.local");

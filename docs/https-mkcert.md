@@ -30,7 +30,7 @@ Alternatively, you can use a hostname instead of a LAN IP:
 mkcert 127.0.0.1 localhost hostname.local
 ```
 
-Replace `hostname.local` with the hostname you use to access the server, such as the value set in **Settings → General → Custom hostname**. The hostname must resolve to the server through DNS or mDNS; `mkcert` only creates the certificate and does not configure name resolution.
+Replace `hostname.local` with the hostname you use to access the server, such as the value set in **Settings → General → Hostname**. The hostname must resolve to the server through DNS or mDNS; `mkcert` only creates the certificate and does not configure name resolution.
 
 The certificate is valid only for the IP addresses and hostnames passed to `mkcert`. The browser URL must match one of them. For example, a certificate created for `192.168.1.20` will not be valid when opening `https://192.168.1.30:41532`.
 

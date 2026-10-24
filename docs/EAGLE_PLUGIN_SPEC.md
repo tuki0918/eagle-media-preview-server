@@ -128,7 +128,7 @@ Build output is created under `dist`:
 - `Settings`
   - Collapsible settings panel
   - Port
-  - Custom hostname (optional hostname for access URLs, QR, and trusted same-origin writes)
+  - Hostname (optional hostname for access URLs, QR, and trusted same-origin writes)
   - TLS certificate path
   - TLS key path
   - Users

@@ -36,6 +36,7 @@ interface SettingsFormProps {
 
 export type HttpsFileField = "cert" | "key";
 
+const DEFAULT_PORT = 41532;
 const MIN_SESSION_DURATION_DAYS = 1;
 const MAX_SESSION_DURATION_DAYS = 365;
 const settingInputClassName = "h-8 min-w-0 rounded-lg border border-[#e1e2e6] bg-white px-2.5 text-[12px] text-[#171717] outline-0 transition-shadow placeholder:text-[#a3a7ae] focus:border-[#171717] focus:shadow-[0_0_0_3px_rgba(23,23,23,0.08)] disabled:cursor-not-allowed disabled:bg-[#f4f5f7] disabled:text-[#8a8f99]";
@@ -103,11 +104,11 @@ export function SettingsForm({
         </div>
 
         <div id="generalSettingsPanel" role="tabpanel" aria-labelledby="generalSettingsTab" hidden={settingsTab !== "general"}>
-          <SettingRow label="Custom hostname" help="Optional. Used for the endpoint URL and QR code.">
+          <SettingRow label="Hostname" help="Optional. Used for the endpoint URL and QR code.">
             <input
               className={`${settingInputClassName} w-full`}
               type="text"
-              aria-label="Custom hostname"
+              aria-label="Hostname"
               autoCapitalize="none"
               autoComplete="off"
               spellCheck={false}
@@ -117,14 +118,15 @@ export function SettingsForm({
               onChange={(event) => onCustomDomainChange(event.currentTarget.value)}
             />
           </SettingRow>
-          <SettingRow label="Port" help={serverRunning ? "Stop the server before changing the port." : "The port the server listens on."}>
+          <SettingRow label="Port" help={serverRunning ? "Stop the server before changing the port." : `The port the server listens on. Default: ${DEFAULT_PORT}.`}>
             <input
-              className={`${settingInputClassName} w-full`}
+              className={`${settingInputClassName} w-24`}
               type="number"
               min="1"
               max="65535"
+              aria-label="Port"
               disabled={settingsInputDisabled}
-              value={settings.port || 41532}
+              value={settings.port ?? DEFAULT_PORT}
               onChange={(event) => onPortChange(event.currentTarget.value)}
             />
           </SettingRow>
