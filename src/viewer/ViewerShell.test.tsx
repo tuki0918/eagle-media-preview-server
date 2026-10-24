@@ -1204,6 +1204,53 @@ describe("ViewerAppShell", () => {
     }
   });
 
+  test("staggers appended tiles from their own first column", async () => {
+    const dom = new JSDOM('<!doctype html><div id="root"></div>', { url: "http://localhost/" });
+    const testGlobal = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+    const previousWindow = globalThis.window;
+    const previousDocument = globalThis.document;
+    const previousNode = globalThis.Node;
+    const previousHTMLElement = globalThis.HTMLElement;
+    const previousIS_REACT_ACT_ENVIRONMENT = testGlobal.IS_REACT_ACT_ENVIRONMENT;
+    globalThis.window = dom.window;
+    globalThis.document = dom.window.document;
+    globalThis.Node = dom.window.Node;
+    globalThis.HTMLElement = dom.window.HTMLElement;
+    testGlobal.IS_REACT_ACT_ENVIRONMENT = true;
+
+    const { createRoot } = await import("react-dom/client");
+    let root: import("react-dom/client").Root | null = null;
+    try {
+      const container = dom.window.document.querySelector("#root");
+      if (!(container instanceof dom.window.HTMLElement)) throw new Error("Missing test root");
+      root = createRoot(container);
+      const items = ["a", "b", "c", "d"].map((id) => ({ id, name: `${id}.png`, ext: "png" }));
+      const delays = () => Array.from(container.querySelectorAll<HTMLElement>(".tile-item")).map((tile) => tile.style.getPropertyValue("--enter-delay"));
+
+      await act(async () => {
+        root?.render(<ResultList items={items.slice(0, 2)} viewMode="tiles" onOpenPreview={() => {}} />);
+      });
+      expect(delays()).toEqual(["0ms", "90ms"]);
+
+      await act(async () => {
+        root?.render(<ResultList items={items} viewMode="tiles" onOpenPreview={() => {}} />);
+      });
+      expect(delays()).toEqual(["0ms", "90ms", "0ms", "90ms"]);
+    } finally {
+      if (root) {
+        await act(async () => {
+          root?.unmount();
+        });
+      }
+      globalThis.window = previousWindow;
+      globalThis.document = previousDocument;
+      globalThis.Node = previousNode;
+      globalThis.HTMLElement = previousHTMLElement;
+      testGlobal.IS_REACT_ACT_ENVIRONMENT = previousIS_REACT_ACT_ENVIRONMENT;
+      dom.window.close();
+    }
+  });
+
   test("renders preview info as reusable detail and action components", () => {
     const details = renderToStaticMarkup(
       <PreviewDetailsPanel

@@ -48,14 +48,14 @@ const overlayIconPaths = {
   ),
 };
 
-const mediaCardClassName = "media-card group/card grid min-w-0 content-start gap-2 border-0 bg-transparent p-0 py-0 shadow-none ring-0";
+const mediaCardClassName = "media-card media-card-enter group/card grid min-w-0 content-start gap-2 border-0 bg-transparent p-0 py-0 shadow-none ring-0";
 const cardMetaClassName = "card-meta grid min-w-0 gap-0.5 px-0.5 [&>span]:block [&>span]:min-w-0 [&>span]:truncate [&>span]:text-[11px] [&>span]:uppercase [&>span]:tracking-[0.04em] [&>span]:text-muted-foreground [&>strong]:block [&>strong]:min-w-0 [&>strong]:truncate [&>strong]:text-[13px] [&>strong]:font-medium [&>strong]:leading-[1.3] [&>strong]:text-foreground";
 const cardMetaDetailsClassName =
   "flex min-w-0 items-center justify-between gap-2 text-[11px] uppercase tracking-[0.04em] text-muted-foreground [&>span]:min-w-0 [&>span]:truncate [&>span:last-child]:shrink-0";
 const tileButtonClassName =
-  "tile-item relative block min-w-0 cursor-zoom-in overflow-hidden rounded-md border-0 bg-muted p-0 shadow-none [&>img]:block [&>img]:h-full [&>img]:w-full [&>img]:object-cover [&>img]:transition-[transform,filter] [&>img]:duration-300 hover:[&>img]:scale-[1.02] hover:[&>img]:brightness-[0.97]";
+  "tile-item media-card-enter relative block min-w-0 cursor-zoom-in overflow-hidden rounded-md border-0 bg-muted p-0 shadow-none [&>img]:block [&>img]:h-full [&>img]:w-full [&>img]:object-cover [&>img]:transition-[transform,filter] [&>img]:duration-300 hover:[&>img]:scale-[1.02] hover:[&>img]:brightness-[0.97]";
 const gridThumbButtonClassName =
-  "thumb-button relative block aspect-square w-full touch-manipulation overflow-hidden rounded-lg border-0 bg-muted p-0 shadow-none [transition:box-shadow_150ms_ease,background-color_150ms_ease] hover:shadow-[0_0_0_1px_var(--border),0_12px_28px_-16px_rgba(15,23,42,0.35)] focus-visible:shadow-[0_0_0_2px_var(--ring)] [&>img]:block [&>img]:h-full [&>img]:w-full [&>img]:object-contain [&>img]:p-[6%]";
+  "thumb-button relative block aspect-square w-full touch-manipulation overflow-hidden rounded-lg border-0 bg-muted p-0 shadow-none [transition:box-shadow_150ms_ease,background-color_150ms_ease] hover:shadow-[0_0_0_1px_var(--border),0_12px_28px_-16px_rgba(15,23,42,0.35)] focus-visible:shadow-[0_0_0_2px_var(--ring)] [&>img]:block [&>img]:h-full [&>img]:w-full [&>img]:object-contain [&>img]:p-[6%] [&>img]:transition-opacity [&>img]:duration-300";
 const rowThumbButtonClassName =
   "row-thumb relative h-11 w-11 touch-manipulation overflow-hidden rounded-md border-0 bg-muted p-0 [transition:box-shadow_150ms_ease] hover:shadow-[0_0_0_1px_var(--border)] focus-visible:shadow-[0_0_0_2px_var(--ring)] [&>img]:block [&>img]:h-full [&>img]:w-full [&>img]:object-cover";
 const missingThumbClassName = "grid place-items-center bg-muted";
@@ -86,17 +86,25 @@ const listTableRatingClassName = "rating-control inline-flex items-center justif
 const fileBadgeClassName = "bg-[rgba(10,10,12,0.55)] text-white backdrop-blur";
 const TILE_MIN_RATIO = 0.4;
 const TILE_MAX_RATIO = 3;
+// Cards and tiles sweep left to right within each row; rows barely wait for the ones above.
+const ENTER_COLUMN_DELAY_MS = 90;
+const ENTER_ROW_DELAY_MS = 50;
+const ENTER_MAX_ROWS = 6;
 const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 export function ResultList({ items, viewMode, onOpenPreview }: ResultListProps) {
   const tileFillerRef = useRef<HTMLSpanElement>(null);
+  const gridAnchorRef = useRef<HTMLSpanElement>(null);
   useLastTileRowFit(tileFillerRef, viewMode === "tiles" ? items : null);
+  useEnterStagger(gridAnchorRef, ":scope > .media-card", viewMode === "grid" ? items : null);
+  useEnterStagger(tileFillerRef, ":scope > .tile-item", viewMode === "tiles" ? items : null);
   return (
     <>
       {viewMode === "list" && items.length ? <ListTableHeader /> : null}
       {items.map((item, index) => (
         <ResultItem key={String(item.id || item.name || index)} item={item} viewMode={viewMode} onOpenPreview={onOpenPreview} />
       ))}
+      {viewMode === "grid" && items.length ? <span ref={gridAnchorRef} className="grid-enter-anchor hidden" aria-hidden="true" /> : null}
       {viewMode === "tiles" && items.length ? <span ref={tileFillerRef} className="tile-filler h-0 grow-[999999]" aria-hidden="true" /> : null}
     </>
   );
@@ -142,6 +150,31 @@ function TileItem({ item, onOpenPreview }: { item: EagleItem; onOpenPreview: (it
       withFileNameOverlay
     />
   );
+}
+
+// Runs after useLastTileRowFit so rows are read from the final layout. Only items that
+// haven't animated yet are staggered, and their rows count from the first new one, so
+// appended tiles sweep in the same way as the first batch.
+function useEnterStagger(anchorRef: { current: HTMLSpanElement | null }, selector: string, items: readonly EagleItem[] | null) {
+  useIsomorphicLayoutEffect(() => {
+    const container = anchorRef.current?.parentElement;
+    if (!items || !container) return;
+    const fresh = Array.from(container.querySelectorAll<HTMLElement>(selector)).filter((item) => !item.dataset.entered);
+    let row = -1;
+    let column = 0;
+    let rowTop = Number.NaN;
+    for (const item of fresh) {
+      if (item.offsetTop !== rowTop) {
+        rowTop = item.offsetTop;
+        row += 1;
+        column = 0;
+      }
+      const delay = column * ENTER_COLUMN_DELAY_MS + Math.min(row, ENTER_MAX_ROWS) * ENTER_ROW_DELAY_MS;
+      item.style.setProperty("--enter-delay", `${delay}ms`);
+      item.dataset.entered = "true";
+      column += 1;
+    }
+  }, [anchorRef, items]);
 }
 
 // The filler keeps the last row from stretching, which leaves it smaller than the
