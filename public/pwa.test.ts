@@ -18,13 +18,16 @@ test("public viewer declares an installable PWA", async () => {
     [
       ["192x192", "/assets/pwa-icon-192.png"],
       ["512x512", "/assets/pwa-icon-512.png"],
+      ["512x512", "/assets/pwa-icon-maskable-512.png"],
     ],
   );
+  assert.equal(manifest.icons.at(-1).purpose, "maskable");
 
   await Promise.all([
     access(new URL("./assets/pwa-icon-180.png", import.meta.url)),
     access(new URL("./assets/pwa-icon-192.png", import.meta.url)),
     access(new URL("./assets/pwa-icon-512.png", import.meta.url)),
+    access(new URL("./assets/pwa-icon-maskable-512.png", import.meta.url)),
   ]);
 });
 
@@ -38,6 +41,6 @@ test("service worker caches only the application shell", async () => {
   assert.match(worker, /request\.mode === "navigate"/);
   assert.match(worker, /url\.pathname\.startsWith\("\/api\/"\)/);
   assert.match(worker, /url\.pathname\.startsWith\("\/file\/"\)/);
-  assert.match(worker, /CACHE_NAME = `\$\{CACHE_PREFIX\}v2`/);
+  assert.match(worker, /CACHE_NAME = `\$\{CACHE_PREFIX\}v3`/);
   assert.match(worker, /fetch\(request\)[\s\S]*\.catch\(\(\) => caches\.match\(request\)\)/);
 });

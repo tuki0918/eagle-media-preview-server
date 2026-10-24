@@ -1,5 +1,5 @@
 const CACHE_PREFIX = "media-preview-shell-";
-const CACHE_NAME = `${CACHE_PREFIX}v2`;
+const CACHE_NAME = `${CACHE_PREFIX}v3`;
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -11,6 +11,7 @@ const APP_SHELL = [
   "/assets/pwa-icon-180.png",
   "/assets/pwa-icon-192.png",
   "/assets/pwa-icon-512.png",
+  "/assets/pwa-icon-maskable-512.png",
 ];
 
 self.addEventListener("install", (event) => {

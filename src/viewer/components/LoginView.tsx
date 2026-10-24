@@ -2,7 +2,7 @@ import { useState, useSyncExternalStore } from "react";
 import { CircleAlertIcon, ClockIcon, EyeIcon, EyeOffIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import iconOnUrl from "../../assets/icon_on.svg";
+import appIconUrl from "../../assets/app_icon.svg";
 import { getLoginConnectState, subscribeLoginConnectState } from "../loginConnectState";
 import { submitConnection } from "../shellActions";
 
@@ -58,7 +58,7 @@ function LoginIdentity() {
     <div className="login-head grid justify-items-center gap-4 text-center">
       <img
         className="app-logo block h-16 w-16 rounded-[18px] object-cover shadow-[0_12px_28px_-12px_rgba(20,99,243,0.55)]"
-        src={iconOnUrl}
+        src={appIconUrl}
         alt=""
         aria-hidden="true"
       />
