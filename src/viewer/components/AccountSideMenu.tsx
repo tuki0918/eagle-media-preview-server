@@ -52,6 +52,11 @@ const floatingSidebarRailClassName = [
   "group-data-[state=expanded]:after:!hidden",
 ].join(" ");
 
+// Folders that continue below the fold fade out as they slide under the account menu.
+// The fade shrinks to the hidden amount, so a list that barely overflows stays readable.
+const SIDE_NAV_FADE_MAX_PX = 48;
+const sideNavScrollClassName =
+  "no-scrollbar min-h-0 flex-1 overflow-y-auto [mask-image:linear-gradient(to_bottom,black_calc(100%-var(--fade-end,0px)),transparent)]";
 const GUEST_USERNAME = "Guest";
 const GUEST_ROLE_LABEL = "No sign-in";
 
@@ -68,6 +73,8 @@ export function AccountSideMenu() {
   const accountStatusLabel = [accountLabel, roleDescription].filter(Boolean).join(". ");
   const authError = loginState.isError ? loginState.message.trim() : "";
   const signedIn = loginState.authRequired && loginState.authenticated;
+  const sideNavScrollRef = useRef<HTMLDivElement>(null);
+  useScrollEndFade(sideNavScrollRef, SIDE_NAV_FADE_MAX_PX);
 
   return (
     <>
@@ -105,7 +112,7 @@ export function AccountSideMenu() {
         </SidebarHeader>
 
         <SidebarContent className="overflow-hidden">
-          <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto">
+          <div ref={sideNavScrollRef} className={sideNavScrollClassName}>
             <FolderShortcutSideNav
               allFoldersTotal={searchState.allFoldersTotal}
               selectedFolderId={searchState.selectedFolderId}
@@ -900,4 +907,26 @@ function authRoleDescription(role: unknown) {
   if (role === "editor") return "Can edit ratings, tags, and categories";
   if (role === "viewer") return "Can browse and preview";
   return "";
+}
+
+// Sets --fade-end to how much content is still hidden below, up to maxPx.
+function useScrollEndFade(ref: { current: HTMLElement | null }, maxPx: number) {
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const update = () => {
+      const hidden = Math.max(0, element.scrollHeight - element.scrollTop - element.clientHeight);
+      element.style.setProperty("--fade-end", `${Math.min(maxPx, Math.round(hidden))}px`);
+    };
+    update();
+    element.addEventListener("scroll", update, { passive: true });
+    if (typeof ResizeObserver === "undefined") return () => element.removeEventListener("scroll", update);
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    for (const child of Array.from(element.children)) observer.observe(child);
+    return () => {
+      element.removeEventListener("scroll", update);
+      observer.disconnect();
+    };
+  }, [ref, maxPx]);
 }
