@@ -202,6 +202,7 @@ test("public viewer exposes sign out when authenticated", async () => {
   assert.match(accountMenu, />Editor</);
   assert.match(accountMenu, /aria-haspopup="menu"/);
   assert.match(accountMenu, /id="authAvatarFallback"[^>]*>E</);
+  assert.match(accountMenu, /src="(?:[^"]*app_icon\.svg|data:image\/svg\+xml,)/);
   assert.match(accountMenu, /data-slot="sidebar"/);
   assert.match(accountMenu, /data-sidebar="menu-button"/);
   assert.match(accountMenu, /hidden=""/);

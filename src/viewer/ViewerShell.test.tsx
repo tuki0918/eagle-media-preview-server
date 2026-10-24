@@ -458,7 +458,8 @@ describe("ViewerAppShell", () => {
     expect(html).toContain("Zero Smart");
     expect(html).not.toContain("Zero Smart (0)");
     expect(html).toContain("Needs Review");
-    expect(html).toContain("lucide-router");
+    expect(html).not.toContain("lucide-router");
+    expect(html).toMatch(/src="(?:[^"]*app_icon\.svg|data:image\/svg\+xml,)/);
     expect(html).not.toContain("lucide-book-open-text");
     expect(html).toContain("lucide-folder-cog");
     expect(html).toContain("lucide-layout-grid");

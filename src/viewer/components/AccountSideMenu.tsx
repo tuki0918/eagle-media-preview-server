@@ -10,7 +10,6 @@ import {
   LogOutIcon,
   MonitorIcon,
   MoonIcon,
-  RouterIcon,
   SunIcon,
   TagIcon,
   TagsIcon,
@@ -18,6 +17,7 @@ import {
 } from "lucide-react";
 import { Fragment, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import appIconUrl from "../../assets/app_icon.svg";
 import {
   Sidebar,
   SidebarContent,
@@ -95,11 +95,12 @@ export function AccountSideMenu() {
               >
                 <div>
                   <span className="relative shrink-0">
-                    <Avatar className="size-8 rounded-xl" aria-hidden="true">
-                      <AvatarFallback className="rounded-xl bg-foreground text-background">
-                        <RouterIcon className="size-5" />
-                      </AvatarFallback>
-                    </Avatar>
+                    <img
+                      className="block size-8 rounded-[9px] object-cover ring-1 ring-white/10"
+                      src={appIconUrl}
+                      alt=""
+                      aria-hidden="true"
+                    />
                     <EagleStatusDot status={eagleStatus} version={libraryHeader.version} />
                   </span>
                   <span className="grid min-w-0 group-data-[collapsible=icon]:hidden">
