@@ -10,14 +10,14 @@ Anyone on the same network can then browse it from phones, tablets, and other co
 ![](docs/screenshot.png)
 ![](docs/screenshot_detail.png)
 ![](docs/screenshot_all_tags.png)
-![](docs/server_panel.png)
 
 ## Features
 
 - One-click local preview server for your Eagle library
-- Browse Eagle media from phones, tablets, and other computers on the same LAN
+- Browse the Media Library from phones, tablets, and other computers on the same LAN
 - Endpoint URL and QR code for quick access, with an optional custom hostname
-- Installable PWA with a cached application shell
+- Installable PWA (**Media Library**) with a cached application shell
+- Background audio and video playback shows the file name and thumbnail in the OS media controls
 
 Optional:
 
@@ -49,9 +49,17 @@ The PWA caches only the application shell. Eagle API responses and library media
 
 ## Settings
 
+### Server Status
+
+Start or stop the server, copy the endpoint URL, or scan the QR code to open the viewer on your phone. The quick toggles below the URL control **Auto start**, **Password protection**, **Public Network**, and **HTTPS**.
+
+![](docs/server_panel.png)
+
+Settings are locked while the server is running. Stop the server to edit them.
+
 ### General
 
-Basic server options such as auto start, host, custom hostname, and port.
+Hostname and port.
 
 Set **Hostname** to a hostname such as `studio-mac.local`, `windows-pc.local`, or `media-server.lan` (without `http://`, a port, or a path). Stop the server, enter the hostname under **Settings → General**, and save. The endpoint URL, copy/open actions, and QR code use this hostname with the configured HTTP/HTTPS protocol and port. Clear the field to return to the automatic localhost/LAN IP URL.
 
@@ -61,11 +69,11 @@ The saved hostname is explicitly allowed for sign-in and writes; the request Ori
 
 ### Access
 
-Network access and user permission settings.
+Users and sign-in session settings.
 
 ![](docs/server_panel_access.png)
 
-Use this panel to control whether other devices on the LAN can open the viewer and which users can access it. User roles define the available actions:
+Use this tab to choose which users can sign in to the viewer. To let other devices on the LAN open the viewer, turn on **Public Network** in Server Status. User roles define the available actions:
 
 - Viewer: browse and preview media
 - Editor: edit rating, tags, and categories from the preview panel
