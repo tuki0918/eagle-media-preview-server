@@ -3,6 +3,7 @@ import { Maximize, Minimize, Music, Pause, Play, Repeat, RotateCcw, RotateCw, Vo
 import { mediaUrl } from "../../api";
 import { displayFileName } from "../../format";
 import { hasNoThumbnail } from "../../media";
+import { bindMediaSession } from "../../mediaSession";
 import {
   getVideoOverlayControlsVisible,
   setVideoOverlayControlsVisible,
@@ -235,6 +236,12 @@ export function MediaControls({
       surface?.removeEventListener("pointerup", handleTap);
     };
   }, [item.id, mediaRef, variant]);
+
+  useEffect(() => {
+    const media = mediaRef.current;
+    if (!media) return;
+    return bindMediaSession(media, item);
+  }, [item, mediaRef]);
 
   useEffect(() => {
     const handleFullscreenChange = () => setFullscreen(Boolean(document.fullscreenElement));
