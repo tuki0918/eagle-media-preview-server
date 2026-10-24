@@ -19,7 +19,7 @@ export function ResultSurface({ state }: ResultSurfaceProps) {
   const isEmpty = surfaceState.kind !== "list" || !surfaceState.items.length;
 
   return (
-    <section id="grid" className={resultSurfaceClassName(surfaceState.viewMode, isEmpty)} aria-label="Eagle assets">
+    <section id="grid" className={resultSurfaceClassName(surfaceState.viewMode, isEmpty)} aria-label="Media items">
       {surfaceState.kind === "list" ? (
         <ResultList items={surfaceState.items} viewMode={surfaceState.viewMode} onOpenPreview={surfaceState.onOpenPreview} />
       ) : surfaceState.kind === "empty" ? (

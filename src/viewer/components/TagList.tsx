@@ -25,7 +25,7 @@ export function TagList() {
   return (
     <div id="tagList" className="flex flex-col gap-6">
       {!hasTags ? (
-        <EmptyTags title="No tags yet" text="Tags you add to items in Eagle show up here." />
+        <EmptyTags title="No tags yet" text="Tags added to items show up here." />
       ) : !sections.total ? (
         <EmptyTags title="No tags matched" text="Try a different search." />
       ) : (

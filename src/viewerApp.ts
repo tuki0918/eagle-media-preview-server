@@ -3,7 +3,6 @@ import { setTagListState } from "./viewer/tagListState";
 import type { TagOverviewResponse } from "./viewer/tagOverview";
 import {
   DEFAULT_EAGLE_CONNECTION,
-  EAGLE_UNAVAILABLE_LABEL,
   LIBRARY_EMPTY_LABEL,
   RECENT_FOLDERS_STORAGE_KEY,
   RECENT_TAGS_STORAGE_KEY,
@@ -367,10 +366,10 @@ function isLoginAuthFailure(error: unknown) {
 function connectErrorMessage(error: unknown) {
   const message = errorMessage(error);
   if (isEagleConnectionError(error, message)) {
-    return "Cannot connect to Eagle. Make sure Eagle is running and the local Eagle API is available.";
+    return "Can't reach the media server right now. Please try again in a bit.";
   }
   if (error instanceof ApiError && error.status >= 500) {
-    return "The preview server could not reach Eagle. Check Eagle, then try connecting again.";
+    return "The media server isn't responding right now. Please try again in a bit.";
   }
   return message;
 }
@@ -379,15 +378,15 @@ function loadErrorMessage(error: unknown) {
   const message = errorMessage(error);
   if (isEagleConnectionError(error, message)) {
     return {
-      title: "Eagle connection lost",
-      text: "The preview server could not reach Eagle while loading items.",
-      detail: "Make sure Eagle is running on this computer, then reconnect from the login screen if the problem continues.",
+      title: "Media server unavailable",
+      text: "Couldn't load items from the media server.",
+      detail: "Please try again in a bit.",
     };
   }
   if (error instanceof ApiError && error.status >= 500) {
     return {
       title: "Unable to load this library",
-      text: "Eagle returned an error while the preview server was loading items.",
+      text: "Something went wrong while loading items.",
       detail: message,
     };
   }
@@ -536,9 +535,7 @@ async function checkEagleStatus() {
 }
 
 function libraryLabel(data: ConnectResponse) {
-  const name = data.library?.name || LIBRARY_EMPTY_LABEL;
-  const version = data.app?.version ? `Eagle ${data.app.version}` : EAGLE_UNAVAILABLE_LABEL;
-  return `${name} - ${version}`;
+  return data.library?.name || LIBRARY_EMPTY_LABEL;
 }
 
 function libraryTitle(data: ConnectResponse) {

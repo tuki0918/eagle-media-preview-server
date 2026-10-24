@@ -1,6 +1,6 @@
 import { mediaUrl } from "./api";
 import { displayFileName } from "./format";
-import { DEFAULT_LIBRARY_FOOTER_NAME, getLibraryFooterName } from "./libraryFooterState";
+import { getLibraryName } from "./libraryNameState";
 import { hasNoThumbnail } from "./media";
 import type { EagleItem } from "./types";
 
@@ -8,14 +8,15 @@ const APP_NAME = "Media Preview Server";
 const APP_ARTWORK: MediaImage = { src: "/assets/pwa-icon-512.png", sizes: "512x512", type: "image/png" };
 const DEFAULT_SEEK_OFFSET_SECONDS = 10;
 
-// Lock screen / Now Playing details: file name as the title, library name below it.
+// Lock screen / Now Playing details: file name as the title, library and server host below it.
 export function mediaSessionMetadataInit(item: EagleItem, libraryName: string, baseUrl: string): MediaMetadataInit {
   const artwork = hasNoThumbnail(item)
     ? APP_ARTWORK
     : { src: mediaUrl(String(item.id || ""), "thumb") };
+  const host = new URL(baseUrl).hostname;
   return {
     title: displayFileName(item),
-    artist: libraryName || APP_NAME,
+    artist: [libraryName, host].filter(Boolean).join(" - ") || APP_NAME,
     album: APP_NAME,
     artwork: [{ ...artwork, src: new URL(artwork.src, baseUrl).href }],
   };
@@ -30,12 +31,7 @@ export function bindMediaSession(media: HTMLMediaElement, item: EagleItem) {
   }
   const session = navigator.mediaSession;
   const publishMetadata = () => {
-    const libraryName = getLibraryFooterName();
-    session.metadata = new MediaMetadata(mediaSessionMetadataInit(
-      item,
-      libraryName === DEFAULT_LIBRARY_FOOTER_NAME ? "" : libraryName,
-      window.location.href,
-    ));
+    session.metadata = new MediaMetadata(mediaSessionMetadataInit(item, getLibraryName(), window.location.href));
   };
   publishMetadata();
   // iOS Safari tabs ignore metadata set before playback actually starts (e.g. after blocked autoplay).

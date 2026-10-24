@@ -12,7 +12,6 @@ export const MAX_PAGE_SIZE = 1000;
 export const DEFAULT_VIEW_MODE = "tiles";
 export const TILE_PREFETCH_PAGES = 3;
 export const LIBRARY_EMPTY_LABEL = "No library";
-export const EAGLE_UNAVAILABLE_LABEL = "Eagle unavailable";
 export const DATE_KEYS_MODIFIED = Object.freeze(["modifiedAt", "modificationTime", "mtime", "lastModified"]);
 export const RECENT_TAGS_STORAGE_KEY = "eagleRecentTags";
 export const RECENT_FOLDERS_STORAGE_KEY = "eagleRecentFolders";

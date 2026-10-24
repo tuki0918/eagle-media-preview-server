@@ -111,7 +111,7 @@ test("public login no longer renders advanced Eagle connection settings", async 
   assert.match(login, /class="[^"]*\bapp-logo\b/);
   assert.match(login, /src="(?:[^"]*app_icon\.svg|data:image\/svg\+xml,)/);
   assert.match(login, /<h1 class="[^"]*">Media Preview Server<\/h1>/);
-  assert.match(login, /A local media server for your Eagle library\./);
+  assert.match(login, /A private media library on your local network\./);
   assert.doesNotMatch(login, /Connect this browser to the media server\./);
   assert.doesNotMatch(login, /Connect this browser to the local Eagle media server\./);
   assert.doesNotMatch(login, /Start the server from the Eagle plugin panel/);
@@ -349,14 +349,14 @@ test("public login reports Eagle connection failures through the error message",
     authRequired: true,
     disabled: false,
     isError: true,
-    message: "Cannot connect to Eagle. Make sure Eagle is running and the local Eagle API is available.",
+    message: "Can't reach the media server right now. Please try again in a bit.",
     serverStatus: "error",
     user: null,
   });
   const login = renderToStaticMarkup(createElement(LoginView, { hidden: false }));
 
   assert.doesNotMatch(login, /Server status/);
-  assert.match(login, /Cannot connect to Eagle\. Make sure Eagle is running/);
+  assert.match(login, /Can&#x27;t reach the media server right now/);
 
   setLoginConnectState({
     authenticated: false,

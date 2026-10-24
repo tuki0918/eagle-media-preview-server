@@ -4,18 +4,19 @@ import { bindMediaSession, mediaSessionMetadataInit } from "./mediaSession";
 const BASE_URL = "https://nas.local:8443/";
 
 describe("media session metadata", () => {
-  test("uses the file name, library name, and item thumbnail", () => {
+  test("uses the file name, library name with server host, and item thumbnail", () => {
     expect(mediaSessionMetadataInit({ id: "A1", name: "clip", ext: "mp4" }, "My Library", BASE_URL)).toEqual({
       title: "clip",
-      artist: "My Library",
+      artist: "My Library - nas.local",
       album: "Media Preview Server",
       artwork: [{ src: "https://nas.local:8443/api/items/A1/thumb" }],
     });
+    expect(mediaSessionMetadataInit({ id: "A1" }, "My Library", "http://192.168.1.20:8080/").artist).toBe("My Library - 192.168.1.20");
   });
 
-  test("falls back to the app icon when the item has no thumbnail", () => {
+  test("falls back to the host and app icon without a library name or thumbnail", () => {
     const init = mediaSessionMetadataInit({ id: "A2", name: "song", ext: "mp3", noThumbnail: true }, "", BASE_URL);
-    expect(init.artist).toBe("Media Preview Server");
+    expect(init.artist).toBe("nas.local");
     expect(init.artwork).toEqual([{ src: "https://nas.local:8443/assets/pwa-icon-512.png", sizes: "512x512", type: "image/png" }]);
   });
 });

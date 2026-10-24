@@ -1,4 +1,4 @@
-export const DEFAULT_LIBRARY_FOOTER_NAME = "Connecting to Eagle";
+const DEFAULT_LIBRARY_FOOTER_NAME = "Connecting…";
 
 const listeners = new Set<() => void>();
 let currentLibraryFooterName = DEFAULT_LIBRARY_FOOTER_NAME;

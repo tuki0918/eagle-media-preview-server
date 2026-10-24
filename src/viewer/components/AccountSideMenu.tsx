@@ -101,7 +101,7 @@ export function AccountSideMenu() {
                       alt=""
                       aria-hidden="true"
                     />
-                    <EagleStatusDot status={eagleStatus} version={libraryHeader.version} />
+                    <EagleStatusDot status={eagleStatus} />
                   </span>
                   <span className="grid min-w-0 group-data-[collapsible=icon]:hidden">
                     <span className="truncate text-sm font-semibold leading-tight text-sidebar-foreground">{libraryHeader.name}</span>
@@ -167,9 +167,8 @@ export function AccountSideMenu() {
 }
 
 function libraryHeaderLabels(displayName: string) {
-  const match = displayName.match(/^(.*?)\s+-\s+(Eagle\s+.+)$/);
-  if (!match) return { name: displayName, version: "" };
-  return { name: match[1], version: match[2] };
+  const match = displayName.match(/^(.*?)\s+-\s+Eagle\s+.+$/);
+  return { name: match ? match[1] : displayName };
 }
 
 function FolderShortcutSideNav({
@@ -624,14 +623,16 @@ const eagleStatusDotClassNames: Record<EagleStatus, string> = {
   online: "bg-success",
 };
 
-function eagleStatusLabel(status: EagleStatus, version: string) {
-  if (status === "online") return version ? `Connected to ${version}` : "Connected to Eagle";
-  if (status === "offline") return "Eagle unavailable";
-  return "Checking Eagle connection";
+function eagleStatusLabel(status: EagleStatus, host: string) {
+  if (status === "online") return host ? `Connected to ${host}` : "Connected to media server";
+  if (status === "offline") return "Media server unavailable";
+  return "Checking media server";
 }
 
-function EagleStatusDot({ status, version }: { status: EagleStatus; version: string }) {
-  const label = eagleStatusLabel(status, version);
+function EagleStatusDot({ status }: { status: EagleStatus }) {
+  // The server host (IP or hostname) this viewer is connected through.
+  const host = typeof window === "undefined" ? "" : window.location.hostname;
+  const label = eagleStatusLabel(status, host);
   return (
     <span
       id="eagleStatusDot"

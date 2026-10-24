@@ -1,7 +1,7 @@
 import { act } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { JSDOM } from "jsdom";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import {
@@ -418,13 +418,16 @@ describe("ViewerAppShell", () => {
     expect(html).toMatch(/id="eagleStatusDot"[^>]*data-status="checking"/);
 
     setEagleStatus("online");
+    expect(renderAccountSideMenu()).toMatch(/id="eagleStatusDot"[^>]*data-status="online"[^>]*title="Connected to media server"/);
+    vi.stubGlobal("window", { location: { hostname: "nas.local" } });
     const onlineHtml = renderAccountSideMenu();
-    expect(onlineHtml).toMatch(/id="eagleStatusDot"[^>]*data-status="online"[^>]*title="Connected to Eagle 4.0.0"/);
+    vi.unstubAllGlobals();
+    expect(onlineHtml).toMatch(/id="eagleStatusDot"[^>]*data-status="online"[^>]*title="Connected to nas.local"/);
     expect(onlineHtml).toContain("bg-success");
 
     setEagleStatus("offline");
     const offlineHtml = renderAccountSideMenu();
-    expect(offlineHtml).toMatch(/id="eagleStatusDot"[^>]*data-status="offline"[^>]*title="Eagle unavailable"/);
+    expect(offlineHtml).toMatch(/id="eagleStatusDot"[^>]*data-status="offline"[^>]*title="Media server unavailable"/);
     expect(offlineHtml).toContain("bg-destructive");
     setEagleStatus("checking");
     expect(html).toContain("Smart Folders");
@@ -1018,9 +1021,9 @@ describe("ViewerAppShell", () => {
       <ResultStateView
         kind="message"
         className="error"
-        title="Eagle connection lost"
-        text="The preview server could not reach Eagle while loading items."
-        detail="Make sure Eagle is running."
+        title="Media server unavailable"
+        text="Couldn't load items from the media server."
+        detail="Please try again in a bit."
       />,
     );
 
@@ -1033,8 +1036,8 @@ describe("ViewerAppShell", () => {
     expect(libraryEmpty).toContain("Library is empty");
     expect(libraryEmpty).toContain("lucide-inbox");
     expect(libraryEmpty).toContain("min-h-[clamp(280px,calc(100dvh-220px),460px)]");
-    expect(error).toContain("Eagle connection lost");
-    expect(error).toContain("Make sure Eagle is running.");
+    expect(error).toContain("Media server unavailable");
+    expect(error).toContain("Please try again in a bit.");
   });
 
   test("renders tiles empty state with dense grid layout", () => {

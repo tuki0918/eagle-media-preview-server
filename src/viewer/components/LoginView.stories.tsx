@@ -40,7 +40,7 @@ export const Parts: Story = {
       <div className="grid gap-4">
         <ConnectButton />
         <ConnectButton disabled />
-        <ConnectMessage message="Connected to Eagle." />
+        <ConnectMessage message="Connected to media server." />
         <ConnectMessage isError message="Unable to connect to Eagle." />
       </div>
     </div>

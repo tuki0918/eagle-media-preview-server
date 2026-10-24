@@ -46,5 +46,5 @@ export const Empty: Story = {
 };
 
 export const LoadError: Story = {
-  decorators: [withTagListState({ error: "Eagle returned an error.", status: "error" })],
+  decorators: [withTagListState({ error: "The media server returned an error.", status: "error" })],
 };
