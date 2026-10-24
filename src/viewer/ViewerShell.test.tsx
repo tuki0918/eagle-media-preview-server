@@ -424,7 +424,7 @@ describe("ViewerAppShell", () => {
     setEagleStatus("online");
     const onlineHtml = renderAccountSideMenu();
     expect(onlineHtml).toMatch(/id="eagleStatusDot"[^>]*data-status="online"[^>]*title="Connected to Eagle 4.0.0"/);
-    expect(onlineHtml).toContain("bg-emerald-500");
+    expect(onlineHtml).toContain("bg-success");
 
     setEagleStatus("offline");
     const offlineHtml = renderAccountSideMenu();

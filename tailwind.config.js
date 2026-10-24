@@ -22,6 +22,9 @@ export default {
         destructive: {
           DEFAULT: "var(--destructive)",
         },
+        success: {
+          DEFAULT: "var(--success)",
+        },
         muted: {
           DEFAULT: "var(--muted)",
           foreground: "var(--muted-foreground)",

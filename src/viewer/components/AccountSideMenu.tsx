@@ -613,7 +613,7 @@ function RoleChip({ description, label }: { description: string; label: string }
 const eagleStatusDotClassNames: Record<EagleStatus, string> = {
   checking: "bg-muted-foreground",
   offline: "bg-destructive",
-  online: "bg-emerald-500",
+  online: "bg-success",
 };
 
 function eagleStatusLabel(status: EagleStatus, version: string) {
