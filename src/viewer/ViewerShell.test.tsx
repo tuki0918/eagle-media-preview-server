@@ -364,10 +364,10 @@ describe("ViewerAppShell", () => {
   });
 
   test("renders library footer as a reusable component", () => {
-    const html = renderToStaticMarkup(<LibraryFooter name="My Library - Eagle 4.0" />);
+    const html = renderToStaticMarkup(<LibraryFooter name="My Library" />);
 
     expect(html).toContain('id="libraryFooterName"');
-    expect(html).toContain("My Library - Eagle 4.0");
+    expect(html).toContain("My Library");
     expect(html).not.toContain("logoutButton");
     expect(html).not.toContain("authFooterMessage");
   });
@@ -403,12 +403,11 @@ describe("ViewerAppShell", () => {
       message: "",
       user: { role: "editor", username: "ed" },
     });
-    setLibraryFooterName("My Library - Eagle 4.0.0");
+    setLibraryFooterName("My Library");
     const html = renderAccountSideMenu();
 
     expect(html).toContain('id="accountSideMenu"');
     expect(html).toContain("My Library");
-    expect(html).not.toContain("Eagle 4.0.0");
     expect(html).not.toContain("Media Preview");
     expect(html).toContain('id="authAccountLabel"');
     expect(html).toContain('id="authUserLabel"');

@@ -91,7 +91,7 @@ interface AccountMenuStoryArgs {
 }
 
 function AccountSideMenuStory(args: AccountMenuStoryArgs) {
-  setLibraryFooterName("My Eagle Library - Eagle 4.0.0");
+  setLibraryFooterName("My Eagle Library");
   setEagleStatus(args.eagleStatus ?? "online");
   setThemePreference(args.theme ?? "light");
   setLoginConnectState({

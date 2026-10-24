@@ -61,8 +61,7 @@ const GUEST_USERNAME = "Guest";
 const GUEST_ROLE_LABEL = "No sign-in";
 
 export function AccountSideMenu() {
-  const displayName = useSyncExternalStore(subscribeLibraryFooterName, getLibraryFooterName, getLibraryFooterName);
-  const libraryHeader = libraryHeaderLabels(displayName);
+  const libraryName = useSyncExternalStore(subscribeLibraryFooterName, getLibraryFooterName, getLibraryFooterName);
   const loginState = useSyncExternalStore(subscribeLoginConnectState, getLoginConnectState, getLoginConnectState);
   const eagleStatus = useSyncExternalStore(subscribeEagleStatus, getEagleStatus, getEagleStatus);
   const searchState = useSyncExternalStore(subscribeSearchControlsState, getSearchControlsState, getSearchControlsState);
@@ -104,7 +103,7 @@ export function AccountSideMenu() {
                     <EagleStatusDot status={eagleStatus} />
                   </span>
                   <span className="grid min-w-0 group-data-[collapsible=icon]:hidden">
-                    <span className="truncate text-sm font-semibold leading-tight text-sidebar-foreground">{libraryHeader.name}</span>
+                    <span className="truncate text-sm font-semibold leading-tight text-sidebar-foreground">{libraryName}</span>
                   </span>
                 </div>
               </SidebarMenuButton>
@@ -164,11 +163,6 @@ export function AccountSideMenu() {
       </Sidebar>
     </>
   );
-}
-
-function libraryHeaderLabels(displayName: string) {
-  const match = displayName.match(/^(.*?)\s+-\s+Eagle\s+.+$/);
-  return { name: match ? match[1] : displayName };
 }
 
 function FolderShortcutSideNav({
