@@ -7,6 +7,23 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-24
+
+### Added
+
+- Playing audio and video now shows the file name, library name, and thumbnail in the OS media controls (lock screen / Now Playing), with play, pause, and seek support.
+- Added a maskable PWA icon.
+- The sidebar menu fades out at the scroll edge to hint at more content.
+
+### Changed
+
+- Renamed the viewer app to "Media Library" in the page title, PWA name, and home screen title.
+- Refreshed the app icon, PWA icons, favicon, and plugin icons with a new design.
+- The sidebar shows only the library name, without the Eagle version.
+- Simplified login, empty-state, and error messages so they no longer mention Eagle internals; technical error details are logged to the console instead of shown on screen.
+- Updated the PWA description and background color.
+- Updated the README and screenshots.
+
 ## [0.4.2] - 2026-10-24
 
 ### Added
@@ -230,7 +247,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 - Initial release of Eagle Media Preview Server.
 
-[Unreleased]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.4.2...HEAD
+[Unreleased]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.3.7...v0.4.0
