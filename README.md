@@ -1,5 +1,9 @@
 # Eagle | Media Preview Server
 
+<p align="center">
+  <img src="plugin/assets/icon_on.png" width="128" height="128" alt="Media Preview Server icon" />
+</p>
+
 Media Preview Server is a tool that starts a local preview server for your Eagle library with one click.
 You can preview your media from other devices on the same network.
 
