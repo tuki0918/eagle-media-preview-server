@@ -237,11 +237,13 @@ export function MediaControls({
     };
   }, [item.id, mediaRef, variant]);
 
+  // Rebind only when what the lock screen shows changes; edits like rating replace `item` too.
+  const { id, name, ext, noThumbnail } = item;
   useEffect(() => {
     const media = mediaRef.current;
     if (!media) return;
-    return bindMediaSession(media, item);
-  }, [item, mediaRef]);
+    return bindMediaSession(media, { id, name, ext, noThumbnail });
+  }, [id, name, ext, noThumbnail, mediaRef]);
 
   useEffect(() => {
     const handleFullscreenChange = () => setFullscreen(Boolean(document.fullscreenElement));
