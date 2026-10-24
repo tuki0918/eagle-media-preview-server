@@ -7,6 +7,28 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-10-24
+
+### Added
+
+- The Rating filter now accepts multiple ratings at once.
+- Added a search box with a clear button to the All Tags page, and a clear button to the main search box.
+- Active filters are shown as labels next to the filter button.
+- The sidebar shows the Eagle connection status and checks it periodically.
+- The sidebar shortcuts show item totals for tags, uncategorized, and untagged items.
+- Added a System option to the theme setting that follows the OS preference.
+- The plugin settings can pick the HTTPS certificate and key files with a file dialog.
+- Items in grid and tile view fade in from below, row by row from left to right, including tiles loaded while scrolling.
+
+### Changed
+
+- Moved the items-per-page setting from the filter panel to the sidebar menu.
+- The Type filter now uses the same dropdown menu as the Rating filter.
+- Search and filters are disabled in smart folders, with a tooltip explaining why.
+- The last row in tile view now fits its tiles more evenly.
+- Renamed "Custom hostname" to "Hostname".
+- Removed uppercase styling from the sidebar group label and header title.
+
 ## [0.4.1] - 2026-10-21
 
 ### Added
@@ -208,7 +230,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 - Initial release of Eagle Media Preview Server.
 
-[Unreleased]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.3.7...v0.4.0
 [0.3.7]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.3.6...v0.3.7
