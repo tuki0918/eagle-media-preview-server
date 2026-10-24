@@ -387,7 +387,7 @@ function loadErrorMessage(error: unknown) {
     return {
       title: "Unable to load this library",
       text: "Something went wrong while loading items.",
-      detail: message,
+      detail: "Please try again in a bit.",
     };
   }
   return {
@@ -1224,6 +1224,8 @@ function folderSuggestionItems(query: string, selectedValues: string[]) {
 }
 
 function renderLoadError(error: unknown) {
+  // Server messages are technical, so keep them in the console instead of on screen.
+  console.error("Failed to load items:", error);
   const message = loadErrorMessage(error);
   setResultSurfaceState({
     kind: "message",

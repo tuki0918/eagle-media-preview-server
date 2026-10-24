@@ -447,6 +447,8 @@ test("public UI no longer shows connect lock icon or connection settings button"
   assert.doesNotMatch(html, /<LibraryFooter \/>/);
   assert.doesNotMatch(html, /id="libraryFooterNameHost"/);
   assert.match(app, /setLibraryFooterName\(libraryLabel\(data\)\);/);
+  assert.match(app, /console\.error\("Failed to load items:", error\);/);
+  assert.doesNotMatch(app, /function loadErrorMessage[\s\S]*?detail: message,[\s\S]*?\n\}/);
   assert.match(app, /document\.title = libraryTitle\(data\);/);
   assert.match(app, /document\.title = DEFAULT_DOCUMENT_TITLE;/);
   assert.match(html, /useSyncExternalStore\(subscribeLibraryFooterName, getLibraryFooterName, getLibraryFooterName\)/);
