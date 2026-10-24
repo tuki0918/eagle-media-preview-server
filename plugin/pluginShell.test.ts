@@ -471,6 +471,7 @@ test("plugin saves a custom domain and uses the resulting URL for display, QR, c
   const saves: Record<string, unknown>[] = [];
   const copied: string[] = [];
   const opened: string[] = [];
+  const dialogs: Array<{ properties?: string[]; title?: string }> = [];
   let status = {
     settings: { customDomain: "", host: "127.0.0.1", port: 41532 },
     state: "stopped", url: "http://localhost:41532",
@@ -478,6 +479,12 @@ test("plugin saves a custom domain and uses the resulting URL for display, QR, c
   pluginWindow.eagle = {
     clipboard: { async writeText(url: string) { copied.push(url); } },
     shell: { async openExternal(url: string) { opened.push(url); } },
+    dialog: {
+      async showOpenDialog(options: { properties?: string[]; title?: string }) {
+        dialogs.push(options);
+        return { canceled: false, filePaths: [options.title?.includes("key") ? "/certs/key.pem" : "/certs/cert.pem"] };
+      },
+    },
   };
   pluginWindow.require = (id: string) => id === "path" ? path : {
     createServerManager: () => ({
@@ -537,6 +544,14 @@ test("plugin saves a custom domain and uses the resulting URL for display, QR, c
     doc.querySelector("form")?.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }));
     await waitFor(() => endpoint.value === "http://localhost:41532");
     assert.equal(saves.at(-1)?.customDomain, "");
+
+    doc.querySelector<HTMLButtonElement>('[aria-label="Choose certificate file"]')?.click();
+    doc.querySelector<HTMLButtonElement>('[aria-label="Choose private key file"]')?.click();
+    await waitFor(() =>
+      doc.querySelector<HTMLInputElement>('[aria-label="TLS certificate path"]')?.value === "/certs/cert.pem"
+      && doc.querySelector<HTMLInputElement>('[aria-label="TLS key path"]')?.value === "/certs/key.pem");
+    assert.equal(dialogs.length, 2);
+    assert.ok(dialogs.every((options) => options.properties?.includes("openFile")));
   } finally {
     dom.window.close();
   }

@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import qrcodeFactory from "qrcode-generator";
 import { CloseIcon } from "./components/Icons";
 import { ServerStatusPanel } from "./components/ServerStatusPanel";
-import { SettingsForm } from "./components/SettingsForm";
+import { SettingsForm, type HttpsFileField } from "./components/SettingsForm";
 import { serverRestartSettingsChanged, settingsPayloadChanged } from "./settingsChange";
 import type { AuthUser, PluginSettings, PluginStatus, ServerState, SettingsTab, UserRole } from "./types";
 
@@ -17,6 +17,14 @@ interface ServerManager {
 
 interface EagleRuntime {
   clipboard?: { writeText?: (value: string) => Promise<void> };
+  dialog?: {
+    showOpenDialog?: (options: {
+      defaultPath?: string;
+      filters?: Array<{ extensions: string[]; name: string }>;
+      properties?: string[];
+      title?: string;
+    }) => Promise<{ canceled: boolean; filePaths: string[] }>;
+  };
   onPluginCreate?: (callback: () => void) => void;
   onPluginShow?: (callback: () => void) => void;
   shell?: { openExternal?: (value: string) => Promise<void> };
@@ -349,6 +357,28 @@ function App() {
     }
   }
 
+  async function chooseHttpsFile(field: HttpsFileField) {
+    const showOpenDialog = globalThis.eagle?.dialog?.showOpenDialog;
+    if (!showOpenDialog) return;
+    const currentPath = field === "cert" ? settings.httpsCertPath : settings.httpsKeyPath;
+    try {
+      const result = await showOpenDialog({
+        title: field === "cert" ? "Choose TLS certificate" : "Choose TLS private key",
+        ...(currentPath ? { defaultPath: currentPath } : {}),
+        filters: [
+          { name: "PEM files", extensions: ["pem", "crt", "cer", "key"] },
+          { name: "All files", extensions: ["*"] },
+        ],
+        properties: ["openFile", "showHiddenFiles"],
+      });
+      const filePath = result.canceled ? "" : result.filePaths[0];
+      if (!filePath) return;
+      updateSettings(field === "cert" ? { httpsCertPath: filePath } : { httpsKeyPath: filePath });
+    } catch (error) {
+      setErrorMessage(error);
+    }
+  }
+
   async function openHttpsDocs() {
     try {
       if (globalThis.eagle?.shell?.openExternal) {
@@ -450,6 +480,7 @@ function App() {
           settingsTab={settingsTab}
           userPasswords={userPasswordsRef.current}
           onAddAuthUser={addAuthUser}
+          onChooseHttpsFile={globalThis.eagle?.dialog?.showOpenDialog ? chooseHttpsFile : undefined}
           onCustomDomainChange={(value) => updateSettings({ customDomain: value })}
           onHttpsCertPathChange={(value) => updateSettings({ httpsCertPath: value })}
           onHttpsKeyPathChange={(value) => updateSettings({ httpsKeyPath: value })}

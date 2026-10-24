@@ -4,6 +4,7 @@ import {
   Copy,
   Eye,
   EyeOff,
+  FolderOpen,
   Globe,
   KeyRound,
   Lock,
@@ -27,6 +28,7 @@ function iconComponent(Icon: LucideIcon, defaultClassName = "h-6 w-6") {
 export const CloseIcon = iconComponent(X);
 export const CheckIcon = iconComponent(Check);
 export const CopyIcon = iconComponent(Copy);
+export const FolderOpenIcon = iconComponent(FolderOpen);
 export const EmptyQrIcon = iconComponent(QrCode);
 export const EyeIcon = iconComponent(Eye);
 export const EyeOffIcon = iconComponent(EyeOff);

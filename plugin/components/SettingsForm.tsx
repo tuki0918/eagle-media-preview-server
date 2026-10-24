@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { AuthUser, PluginSettings, SettingsTab, UserRole } from "../types";
-import { ChevronIcon, CloseIcon, EyeIcon, EyeOffIcon, PlusIcon, SettingsIcon } from "./Icons";
+import { ChevronIcon, CloseIcon, EyeIcon, EyeOffIcon, FolderOpenIcon, PlusIcon, SettingsIcon } from "./Icons";
 
 interface SettingsFormProps {
   authEnabled: boolean;
@@ -18,6 +18,8 @@ interface SettingsFormProps {
   settingsTab: SettingsTab;
   userPasswords: Record<string, string>;
   onAddAuthUser: () => void;
+  /** Opens Eagle's file picker for a TLS file; omitted when the dialog API is unavailable. */
+  onChooseHttpsFile?: (field: HttpsFileField) => void;
   onCustomDomainChange: (value: string) => void;
   onHttpsCertPathChange: (value: string) => void;
   onHttpsKeyPathChange: (value: string) => void;
@@ -31,6 +33,8 @@ interface SettingsFormProps {
   onUpdateAuthUser: (index: number, patch: AuthUser) => void;
   onUserPasswordDraftChange: (index: number, value: string) => void;
 }
+
+export type HttpsFileField = "cert" | "key";
 
 const MIN_SESSION_DURATION_DAYS = 1;
 const MAX_SESSION_DURATION_DAYS = 365;
@@ -54,6 +58,7 @@ export function SettingsForm({
   settingsTab,
   userPasswords,
   onAddAuthUser,
+  onChooseHttpsFile,
   onCustomDomainChange,
   onHttpsCertPathChange,
   onHttpsKeyPathChange,
@@ -214,23 +219,25 @@ export function SettingsForm({
 
         <div id="securitySettingsPanel" role="tabpanel" aria-labelledby="securitySettingsTab" hidden={settingsTab !== "security"}>
           <SettingRow label="TLS Cert" help="PEM certificate file used when HTTPS is enabled.">
-            <input
-              className={`${settingInputClassName} w-full`}
-              type="text"
+            <FilePathInput
+              chooseLabel="Choose certificate file"
               disabled={settingsInputDisabled}
+              inputLabel="TLS certificate path"
               placeholder="/path/to/cert.pem"
               value={settings.httpsCertPath || ""}
-              onChange={(event) => onHttpsCertPathChange(event.currentTarget.value)}
+              onChange={onHttpsCertPathChange}
+              onChoose={onChooseHttpsFile ? () => onChooseHttpsFile("cert") : undefined}
             />
           </SettingRow>
           <SettingRow label="TLS Key" help="PEM private key file used when HTTPS is enabled.">
-            <input
-              className={`${settingInputClassName} w-full`}
-              type="text"
+            <FilePathInput
+              chooseLabel="Choose private key file"
               disabled={settingsInputDisabled}
+              inputLabel="TLS key path"
               placeholder="/path/to/key.pem"
               value={settings.httpsKeyPath || ""}
-              onChange={(event) => onHttpsKeyPathChange(event.currentTarget.value)}
+              onChange={onHttpsKeyPathChange}
+              onChoose={onChooseHttpsFile ? () => onChooseHttpsFile("key") : undefined}
             />
           </SettingRow>
         </div>
@@ -261,6 +268,50 @@ function SettingsTabButton({ active, children, controls, id, onClick }: { active
     >
       {children}
     </button>
+  );
+}
+
+function FilePathInput({
+  chooseLabel,
+  disabled,
+  inputLabel,
+  placeholder,
+  value,
+  onChange,
+  onChoose,
+}: {
+  chooseLabel: string;
+  disabled: boolean;
+  inputLabel: string;
+  placeholder: string;
+  value: string;
+  onChange: (value: string) => void;
+  onChoose?: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        className={`${settingInputClassName} w-full`}
+        type="text"
+        disabled={disabled}
+        aria-label={inputLabel}
+        placeholder={placeholder}
+        value={value}
+        onChange={(event) => onChange(event.currentTarget.value)}
+      />
+      {onChoose ? (
+        <button
+          className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${authActionButtonClassName}`}
+          type="button"
+          disabled={disabled}
+          aria-label={chooseLabel}
+          title={chooseLabel}
+          onClick={onChoose}
+        >
+          <FolderOpenIcon className="h-[14px] w-[14px]" />
+        </button>
+      ) : null}
+    </div>
   );
 }
 
