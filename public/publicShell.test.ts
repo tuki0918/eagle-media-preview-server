@@ -115,7 +115,7 @@ test("public login no longer renders advanced Eagle connection settings", async 
   assert.doesNotMatch(login, /Connect this browser to the media server\./);
   assert.doesNotMatch(login, /Connect this browser to the local Eagle media server\./);
   assert.doesNotMatch(login, /Start the server from the Eagle plugin panel/);
-  assert.doesNotMatch(login, /Use an account configured in the Eagle plugin panel\./);
+  assert.doesNotMatch(login, /Ask the person who set up this media library for an account\./);
   assert.doesNotMatch(login, /id="viewerPasswordField"/);
   assert.doesNotMatch(login, /id="viewerPasswordInput"/);
   assert.doesNotMatch(login, /id="togglePasswordButton"/);
@@ -158,7 +158,7 @@ test("public login renders credentials when server auth is required", async () =
   assert.match(login, /id="authPasswordInput"[\s\S]*required=""/);
   assert.match(login, /id="authPasswordToggle"/);
   assert.match(login, /aria-label="Show password"/);
-  assert.match(login, /Use an account configured in the Eagle plugin panel\./);
+  assert.match(login, /Ask the person who set up this media library for an account\./);
   assert.doesNotMatch(login, /Use a viewer account/);
   assert.match(button, /Sign in/);
   assert.match(app, /postJson<AuthStatusResponse>\("\/api\/auth\/login", \{ username, password \}\)/);

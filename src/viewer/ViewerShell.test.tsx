@@ -171,7 +171,7 @@ describe("ViewerAppShell", () => {
     expect(message).toContain('role="alert"');
     expect(message).not.toContain("fixed bottom-");
     expect(login).not.toContain("Start the server from the Eagle plugin panel");
-    expect(login).not.toContain("Use an account configured in the Eagle plugin panel.");
+    expect(login).not.toContain("Ask the person who set up this media library for an account.");
   });
 
   test("exports independently renderable shell components", () => {

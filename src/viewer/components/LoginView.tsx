@@ -37,7 +37,7 @@ export function LoginView({ hidden = false }: LoginViewProps) {
           {showCredentials ? (
             <div className="grid gap-1 text-center">
               <h2 className="m-0 text-base font-semibold leading-tight">Sign in</h2>
-              <p className="m-0 text-[13px] leading-[1.45] text-muted-foreground">Use an account configured in the Eagle plugin panel.</p>
+              <p className="m-0 text-[13px] leading-[1.45] text-muted-foreground">Ask the person who set up this media library for an account.</p>
             </div>
           ) : null}
           <div className="form-actions grid grid-cols-1 gap-4">
