@@ -1,12 +1,12 @@
 {
   "name": "Media Preview Server",
   "short_name": "Media Preview",
-  "description": "Browse and preview your Eagle media library from another device.",
+  "description": "A private media library on your local network.",
   "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
+  "background_color": "#141416",
   "theme_color": "#171717",
   "categories": ["photo", "utilities"],
   "icons": [
