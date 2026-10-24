@@ -24,9 +24,16 @@ Optional:
 ## Future Plans
 
 - Expand support for additional file extensions
-- Sort results by date, rating, name, or size (on hold: waiting for Eagle API support)
-- Add or remove favorite tags (on hold: waiting for Eagle API support)
 - Add AI-related capabilities
+
+### Limitations
+
+These are planned, but on hold until the Eagle API supports them:
+
+- Sort results by date, rating, name, or size
+- Add or remove favorite tags
+- Filter by multiple file extensions at once
+- Use search filters inside smart folders
 
 ## PWA Installation
 
