@@ -934,8 +934,8 @@ test("public UI labels media extensions as type", async () => {
   }));
 
   assert.doesNotMatch(filters, /id="folderSelect"[^>]*aria-label="Folder"/);
-  assert.match(filters, /id="extSelect"[^>]*aria-label="Type"/);
-  assert.match(filters, /<option value="">All types<\/option>/);
+  assert.match(filters, /id="extSelect"[^>]*aria-label="Type: JPG"/);
+  assert.doesNotMatch(filters, /<select id="extSelect"/);
   assert.match(filters, /id="ratingSelect"[^>]*aria-label="Rating: ★★★☆☆"/);
   assert.doesNotMatch(filters, /<select id="ratingSelect"/);
   assert.doesNotMatch(filters, /id="pageSizeSelect"/);

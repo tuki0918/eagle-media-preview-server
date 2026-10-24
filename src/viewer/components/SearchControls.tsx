@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { CheckIcon, FunnelXIcon, Search, SearchSlashIcon, XIcon } from "lucide-react";
 import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui";
 import { Button } from "@/components/ui/button";
@@ -175,16 +175,9 @@ export function AdvancedFilters({
   const extOptions = mediaTypeOptions(availableExts, selectedExt);
   return (
     <div id="advancedFilters" className="filter-row grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-4 max-[540px]:grid-cols-[minmax(0,1fr)_auto] max-[540px]:gap-3" hidden={!filtersOpen}>
-      <label className="grid gap-2 max-[540px]:col-span-2">
-        <select id="extSelect" className={selectClassName} aria-label="Type" value={selectedExt} onChange={changeMediaType}>
-          <option value="">All types</option>
-          {extOptions.map((type) => (
-            <option key={type} value={type}>
-              {type.toUpperCase()}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="min-w-0 max-[540px]:col-span-2">
+        <TypeFilter options={extOptions} selectedExt={selectedExt} />
+      </div>
       <RatingFilter selectedRating={selectedRating} />
       <div className="flex justify-end">
         <ResetFiltersButton hasResettableFilters={hasResettableFilters} />
@@ -193,47 +186,101 @@ export function AdvancedFilters({
   );
 }
 
-function RatingFilter({ selectedRating }: { selectedRating: string }) {
-  const selected = parseRatingFilter(selectedRating);
-  const summary = ratingFilterSummary(selectedRating);
+const filterOptionClassName =
+  "group/option flex cursor-default items-center gap-2.5 rounded-lg px-2 py-2 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground";
+const filterIndicatorClassName =
+  "flex size-4 shrink-0 items-center justify-center border border-input bg-background text-primary-foreground transition-colors group-data-[state=checked]/option:border-primary group-data-[state=checked]/option:bg-primary";
+
+// Shared by the type and rating filters: a select-styled trigger opening a menu of options.
+function FilterMenu({
+  id,
+  label,
+  summary,
+  summaryText,
+  children,
+}: {
+  id: string;
+  label: string;
+  summary: ReactNode;
+  summaryText: string;
+  children: ReactNode;
+}) {
   return (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
         <button
-          id="ratingSelect"
+          id={id}
           type="button"
           className={cn(selectClassName, "flex min-w-0 items-center text-left")}
-          aria-label={`Rating: ${summary}`}
-          title={summary}
+          aria-label={`${label}: ${summaryText}`}
+          title={summaryText}
         >
-          <RatingFilterSummary ratings={selected} summary={summary} />
+          {summary}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent id="ratingFilterMenu" align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] rounded-xl p-1.5">
-        {RATING_OPTIONS.map((rating) => (
-          <DropdownMenuPrimitive.CheckboxItem
-            key={rating}
-            data-slot="dropdown-menu-checkbox-item"
-            className="group/rating flex cursor-default items-center gap-2.5 rounded-lg px-2 py-2 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground"
-            checked={selected.includes(rating)}
-            aria-label={rating === 0 ? "No rating" : `${rating} stars`}
-            // Keep the menu open so several ratings can be picked in one go.
-            onSelect={(event) => event.preventDefault()}
-            onCheckedChange={() => changeRating(toggleRatingFilter(selectedRating, rating))}
-          >
-            <span
-              className="flex size-4 shrink-0 items-center justify-center rounded-[5px] border border-input bg-background text-primary-foreground transition-colors group-data-[state=checked]/rating:border-primary group-data-[state=checked]/rating:bg-primary"
-              aria-hidden="true"
-            >
-              <DropdownMenuPrimitive.ItemIndicator>
-                <CheckIcon className="size-3" strokeWidth={3} />
-              </DropdownMenuPrimitive.ItemIndicator>
-            </span>
-            <RatingFilterLabel rating={rating} />
-          </DropdownMenuPrimitive.CheckboxItem>
-        ))}
+      <DropdownMenuContent
+        id={`${id}Menu`}
+        data-filter-menu=""
+        align="start"
+        className="max-h-[min(360px,var(--radix-dropdown-menu-content-available-height))] w-[var(--radix-dropdown-menu-trigger-width)] rounded-xl p-1.5"
+      >
+        {children}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+// Eagle filters by a single extension, so the type menu picks one value (radio) and closes.
+function TypeFilter({ options, selectedExt }: { options: readonly string[]; selectedExt: string }) {
+  const summaryText = selectedExt ? selectedExt.toUpperCase() : "All types";
+  return (
+    <FilterMenu id="extSelect" label="Type" summary={<span className="truncate">{summaryText}</span>} summaryText={summaryText}>
+      <DropdownMenuPrimitive.RadioGroup value={selectedExt} onValueChange={changeMediaType}>
+        {["", ...options].map((ext) => (
+          <DropdownMenuPrimitive.RadioItem key={ext || "all"} data-slot="dropdown-menu-radio-item" className={filterOptionClassName} value={ext}>
+            <span className={cn(filterIndicatorClassName, "rounded-full")} aria-hidden="true">
+              <DropdownMenuPrimitive.ItemIndicator>
+                <span className="block size-1.5 rounded-full bg-primary-foreground" />
+              </DropdownMenuPrimitive.ItemIndicator>
+            </span>
+            <span className="truncate">{ext ? ext.toUpperCase() : "All types"}</span>
+          </DropdownMenuPrimitive.RadioItem>
+        ))}
+      </DropdownMenuPrimitive.RadioGroup>
+    </FilterMenu>
+  );
+}
+
+function RatingFilter({ selectedRating }: { selectedRating: string }) {
+  const selected = parseRatingFilter(selectedRating);
+  const summaryText = ratingFilterSummary(selectedRating);
+  return (
+    <FilterMenu
+      id="ratingSelect"
+      label="Rating"
+      summary={<RatingFilterSummary ratings={selected} summary={summaryText} />}
+      summaryText={summaryText}
+    >
+      {RATING_OPTIONS.map((rating) => (
+        <DropdownMenuPrimitive.CheckboxItem
+          key={rating}
+          data-slot="dropdown-menu-checkbox-item"
+          className={filterOptionClassName}
+          checked={selected.includes(rating)}
+          aria-label={rating === 0 ? "No rating" : `${rating} stars`}
+          // Keep the menu open so several ratings can be picked in one go.
+          onSelect={(event) => event.preventDefault()}
+          onCheckedChange={() => changeRating(toggleRatingFilter(selectedRating, rating))}
+        >
+          <span className={cn(filterIndicatorClassName, "rounded-[5px]")} aria-hidden="true">
+            <DropdownMenuPrimitive.ItemIndicator>
+              <CheckIcon className="size-3" strokeWidth={3} />
+            </DropdownMenuPrimitive.ItemIndicator>
+          </span>
+          <RatingFilterLabel rating={rating} />
+        </DropdownMenuPrimitive.CheckboxItem>
+      ))}
+    </FilterMenu>
   );
 }
 

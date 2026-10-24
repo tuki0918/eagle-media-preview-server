@@ -43,7 +43,6 @@ import { TagSearchControls } from "./components/SearchControls";
 import { resetPreviewDialogState, setPreviewDialogState } from "./previewDialogState";
 import { setImageOverlayControlsVisible } from "./imageOverlayState";
 import { setVideoOverlayControlsVisible } from "./videoOverlayState";
-import { MEDIA_TYPE_OPTIONS } from "./shellConfig";
 import { setLoginConnectState } from "./loginConnectState";
 import { setLibraryFooterName } from "./libraryFooterState";
 import { setEagleStatus } from "./eagleStatusState";
@@ -133,11 +132,8 @@ describe("ViewerAppShell", () => {
   test("renders configured filter options", () => {
     const html = renderToStaticMarkup(<ViewerAppShell />);
 
-    for (const type of MEDIA_TYPE_OPTIONS) {
-      expect(html).toContain(`value="${type}"`);
-      expect(html).toContain(type.toUpperCase());
-    }
-
+    expect(html).toMatch(/id="extSelect"[^>]*aria-label="Type: All types"/);
+    expect(html).toContain(">All types<");
     expect(html).toMatch(/id="ratingSelect"[^>]*aria-label="Rating: All ratings"/);
     expect(html).toContain(">All ratings<");
 

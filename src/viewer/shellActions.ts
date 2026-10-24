@@ -107,8 +107,8 @@ export function openTags() {
   actions.tagsOpened();
 }
 
-export function changeMediaType(event: { currentTarget: { value: string } }) {
-  actions.mediaTypeChanged(event.currentTarget.value);
+export function changeMediaType(mediaType: string) {
+  actions.mediaTypeChanged(mediaType);
 }
 
 export function changeRating(rating: string) {
