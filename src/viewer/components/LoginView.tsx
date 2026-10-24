@@ -63,7 +63,7 @@ function LoginIdentity() {
         aria-hidden="true"
       />
       <div className="grid gap-1.5">
-        <h1 className="m-0 whitespace-nowrap text-xl font-semibold leading-tight">Media Preview Server</h1>
+        <h1 className="m-0 whitespace-nowrap text-xl font-semibold leading-tight">Media Library</h1>
         <p className="m-0 text-[13px] leading-[1.45] text-muted-foreground">A private media library on your local network.</p>
       </div>
     </div>

@@ -127,7 +127,7 @@ let eagleStatusCheckInFlight = false;
 let unsubscribeEagleStatusRequests: (() => void) | null = null;
 const EAGLE_STATUS_POLL_INTERVAL_MS = 30_000;
 const pendingRatingItemIds = new Set<string>();
-const DEFAULT_DOCUMENT_TITLE = "Media Preview Server";
+const DEFAULT_DOCUMENT_TITLE = "Media Library";
 const changeSearch = debounce((query: string) => {
   applyFilterChange({ query: query.trim() });
   loadTagSuggestions();
@@ -540,7 +540,7 @@ function libraryLabel(data: ConnectResponse) {
 
 function libraryTitle(data: ConnectResponse) {
   const name = data.library?.name || LIBRARY_EMPTY_LABEL;
-  return `${name} - Media Preview Server`;
+  return `${name} - Media Library`;
 }
 
 async function loadFolders() {

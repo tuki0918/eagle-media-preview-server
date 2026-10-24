@@ -8,7 +8,7 @@ describe("media session metadata", () => {
     expect(mediaSessionMetadataInit({ id: "A1", name: "clip", ext: "mp4" }, "My Library", BASE_URL)).toEqual({
       title: "clip",
       artist: "My Library - nas.local",
-      album: "Media Preview Server",
+      album: "Media Library",
       artwork: [{ src: "https://nas.local:8443/api/items/A1/thumb" }],
     });
     expect(mediaSessionMetadataInit({ id: "A1" }, "My Library", "http://192.168.1.20:8080/").artist).toBe("My Library - 192.168.1.20");

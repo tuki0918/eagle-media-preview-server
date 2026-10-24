@@ -4,7 +4,7 @@ import { getLibraryName } from "./libraryNameState";
 import { hasNoThumbnail } from "./media";
 import type { EagleItem } from "./types";
 
-const APP_NAME = "Media Preview Server";
+const APP_NAME = "Media Library";
 const APP_ARTWORK: MediaImage = { src: "/assets/pwa-icon-512.png", sizes: "512x512", type: "image/png" };
 const DEFAULT_SEEK_OFFSET_SECONDS = 10;
 

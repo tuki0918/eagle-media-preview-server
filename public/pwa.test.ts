@@ -9,7 +9,7 @@ test("public viewer declares an installable PWA", async () => {
   assert.match(html, /<link rel="manifest" href="\/manifest\.webmanifest"/);
   assert.match(html, /<link rel="apple-touch-icon" href="\/assets\/pwa-icon-180\.png"/);
   assert.match(html, /<meta name="theme-color"/);
-  assert.equal(manifest.name, "Media Preview Server");
+  assert.equal(manifest.name, "Media Library");
   assert.equal(manifest.start_url, "/");
   assert.equal(manifest.scope, "/");
   assert.equal(manifest.display, "standalone");

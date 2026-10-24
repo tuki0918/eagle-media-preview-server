@@ -110,7 +110,7 @@ test("public login no longer renders advanced Eagle connection settings", async 
 
   assert.match(login, /class="[^"]*\bapp-logo\b/);
   assert.match(login, /src="(?:[^"]*app_icon\.svg|data:image\/svg\+xml,)/);
-  assert.match(login, /<h1 class="[^"]*">Media Preview Server<\/h1>/);
+  assert.match(login, /<h1 class="[^"]*">Media Library<\/h1>/);
   assert.match(login, /A private media library on your local network\./);
   assert.doesNotMatch(login, /Connect this browser to the media server\./);
   assert.doesNotMatch(login, /Connect this browser to the local Eagle media server\./);
@@ -704,15 +704,15 @@ test("public status line no longer renders page count UI", async () => {
   assert.doesNotMatch(css, /#pageInfo/);
 });
 
-test("public shell uses Media Preview Server branding and serves a favicon", async () => {
+test("public shell uses Media Library branding and serves a favicon", async () => {
   const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
   const app = await readViewerSources();
   const login = renderToStaticMarkup(createElement(LoginView, { hidden: false }));
   await access(new URL("./favicon.ico", import.meta.url));
 
-  assert.match(html, /<title>Media Preview Server<\/title>/);
-  assert.match(app, /function libraryTitle\(data: ConnectResponse\) \{[\s\S]*return `\$\{name\} - Media Preview Server`;/);
-  assert.match(login, />Media Preview Server<\/h1>/);
+  assert.match(html, /<title>Media Library<\/title>/);
+  assert.match(app, /function libraryTitle\(data: ConnectResponse\) \{[\s\S]*return `\$\{name\} - Media Library`;/);
+  assert.match(login, />Media Library<\/h1>/);
   assert.match(html, /<link rel="icon" href="\/favicon\.ico"/);
   assert.doesNotMatch(html, /Eagle Web UI/);
 });

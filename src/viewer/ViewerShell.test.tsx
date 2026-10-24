@@ -408,7 +408,7 @@ describe("ViewerAppShell", () => {
 
     expect(html).toContain('id="accountSideMenu"');
     expect(html).toContain("My Library");
-    expect(html).not.toContain("Media Preview");
+    expect(html).not.toContain("Media Library");
     expect(html).toContain('id="authAccountLabel"');
     expect(html).toContain('id="authUserLabel"');
     expect(html).toContain('id="authRoleLabel"');

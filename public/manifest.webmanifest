@@ -1,6 +1,6 @@
 {
-  "name": "Media Preview Server",
-  "short_name": "Media Preview",
+  "name": "Media Library",
+  "short_name": "Media Library",
   "description": "A private media library on your local network.",
   "id": "/",
   "start_url": "/",
