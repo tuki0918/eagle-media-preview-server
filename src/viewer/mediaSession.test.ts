@@ -215,4 +215,23 @@ describe("Media Session automatic Picture-in-Picture", () => {
     expect(request).toHaveBeenCalledTimes(2);
     cleanup();
   });
+
+  test("marks automatic PiP requests before calling the browser and releases the marker after rejection", async () => {
+    const { media, request, invoke } = setup();
+    const release = vi.fn();
+    const begin = vi.fn(() => {
+      expect(request).not.toHaveBeenCalled();
+      return release;
+    });
+    request.mockRejectedValueOnce(new Error("Permission denied"));
+    const cleanup = bindMediaSession(media, { id: "video" }, begin);
+    Object.defineProperty(media, "paused", { value: true });
+    await invoke();
+    expect(begin).not.toHaveBeenCalled();
+    Object.defineProperty(media, "paused", { value: false });
+    await invoke();
+    expect(begin).toHaveBeenCalledOnce();
+    expect(release).toHaveBeenCalledOnce();
+    cleanup();
+  });
 });

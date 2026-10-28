@@ -1,16 +1,20 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, ChevronLeft, ChevronRight, Music, Pause, Play, Presentation, RotateCcw, Volume2, VolumeX, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Music, Pause, PictureInPicture2, Play, Presentation, RotateCcw, Volume2, VolumeX, X } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { errorMessage, mediaUrl } from "../api";
 import { displayFileName } from "../format";
+import { bindMediaSession } from "../mediaSession";
+import { isPictureInPictureActive } from "../pictureInPicture";
+import { usePictureInPicture } from "../usePictureInPicture";
 import { subscribeDisplaySettingsReset } from "../displayPreferences";
 import { getResultSurfaceState, subscribeResultSurfaceState } from "../resultSurfaceState";
 import { getSearchControlsState } from "../searchControlsState";
 import { getTagChipsState } from "../tagChipsState";
 import { DEFAULT_SLIDESHOW_SETTINGS, readSlideshowSettings, saveSlideshowSettings, SlideshowSource, slideshowMediaKind, type SlideshowQuery, type SlideshowSettings } from "../slideshow";
 import type { EagleItem } from "../types";
+import { dockSurfaceClassName } from "./viewerDockStyles";
 
 const playerButton = "inline-grid size-11 shrink-0 place-items-center rounded-full text-white/80 hover:bg-white/15 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white disabled:pointer-events-none disabled:opacity-30 [&_svg]:size-5";
 const selectClass = "h-10 w-full min-w-0 appearance-none rounded-xl border border-input bg-background pl-3 pr-9 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30";
@@ -26,7 +30,7 @@ export function SlideshowLauncher() {
   };
   return (
     <>
-      <div className="slideshow-launcher pointer-events-auto fixed bottom-[calc(16px+env(safe-area-inset-bottom))] left-[calc(16px+env(safe-area-inset-left))] z-20 flex h-12 items-center rounded-full bg-[color-mix(in_srgb,var(--card)_86%,transparent)] px-1.5 shadow-[0_10px_30px_-12px_rgba(15,23,42,0.28)] backdrop-blur-xl min-[720px]:bottom-6 min-[720px]:left-6">
+      <div className={`slideshow-launcher fixed bottom-[calc(16px+env(safe-area-inset-bottom))] left-[calc(16px+env(safe-area-inset-left))] z-20 min-[720px]:bottom-6 min-[720px]:left-6 ${dockSurfaceClassName}`}>
         <button type="button" className="inline-grid size-9 place-items-center rounded-full border-0 bg-transparent text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-40" aria-label="Slideshow" title="Slideshow" disabled={!available} onClick={open}>
           <Presentation className="size-[18px]" aria-hidden="true" />
         </button>
@@ -41,6 +45,11 @@ export function SlideshowDialog({ query, onClose }: { query: SlideshowQuery; onC
   const screenRef = useRef<HTMLDivElement>(null);
   const [settings, setSettings] = useState(readSlideshowSettings);
   const [running, setRunning] = useState(false);
+  const pictureInPictureRequests = useRef(0);
+  const onPictureInPictureRequest = useCallback(() => {
+    pictureInPictureRequests.current += 1;
+    return () => { pictureInPictureRequests.current -= 1; };
+  }, []);
   const closing = useRef(false);
   const close = useCallback(() => {
     if (closing.current) return;
@@ -68,7 +77,12 @@ export function SlideshowDialog({ query, onClose }: { query: SlideshowQuery; onC
     let entered = false;
     const changed = () => {
       if (document.fullscreenElement === screenRef.current) entered = true;
-      else if (entered) close();
+      else if (entered) {
+        entered = false;
+        const videoInPictureInPicture = Array.from(screenRef.current?.querySelectorAll("video") || []).some(isPictureInPictureActive);
+        // Native PiP may leave fullscreen before its enter event is dispatched.
+        if (!pictureInPictureRequests.current && !videoInPictureInPicture) close();
+      }
     };
     document.addEventListener("fullscreenchange", changed);
     return () => document.removeEventListener("fullscreenchange", changed);
@@ -87,7 +101,7 @@ export function SlideshowDialog({ query, onClose }: { query: SlideshowQuery; onC
   return createPortal(
     <dialog ref={dialogRef} aria-label="Slideshow" className={running ? "fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none overflow-hidden border-0 bg-black p-0 text-white backdrop:bg-black" : "fixed inset-0 m-auto max-h-[calc(100dvh-24px)] w-[min(480px,calc(100vw-24px))] overflow-hidden rounded-2xl border border-border bg-card p-0 text-card-foreground shadow-xl backdrop:bg-black/50"} onCancel={(event) => { event.preventDefault(); close(); }}>
       <div ref={screenRef} className={running ? "relative h-full w-full overflow-hidden bg-black text-white [&:fullscreen]:h-screen [&:fullscreen]:w-screen" : "relative flex max-h-[inherit] flex-col bg-card text-card-foreground"}>
-        {running ? <SlideshowPlayer query={query} settings={settings} onClose={close} /> : (
+        {running ? <SlideshowPlayer query={query} settings={settings} onClose={close} onPictureInPictureRequest={onPictureInPictureRequest} /> : (
           <>
             <header className="flex min-h-[60px] shrink-0 items-center gap-3 pb-3 pl-5 pr-14 pt-4">
               <h2 className="flex items-center gap-2 text-lg font-semibold"><Presentation className="size-5" aria-hidden="true" />Slideshow</h2>
@@ -134,7 +148,7 @@ function SlideshowToggle({ label, checked, onChange }: { label: string; checked:
 }
 
 interface Slide { item: EagleItem; index: number; token: number }
-export function SlideshowPlayer({ query, settings, onClose }: { query: SlideshowQuery; settings: SlideshowSettings; onClose: () => void }) {
+export function SlideshowPlayer({ query, settings, onClose, onPictureInPictureRequest }: { query: SlideshowQuery; settings: SlideshowSettings; onClose: () => void; onPictureInPictureRequest?: () => void | (() => void) }) {
   const sourceRef = useRef<SlideshowSource | null>(null);
   const [total, setTotal] = useState<number | null>(null);
   const [slide, setSlide] = useState<Slide | null>(null);
@@ -154,6 +168,8 @@ export function SlideshowPlayer({ query, settings, onClose }: { query: Slideshow
   const [focusWithin, setFocusWithin] = useState(false);
   const controlsTimer = useRef<number | null>(null);
   const mediaRef = useRef<HTMLMediaElement | null>(null);
+  const playbackEventsEnabled = useRef(false);
+  playbackEventsEnabled.current = ready && !loading && !error && !finished;
   const request = useRef(0);
   const targetIndex = useRef(0);
   const currentIndex = useRef(-1);
@@ -163,6 +179,7 @@ export function SlideshowPlayer({ query, settings, onClose }: { query: Slideshow
     if (!source) return;
     const generation = ++request.current;
     targetIndex.current = index;
+    playbackEventsEnabled.current = false;
     mediaRef.current?.pause();
     setLoading(true); setReady(false); setError(""); setBlocked(false); setFinished(false); setBuffering(false);
     try {
@@ -214,6 +231,7 @@ export function SlideshowPlayer({ query, settings, onClose }: { query: Slideshow
 
   const advance = useCallback(() => { void navigate(currentIndex.current + 1); }, [navigate]);
   const kind = slide ? slideshowMediaKind(slide.item) : null;
+  const pictureInPicture = usePictureInPicture(mediaRef, kind === "video" && !loading && !error && !finished, String(slide?.token), onPictureInPictureRequest);
   const staticSlide = kind === "image" || kind === "thumbnail";
   useEffect(() => {
     if (!slide || !staticSlide || !ready || paused || loading || error || finished) return;
@@ -347,6 +365,8 @@ export function SlideshowPlayer({ query, settings, onClose }: { query: Slideshow
           key={`${frame.index}:${String(frame.item.id)}`}
           item={frame.item}
           active={frame.active}
+          playbackToken={frame.active ? slide?.token : undefined}
+          sessionEnabled={frame.active && !error && !finished}
           effect={settings.effect}
           mediaRef={mediaRef}
           onReady={() => { setReady(true); setBuffering(false); syncMediaTime(); }}
@@ -355,6 +375,11 @@ export function SlideshowPlayer({ query, settings, onClose }: { query: Slideshow
           onEnded={() => { syncMediaTime(); advance(); }}
           onError={failMedia}
           onPreloadError={() => setPreparedNext(null)}
+          onPlaybackChange={(nextPaused) => {
+            if (playbackEventsEnabled.current) { setPaused(nextPaused); if (!nextPaused) setBlocked(false); }
+          }}
+          onMutedChange={setMuted}
+          onPictureInPictureRequest={onPictureInPictureRequest}
           muted={muted}
         />
       ))}
@@ -392,16 +417,22 @@ export function SlideshowPlayer({ query, settings, onClose }: { query: Slideshow
         />
         <div className="flex min-h-9 items-center justify-between gap-3">
           <span className="text-xs font-medium tabular-nums text-white/80" aria-label="Playback time">{playbackTime(currentTime)} / {playbackTime(duration)}</span>
-          {kind === "video" || kind === "audio" ? <button type="button" className={playerButton} aria-label={muted ? "Unmute slideshow" : "Mute slideshow"} onClick={() => setMuted((value) => !value)}>{muted ? <VolumeX /> : <Volume2 />}</button> : null}
+          <div className="flex items-center gap-1">
+            {kind === "video" && pictureInPicture.supported ? <button type="button" className={playerButton} aria-label={pictureInPicture.active ? "Exit Picture-in-Picture" : "Picture-in-Picture"} title={pictureInPicture.active ? "Exit Picture-in-Picture" : "Picture-in-Picture"} aria-pressed={pictureInPicture.active} disabled={!pictureInPicture.ready || pictureInPicture.pending || loading || Boolean(error) || finished} onClick={() => { void pictureInPicture.toggle(); }}><PictureInPicture2 /></button> : null}
+            {kind === "video" || kind === "audio" ? <button type="button" className={playerButton} aria-label={muted ? "Unmute slideshow" : "Mute slideshow"} onClick={() => setMuted((value) => !value)}>{muted ? <VolumeX /> : <Volume2 />}</button> : null}
+          </div>
         </div>
+        {pictureInPicture.error ? <p className="m-0 text-xs text-white/80" role="status">{pictureInPicture.error}</p> : null}
       </footer>
     </section>
   );
 }
 
-function SlideshowFrame({ item, active, effect, mediaRef, onReady, onBuffering, onTime, onEnded, onError, onPreloadError, muted }: {
+function SlideshowFrame({ item, active, playbackToken, sessionEnabled, effect, mediaRef, onReady, onBuffering, onTime, onEnded, onError, onPreloadError, onPlaybackChange, onMutedChange, onPictureInPictureRequest, muted }: {
   item: EagleItem;
   active: boolean;
+  playbackToken?: number;
+  sessionEnabled: boolean;
   effect: SlideshowSettings["effect"];
   mediaRef: { current: HTMLMediaElement | null };
   onReady: () => void;
@@ -410,6 +441,9 @@ function SlideshowFrame({ item, active, effect, mediaRef, onReady, onBuffering, 
   onEnded: () => void;
   onError: () => void;
   onPreloadError: () => void;
+  onPlaybackChange: (paused: boolean) => void;
+  onMutedChange: (muted: boolean) => void;
+  onPictureInPictureRequest?: () => void | (() => void);
   muted: boolean;
 }) {
   const kind = slideshowMediaKind(item);
@@ -428,11 +462,17 @@ function SlideshowFrame({ item, active, effect, mediaRef, onReady, onBuffering, 
     if (!active) return;
     const media = localMediaRef.current;
     if (media) { mediaRef.current = media; media.currentTime = 0; }
-  }, [active]);
+  }, [active, playbackToken]);
+  const { id, name, ext, noThumbnail } = item;
+  useEffect(() => {
+    const media = localMediaRef.current;
+    if (!sessionEnabled || !media) return;
+    return bindMediaSession(media, { id, name, ext, noThumbnail }, onPictureInPictureRequest);
+  }, [sessionEnabled, id, name, ext, noThumbnail, onPictureInPictureRequest]);
   useEffect(() => {
     if (active && failed) onError();
     else if (active && prepared) onReady();
-  }, [active, prepared, failed]);
+  }, [active, playbackToken, prepared, failed]);
   useEffect(() => {
     const media = localMediaRef.current;
     return () => { media?.pause(); };
@@ -444,6 +484,9 @@ function SlideshowFrame({ item, active, effect, mediaRef, onReady, onBuffering, 
   const mediaEvents = {
     onCanPlay: () => { setPrepared(true); if (active) onBuffering(false); },
     onPlaying: () => { if (active) onBuffering(false); },
+    onPlay: () => { if (active) onPlaybackChange(false); },
+    onPause: () => { if (active && !localMediaRef.current?.ended) onPlaybackChange(true); },
+    onVolumeChange: () => { if (active && localMediaRef.current) onMutedChange(localMediaRef.current.muted); },
     onWaiting: () => { if (active) onBuffering(true); },
     onLoadedMetadata: () => { if (active) onTime(); },
     onDurationChange: () => { if (active) onTime(); },

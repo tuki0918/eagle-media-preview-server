@@ -12,6 +12,7 @@ export function usePictureInPicture(
   mediaRef: { current: HTMLMediaElement | null },
   enabled: boolean,
   itemId: string | undefined,
+  onPictureInPictureRequest?: () => void | (() => void),
 ) {
   const [state, setState] = useState(INITIAL_STATE);
   const bindingRef = useRef<{ video: HTMLVideoElement; disposed: boolean; pending: boolean } | null>(null);
@@ -48,7 +49,9 @@ export function usePictureInPicture(
     if (!binding || binding.disposed || binding.pending) return;
     binding.pending = true;
     setState((current) => ({ ...current, pending: true, error: "" }));
+    let releaseRequest: void | (() => void) = undefined;
     try {
+      if (!isPictureInPictureActive(binding.video)) releaseRequest = onPictureInPictureRequest?.();
       // Call immediately from the button click to retain the browser's user gesture.
       await togglePictureInPicture(binding.video);
     } catch {
@@ -56,6 +59,7 @@ export function usePictureInPicture(
         setState((current) => ({ ...current, error: "Could not change Picture-in-Picture mode. Please try again." }));
       }
     } finally {
+      releaseRequest?.();
       binding.pending = false;
       if (!binding.disposed) {
         setState((current) => ({ ...current, pending: false, active: isPictureInPictureActive(binding.video) }));

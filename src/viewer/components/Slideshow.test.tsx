@@ -355,3 +355,192 @@ test("a failed preload leaves playback intact and is loaded fresh when selected"
   await loaded();
   expect(container.querySelector('[aria-label="Loading slide"]')).toBeNull();
 });
+
+function enablePictureInPicture() {
+  const handlers = new Map<string, MediaSessionActionHandler | null>();
+  let active: HTMLVideoElement | null = null;
+  Object.defineProperty(document, "pictureInPictureEnabled", { value: true });
+  Object.defineProperty(document, "pictureInPictureElement", { configurable: true, get: () => active });
+  const present = (video: HTMLVideoElement | null) => {
+    const previous = active;
+    active = video;
+    previous?.dispatchEvent(new dom.window.Event("leavepictureinpicture"));
+    video?.dispatchEvent(new dom.window.Event("enterpictureinpicture"));
+  };
+  const request = vi.fn(function (this: HTMLVideoElement) {
+    present(this);
+    return Promise.resolve({} as PictureInPictureWindow);
+  });
+  dom.window.HTMLVideoElement.prototype.requestPictureInPicture = request;
+  const exit = vi.fn(async () => { present(null); });
+  document.exitPictureInPicture = exit;
+  Object.defineProperty(navigator, "mediaSession", { value: {
+    metadata: null,
+    setActionHandler: (action: string, handler: MediaSessionActionHandler | null) => handlers.set(action, handler),
+  } });
+  const automatic = () => handlers.get("enterpictureinpicture")?.({ action: "enterpictureinpicture" as MediaSessionAction });
+  return { handlers, request, exit, present, automatic };
+}
+
+async function readyVideo(video: HTMLVideoElement) {
+  Object.defineProperty(video, "readyState", { configurable: true, value: 4 });
+  Object.defineProperty(video, "paused", { configurable: true, value: false });
+  Object.defineProperty(video, "duration", { configurable: true, value: 60 });
+  await act(async () => {
+    video.dispatchEvent(new dom.window.Event("loadedmetadata"));
+    video.dispatchEvent(new dom.window.Event("canplay"));
+  });
+}
+
+test("PiP and media controls follow only the active video, then clear on image slides", async () => {
+  const pip = enablePictureInPicture();
+  serve([{ id: "first", ext: "mp4" }, { id: "next", ext: "mp4" }, { id: "image", ext: "jpg" }]);
+  await renderPlayer();
+  const first = container.querySelector<HTMLVideoElement>("video")!;
+  expect(button("Picture-in-Picture").disabled).toBe(true);
+  await readyVideo(first);
+  const automatic = pip.handlers.get("enterpictureinpicture");
+  const next = container.querySelector<HTMLVideoElement>('[data-slideshow-preload] video')!;
+  await readyVideo(next);
+  expect(pip.handlers.get("enterpictureinpicture")).toBe(automatic);
+  await act(async () => { await pip.automatic(); });
+  expect(pip.request.mock.contexts).toEqual([first]);
+  expect(button("Exit Picture-in-Picture").getAttribute("aria-pressed")).toBe("true");
+  await click("Next slide");
+  expect(pip.exit).toHaveBeenCalledOnce();
+  expect(container.querySelector(".slideshow-frame video")).toBe(next);
+  await act(async () => { await pip.automatic(); });
+  expect(pip.request.mock.contexts).toEqual([first, next]);
+  await click("Next slide");
+  expect(pip.exit).toHaveBeenCalledTimes(2);
+  expect(container.querySelector('button[aria-label$="Picture-in-Picture"]')).toBeNull();
+  expect(pip.handlers.get("enterpictureinpicture")).toBeNull();
+  expect(pip.handlers.get("play")).toBeNull();
+});
+
+test("native PiP pause/play updates the slideshow without letting preload or navigation pause the next item", async () => {
+  enablePictureInPicture();
+  serve([{ id: "first", ext: "mp4" }, { id: "next", ext: "mp4" }]);
+  await renderPlayer();
+  const first = container.querySelector<HTMLVideoElement>("video")!;
+  await readyVideo(first);
+  const next = container.querySelector<HTMLVideoElement>('[data-slideshow-preload] video')!;
+  await readyVideo(next);
+  await act(async () => { first.dispatchEvent(new dom.window.Event("pause")); });
+  expect(button("Resume slideshow")).toBeTruthy();
+  await act(async () => { first.dispatchEvent(new dom.window.Event("play")); });
+  expect(button("Pause slideshow")).toBeTruthy();
+  await act(async () => { next.dispatchEvent(new dom.window.Event("pause")); });
+  expect(button("Pause slideshow")).toBeTruthy();
+  vi.mocked(dom.window.HTMLMediaElement.prototype.pause).mockImplementation(function (this: HTMLMediaElement) {
+    this.dispatchEvent(new dom.window.Event("pause"));
+  });
+  await click("Next slide");
+  expect(button("Pause slideshow")).toBeTruthy();
+});
+
+test("a late PiP request is closed after navigating away from its video", async () => {
+  const pip = enablePictureInPicture();
+  let resolve!: (value: PictureInPictureWindow) => void;
+  pip.request.mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
+  serve([{ id: "video", ext: "mp4" }, { id: "image", ext: "jpg" }]);
+  await renderPlayer();
+  const video = container.querySelector<HTMLVideoElement>("video")!;
+  await readyVideo(video);
+  await click("Picture-in-Picture");
+  await click("Next slide");
+  await act(async () => { pip.present(video); resolve({} as PictureInPictureWindow); });
+  expect(pip.exit).toHaveBeenCalledOnce();
+  expect(document.pictureInPictureElement).toBeNull();
+  expect(container.querySelector(".slideshow-frame img")?.getAttribute("src")).toBe("/file/image");
+});
+
+test.each(["button", "automatic"])("keeps the slideshow open when %s PiP leaves fullscreen before entering PiP", async (trigger) => {
+  const pip = enablePictureInPicture();
+  let fullscreenElement: Element | null = null;
+  Object.defineProperty(document, "fullscreenElement", { get: () => fullscreenElement });
+  fullscreen.mockImplementation(function (this: HTMLElement) {
+    fullscreenElement = this;
+    document.dispatchEvent(new dom.window.Event("fullscreenchange"));
+    return Promise.resolve();
+  });
+  let resolve!: (value: PictureInPictureWindow) => void;
+  pip.request.mockImplementationOnce(() => {
+    fullscreenElement = null;
+    document.dispatchEvent(new dom.window.Event("fullscreenchange"));
+    return new Promise((done) => { resolve = done; });
+  });
+  serve([{ id: "video", ext: "mp4" }]);
+  await act(async () => { root.render(<SlideshowDialog query={query} onClose={close} />); });
+  const start = Array.from(document.querySelectorAll("button")).find((element) => element.textContent === "START")!;
+  await act(async () => { start.click(); });
+  const video = document.querySelector<HTMLVideoElement>("video")!;
+  await readyVideo(video);
+  let opening: unknown;
+  await act(async () => {
+    if (trigger === "button") button("Picture-in-Picture").click();
+    else opening = pip.automatic();
+  });
+  expect(close).not.toHaveBeenCalled();
+  await act(async () => { pip.present(video); resolve({} as PictureInPictureWindow); await opening; });
+  expect(button("Exit Picture-in-Picture")).toBeTruthy();
+  await click("Exit Picture-in-Picture");
+  await act(async () => { document.dispatchEvent(new dom.window.Event("fullscreenchange")); });
+  expect(close).not.toHaveBeenCalled();
+  // A later regular fullscreen exit keeps the original close behavior.
+  fullscreenElement = document.querySelector('[aria-label="Slideshow player"]')!.parentElement;
+  await act(async () => { document.dispatchEvent(new dom.window.Event("fullscreenchange")); });
+  fullscreenElement = null;
+  await act(async () => { document.dispatchEvent(new dom.window.Event("fullscreenchange")); });
+  expect(close).toHaveBeenCalledOnce();
+});
+
+test("a rejected PiP transition keeps the player available and releases its fullscreen guard", async () => {
+  const pip = enablePictureInPicture();
+  let fullscreenElement: Element | null = null;
+  Object.defineProperty(document, "fullscreenElement", { get: () => fullscreenElement });
+  fullscreen.mockImplementation(function (this: HTMLElement) {
+    fullscreenElement = this;
+    document.dispatchEvent(new dom.window.Event("fullscreenchange"));
+    return Promise.resolve();
+  });
+  pip.request.mockRejectedValueOnce(new Error("PiP denied"));
+  serve([{ id: "video", ext: "mp4" }]);
+  await act(async () => { root.render(<SlideshowDialog query={query} onClose={close} />); });
+  await act(async () => { Array.from(document.querySelectorAll("button")).find((element) => element.textContent === "START")!.click(); });
+  await readyVideo(document.querySelector<HTMLVideoElement>("video")!);
+  await click("Picture-in-Picture");
+  expect(document.querySelector("footer [role=status]")?.textContent).toContain("Could not change Picture-in-Picture mode");
+  fullscreenElement = null;
+  await act(async () => { document.dispatchEvent(new dom.window.Event("fullscreenchange")); });
+  expect(close).toHaveBeenCalledOnce();
+});
+
+test("replaying the same buffered video closes PiP, restarts its timeline, and remains ready", async () => {
+  const pip = enablePictureInPicture();
+  serve([{ id: "video", ext: "mp4" }]);
+  await renderPlayer({ ...settings, loop: true });
+  const video = container.querySelector<HTMLVideoElement>("video")!;
+  await readyVideo(video);
+  await click("Picture-in-Picture");
+  video.currentTime = 60;
+  await act(async () => { video.dispatchEvent(new dom.window.Event("ended")); });
+  expect(pip.exit).toHaveBeenCalledOnce();
+  expect(container.querySelector(".slideshow-frame video")).toBe(video);
+  expect(video.currentTime).toBe(0);
+  expect(container.querySelector('[aria-label="Loading slide"]')).toBeNull();
+  expect(button("Pause slideshow")).toBeTruthy();
+});
+
+test.each(["ended", "error"])("clears the media session when the current video reports %s", async (event) => {
+  const pip = enablePictureInPicture();
+  serve([{ id: "video", ext: "mp4" }]);
+  await renderPlayer();
+  const video = container.querySelector<HTMLVideoElement>("video")!;
+  await readyVideo(video);
+  await click("Picture-in-Picture");
+  await act(async () => { video.dispatchEvent(new dom.window.Event(event)); });
+  expect(pip.exit).toHaveBeenCalledOnce();
+  expect(pip.handlers.get("enterpictureinpicture")).toBeNull();
+  expect(pip.handlers.get("play")).toBeNull();
+});
