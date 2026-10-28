@@ -5,6 +5,7 @@ import {
   FolderCogIcon,
   FolderIcon,
   FolderOpenIcon,
+  FunnelIcon,
   InboxIcon,
   LayoutGridIcon,
   LogOutIcon,
@@ -14,9 +15,11 @@ import {
   TagIcon,
   TagsIcon,
   UserRoundIcon,
+  XIcon,
 } from "lucide-react";
-import { Fragment, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Input } from "@/components/ui/input";
 import appIconUrl from "../../assets/app_icon.svg";
 import {
   Sidebar,
@@ -52,7 +55,7 @@ const floatingSidebarRailClassName = [
   "group-data-[state=expanded]:after:!hidden",
 ].join(" ");
 
-// Folders that continue below the fold fade out as they slide under the account menu.
+// Folders that continue below the fold fade out just above the fixed folder filter.
 // The fade shrinks to the hidden amount, so a list that barely overflows stays readable.
 const SIDE_NAV_FADE_MAX_PX = 48;
 const sideNavScrollClassName =
@@ -72,8 +75,15 @@ export function AccountSideMenu() {
   const accountStatusLabel = [accountLabel, roleDescription].filter(Boolean).join(". ");
   const authError = loginState.isError ? loginState.message.trim() : "";
   const signedIn = loginState.authRequired && loginState.authenticated;
-  const sideNavScrollRef = useRef<HTMLDivElement>(null);
-  useScrollEndFade(sideNavScrollRef, SIDE_NAV_FADE_MAX_PX);
+  const [folderFilter, setFolderFilter] = useState("");
+  const folderFilterFormRef = useRef<HTMLFormElement>(null);
+  const folderFilterQuery = folderFilter.trim().toLocaleLowerCase();
+  const filteredFolders = useMemo(() => filterFolderTree(searchState.folders, folderFilterQuery), [searchState.folders, folderFilterQuery]);
+  const filteredSmartFolders = useMemo(() => filterFolderTree(searchState.smartFolders, folderFilterQuery), [searchState.smartFolders, folderFilterQuery]);
+  const clearFolderFilter = () => {
+    setFolderFilter("");
+    folderFilterFormRef.current?.querySelector("input")?.focus();
+  };
 
   return (
     <>
@@ -83,6 +93,11 @@ export function AccountSideMenu() {
         collapsible="offcanvas"
         className="border-sidebar-border"
         aria-label="Account menu"
+        onEscapeKeyDown={(event) => {
+          if (!folderFilter || !folderFilterFormRef.current?.contains(document.activeElement)) return;
+          event.preventDefault();
+          clearFolderFilter();
+        }}
       >
         <SidebarHeader className="justify-center p-3 pb-1 pt-[calc(14px+env(safe-area-inset-top))]">
           <SidebarMenu>
@@ -112,7 +127,7 @@ export function AccountSideMenu() {
         </SidebarHeader>
 
         <SidebarContent className="overflow-hidden">
-          <div ref={sideNavScrollRef} className={sideNavScrollClassName}>
+          <FolderNavigationScrollArea filterQuery={folderFilterQuery}>
             <FolderShortcutSideNav
               allFoldersTotal={searchState.allFoldersTotal}
               selectedFolderId={searchState.selectedFolderId}
@@ -123,17 +138,61 @@ export function AccountSideMenu() {
               untaggedTotal={searchState.untaggedTotal}
             />
             <SmartFolderSideNav
+              filterQuery={folderFilterQuery}
+              filteredFolders={filteredSmartFolders}
               selectedSmartFolderId={searchState.selectedSmartFolderId}
               smartFolders={searchState.smartFolders}
             />
             <FolderSideNav
+              filterQuery={folderFilterQuery}
+              filteredFolders={filteredFolders}
               folders={searchState.folders}
               selectedFolderId={searchState.selectedFolderId}
             />
-          </div>
+            {folderFilterQuery && !filteredFolders.length && !filteredSmartFolders.length ? (
+              <p className="m-0 px-5 py-4 text-center text-xs text-muted-foreground" role="status">
+                No matching folders
+              </p>
+            ) : null}
+          </FolderNavigationScrollArea>
         </SidebarContent>
 
         <SidebarFooter className="p-2">
+          <form
+            ref={folderFilterFormRef}
+            className="relative mx-1 mb-1 group-data-[collapsible=icon]:hidden"
+            aria-label="Folder filter"
+            onSubmit={(event) => event.preventDefault()}
+          >
+            <FunnelIcon className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+            <Input
+              type="search"
+              aria-label="Filter folders"
+              placeholder="Filter"
+              autoComplete="off"
+              spellCheck={false}
+              value={folderFilter}
+              onChange={(event) => setFolderFilter(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Escape" || !folderFilter) return;
+                event.preventDefault();
+                event.stopPropagation();
+                clearFolderFilter();
+              }}
+              className="h-8 rounded-md bg-background/60 pl-7 pr-7 md:h-7 md:text-xs dark:bg-background/30"
+            />
+            {folderFilter ? (
+              <button
+                type="button"
+                aria-label="Clear folder filter"
+                title="Clear folder filter"
+                className="absolute right-0.5 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                onClick={clearFolderFilter}
+              >
+                <XIcon className="size-3.5" aria-hidden="true" />
+              </button>
+            ) : null}
+          </form>
           {signedIn ? (
             <AccountDropdown
               disabled={loginState.disabled}
@@ -162,6 +221,19 @@ export function AccountSideMenu() {
         <SidebarRail className={floatingSidebarRailClassName} />
       </Sidebar>
     </>
+  );
+}
+
+function FolderNavigationScrollArea({ children, filterQuery }: { children: ReactNode; filterQuery: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useScrollEndFade(ref, SIDE_NAV_FADE_MAX_PX);
+  useEffect(() => {
+    if (ref.current) ref.current.scrollTop = 0;
+  }, [filterQuery]);
+  return (
+    <div ref={ref} className={sideNavScrollClassName}>
+      <div>{children}</div>
+    </div>
   );
 }
 
@@ -242,15 +314,21 @@ function FolderShortcutSideNav({
 
 function FolderSideNav({
   folders,
+  filteredFolders,
+  filterQuery,
   selectedFolderId,
 }: {
   folders: readonly EagleFolder[];
+  filteredFolders: readonly EagleFolder[];
+  filterQuery: string;
   selectedFolderId: string;
 }) {
   const { isMobile, setOpenMobile } = useSidebar();
-  const { expandedIds, toggleFolder } = useFolderExpansion(folders);
-  const { open, toggleOpen } = useFolderSectionOpen("folders");
-  const label = folderSectionLabel("Folders", folders);
+  const { expandedIds, toggleFolder } = useFolderExpansion(folders, filterQuery);
+  const { open, toggleOpen } = useFolderSectionOpen("folders", filterQuery);
+  const label = folderSectionLabel("Folders", filteredFolders);
+
+  if (filterQuery && !filteredFolders.length) return null;
 
   const selectFolder = (folderId: string) => {
     changeFolder({ currentTarget: { value: folderId } });
@@ -270,7 +348,7 @@ function FolderSideNav({
           <SidebarMenu className="gap-0.5" aria-label="Folder tree">
             <FolderTreeNavItems
               expandedIds={expandedIds}
-              folders={folders}
+              folders={filteredFolders}
               iconForFolder={(folder) => selectedFolderId === folder.id ? "open" : "folder"}
               isActive={(folder) => selectedFolderId === folder.id}
               onSelect={selectFolder}
@@ -286,16 +364,20 @@ function FolderSideNav({
 function SmartFolderSideNav({
   selectedSmartFolderId,
   smartFolders,
+  filteredFolders,
+  filterQuery,
 }: {
   selectedSmartFolderId: string;
   smartFolders: readonly EagleSmartFolder[];
+  filteredFolders: readonly EagleSmartFolder[];
+  filterQuery: string;
 }) {
   const { isMobile, setOpenMobile } = useSidebar();
-  const { expandedIds, toggleFolder } = useFolderExpansion(smartFolders);
-  const { open, toggleOpen } = useFolderSectionOpen("smartFolders");
-  const label = folderSectionLabel("Smart Folders", smartFolders);
+  const { expandedIds, toggleFolder } = useFolderExpansion(smartFolders, filterQuery);
+  const { open, toggleOpen } = useFolderSectionOpen("smartFolders", filterQuery);
+  const label = folderSectionLabel("Smart Folders", filteredFolders);
 
-  if (!smartFolders.length) return null;
+  if (!filteredFolders.length) return null;
 
   const selectSmartFolder = (smartFolderId: string) => {
     changeSmartFolder({ currentTarget: { value: smartFolderId } });
@@ -315,7 +397,7 @@ function SmartFolderSideNav({
           <SidebarMenu className="gap-0.5" aria-label="Smart folder tree">
             <FolderTreeNavItems
               expandedIds={expandedIds}
-              folders={smartFolders}
+              folders={filteredFolders}
               iconForFolder={(folder) => isSmartFolderGroup(folder as EagleSmartFolder) ? "smartGroup" : "smart"}
               isActive={(folder) => selectedSmartFolderId === folder.id}
               onSelect={selectSmartFolder}
@@ -359,12 +441,18 @@ function FolderSectionHeader({
   );
 }
 
-function useFolderSectionOpen(section: FolderSectionKey) {
+function useFolderSectionOpen(section: FolderSectionKey, filterQuery: string) {
   const [open, setOpen] = useState(() => readFolderSectionOpen(section));
+  const [filterOpen, setFilterOpen] = useState(true);
+  useEffect(() => setFilterOpen(true), [filterQuery]);
 
   return {
-    open,
+    open: filterQuery ? filterOpen : open,
     toggleOpen() {
+      if (filterQuery) {
+        setFilterOpen((current) => !current);
+        return;
+      }
       setOpen((current) => {
         const next = !current;
         writeFolderSectionOpen(section, next);
@@ -372,6 +460,20 @@ function useFolderSectionOpen(section: FolderSectionKey) {
       });
     },
   };
+}
+
+function filterFolderTree<T extends EagleFolder>(folders: readonly T[], query: string): readonly T[] {
+  if (!query) return folders;
+  const matches: T[] = [];
+  for (const folder of folders) {
+    if (folder.name.toLocaleLowerCase().includes(query)) {
+      matches.push(folder);
+      continue;
+    }
+    const children = filterFolderTree(folder.children ?? [], query);
+    if (children.length) matches.push({ ...folder, children: [...children] });
+  }
+  return matches;
 }
 
 function folderSectionLabel(label: string, folders: readonly EagleFolder[]) {
@@ -467,10 +569,25 @@ function FolderTreeNavItems({
   );
 }
 
-function useFolderExpansion(folders: readonly EagleFolder[]) {
+function useFolderExpansion(folders: readonly EagleFolder[], filterQuery: string) {
   const signature = folderExpansionSignature(folders);
   const signatureRef = useRef("");
   const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>(() => initialFolderExpansion(folders));
+  const [filterCollapsedIds, setFilterCollapsedIds] = useState<Record<string, boolean>>({});
+  useEffect(() => setFilterCollapsedIds({}), [filterQuery]);
+  const filteredExpandedIds = useMemo(() => {
+    if (!filterQuery) return expandedIds;
+    const ids: Record<string, boolean> = {};
+    const expand = (nodes: readonly EagleFolder[]) => {
+      for (const folder of nodes) {
+        if (!folder.children?.length) continue;
+        ids[folder.id] = !filterCollapsedIds[folder.id];
+        expand(folder.children);
+      }
+    };
+    expand(folders);
+    return ids;
+  }, [folders, filterQuery, filterCollapsedIds, expandedIds]);
 
   useEffect(() => {
     if (signatureRef.current === signature) return;
@@ -479,8 +596,12 @@ function useFolderExpansion(folders: readonly EagleFolder[]) {
   }, [folders, signature]);
 
   return {
-    expandedIds,
+    expandedIds: filteredExpandedIds,
     toggleFolder(folderId: string) {
+      if (filterQuery) {
+        setFilterCollapsedIds((current) => ({ ...current, [folderId]: !current[folderId] }));
+        return;
+      }
       setExpandedIds((current) => ({ ...current, [folderId]: !current[folderId] }));
     },
   };

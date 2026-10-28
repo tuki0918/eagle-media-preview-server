@@ -46,7 +46,7 @@ import { setVideoOverlayControlsVisible } from "./videoOverlayState";
 import { setLoginConnectState } from "./loginConnectState";
 import { setLibraryFooterName } from "./libraryFooterState";
 import { setEagleStatus } from "./eagleStatusState";
-import { setSearchControlsState } from "./searchControlsState";
+import { getSearchControlsState, setSearchControlsState } from "./searchControlsState";
 import { setTagListState } from "./tagListState";
 import { TagList } from "./components/TagList";
 import { getThemeState, initializeThemeState, setThemePreference } from "./themeState";
@@ -453,6 +453,14 @@ describe("ViewerAppShell", () => {
     const accountMenuDocument = new JSDOM(html, { url: "http://localhost" }).window.document;
     const folderShortcuts = accountMenuDocument.querySelector('[aria-label="Folder shortcuts"]');
     expect(folderShortcuts?.querySelector(".sidebar-tree-depth-0")).toBeNull();
+    const folderFilter = accountMenuDocument.querySelector('input[aria-label="Filter folders"]');
+    const sidebarFooter = accountMenuDocument.querySelector('[data-slot="sidebar-footer"]');
+    const scrollingFolders = accountMenuDocument.querySelector(".no-scrollbar.overflow-y-auto");
+    expect(folderFilter?.getAttribute("placeholder")).toBe("Filter");
+    expect(sidebarFooter?.contains(folderFilter)).toBe(true);
+    expect(scrollingFolders?.contains(folderFilter)).toBe(false);
+    expect(scrollingFolders?.className).toContain("mask-image:linear-gradient");
+    expect(html.indexOf('aria-label="Filter folders"')).toBeLessThan(html.indexOf('id="authAccountLabel"'));
     expect(html).toContain("Large Images");
     expect(html).toContain(">42</span>");
     expect(html).toContain('title="Large Images"');
@@ -734,6 +742,137 @@ describe("ViewerAppShell", () => {
       globalThis.Node = previousNode;
       globalThis.HTMLElement = previousHTMLElement;
       testGlobal.IS_REACT_ACT_ENVIRONMENT = previousIS_REACT_ACT_ENVIRONMENT;
+    }
+  });
+
+  test("filters both folder trees without changing item search or saved expansion state", async () => {
+    const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
+    const testGlobal = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+    const previousWindow = globalThis.window;
+    const previousDocument = globalThis.document;
+    const previousNode = globalThis.Node;
+    const previousHTMLElement = globalThis.HTMLElement;
+    const previousIS_REACT_ACT_ENVIRONMENT = testGlobal.IS_REACT_ACT_ENVIRONMENT;
+    const previousSearchState = getSearchControlsState();
+    globalThis.window = dom.window;
+    globalThis.document = dom.window.document;
+    globalThis.Node = dom.window.Node;
+    globalThis.HTMLElement = dom.window.HTMLElement;
+    testGlobal.IS_REACT_ACT_ENVIRONMENT = true;
+    const savedSections = JSON.stringify({ folders: false, smartFolders: false });
+    dom.window.localStorage.setItem("eagleFolderSectionsOpen", savedSections);
+    setSearchControlsState({
+      allFoldersTotal: 42,
+      filtersOpen: true,
+      folders: [
+        {
+          id: "design", name: "Design", isExpand: false,
+          children: [
+            { id: "logo-studies", name: "Logo studies", depth: 1 },
+            { id: "other-asset", name: "Other asset", depth: 1 },
+          ],
+        },
+        {
+          id: "logo-category", name: "Logo category", isExpand: false,
+          children: [{ id: "unmatched-child", name: "Unmatched child", depth: 1 }],
+        },
+        { id: "photos", name: "Photos" },
+      ],
+      hasActiveFilters: true,
+      hasResettableFilters: true,
+      searchQuery: "existing item search",
+      selectedExt: "png",
+      selectedFolderId: "logo-studies",
+      selectedLimit: 30,
+      selectedRating: "4",
+      selectedSmartFolderId: "",
+      smartFolders: [
+        {
+          id: "saved-searches", name: "Saved searches", isExpand: false,
+          children: [{ id: "logo-favorites", name: "Logo favorites", depth: 1 }],
+        },
+        { id: "video-picks", name: "Video picks", conditions: [] },
+      ],
+    });
+    const itemSearchState = getSearchControlsState();
+    const { createRoot } = await import("react-dom/client");
+    const { Simulate } = await import("react-dom/test-utils");
+    let root: import("react-dom/client").Root | null = null;
+    try {
+      const container = dom.window.document.querySelector("#root");
+      if (!(container instanceof dom.window.HTMLElement)) throw new Error("Missing test root");
+      root = createRoot(container);
+      await act(async () => {
+        root?.render(<TooltipProvider><SidebarProvider><AccountSideMenu /></SidebarProvider></TooltipProvider>);
+      });
+      const input = container.querySelector('input[aria-label="Filter folders"]');
+      if (!(input instanceof dom.window.HTMLInputElement)) throw new Error("Missing folder filter");
+      const setFilter = async (value: string) => {
+        await act(async () => {
+          Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")?.set?.call(input, value);
+          Simulate.change(input);
+        });
+      };
+
+      expect(container.textContent).not.toContain("Logo studies");
+      expect(container.textContent).not.toContain("Logo favorites");
+      await setFilter("  lOgO  ");
+
+      const folderTree = container.querySelector('[aria-label="Folder tree"]');
+      const smartTree = container.querySelector('[aria-label="Smart folder tree"]');
+      expect(folderTree?.textContent).toContain("Design");
+      expect(folderTree?.textContent).toContain("Logo studies");
+      expect(folderTree?.textContent).toContain("Logo category");
+      expect(folderTree?.textContent).toContain("Unmatched child");
+      expect(folderTree?.textContent).not.toContain("Other asset");
+      expect(folderTree?.textContent).not.toContain("Photos");
+      expect(smartTree?.textContent).toContain("Saved searches");
+      expect(smartTree?.textContent).toContain("Logo favorites");
+      expect(smartTree?.textContent).not.toContain("Video picks");
+      expect(getSearchControlsState()).toBe(itemSearchState);
+      expect(dom.window.localStorage.getItem("eagleFolderSectionsOpen")).toBe(savedSections);
+
+      await setFilter("no such folder");
+      expect(container.querySelector('[data-slot="sidebar-content"] [role="status"]')?.textContent).toContain("No matching folders");
+      expect(container.querySelector('[aria-label="Folder tree"]')).toBeNull();
+      expect(container.querySelector('[aria-label="Smart folder tree"]')).toBeNull();
+      expect(container.querySelector('[aria-label="Folder shortcuts"]')?.textContent).toContain("All");
+      expect(container.querySelector('[aria-label="Folder shortcuts"]')?.textContent).toContain("Uncategorized");
+
+      const clearButton = container.querySelector('[aria-label="Clear folder filter"]');
+      if (!(clearButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing filter clear button");
+      await act(async () => { clearButton.click(); });
+      expect(input.value).toBe("");
+      expect(container.querySelector('[data-slot="sidebar-content"] [role="status"]')).toBeNull();
+      expect(container.querySelector('[aria-label="Expand Folders section"]')).not.toBeNull();
+      expect(container.querySelector('[aria-label="Expand Smart Folders section"]')).not.toBeNull();
+      expect(container.textContent).not.toContain("Logo studies");
+
+      const folderToggle = container.querySelector('[aria-label="Expand Folders section"]');
+      if (!(folderToggle instanceof dom.window.HTMLButtonElement)) throw new Error("Missing folder section toggle");
+      await act(async () => { folderToggle.click(); });
+      expect(container.textContent).toContain("Design");
+      expect(container.textContent).toContain("Photos");
+      expect(container.textContent).not.toContain("Logo studies");
+      expect(container.textContent).not.toContain("Unmatched child");
+
+      await setFilter("photos");
+      expect(container.querySelector('[aria-label="Folder tree"]')?.textContent).not.toContain("Design");
+      await act(async () => {
+        input.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, key: "Escape" }));
+      });
+      expect(input.value).toBe("");
+      expect(container.querySelector('[aria-label="Folder tree"]')?.textContent).toContain("Design");
+      expect(getSearchControlsState()).toBe(itemSearchState);
+    } finally {
+      if (root) await act(async () => { root?.unmount(); });
+      setSearchControlsState(previousSearchState);
+      globalThis.window = previousWindow;
+      globalThis.document = previousDocument;
+      globalThis.Node = previousNode;
+      globalThis.HTMLElement = previousHTMLElement;
+      testGlobal.IS_REACT_ACT_ENVIRONMENT = previousIS_REACT_ACT_ENVIRONMENT;
+      dom.window.close();
     }
   });
 
