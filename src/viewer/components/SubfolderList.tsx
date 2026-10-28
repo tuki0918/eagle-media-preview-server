@@ -1,4 +1,5 @@
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { subscribeDisplaySettingsReset } from "../displayPreferences";
 import { ChevronDownIcon } from "lucide-react";
 import { UNCATEGORIZED_FOLDER_ID, UNTAGGED_FOLDER_ID } from "../constants";
 import { directSubfolders } from "../folderTree";
@@ -12,6 +13,7 @@ export function SubfolderList() {
   const state = useSyncExternalStore(subscribeSearchControlsState, getSearchControlsState, getSearchControlsState);
   const visible = useSyncExternalStore(subscribeSubfoldersVisible, getSubfoldersVisible, getSubfoldersVisible);
   const [collapsed, setCollapsed] = useState(readCollapsed);
+  useEffect(() => subscribeDisplaySettingsReset(() => setCollapsed(false)), []);
   const toggleCollapsed = () => {
     const next = !collapsed;
     setCollapsed(next);

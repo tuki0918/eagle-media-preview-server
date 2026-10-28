@@ -11,6 +11,7 @@ import {
   LogOutIcon,
   MonitorIcon,
   MoonIcon,
+  RotateCcwIcon,
   SunIcon,
   TagIcon,
   TagsIcon,
@@ -39,6 +40,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FOLDER_SECTIONS_OPEN_STORAGE_KEY, UNCATEGORIZED_FOLDER_ID, UNTAGGED_FOLDER_ID } from "../constants";
 import { getEagleStatus, subscribeEagleStatus, type EagleStatus } from "../eagleStatusState";
 import { displayFolderCount } from "../format";
+import { resetDisplaySettings, subscribeDisplaySettingsReset } from "../displayPreferences";
 import { getLibraryFooterName, subscribeLibraryFooterName } from "../libraryFooterState";
 import { getLoginConnectState, subscribeLoginConnectState } from "../loginConnectState";
 import { getSearchControlsState, subscribeSearchControlsState } from "../searchControlsState";
@@ -77,6 +79,7 @@ export function AccountSideMenu() {
   const authError = loginState.isError ? loginState.message.trim() : "";
   const signedIn = loginState.authRequired && loginState.authenticated;
   const [folderFilter, setFolderFilter] = useState("");
+  useEffect(() => subscribeDisplaySettingsReset(() => setFolderFilter("")), []);
   const folderFilterFormRef = useRef<HTMLFormElement>(null);
   const folderFilterQuery = folderFilter.trim().toLocaleLowerCase();
   const filteredFolders = useMemo(() => filterFolderTree(searchState.folders, folderFilterQuery), [searchState.folders, folderFilterQuery]);
@@ -447,6 +450,10 @@ function FolderSectionHeader({
 function useFolderSectionOpen(section: FolderSectionKey, filterQuery: string) {
   const [open, setOpen] = useState(() => readFolderSectionOpen(section));
   const [filterOpen, setFilterOpen] = useState(true);
+  useEffect(() => subscribeDisplaySettingsReset(() => {
+    setOpen(true);
+    setFilterOpen(true);
+  }), []);
   useEffect(() => setFilterOpen(true), [filterQuery]);
 
   return {
@@ -581,6 +588,10 @@ function useFolderExpansion(folders: readonly EagleFolder[], filterQuery: string
   const signatureRef = useRef("");
   const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>(() => initialFolderExpansion(folders));
   const [filterCollapsedIds, setFilterCollapsedIds] = useState<Record<string, boolean>>({});
+  useEffect(() => subscribeDisplaySettingsReset(() => {
+    setExpandedIds(initialFolderExpansion(folders));
+    setFilterCollapsedIds({});
+  }), [folders]);
   useEffect(() => setFilterCollapsedIds({}), [filterQuery]);
   const filteredExpandedIds = useMemo(() => {
     if (!filterQuery) return expandedIds;
@@ -1023,9 +1034,27 @@ function AccountDropdown({
               </div>
             </div>
             <div className="-mx-1.5 my-1 h-px bg-border" />
-            <ThemeMenuSection />
-            <PageSizeMenuSection />
-            <SubfoldersMenuSection />
+            <div role="group" aria-labelledby="accountSettingsLabel">
+              <div className="mt-1 flex items-center justify-between gap-2 rounded-lg px-2 py-1">
+                <span id="accountSettingsLabel" className="text-xs font-semibold tracking-[0.06em] text-foreground">SETTINGS</span>
+                <button
+                  type="button"
+                  role="menuitem"
+                  aria-label="Reset display settings"
+                  className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
+                  title="Reset display settings"
+                  onClick={() => {
+                    resetDisplaySettings();
+                    setOpen(false);
+                  }}
+                >
+                  <RotateCcwIcon className="size-3.5" aria-hidden="true" />
+                </button>
+              </div>
+              <ThemeMenuSection />
+              <PageSizeMenuSection />
+              <SubfoldersMenuSection />
+            </div>
             {signedIn ? (
               <>
                 <div className="-mx-1.5 my-1 h-px bg-border" />

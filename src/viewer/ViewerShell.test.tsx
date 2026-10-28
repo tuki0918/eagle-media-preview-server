@@ -1153,7 +1153,7 @@ describe("ViewerAppShell", () => {
     }
   });
 
-  test("resizes the viewer sidebar for the current page session only", async () => {
+  test("persists the viewer sidebar width and restores defaults from the account menu", async () => {
     const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
     const testGlobal = globalThis as typeof globalThis & {
       IS_REACT_ACT_ENVIRONMENT?: boolean;
@@ -1208,7 +1208,7 @@ describe("ViewerAppShell", () => {
       expect(wrapper.classList.contains("sidebar-width-352")).toBe(true);
       expect(dom.window.document.body.classList.contains("cursor-col-resize")).toBe(false);
       expect(dom.window.document.body.classList.contains("select-none")).toBe(false);
-      expect(dom.window.localStorage.length).toBe(0);
+      expect(dom.window.localStorage.getItem("eagleSidebarWidth")).toBe("352");
 
       await act(async () => {
         root?.unmount();
@@ -1225,8 +1225,23 @@ describe("ViewerAppShell", () => {
 
       const resetWrapper = container.querySelector('[data-slot="sidebar-wrapper"]');
       if (!(resetWrapper instanceof dom.window.HTMLElement)) throw new Error("Missing reset sidebar wrapper");
-      expect(resetWrapper.classList.contains("sidebar-width-256")).toBe(true);
+      expect(resetWrapper.classList.contains("sidebar-width-352")).toBe(true);
       expect(resetWrapper.getAttribute("style")).toBeNull();
+      const account = container.querySelector<HTMLButtonElement>("#authAccountLabel");
+      await act(async () => { account?.click(); });
+      const resetButton = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
+        .find((button) => button.getAttribute("aria-label") === "Reset display settings");
+      expect(resetButton).toBeDefined();
+      const settingsGroup = container.querySelector('[role="group"][aria-labelledby="accountSettingsLabel"]');
+      expect(settingsGroup?.querySelector("#accountSettingsLabel")?.textContent).toBe("SETTINGS");
+      expect(settingsGroup?.contains(resetButton!)).toBe(true);
+      expect(settingsGroup?.querySelector("#themeModeGroup")).not.toBeNull();
+      expect(settingsGroup?.querySelector("#pageSizeGroup")).not.toBeNull();
+      expect(settingsGroup?.querySelector("#subfoldersDisplayGroup")).not.toBeNull();
+      expect(resetButton?.textContent).toBe("");
+      await act(async () => { resetButton?.click(); });
+      expect(resetWrapper.classList.contains("sidebar-width-256")).toBe(true);
+      expect(dom.window.localStorage.getItem("eagleSidebarWidth")).toBeNull();
     } finally {
       if (root) {
         await act(async () => {

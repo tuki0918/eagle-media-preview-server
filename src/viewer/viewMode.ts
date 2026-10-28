@@ -32,5 +32,9 @@ export function needsViewModeReload(previousMode: ViewerMode, nextMode: ViewerMo
 }
 
 function browserStorage() {
-  return typeof window === "undefined" ? undefined : window.localStorage;
+  try {
+    return typeof window === "undefined" ? undefined : window.localStorage;
+  } catch {
+    return undefined;
+  }
 }

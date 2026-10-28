@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ChevronDownIcon, StarIcon, TagIcon, TagsIcon } from "lucide-react";
 import { mediaUrl } from "../api";
+import { subscribeDisplaySettingsReset } from "../displayPreferences";
 import { TAG_SECTIONS_COLLAPSED_STORAGE_KEY } from "../constants";
 import { thumbnailMediaType } from "../media";
 import { loadTagCover } from "../tagCovers";
@@ -132,6 +133,7 @@ function groupSectionKey(groupId: string) {
 // Sections start expanded; only the collapsed ones are remembered so new groups show up open.
 function useCollapsedTagSections() {
   const [collapsed, setCollapsed] = useState(readCollapsedTagSections);
+  useEffect(() => subscribeDisplaySettingsReset(() => setCollapsed(new Set())), []);
   const toggle = useCallback((key: string) => {
     setCollapsed((current) => {
       const next = new Set(current);

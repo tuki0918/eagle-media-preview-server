@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type C
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { SIDEBAR_OPEN_STORAGE_KEY, UNCATEGORIZED_FOLDER_ID, UNTAGGED_FOLDER_ID } from "../constants";
 import { activeFilterLabels } from "../filters";
+import { DEFAULT_SIDEBAR_WIDTH, readSavedSidebarWidth, writeSavedSidebarWidth, subscribeDisplaySettingsReset } from "../displayPreferences";
 import { findFolderById } from "../folderTree";
 import { getLibraryName, subscribeLibraryName } from "../libraryNameState";
 import { getResultsStatusState, subscribeResultsStatusState } from "../resultsStatusState";
@@ -31,7 +32,6 @@ interface ViewerShellLayoutProps {
   hidden?: boolean;
 }
 
-const SIDEBAR_INITIAL_WIDTH = 16 * 16;
 const SIDEBAR_MIN_WIDTH = 12 * 16;
 const SIDEBAR_MAX_WIDTH = 22 * 16;
 const HEADER_REVEAL_OFFSET = 64;
@@ -40,7 +40,15 @@ const HEADER_SCROLL_THRESHOLD = 8;
 export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
   const searchState = useSyncExternalStore(subscribeSearchControlsState, getSearchControlsState, getSearchControlsState);
   const [sidebarOpen, setSidebarOpenState] = useState(readSavedSidebarOpen);
-  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_INITIAL_WIDTH);
+  const [sidebarWidth, setSidebarWidth] = useState(readSavedSidebarWidth);
+  const saveSidebarWidth = useCallback((width: number) => {
+    setSidebarWidth(width);
+    writeSavedSidebarWidth(width);
+  }, []);
+  useEffect(() => subscribeDisplaySettingsReset(() => {
+    setSidebarWidth(DEFAULT_SIDEBAR_WIDTH);
+    setSidebarOpenState(true);
+  }), []);
   const resultsStatus = useSyncExternalStore(subscribeResultsStatusState, getResultsStatusState, getResultsStatusState);
   const zoomLevel = useSyncExternalStore(subscribeZoomLevel, getZoomLevel, getZoomLevel);
   const contentStyle = {
@@ -85,7 +93,7 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
         sidebarWidth={sidebarWidth}
         sidebarWidthMin={SIDEBAR_MIN_WIDTH}
         sidebarWidthMax={SIDEBAR_MAX_WIDTH}
-        onSidebarWidthChange={setSidebarWidth}
+        onSidebarWidthChange={saveSidebarWidth}
       >
         <AccountSideMenu />
         <SidebarInset className="min-w-0 bg-background">
