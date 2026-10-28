@@ -19,13 +19,13 @@ const mediaPlayerClassName =
 const videoPlayerClassName =
   "video-player absolute inset-x-0 bottom-0 z-[2] px-3 pb-[calc(10px+env(safe-area-inset-bottom))] pt-12 [background:linear-gradient(180deg,transparent,rgba(5,7,10,0.82))] min-[720px]:px-4";
 const audioPlayerShellClassName =
-  "audio-player-shell grid w-[min(520px,calc(100%_-_28px))] content-center gap-5 rounded-[24px] border border-[rgba(255,255,255,0.1)] bg-[linear-gradient(160deg,rgba(38,38,44,0.94),rgba(10,10,14,0.96))] p-6 text-white shadow-[0_30px_80px_rgba(0,0,0,0.45)] max-[540px]:w-[calc(100%_-_24px)] max-[540px]:gap-4 max-[540px]:p-5";
+  "audio-player-shell grid min-w-0 w-[min(520px,calc(100%_-_28px))] grid-cols-[minmax(0,1fr)] content-center gap-5 rounded-[24px] border border-[rgba(255,255,255,0.1)] bg-[linear-gradient(160deg,rgba(38,38,44,0.94),rgba(10,10,14,0.96))] p-6 text-white shadow-[0_30px_80px_rgba(0,0,0,0.45)] max-[540px]:w-[calc(100%_-_24px)] max-[540px]:gap-4 max-[540px]:p-5";
 const audioArtworkClassName =
   "audio-artwork relative mx-auto aspect-square w-[min(240px,64vw)] overflow-hidden rounded-[18px] border border-[rgba(255,255,255,0.1)] bg-[linear-gradient(135deg,rgba(99,102,241,0.35),rgba(14,165,233,0.18)),rgba(24,24,27,0.9)] shadow-[0_18px_48px_rgba(0,0,0,0.4)] [&>img]:h-full [&>img]:w-full [&>img]:object-cover";
 const audioArtworkFallbackClassName =
   "grid h-full w-full place-items-center text-[rgba(255,255,255,0.72)] [&_svg]:h-14 [&_svg]:w-14";
 const mediaTitleClassName =
-  "min-w-0 truncate text-base font-semibold leading-tight text-white";
+  "block w-full min-w-0 max-w-full truncate text-base font-semibold leading-tight text-white";
 const mediaTimeClassName = "whitespace-nowrap text-xs font-medium tabular-nums text-[rgba(255,255,255,0.78)]";
 const mediaButtonClassName =
   "relative inline-grid size-9 shrink-0 touch-manipulation select-none place-items-center rounded-full border-0 bg-transparent text-white transition-colors hover:bg-[rgba(255,255,255,0.14)] disabled:cursor-default disabled:opacity-40 [&_svg]:size-5";
@@ -95,6 +95,7 @@ export function VideoPreview({ item }: { item: EagleItem }) {
 }
 
 export function AudioPreview({ item }: { item: EagleItem }) {
+  const title = displayFileName(item) || "Audio preview";
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const noThumbnail = hasNoThumbnail(item);
   const [artworkMissing, setArtworkMissing] = useState(noThumbnail);
@@ -120,9 +121,8 @@ export function AudioPreview({ item }: { item: EagleItem }) {
           />
         )}
       </div>
-      <div className="grid min-w-0 justify-items-center gap-1 text-center">
-        <strong className={mediaTitleClassName}>{displayFileName(item) || "Audio preview"}</strong>
-        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[rgba(255,255,255,0.55)]">{(item.ext || "audio").toUpperCase()}</span>
+      <div className="min-w-0 text-center">
+        <strong className={mediaTitleClassName} title={title}>{title}</strong>
       </div>
       <audio ref={audioRef} src={mediaUrl(String(item.id || ""), "file")} preload="metadata" />
       <MediaControls mediaRef={audioRef} item={item} variant="audio" />
