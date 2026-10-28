@@ -8,6 +8,7 @@ import { getItemActionsVisible, subscribeItemActionsVisible } from "../itemActio
 import { folderIds, itemTags } from "../format";
 import { uniqueValues, type MetadataSuggestion } from "../metadata";
 import { getPreviewInfoState, subscribePreviewInfoState } from "../previewInfoState";
+import { revealMetadataSuggestions } from "../revealMetadataSuggestions";
 import { showErrorToast, showSuccessToast } from "../toasts";
 import type { EagleFolder, EagleItem } from "../types";
 
@@ -519,10 +520,28 @@ function MetadataInlineInput({
   onSubmitValue: (value: string) => void | Promise<void>;
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const suggestionsRef = useRef<HTMLDivElement | null>(null);
   const [suggestions, setSuggestions] = useState<MetadataSuggestion[]>([]);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const requestId = useRef(0);
   const debounceTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!suggestionsOpen) return;
+    const reveal = () => {
+      if (inputRef.current && suggestionsRef.current) {
+        revealMetadataSuggestions(inputRef.current, suggestionsRef.current);
+      }
+    };
+    const timer = window.setTimeout(reveal, 0);
+    // iOS can finish opening the keyboard after the suggestions have rendered.
+    const viewport = window.visualViewport;
+    viewport?.addEventListener("resize", reveal);
+    return () => {
+      window.clearTimeout(timer);
+      viewport?.removeEventListener("resize", reveal);
+    };
+  }, [suggestionsOpen]);
 
   const clearDebounceTimer = () => {
     if (!debounceTimer.current) return;
@@ -610,7 +629,7 @@ function MetadataInlineInput({
         </Button>
       </label>
       {suggestionsOpen ? (
-        <div className={previewChipSuggestionsClassName} role="listbox">
+        <div ref={suggestionsRef} className={previewChipSuggestionsClassName} role="listbox">
           {suggestions.map((item) => (
             <button
               key={item.value}
