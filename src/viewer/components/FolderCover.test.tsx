@@ -7,13 +7,14 @@ import type { EagleItem } from "../types";
 import { FolderCover } from "./FolderCover";
 
 let dom: JSDOM;
-let root: Root;
+let root: Root | undefined;
 let container: HTMLDivElement;
 
 beforeEach(async () => {
   dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
   vi.stubGlobal("window", dom.window);
   vi.stubGlobal("document", dom.window.document);
+  vi.stubGlobal("navigator", dom.window.navigator);
   vi.stubGlobal("Node", dom.window.Node);
   vi.stubGlobal("HTMLElement", dom.window.HTMLElement);
   vi.stubGlobal("IntersectionObserver", undefined);
@@ -24,15 +25,19 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await act(async () => root.unmount());
-  setFolderCoverFetcher(null);
-  vi.unstubAllGlobals();
-  dom.window.close();
+  try {
+    await act(async () => root?.unmount());
+  } finally {
+    root = undefined;
+    setFolderCoverFetcher(null);
+    vi.unstubAllGlobals();
+    dom?.window.close();
+  }
 });
 
 test("falls back from an image thumbnail to the original and then the folder icon", async () => {
   setFolderCoverFetcher(async () => ({ id: "image/one", ext: "png" }));
-  await act(async () => root.render(<FolderCover folderId="folder-one" />));
+  await act(async () => root?.render(<FolderCover folderId="folder-one" />));
   expect(container.querySelector("img")?.getAttribute("src")).toBe("/api/items/image%2Fone/thumb");
   expect(container.querySelector("img")?.getAttribute("alt")).toBe("");
   await act(async () => {
@@ -52,12 +57,12 @@ test("ignores a previous folder's late result and skips requests for empty folde
     ? new Promise<EagleItem | null>((resolve) => { finishPrevious = resolve; })
     : Promise.resolve({ id: "current-image", ext: "jpg" }));
   setFolderCoverFetcher(fetcher);
-  await act(async () => root.render(<FolderCover folderId="previous" />));
-  await act(async () => root.render(<FolderCover folderId="current" />));
+  await act(async () => root?.render(<FolderCover folderId="previous" />));
+  await act(async () => root?.render(<FolderCover folderId="current" />));
   expect(container.querySelector("img")?.getAttribute("src")).toBe("/api/items/current-image/thumb");
   await act(async () => finishPrevious({ id: "previous-image", ext: "jpg" }));
   expect(container.querySelector("img")?.getAttribute("src")).toBe("/api/items/current-image/thumb");
-  await act(async () => root.render(<FolderCover folderId="empty" empty />));
+  await act(async () => root?.render(<FolderCover folderId="empty" empty />));
   expect(container.querySelector("img")).toBeNull();
   expect(fetcher).toHaveBeenCalledTimes(2);
 });
