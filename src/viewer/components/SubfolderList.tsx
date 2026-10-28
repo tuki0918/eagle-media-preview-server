@@ -47,7 +47,7 @@ export function SubfolderList() {
           <span className="[font-variant-numeric:tabular-nums]">({folders.length.toLocaleString()})</span>
         </button>
       </h2>
-      {collapsed ? null : <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(min(220px,100%),1fr))] gap-x-4 gap-y-1 p-0">
+      {collapsed ? null : <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(min(220px,calc((100%_-_1rem)/2)),1fr))] gap-x-4 gap-y-1 p-0">
         {folders.map((folder) => (
           <li key={folder.id} className="min-w-0">
             <SubfolderCard folder={folder} smart={smart} />
@@ -73,15 +73,15 @@ function SubfolderCard({ folder, smart }: { folder: EagleFolder; smart: boolean 
   return (
     <button
       type="button"
-      className="subfolder-card flex w-full min-w-0 items-center gap-3 rounded-xl border-0 bg-transparent p-2 text-left text-inherit transition-colors hover:bg-muted focus-visible:bg-muted"
+      className="subfolder-card flex w-full min-w-0 items-center gap-2 rounded-xl border-0 bg-transparent p-1.5 text-left text-inherit transition-colors hover:bg-muted focus-visible:bg-muted min-[540px]:gap-3 min-[540px]:p-2 max-[540px]:[&>span:first-child]:size-10"
       title={folder.name}
       onClick={() => (smart ? changeSmartFolder : changeFolder)({ currentTarget: { value: folder.id } })}
     >
       <FolderCover folderId={folder.id} smart={smart} empty={count === 0 && !folder.children?.length} />
       <span className="grid min-w-0 flex-1 gap-0.5">
-        <span className="truncate text-[15px] font-medium leading-tight text-foreground">{folder.name}</span>
+        <span className="truncate text-[13px] font-medium leading-tight text-foreground min-[540px]:text-[15px]">{folder.name}</span>
         {count === undefined ? null : (
-          <span className="text-[13px] leading-tight text-muted-foreground [font-variant-numeric:tabular-nums]">
+          <span className="truncate text-[11px] leading-tight text-muted-foreground [font-variant-numeric:tabular-nums] min-[540px]:text-[13px]">
             {count.toLocaleString()} {count === 1 ? "item" : "items"}
           </span>
         )}
