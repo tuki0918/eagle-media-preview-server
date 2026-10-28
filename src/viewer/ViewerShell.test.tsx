@@ -776,6 +776,8 @@ describe("ViewerAppShell", () => {
           id: "logo-category", name: "Logo category", isExpand: false,
           children: [{ id: "unmatched-child", name: "Unmatched child", depth: 1 }],
         },
+        { id: "repeated-logo", name: "Logo LOGO" },
+        { id: "literal-folder", name: "Release.[draft]" },
         { id: "photos", name: "Photos" },
       ],
       hasActiveFilters: true,
@@ -791,6 +793,7 @@ describe("ViewerAppShell", () => {
           id: "saved-searches", name: "Saved searches", isExpand: false,
           children: [{ id: "logo-favorites", name: "Logo favorites", depth: 1 }],
         },
+        { id: "literal-smart-folder", name: "Review.[draft]", conditions: [] },
         { id: "video-picks", name: "Video picks", conditions: [] },
       ],
     });
@@ -829,8 +832,25 @@ describe("ViewerAppShell", () => {
       expect(smartTree?.textContent).toContain("Saved searches");
       expect(smartTree?.textContent).toContain("Logo favorites");
       expect(smartTree?.textContent).not.toContain("Video picks");
+      expect(Array.from(folderTree?.querySelectorAll("mark") ?? [], (match) => match.textContent)).toEqual(["Logo", "Logo", "Logo", "LOGO"]);
+      expect(Array.from(smartTree?.querySelectorAll("mark") ?? [], (match) => match.textContent)).toEqual(["Logo"]);
+      expect(folderTree?.querySelector('[title="Design"] mark')).toBeNull();
+      expect(folderTree?.querySelector('[title="Unmatched child"] mark')).toBeNull();
+      expect(smartTree?.querySelector('[title="Saved searches"] mark')).toBeNull();
+      for (const match of container.querySelectorAll("mark")) {
+        expect(match.classList.contains("bg-transparent")).toBe(true);
+        expect(match.classList.contains("text-blue-700")).toBe(true);
+        expect(match.classList.contains("dark:text-blue-400")).toBe(true);
+      }
       expect(getSearchControlsState()).toBe(itemSearchState);
       expect(dom.window.localStorage.getItem("eagleFolderSectionsOpen")).toBe(savedSections);
+
+      for (const literal of [".", "["]) {
+        await setFilter(literal);
+        expect(container.querySelector('[aria-label="Folder tree"]')?.textContent).toBe("Release.[draft]");
+        expect(container.querySelector('[aria-label="Smart folder tree"]')?.textContent).toBe("Review.[draft]");
+        expect(Array.from(container.querySelectorAll("mark"), (match) => match.textContent)).toEqual([literal, literal]);
+      }
 
       await setFilter("no such folder");
       expect(container.querySelector('[data-slot="sidebar-content"] [role="status"]')?.textContent).toContain("No matching folders");
@@ -843,6 +863,7 @@ describe("ViewerAppShell", () => {
       if (!(clearButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing filter clear button");
       await act(async () => { clearButton.click(); });
       expect(input.value).toBe("");
+      expect(container.querySelector("mark")).toBeNull();
       expect(container.querySelector('[data-slot="sidebar-content"] [role="status"]')).toBeNull();
       expect(container.querySelector('[aria-label="Expand Folders section"]')).not.toBeNull();
       expect(container.querySelector('[aria-label="Expand Smart Folders section"]')).not.toBeNull();
@@ -863,6 +884,7 @@ describe("ViewerAppShell", () => {
       });
       expect(input.value).toBe("");
       expect(container.querySelector('[aria-label="Folder tree"]')?.textContent).toContain("Design");
+      expect(container.querySelector("mark")).toBeNull();
       expect(getSearchControlsState()).toBe(itemSearchState);
     } finally {
       if (root) await act(async () => { root?.unmount(); });

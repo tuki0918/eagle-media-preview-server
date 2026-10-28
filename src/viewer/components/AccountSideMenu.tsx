@@ -179,14 +179,14 @@ export function AccountSideMenu() {
                 event.stopPropagation();
                 clearFolderFilter();
               }}
-              className="h-8 rounded-md bg-background/60 pl-7 pr-7 md:h-7 md:text-xs dark:bg-background/30"
+              className="h-9 rounded-md bg-background/60 pl-7 pr-8 md:text-xs dark:bg-background/30"
             />
             {folderFilter ? (
               <button
                 type="button"
                 aria-label="Clear folder filter"
                 title="Clear folder filter"
-                className="absolute right-0.5 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                className="absolute right-0.5 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
                 onClick={clearFolderFilter}
               >
                 <XIcon className="size-3.5" aria-hidden="true" />
@@ -348,6 +348,7 @@ function FolderSideNav({
           <SidebarMenu className="gap-0.5" aria-label="Folder tree">
             <FolderTreeNavItems
               expandedIds={expandedIds}
+              filterQuery={filterQuery}
               folders={filteredFolders}
               iconForFolder={(folder) => selectedFolderId === folder.id ? "open" : "folder"}
               isActive={(folder) => selectedFolderId === folder.id}
@@ -397,6 +398,7 @@ function SmartFolderSideNav({
           <SidebarMenu className="gap-0.5" aria-label="Smart folder tree">
             <FolderTreeNavItems
               expandedIds={expandedIds}
+              filterQuery={filterQuery}
               folders={filteredFolders}
               iconForFolder={(folder) => isSmartFolderGroup(folder as EagleSmartFolder) ? "smartGroup" : "smart"}
               isActive={(folder) => selectedSmartFolderId === folder.id}
@@ -520,6 +522,7 @@ type FolderNavIconName = "folder" | "inbox" | "open" | "smart" | "smartGroup" | 
 
 function FolderTreeNavItems({
   expandedIds,
+  filterQuery,
   folders,
   iconForFolder,
   isActive,
@@ -527,6 +530,7 @@ function FolderTreeNavItems({
   onToggle,
 }: {
   expandedIds: Readonly<Record<string, boolean>>;
+  filterQuery: string;
   folders: readonly EagleFolder[];
   iconForFolder: (folder: EagleFolder) => FolderNavIconName;
   isActive: (folder: EagleFolder) => boolean;
@@ -546,6 +550,7 @@ function FolderTreeNavItems({
               count={folder.imageCount}
               depth={folder.depth || 0}
               expanded={children.length ? isExpanded : undefined}
+              filterQuery={filterQuery}
               icon={iconForFolder(folder)}
               isLastChild={isLastChild}
               label={folder.name}
@@ -555,6 +560,7 @@ function FolderTreeNavItems({
             {children.length && isExpanded ? (
               <FolderTreeNavItems
                 expandedIds={expandedIds}
+                filterQuery={filterQuery}
                 folders={children}
                 iconForFolder={iconForFolder}
                 isActive={isActive}
@@ -790,11 +796,22 @@ function folderTreeDepthClass(depth: number) {
   return folderTreeDepthClasses[Math.max(0, Math.min(depth, folderTreeDepthClasses.length - 1))];
 }
 
+function highlightFolderName(label: string, query: string) {
+  if (!query) return label;
+  const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return label.split(new RegExp(`(${escapedQuery})`, "giu")).map((part, index) => (
+    index % 2 === 1
+      ? <mark key={index} className="bg-transparent text-blue-700 dark:text-blue-400">{part}</mark>
+      : part
+  ));
+}
+
 function FolderNavItem({
   active,
   count,
   depth,
   expanded,
+  filterQuery = "",
   icon,
   isLastChild,
   label,
@@ -806,6 +823,7 @@ function FolderNavItem({
   count?: number;
   depth: number;
   expanded?: boolean;
+  filterQuery?: string;
   icon: FolderNavIconName;
   isLastChild?: boolean;
   label: string;
@@ -866,7 +884,7 @@ function FolderNavItem({
           onClick={onSelect}
         >
           <Icon className={active ? "text-[var(--sidebar-active-foreground)]" : "text-muted-foreground"} aria-hidden="true" />
-          <span className="min-w-0 truncate">{label}</span>
+          <span className="min-w-0 truncate">{highlightFolderName(label, filterQuery)}</span>
           {displayCount === undefined ? null : (
             <span className={`ml-auto shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium leading-none [font-variant-numeric:tabular-nums] group-data-[collapsible=icon]:hidden ${active ? "bg-background text-sidebar-foreground" : "bg-sidebar-accent text-muted-foreground"}`}>
               {displayCount.toLocaleString()}
