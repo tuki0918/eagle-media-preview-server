@@ -232,11 +232,13 @@ function Sidebar({
   className,
   children,
   dir,
+  onEscapeKeyDown,
   ...props
 }: React.ComponentProps<"div"> & {
   side?: "left" | "right"
   variant?: "sidebar" | "floating" | "inset"
   collapsible?: "offcanvas" | "icon" | "none"
+  onEscapeKeyDown?: React.ComponentProps<typeof SheetContent>["onEscapeKeyDown"]
 }) {
   const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
 
@@ -260,6 +262,7 @@ function Sidebar({
       <Sheet modal={false} open={openMobile} onOpenChange={setOpenMobile} {...props}>
         <SheetContent
           dir={dir}
+          onEscapeKeyDown={onEscapeKeyDown}
           data-sidebar="sidebar"
           data-slot="sidebar"
           data-mobile="true"
