@@ -283,7 +283,7 @@ function PreviewMetadataSummary({ folders, item }: { folders: readonly EagleFold
   const tags = tagValues(item.tags);
   const categories = categoryValues(item.folders).map((value) => folderLabel(value, folders));
   return (
-    <section className="preview-metadata-summary grid gap-6">
+    <section className="preview-metadata-summary grid gap-6 pb-4">
       <MetadataReadOnlyRow icon={<TagIcon aria-hidden="true" />} label="Tags" values={tags} />
       <MetadataReadOnlyRow icon={<FolderIcon aria-hidden="true" />} label="Folders" values={categories} />
     </section>
@@ -388,7 +388,7 @@ function PreviewMetadataEditor({
   };
 
   return (
-    <section className="preview-metadata-summary grid gap-6" aria-busy={saving}>
+    <section className="preview-metadata-summary grid gap-6 pb-4" aria-busy={saving}>
       <EditableMetadataRow
         icon={<TagIcon aria-hidden="true" />}
         label="Tags"

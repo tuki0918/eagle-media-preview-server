@@ -31,7 +31,13 @@ function setup({ mobile = true, inputTop = 550, listBottom = 820, viewportHeight
 test("reveals the suggestions within the keyboard-visible viewport by scrolling the panel", () => {
   const { input, list, scrollBy } = setup();
   revealMetadataSuggestions(input, list);
-  expect(scrollBy).toHaveBeenCalledWith({ top: 128, behavior: "auto" });
+  expect(scrollBy).toHaveBeenCalledWith({ top: 136, behavior: "auto" });
+});
+
+test("includes bottom breathing room even when the list itself is already visible", () => {
+  const { input, list, scrollBy } = setup({ listBottom: 690 });
+  revealMetadataSuggestions(input, list);
+  expect(scrollBy).toHaveBeenCalledWith({ top: 6, behavior: "auto" });
 });
 
 test("keeps the input below the sticky handle when the whole list cannot fit", () => {

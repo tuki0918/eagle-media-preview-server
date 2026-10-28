@@ -10,7 +10,7 @@ export function revealMetadataSuggestions(input: HTMLElement, list: HTMLElement)
   const viewportBottom = viewportTop + (viewport?.height ?? window.innerHeight);
   const handleHeight = panel.querySelector(".preview-info-handle")?.getBoundingClientRect().height ?? 0;
   const top = Math.max(panelBounds.top, viewportTop) + handleHeight + 8;
-  const bottom = Math.min(panelBounds.bottom, viewportBottom) - 8;
+  const bottom = Math.min(panelBounds.bottom, viewportBottom) - 16;
   if (bottom <= top) return;
 
   const inputTop = input.getBoundingClientRect().top;
