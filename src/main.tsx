@@ -2,6 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+import { initializeSubfoldersVisible } from "./viewer/subfolderVisibilityState";
 import "./styles.css";
 
 const root = document.querySelector("#root");
@@ -9,6 +10,8 @@ const root = document.querySelector("#root");
 if (!root) {
   throw new Error("Missing #root element");
 }
+
+initializeSubfoldersVisible();
 
 flushSync(() => {
   createRoot(root).render(
