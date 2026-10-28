@@ -1,5 +1,6 @@
 import { DEFAULT_PAGE_SIZE, DEFAULT_VIEW_MODE, FOLDER_SECTIONS_OPEN_STORAGE_KEY, SIDEBAR_OPEN_STORAGE_KEY, TAG_SECTIONS_COLLAPSED_STORAGE_KEY } from "./constants";
 import { changePageSize, selectViewMode } from "./shellActions";
+import { setItemActionsVisible } from "./itemActionsVisibilityState";
 import { setSubfoldersVisible } from "./subfolderVisibilityState";
 import { setThemePreference } from "./themeState";
 import { writeSavedViewerMode } from "./viewMode";
@@ -41,13 +42,14 @@ export function resetDisplaySettings() {
   for (const key of [
     SIDEBAR_WIDTH_STORAGE_KEY, SIDEBAR_OPEN_STORAGE_KEY, FOLDER_SECTIONS_OPEN_STORAGE_KEY,
     TAG_SECTIONS_COLLAPSED_STORAGE_KEY, "eagleSubfoldersCollapsed", "eagleShowSubfolders",
-    "eagle-media-preview-theme", "eagleViewerZoomLevel", "eagleViewMode",
+    "eagleShowItemActions", "eagle-media-preview-theme", "eagleViewerZoomLevel", "eagleViewMode",
   ]) {
     try { window.localStorage.removeItem(key); } catch { /* Storage is optional. */ }
   }
   setThemePreference("system");
   setZoomLevel(DEFAULT_ZOOM_LEVEL);
   setSubfoldersVisible(false);
+  setItemActionsVisible(true);
   writeSavedViewerMode(DEFAULT_VIEW_MODE);
   changePageSize(DEFAULT_PAGE_SIZE);
   selectViewMode(DEFAULT_VIEW_MODE);

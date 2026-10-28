@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { errorMessage } from "../api";
 import { directFileUrl, isStandaloneApp } from "../fileLinks";
+import { getItemActionsVisible, subscribeItemActionsVisible } from "../itemActionsVisibilityState";
 import { folderIds, itemTags } from "../format";
 import { uniqueValues, type MetadataSuggestion } from "../metadata";
 import { getPreviewInfoState, subscribePreviewInfoState } from "../previewInfoState";
@@ -132,7 +133,9 @@ export function PreviewInfoDetails() {
 }
 
 export function PreviewInfoActions() {
+  const actionsVisible = useSyncExternalStore(subscribeItemActionsVisible, getItemActionsVisible, getItemActionsVisible);
   const previewInfoState = useSyncExternalStore(subscribePreviewInfoState, getPreviewInfoState, getPreviewInfoState);
+  if (!actionsVisible) return null;
   return (
     <div id="previewActions" className="preview-info-actions sticky bottom-0 z-[1] -mx-5 mt-auto border-t border-border bg-card px-5 pb-[calc(16px+env(safe-area-inset-bottom))] pt-4 max-[540px]:static">
       {previewInfoState ? <PreviewActions key={String(previewInfoState.item.id || "")} canEditMetadata={previewInfoState.canEditMetadata} canManageLibrary={previewInfoState.canManageLibrary} item={previewInfoState.item} onToggleTrash={previewInfoState.onToggleTrash} /> : null}
@@ -141,9 +144,13 @@ export function PreviewInfoActions() {
 }
 
 export function PreviewActions({ canEditMetadata = false, canManageLibrary = false, item, onToggleTrash }: { canEditMetadata?: boolean; canManageLibrary?: boolean; item: EagleItem; onToggleTrash?: (item: EagleItem, isDeleted: boolean) => Promise<void> }) {
+  const actionsVisible = useSyncExternalStore(subscribeItemActionsVisible, getItemActionsVisible, getItemActionsVisible);
   const standalone = isStandaloneApp();
   const [trashSaving, setTrashSaving] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => {
+    if (!actionsVisible) setMenuOpen(false);
+  }, [actionsVisible]);
   const actionsRef = useRef<HTMLElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const nextDeletedState = !Boolean(item.isDeleted);
@@ -182,6 +189,8 @@ export function PreviewActions({ canEditMetadata = false, canManageLibrary = fal
   };
   const canShowAdminMenu = canManageLibrary;
   const canToggleTrash = canManageLibrary && Boolean(onToggleTrash);
+
+  if (!actionsVisible) return null;
 
   return (
     <section ref={actionsRef} className={`preview-admin-actions relative grid gap-2 ${canShowAdminMenu ? "grid-cols-[minmax(0,1fr)_auto]" : "grid-cols-1"}`}>

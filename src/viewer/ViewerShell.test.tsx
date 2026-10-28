@@ -53,6 +53,7 @@ import { getThemeState, initializeThemeState, setThemePreference } from "./theme
 import { safeExternalUrl } from "./components/PreviewBody";
 import { SubfolderList } from "./components/SubfolderList";
 import { setFolderCoverFetcher } from "./folderCovers";
+import { getItemActionsVisible } from "./itemActionsVisibilityState";
 import { getSubfoldersVisible, setSubfoldersVisible } from "./subfolderVisibilityState";
 import * as shellActions from "./shellActions";
 
@@ -1238,9 +1239,22 @@ describe("ViewerAppShell", () => {
       expect(settingsGroup?.querySelector("#themeModeGroup")).not.toBeNull();
       expect(settingsGroup?.querySelector("#pageSizeGroup")).not.toBeNull();
       expect(settingsGroup?.querySelector("#subfoldersDisplayGroup")).not.toBeNull();
+      const itemActionsGroup = settingsGroup?.querySelector("#itemActionsDisplayGroup");
+      expect(itemActionsGroup).not.toBeNull();
+      expect(getItemActionsVisible()).toBe(true);
+      const hideActions = itemActionsGroup?.querySelector('[aria-label="Hide item actions"]');
+      await act(async () => {
+        hideActions?.dispatchEvent(new dom.window.MouseEvent("mousedown", { bubbles: true, button: 0 }));
+      });
+      expect(getItemActionsVisible()).toBe(false);
+      expect(dom.window.localStorage.getItem("eagleShowItemActions")).toBe("false");
+      expect(renderToStaticMarkup(<PreviewActions canManageLibrary item={{ id: "item-1" }} />)).toBe("");
+      expect(renderToStaticMarkup(<PreviewInfoActions />)).toBe("");
+
       expect(resetButton?.textContent).toBe("");
       await act(async () => { resetButton?.click(); });
       expect(resetWrapper.classList.contains("sidebar-width-256")).toBe(true);
+      expect(getItemActionsVisible()).toBe(true);
       expect(dom.window.localStorage.getItem("eagleSidebarWidth")).toBeNull();
     } finally {
       if (root) {

@@ -2,6 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+import { initializeItemActionsVisible } from "./viewer/itemActionsVisibilityState";
 import { initializeSubfoldersVisible } from "./viewer/subfolderVisibilityState";
 import { getLoginConnectState } from "./viewer/loginConnectState";
 import "./styles.css";
@@ -13,6 +14,7 @@ if (!root) {
 }
 
 initializeSubfoldersVisible();
+initializeItemActionsVisible();
 
 flushSync(() => {
   createRoot(root).render(

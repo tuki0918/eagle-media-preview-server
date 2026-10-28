@@ -4,6 +4,7 @@ import { readSavedSidebarWidth, writeSavedSidebarWidth, resetDisplaySettings, su
 import { getThemeState, setThemePreference } from "./themeState";
 import { getZoomLevel, setZoomLevel } from "./zoomState";
 import { getSubfoldersVisible, setSubfoldersVisible } from "./subfolderVisibilityState";
+import { getItemActionsVisible, setItemActionsVisible } from "./itemActionsVisibilityState";
 import * as actions from "./shellActions";
 
 let dom: JSDOM | undefined;
@@ -47,6 +48,7 @@ test("resets display preferences and mounted views while preserving unrelated br
   setThemePreference("dark");
   setZoomLevel(5);
   setSubfoldersVisible(true);
+  setItemActionsVisible(false);
   const listener = vi.fn();
   const unsubscribe = subscribeDisplaySettingsReset(listener);
   try {
@@ -54,6 +56,8 @@ test("resets display preferences and mounted views while preserving unrelated br
     expect(getThemeState().preference).toBe("system");
     expect(getZoomLevel()).toBe(2);
     expect(getSubfoldersVisible()).toBe(false);
+    expect(getItemActionsVisible()).toBe(true);
+    expect(storage.getItem("eagleShowItemActions")).toBe("true");
     expect(readSavedSidebarWidth()).toBe(256);
     expect(storage.getItem("eagleTagSectionsCollapsed")).toBeNull();
     expect(storage.getItem("eagleSubfoldersCollapsed")).toBeNull();

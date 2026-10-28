@@ -46,6 +46,7 @@ import { getLoginConnectState, subscribeLoginConnectState } from "../loginConnec
 import { getSearchControlsState, subscribeSearchControlsState } from "../searchControlsState";
 import { PAGE_SIZE_OPTIONS } from "../shellConfig";
 import { changeFolder, changePageSize, changeSmartFolder, openTags, submitLogout } from "../shellActions";
+import { getItemActionsVisible, setItemActionsVisible, subscribeItemActionsVisible } from "../itemActionsVisibilityState";
 import { getSubfoldersVisible, setSubfoldersVisible, subscribeSubfoldersVisible } from "../subfolderVisibilityState";
 import { getThemeState, setThemePreference, subscribeThemeState, type ThemePreference } from "../themeState";
 import type { EagleFolder, EagleSmartFolder } from "../types";
@@ -749,6 +750,28 @@ function SubfoldersMenuSection() {
   );
 }
 
+function ItemActionsMenuSection() {
+  const visible = useSyncExternalStore(subscribeItemActionsVisible, getItemActionsVisible, getItemActionsVisible);
+
+  return (
+    <div className="grid gap-2 px-2 pb-1.5 pt-2">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Show item actions</span>
+      <Tabs
+        id="itemActionsDisplayGroup"
+        value={visible ? "on" : "off"}
+        className="w-full"
+        aria-label="Item actions display"
+        onValueChange={(value) => setItemActionsVisible(value === "on")}
+      >
+        <TabsList className="grid h-9 w-full grid-cols-2 rounded-xl bg-muted p-1 shadow-none" aria-label="Item actions display">
+          <TabsTrigger value="on" className={menuTabTriggerClassName} aria-label="Show item actions">On</TabsTrigger>
+          <TabsTrigger value="off" className={menuTabTriggerClassName} aria-label="Hide item actions">Off</TabsTrigger>
+        </TabsList>
+      </Tabs>
+    </div>
+  );
+}
+
 function RoleChip({ description, label }: { description: string; label: string }) {
   return (
     <span className="group/role relative inline-flex shrink-0">
@@ -1054,6 +1077,7 @@ function AccountDropdown({
               <ThemeMenuSection />
               <PageSizeMenuSection />
               <SubfoldersMenuSection />
+              <ItemActionsMenuSection />
             </div>
             {signedIn ? (
               <>
