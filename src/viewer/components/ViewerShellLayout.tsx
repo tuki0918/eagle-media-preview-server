@@ -28,7 +28,7 @@ interface ViewerShellLayoutProps {
   hidden?: boolean;
 }
 
-const SIDEBAR_INITIAL_WIDTH = 14 * 16;
+const SIDEBAR_INITIAL_WIDTH = 16 * 16;
 const SIDEBAR_MIN_WIDTH = 12 * 16;
 const SIDEBAR_MAX_WIDTH = 22 * 16;
 const HEADER_REVEAL_OFFSET = 64;

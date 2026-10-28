@@ -1,5 +1,4 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import type { CSSProperties } from "react";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AccountSideMenu } from "./AccountSideMenu";
@@ -109,7 +108,7 @@ function AccountSideMenuStory(args: AccountMenuStoryArgs) {
 
   return (
     <TooltipProvider>
-      <SidebarProvider defaultOpen style={{ "--sidebar-width": "14rem", "--sidebar-width-icon": "3rem" } as CSSProperties}>
+      <SidebarProvider defaultOpen sidebarWidth={16 * 16}>
         <AccountSideMenu />
         <SidebarInset className="min-h-dvh p-6">
           <h1 className="m-0 text-xl font-bold text-foreground">Viewer content</h1>

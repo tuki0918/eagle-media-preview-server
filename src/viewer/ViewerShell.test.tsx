@@ -872,13 +872,13 @@ describe("ViewerAppShell", () => {
       const rail = container.querySelector('[data-slot="sidebar-rail"]');
       if (!(wrapper instanceof dom.window.HTMLElement)) throw new Error("Missing sidebar wrapper");
       if (!(rail instanceof dom.window.HTMLButtonElement)) throw new Error("Missing sidebar rail");
-      expect(wrapper.classList.contains("sidebar-width-224")).toBe(true);
+      expect(wrapper.classList.contains("sidebar-width-256")).toBe(true);
       expect(wrapper.getAttribute("style")).toBeNull();
       expect(rail.classList.contains("cursor-col-resize")).toBe(true);
       expect(rail.getAttribute("style")).toBeNull();
 
       await act(async () => {
-        rail.dispatchEvent(new dom.window.MouseEvent("pointerdown", { bubbles: true, button: 0, clientX: 224 }));
+        rail.dispatchEvent(new dom.window.MouseEvent("pointerdown", { bubbles: true, button: 0, clientX: 256 }));
       });
 
       expect(dom.window.document.body.classList.contains("cursor-col-resize")).toBe(true);
@@ -909,7 +909,7 @@ describe("ViewerAppShell", () => {
 
       const resetWrapper = container.querySelector('[data-slot="sidebar-wrapper"]');
       if (!(resetWrapper instanceof dom.window.HTMLElement)) throw new Error("Missing reset sidebar wrapper");
-      expect(resetWrapper.classList.contains("sidebar-width-224")).toBe(true);
+      expect(resetWrapper.classList.contains("sidebar-width-256")).toBe(true);
       expect(resetWrapper.getAttribute("style")).toBeNull();
     } finally {
       if (root) {
