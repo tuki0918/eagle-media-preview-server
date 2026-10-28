@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, ChevronLeft, ChevronRight, Music, Pause, PictureInPicture2, Play, Presentation, RotateCcw, Volume2, VolumeX, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Music, Pause, Play, Presentation, RotateCcw, Volume2, VolumeX, X } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { errorMessage, mediaUrl } from "../api";
 import { displayFileName } from "../format";
 import { bindMediaSession } from "../mediaSession";
-import { isPictureInPictureActive } from "../pictureInPicture";
-import { usePictureInPicture } from "../usePictureInPicture";
 import { subscribeDisplaySettingsReset } from "../displayPreferences";
 import { getResultSurfaceState, subscribeResultSurfaceState } from "../resultSurfaceState";
 import { getSearchControlsState } from "../searchControlsState";
@@ -45,11 +43,6 @@ export function SlideshowDialog({ query, onClose }: { query: SlideshowQuery; onC
   const screenRef = useRef<HTMLDivElement>(null);
   const [settings, setSettings] = useState(readSlideshowSettings);
   const [running, setRunning] = useState(false);
-  const pictureInPictureRequests = useRef(0);
-  const onPictureInPictureRequest = useCallback(() => {
-    pictureInPictureRequests.current += 1;
-    return () => { pictureInPictureRequests.current -= 1; };
-  }, []);
   const closing = useRef(false);
   const close = useCallback(() => {
     if (closing.current) return;
@@ -79,9 +72,7 @@ export function SlideshowDialog({ query, onClose }: { query: SlideshowQuery; onC
       if (document.fullscreenElement === screenRef.current) entered = true;
       else if (entered) {
         entered = false;
-        const videoInPictureInPicture = Array.from(screenRef.current?.querySelectorAll("video") || []).some(isPictureInPictureActive);
-        // Native PiP may leave fullscreen before its enter event is dispatched.
-        if (!pictureInPictureRequests.current && !videoInPictureInPicture) close();
+        close();
       }
     };
     document.addEventListener("fullscreenchange", changed);
@@ -101,7 +92,7 @@ export function SlideshowDialog({ query, onClose }: { query: SlideshowQuery; onC
   return createPortal(
     <dialog ref={dialogRef} aria-label="Slideshow" className={running ? "fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none overflow-hidden border-0 bg-black p-0 text-white backdrop:bg-black" : "fixed inset-0 m-auto max-h-[calc(100dvh-24px)] w-[min(480px,calc(100vw-24px))] overflow-hidden rounded-2xl border border-border bg-card p-0 text-card-foreground shadow-xl backdrop:bg-black/50"} onCancel={(event) => { event.preventDefault(); close(); }}>
       <div ref={screenRef} className={running ? "relative h-full w-full overflow-hidden bg-black text-white [&:fullscreen]:h-screen [&:fullscreen]:w-screen" : "relative flex max-h-[inherit] flex-col bg-card text-card-foreground"}>
-        {running ? <SlideshowPlayer query={query} settings={settings} onClose={close} onPictureInPictureRequest={onPictureInPictureRequest} /> : (
+        {running ? <SlideshowPlayer query={query} settings={settings} onClose={close} /> : (
           <>
             <header className="flex min-h-[60px] shrink-0 items-center gap-3 pb-3 pl-5 pr-14 pt-4">
               <h2 className="flex items-center gap-2 text-lg font-semibold"><Presentation className="size-5" aria-hidden="true" />Slideshow</h2>
@@ -148,7 +139,7 @@ function SlideshowToggle({ label, checked, onChange }: { label: string; checked:
 }
 
 interface Slide { item: EagleItem; index: number; token: number }
-export function SlideshowPlayer({ query, settings, onClose, onPictureInPictureRequest }: { query: SlideshowQuery; settings: SlideshowSettings; onClose: () => void; onPictureInPictureRequest?: () => void | (() => void) }) {
+export function SlideshowPlayer({ query, settings, onClose }: { query: SlideshowQuery; settings: SlideshowSettings; onClose: () => void }) {
   const sourceRef = useRef<SlideshowSource | null>(null);
   const [total, setTotal] = useState<number | null>(null);
   const [slide, setSlide] = useState<Slide | null>(null);
@@ -231,18 +222,18 @@ export function SlideshowPlayer({ query, settings, onClose, onPictureInPictureRe
 
   const advance = useCallback(() => { void navigate(currentIndex.current + 1); }, [navigate]);
   const kind = slide ? slideshowMediaKind(slide.item) : null;
-  const pictureInPicture = usePictureInPicture(mediaRef, kind === "video" && !loading && !error && !finished, String(slide?.token), onPictureInPictureRequest);
   const staticSlide = kind === "image" || kind === "thumbnail";
   useEffect(() => {
     if (!slide || !staticSlide || !ready || paused || loading || error || finished) return;
     const budget = remaining.current;
     const started = performance.now();
     const elapsed = () => Math.min(settings.seconds, settings.seconds - Math.max(0, budget.ms - (performance.now() - started)) / 1000);
-    const interval = window.setInterval(() => setCurrentTime(elapsed()), 100);
-    const timer = window.setTimeout(() => { setCurrentTime(settings.seconds); advance(); }, Math.max(0, budget.ms));
+    const timerWindow = window;
+    const interval = timerWindow.setInterval(() => setCurrentTime(elapsed()), 100);
+    const timer = timerWindow.setTimeout(() => { setCurrentTime(settings.seconds); advance(); }, Math.max(0, budget.ms));
     return () => {
-      window.clearInterval(interval);
-      window.clearTimeout(timer);
+      timerWindow.clearInterval(interval);
+      timerWindow.clearTimeout(timer);
       if (remaining.current === budget) budget.ms = Math.max(0, budget.ms - (performance.now() - started));
     };
   }, [slide, staticSlide, ready, paused, loading, error, finished, advance, settings.seconds, seekVersion]);
@@ -295,14 +286,15 @@ export function SlideshowPlayer({ query, settings, onClose, onPictureInPictureRe
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
       if (event.altKey || event.ctrlKey || event.metaKey || /^(INPUT|SELECT|TEXTAREA)$/.test((event.target as HTMLElement)?.tagName)) return;
-      if ((event.target as HTMLElement)?.closest("button") && (event.key === " " || event.key === "Enter")) return;
+      if ((event.target as HTMLElement)?.closest?.("button") && (event.key === " " || event.key === "Enter")) return;
       if (event.key === " ") { event.preventDefault(); togglePause(); }
       if (event.key === "ArrowRight" && !loading && !error && !finished) { event.preventDefault(); advance(); }
       if (event.key === "ArrowLeft" && !loading && !error && currentIndex.current > 0) { event.preventDefault(); void navigate(currentIndex.current - 1); }
+      if (event.key === "Escape") { event.preventDefault(); onClose(); }
     };
     document.addEventListener("keydown", keydown);
     return () => document.removeEventListener("keydown", keydown);
-  }, [togglePause, loading, error, finished, advance, navigate]);
+  }, [togglePause, loading, error, finished, advance, navigate, onClose]);
 
   const duration = staticSlide ? settings.seconds : mediaDuration;
   const syncMediaTime = () => {
@@ -379,7 +371,6 @@ export function SlideshowPlayer({ query, settings, onClose, onPictureInPictureRe
             if (playbackEventsEnabled.current) { setPaused(nextPaused); if (!nextPaused) setBlocked(false); }
           }}
           onMutedChange={setMuted}
-          onPictureInPictureRequest={onPictureInPictureRequest}
           muted={muted}
         />
       ))}
@@ -418,17 +409,15 @@ export function SlideshowPlayer({ query, settings, onClose, onPictureInPictureRe
         <div className="flex min-h-9 items-center justify-between gap-3">
           <span className="text-xs font-medium tabular-nums text-white/80" aria-label="Playback time">{playbackTime(currentTime)} / {playbackTime(duration)}</span>
           <div className="flex items-center gap-1">
-            {kind === "video" && pictureInPicture.supported ? <button type="button" className={playerButton} aria-label={pictureInPicture.active ? "Exit Picture-in-Picture" : "Picture-in-Picture"} title={pictureInPicture.active ? "Exit Picture-in-Picture" : "Picture-in-Picture"} aria-pressed={pictureInPicture.active} disabled={!pictureInPicture.ready || pictureInPicture.pending || loading || Boolean(error) || finished} onClick={() => { void pictureInPicture.toggle(); }}><PictureInPicture2 /></button> : null}
             {kind === "video" || kind === "audio" ? <button type="button" className={playerButton} aria-label={muted ? "Unmute slideshow" : "Mute slideshow"} onClick={() => setMuted((value) => !value)}>{muted ? <VolumeX /> : <Volume2 />}</button> : null}
           </div>
         </div>
-        {pictureInPicture.error ? <p className="m-0 text-xs text-white/80" role="status">{pictureInPicture.error}</p> : null}
       </footer>
     </section>
   );
 }
 
-function SlideshowFrame({ item, active, playbackToken, sessionEnabled, effect, mediaRef, onReady, onBuffering, onTime, onEnded, onError, onPreloadError, onPlaybackChange, onMutedChange, onPictureInPictureRequest, muted }: {
+function SlideshowFrame({ item, active, playbackToken, sessionEnabled, effect, mediaRef, onReady, onBuffering, onTime, onEnded, onError, onPreloadError, onPlaybackChange, onMutedChange, muted }: {
   item: EagleItem;
   active: boolean;
   playbackToken?: number;
@@ -443,7 +432,6 @@ function SlideshowFrame({ item, active, playbackToken, sessionEnabled, effect, m
   onPreloadError: () => void;
   onPlaybackChange: (paused: boolean) => void;
   onMutedChange: (muted: boolean) => void;
-  onPictureInPictureRequest?: () => void | (() => void);
   muted: boolean;
 }) {
   const kind = slideshowMediaKind(item);
@@ -467,8 +455,8 @@ function SlideshowFrame({ item, active, playbackToken, sessionEnabled, effect, m
   useEffect(() => {
     const media = localMediaRef.current;
     if (!sessionEnabled || !media) return;
-    return bindMediaSession(media, { id, name, ext, noThumbnail }, onPictureInPictureRequest);
-  }, [sessionEnabled, id, name, ext, noThumbnail, onPictureInPictureRequest]);
+    return bindMediaSession(media, { id, name, ext, noThumbnail }, false);
+  }, [sessionEnabled, id, name, ext, noThumbnail]);
   useEffect(() => {
     if (active && failed) onError();
     else if (active && prepared) onReady();
@@ -501,7 +489,7 @@ function SlideshowFrame({ item, active, playbackToken, sessionEnabled, effect, m
       data-slideshow-preload={active ? undefined : "true"}
     >
       {isStatic ? <img src={mediaUrl(String(item.id), kind === "image" ? "file" : "thumb")} alt={active ? displayFileName(item) || "Untitled" : ""} className="h-full min-h-0 w-full object-contain" decoding="async" onLoad={(event) => prepareImage(event.currentTarget)} onError={fail} /> : null}
-      {kind === "video" ? <video ref={bindMedia} className="h-full min-h-0 w-full object-contain" src={mediaUrl(String(item.id), "file")} playsInline muted={muted || !active} preload="auto" {...mediaEvents} /> : null}
+      {kind === "video" ? <video ref={bindMedia} className="h-full min-h-0 w-full object-contain" src={mediaUrl(String(item.id), "file")} playsInline disablePictureInPicture muted={muted || !active} preload="auto" {...mediaEvents} /> : null}
       {kind === "audio" ? <div className="grid w-[min(420px,80vw)] justify-items-center px-4"><AudioArtwork item={item} /><audio ref={bindMedia} src={mediaUrl(String(item.id), "file")} muted={muted || !active} preload="auto" {...mediaEvents} /></div> : null}
     </div>
   );

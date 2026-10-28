@@ -29,7 +29,7 @@ const ENTER_PICTURE_IN_PICTURE = "enterpictureinpicture" as MediaSessionAction;
 const mediaSessionBindings = new WeakMap<HTMLMediaElement, symbol>();
 
 // Publishes the playing item to the OS media controls; returns a cleanup that clears them.
-export function bindMediaSession(media: HTMLMediaElement, item: EagleItem, onPictureInPictureRequest?: () => void | (() => void)) {
+export function bindMediaSession(media: HTMLMediaElement, item: EagleItem, allowPictureInPicture = true) {
   if (typeof navigator === "undefined" || !("mediaSession" in navigator)) {
     return () => {};
   }
@@ -65,23 +65,18 @@ export function bindMediaSession(media: HTMLMediaElement, item: EagleItem, onPic
   let pictureInPictureRegistered = false;
   const video = media.tagName === "VIDEO" ? media as HTMLVideoElement : null;
   const enterPictureInPicture = async () => {
-    if (!video || disposed || video.paused || video.ended || video.readyState === 0 || !supportsPictureInPicture(video)) return;
+    if (!allowPictureInPicture || !video || disposed || video.paused || video.ended || video.readyState === 0 || !supportsPictureInPicture(video)) return;
     const existing = video.ownerDocument.pictureInPictureElement;
     if (existing && existing !== video) return;
-    let releaseRequest: void | (() => void) = undefined;
     try {
-      releaseRequest = onPictureInPictureRequest?.();
       await requestPictureInPicture(video);
       if (disposed && !mediaSessionBindings.has(media)) await exitPictureInPicture(video);
     } catch {
       // Automatic PiP remains subject to browser support, permission, and playback eligibility.
-    } finally {
-      releaseRequest?.();
     }
   };
   const syncPictureInPictureHandler = () => {
-    if (!video) return;
-    const supported = supportsPictureInPicture(video);
+    const supported = Boolean(allowPictureInPicture && video && supportsPictureInPicture(video));
     if (supported === pictureInPictureRegistered) return;
     pictureInPictureRegistered = setActionHandler(session, ENTER_PICTURE_IN_PICTURE, supported ? enterPictureInPicture : null) && supported;
   };

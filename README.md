@@ -20,7 +20,7 @@ Anyone on the same network can then browse it from phones, tablets, and other co
 - Endpoint URL and QR code for quick access, with an optional custom hostname
 - Installable PWA (**Media Library**) with a cached application shell
 - Background audio and video playback shows the file name and thumbnail in the OS media controls
-- Picture-in-Picture controls for video previews and slideshow videos on supported desktop and mobile browsers, with automatic PiP in supported desktop Chrome versions
+- Picture-in-Picture controls for video previews on supported desktop and mobile browsers, with automatic PiP in supported desktop Chrome versions
 
 Optional:
 
@@ -53,8 +53,6 @@ The PWA caches only the application shell. Eagle API responses and library media
 ## Video Picture-in-Picture
 
 Open a video preview and use the **Picture-in-Picture** button beside the full-screen button. It appears when the browser and device expose PiP support and becomes available after the video metadata loads. Standard PiP and Safari's native video presentation API are supported. Closing the preview or changing items also closes its PiP window.
-
-Slideshow videos have the same PiP control in the bottom playback bar. Only the current video participates in PiP and OS media controls. Entering PiP keeps the slideshow open when the browser leaves full-screen mode. Advancing to another slide or closing the slideshow closes the current video's PiP window.
 
 On desktop Chrome, playing a video and switching tabs can open PiP automatically. This requires Chrome's automatic Picture-in-Picture permission for the site and audible playback; Chrome also checks playback focus and site engagement when permission has not been granted explicitly. The browser decides when to trigger it and closes an automatically opened PiP window when you return to the tab. See [Chrome's automatic PiP requirements](https://developer.chrome.com/blog/automatic-picture-in-picture-media-playback).
 
