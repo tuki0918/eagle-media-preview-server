@@ -1,4 +1,5 @@
-import { useMemo, useSyncExternalStore } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
+import { ChevronDownIcon } from "lucide-react";
 import { UNCATEGORIZED_FOLDER_ID, UNTAGGED_FOLDER_ID } from "../constants";
 import { directSubfolders } from "../folderTree";
 import { getSearchControlsState, subscribeSearchControlsState } from "../searchControlsState";
@@ -10,6 +11,16 @@ import { FolderCover } from "./FolderCover";
 export function SubfolderList() {
   const state = useSyncExternalStore(subscribeSearchControlsState, getSearchControlsState, getSearchControlsState);
   const visible = useSyncExternalStore(subscribeSubfoldersVisible, getSubfoldersVisible, getSubfoldersVisible);
+  const [collapsed, setCollapsed] = useState(readCollapsed);
+  const toggleCollapsed = () => {
+    const next = !collapsed;
+    setCollapsed(next);
+    try {
+      window.localStorage.setItem("eagleSubfoldersCollapsed", String(next));
+    } catch {
+      // The section still toggles when storage is unavailable.
+    }
+  };
   const smart = Boolean(state.selectedSmartFolderId);
   const folders = useMemo(() => directSubfolders(
     smart ? state.smartFolders : state.folders,
@@ -21,19 +32,36 @@ export function SubfolderList() {
 
   return (
     <section id="subfolderList" className="mb-3 flex flex-col gap-2" aria-label="Subfolders">
-      <h2 className="m-0 flex items-center gap-2 px-2 py-1 text-xs font-medium uppercase tracking-[0.06em] text-muted-foreground">
-        <span>Subfolders</span>
-        <span className="[font-variant-numeric:tabular-nums]">{folders.length.toLocaleString()}</span>
+      <h2 className="m-0">
+        <button
+          type="button"
+          className="flex max-w-full items-center gap-2 rounded-lg border-0 bg-transparent px-1 py-1 text-left text-xs font-medium uppercase tracking-[0.06em] text-muted-foreground transition-colors hover:text-foreground"
+          aria-expanded={!collapsed}
+          aria-label={`${collapsed ? "Expand" : "Collapse"} Subfolders`}
+          onClick={toggleCollapsed}
+        >
+          <ChevronDownIcon className={`size-3.5 shrink-0 transition-transform duration-150 ${collapsed ? "-rotate-90" : ""}`} aria-hidden="true" />
+          <span>Subfolders</span>
+          <span className="[font-variant-numeric:tabular-nums]">({folders.length.toLocaleString()})</span>
+        </button>
       </h2>
-      <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(min(220px,100%),1fr))] gap-x-4 gap-y-1 p-0">
+      {collapsed ? null : <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(min(220px,100%),1fr))] gap-x-4 gap-y-1 p-0">
         {folders.map((folder) => (
           <li key={folder.id} className="min-w-0">
             <SubfolderCard folder={folder} smart={smart} />
           </li>
         ))}
-      </ul>
+      </ul>}
     </section>
   );
+}
+
+function readCollapsed() {
+  try {
+    return typeof window !== "undefined" && window.localStorage.getItem("eagleSubfoldersCollapsed") === "true";
+  } catch {
+    return false;
+  }
 }
 
 function SubfolderCard({ folder, smart }: { folder: EagleFolder; smart: boolean }) {

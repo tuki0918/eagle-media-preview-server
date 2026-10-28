@@ -113,7 +113,7 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
                   aria-label={headerCountLabel}
                   title={headerCountLabel}
                 >
-                  {headerCount.toLocaleString()}
+                  {showingTags ? `(${headerCount.toLocaleString()})` : headerCount.toLocaleString()}
                 </span>
               </button>
               <div className="flex min-w-0 items-center justify-end">

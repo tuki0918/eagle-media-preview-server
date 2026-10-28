@@ -996,6 +996,19 @@ describe("ViewerAppShell", () => {
       expect(subfolders).not.toBeNull();
       expect(media).not.toBeNull();
       expect(Boolean(subfolders!.compareDocumentPosition(media!) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+      const heading = subfolders?.querySelector('button[aria-label="Collapse Subfolders"]');
+      if (!(heading instanceof dom.window.HTMLButtonElement)) throw new Error("Missing subfolder toggle");
+      const childCount = subfolders!.querySelectorAll(".subfolder-card").length;
+      expect(heading.textContent).toBe(`Subfolders(${childCount})`);
+      await act(async () => { heading.click(); });
+      expect(heading.getAttribute("aria-expanded")).toBe("false");
+      expect(subfolders!.querySelector("ul")).toBeNull();
+      expect(dom.window.localStorage.getItem("eagleSubfoldersCollapsed")).toBe("true");
+      expect(media).toBe(container.querySelector("#grid"));
+      await act(async () => { heading.click(); });
+      expect(heading.getAttribute("aria-expanded")).toBe("true");
+      expect(dom.window.localStorage.getItem("eagleSubfoldersCollapsed")).toBe("false");
+      expect(subfolders!.querySelectorAll(".subfolder-card")).toHaveLength(childCount);
       const brand = subfolders?.querySelector('button[title="Brand"]');
       if (!(brand instanceof dom.window.HTMLButtonElement)) throw new Error("Missing subfolder card");
       await act(async () => { brand.click(); });
@@ -2466,6 +2479,10 @@ describe("tag list", () => {
     expect(html).toContain("3 items");
     expect(html).toContain("1 item<");
     expect(html.match(/aria-label="Starred"/g)).toHaveLength(1);
+    const document = new JSDOM(html).window.document;
+    expect(Array.from(document.querySelectorAll("h2 button"), (button) => button.textContent)).toEqual([
+      "Starred Tags(1)", "Nature(1)", "Ungrouped(1)",
+    ]);
   });
 
   test("shows load errors and empty libraries", () => {
@@ -2524,7 +2541,7 @@ describe("tag list", () => {
       });
 
       expect(container.textContent).not.toContain("tree");
-      expect(container.textContent).toContain("Nature1");
+      expect(container.textContent).toContain("Nature(1)");
       expect(JSON.parse(dom.window.localStorage.getItem("eagleTagSectionsCollapsed") || "[]")).toEqual(["ungrouped", "group:g1"]);
 
       const ungroupedToggle = container.querySelector('[aria-label="Expand Ungrouped"]');
