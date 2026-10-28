@@ -134,7 +134,7 @@ export function PreviewInfoDetails() {
 export function PreviewInfoActions() {
   const previewInfoState = useSyncExternalStore(subscribePreviewInfoState, getPreviewInfoState, getPreviewInfoState);
   return (
-    <div id="previewActions" className="preview-info-actions sticky bottom-0 z-[1] -mx-5 mt-auto border-t border-border bg-card px-5 pb-[calc(16px+env(safe-area-inset-bottom))] pt-4">
+    <div id="previewActions" className="preview-info-actions sticky bottom-0 z-[1] -mx-5 mt-auto border-t border-border bg-card px-5 pb-[calc(16px+env(safe-area-inset-bottom))] pt-4 max-[540px]:static">
       {previewInfoState ? <PreviewActions key={String(previewInfoState.item.id || "")} canEditMetadata={previewInfoState.canEditMetadata} canManageLibrary={previewInfoState.canManageLibrary} item={previewInfoState.item} onToggleTrash={previewInfoState.onToggleTrash} /> : null}
     </div>
   );
