@@ -59,17 +59,24 @@ export class SlideshowSource {
     const page = Math.floor(index / SLIDESHOW_PAGE_SIZE);
     this.activePage = page;
     this.prune();
-    const items = await this.page(page);
-    const item = items[index % SLIDESHOW_PAGE_SIZE];
-    if (!item) {
-      if (this.total !== null && index >= this.total) return null;
-      throw new Error("The list has changed. Close the slideshow and start again.");
-    }
+    const item = await this.peek(index);
     // Prefetch metadata for only the following page; failures are retried on demand.
     if (this.total !== null && (page + 1) * SLIDESHOW_PAGE_SIZE < this.total) {
       void this.page(page + 1).catch(() => {});
     }
     return item;
+  }
+
+  /** Read a neighboring item without moving or pruning the playback cursor. */
+  async peek(index: number): Promise<EagleItem | null> {
+    if (this.disposed) throw new Error("Slideshow closed");
+    if (index < 0 || (this.total !== null && index >= this.total)) return null;
+    const items = await this.page(Math.floor(index / SLIDESHOW_PAGE_SIZE));
+    const item = items[index % SLIDESHOW_PAGE_SIZE];
+    if (!item && !(this.total !== null && index >= this.total)) {
+      throw new Error("The list has changed. Close the slideshow and start again.");
+    }
+    return item ?? null;
   }
 
   dispose() {

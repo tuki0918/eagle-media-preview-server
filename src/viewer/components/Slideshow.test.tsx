@@ -164,6 +164,7 @@ async function pointer(pointerType: string, type = "pointermove") {
   await act(async () => {
     const event = new dom.window.MouseEvent(type, { bubbles: true, relatedTarget: document.body });
     Object.defineProperty(event, "pointerType", { value: pointerType });
+    Object.defineProperty(event, "movementX", { value: type === "pointermove" ? 1 : 0 });
     container.querySelector('[aria-label="Slideshow player"]')!.dispatchEvent(event);
   });
 }
@@ -230,4 +231,66 @@ test("audio shows artwork with a single header title and the media's real playba
     seek.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
   });
   expect(audio.currentTime).toBe(60);
+});
+
+test("does not reveal controls on startup hover or overlap the loader with the center button", async () => {
+  serve([{ id: "1", ext: "jpg" }]);
+  await renderPlayer();
+  expect(container.querySelector('[aria-label="Loading slide"]')).not.toBeNull();
+  expect(container.querySelector('[aria-label="Pause slideshow"]')).toBeNull();
+  await pointer("mouse", "pointerover");
+  expect(container.querySelector("footer")?.getAttribute("aria-hidden")).toBe("true");
+  await pointer("mouse");
+  expect(container.querySelector("footer")?.getAttribute("aria-hidden")).toBe("false");
+  expect(container.querySelector('[aria-label="Pause slideshow"]')).toBeNull();
+  await loaded();
+  expect(container.querySelector('[aria-label="Pause slideshow"]')).not.toBeNull();
+});
+
+test("preloads the next image and promotes the same decoded element", async () => {
+  serve([{ id: "1", ext: "jpg" }, { id: "2", ext: "jpg" }, { id: "3", ext: "jpg" }]);
+  await renderPlayer();
+  await loaded();
+  const prepared = container.querySelector<HTMLImageElement>('[data-slideshow-preload] img')!;
+  expect(prepared.getAttribute("src")).toBe("/file/2");
+  await act(async () => { prepared.dispatchEvent(new dom.window.Event("load")); });
+  await click("Next slide");
+  expect(container.querySelector(".slideshow-frame img")).toBe(prepared);
+  expect(container.querySelector('[aria-label="Loading slide"]')).toBeNull();
+  expect(container.querySelector('[data-slideshow-preload] img')?.getAttribute("src")).toBe("/file/3");
+});
+
+test("prepares video and audio without playing them and retains their buffers on promotion", async () => {
+  serve([{ id: "i", ext: "jpg" }, { id: "v", ext: "mp4" }, { id: "a", ext: "mp3", noThumbnail: true }]);
+  await renderPlayer();
+  await loaded();
+  const video = container.querySelector<HTMLVideoElement>('[data-slideshow-preload] video')!;
+  expect(video.preload).toBe("auto");
+  await act(async () => { video.dispatchEvent(new dom.window.Event("canplay")); });
+  expect(play).not.toHaveBeenCalled();
+  await click("Next slide");
+  expect(container.querySelector(".slideshow-frame video")).toBe(video);
+  expect(play).toHaveBeenCalled();
+  const audio = container.querySelector<HTMLAudioElement>('[data-slideshow-preload] audio')!;
+  const played = play.mock.calls.length;
+  await act(async () => { audio.dispatchEvent(new dom.window.Event("canplay")); });
+  expect(play).toHaveBeenCalledTimes(played);
+  await click("Next slide");
+  expect(container.querySelector(".slideshow-frame audio")).toBe(audio);
+  expect(container.querySelector('[aria-label="Loading slide"]')).toBeNull();
+});
+
+test("a failed preload leaves playback intact and is loaded fresh when selected", async () => {
+  serve([{ id: "1", ext: "jpg" }, { id: "2", ext: "jpg" }]);
+  await renderPlayer();
+  await loaded();
+  const prepared = container.querySelector('[data-slideshow-preload] img')!;
+  await act(async () => { prepared.dispatchEvent(new dom.window.Event("error")); });
+  expect(container.querySelector('[role="alert"]')).toBeNull();
+  expect(container.querySelector('[data-slideshow-preload]')).toBeNull();
+  await click("Next slide");
+  expect(container.querySelector(".slideshow-frame img")).not.toBe(prepared);
+  expect(container.querySelector(".slideshow-frame img")?.getAttribute("src")).toBe("/file/2");
+  await loaded();
+  expect(container.querySelector('[aria-label="Loading slide"]')).toBeNull();
 });

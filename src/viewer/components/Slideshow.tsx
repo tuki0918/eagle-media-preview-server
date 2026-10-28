@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Music, Pause, Play, Presentation, RotateCcw, Volume2, VolumeX, X } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { errorMessage, mediaUrl } from "../api";
 import { displayFileName } from "../format";
@@ -121,6 +122,7 @@ export function SlideshowPlayer({ query, settings, onClose }: { query: Slideshow
   const sourceRef = useRef<SlideshowSource | null>(null);
   const [total, setTotal] = useState<number | null>(null);
   const [slide, setSlide] = useState<Slide | null>(null);
+  const [preparedNext, setPreparedNext] = useState<{ item: EagleItem; index: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [ready, setReady] = useState(false);
   const [buffering, setBuffering] = useState(false);
@@ -176,6 +178,23 @@ export function SlideshowPlayer({ query, settings, onClose }: { query: Slideshow
     void navigate(0);
     return () => { request.current += 1; source.dispose(); };
   }, [navigate, query]);
+
+  useEffect(() => {
+    if (!slide || !ready || loading || error || finished) return;
+    const source = sourceRef.current;
+    if (!source) return;
+    let cancelled = false;
+    setPreparedNext(null);
+    const nextIndex = source.total !== null && slide.index + 1 >= source.total
+      ? settings.loop ? 0 : -1
+      : slide.index + 1;
+    if (nextIndex >= 0) {
+      void source.peek(nextIndex).then((item) => {
+        if (!cancelled && item) setPreparedNext({ item, index: nextIndex });
+      }).catch(() => { /* Retry on demand; a failed preload must not interrupt playback. */ });
+    }
+    return () => { cancelled = true; };
+  }, [slide, ready, loading, error, finished, settings.loop]);
 
   const advance = useCallback(() => { void navigate(currentIndex.current + 1); }, [navigate]);
   const kind = slide ? slideshowMediaKind(slide.item) : null;
@@ -273,18 +292,18 @@ export function SlideshowPlayer({ query, settings, onClose }: { query: Slideshow
   const controlsVisibility = controlsShown ? "visible opacity-100" : "pointer-events-none invisible opacity-0";
   const progress = duration > 0 ? Math.min(100, Math.max(0, currentTime / duration * 100)) : 0;
   const failMedia = () => { setError("Unable to play this file. Retry or skip it."); setPaused(true); };
-  const retry = () => { setPaused(false); void navigate(targetIndex.current); };
+  const retry = () => { setPreparedNext(null); setPaused(false); void navigate(targetIndex.current); };
   const skip = () => { setPaused(false); void navigate(targetIndex.current + 1); };
   const title = slide ? displayFileName(slide.item) || "Untitled" : "Slideshow";
-  const imageUrl = slide ? mediaUrl(String(slide.item.id || ""), kind === "image" ? "file" : "thumb") : "";
   return (
     <section
       className="relative grid h-full w-full grid-rows-[minmax(0,1fr)] bg-black text-white outline-none"
       aria-label="Slideshow player"
       tabIndex={0}
       onPointerDown={() => setFocusWithin(false)}
-      onPointerEnter={(event) => { if (event.pointerType === "mouse") revealControls(); }}
-      onPointerMove={(event) => { if (event.pointerType === "mouse") revealControls(); }}
+      onPointerMove={(event) => {
+        if (event.pointerType === "mouse" && (event.movementX || event.movementY)) revealControls();
+      }}
       onPointerLeave={(event) => {
         if (event.pointerType !== "mouse") return;
         clearControlsTimer(); setControlsVisible(false);
@@ -302,18 +321,25 @@ export function SlideshowPlayer({ query, settings, onClose }: { query: Slideshow
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocusWithin(false);
       }}
     >
-      {slide && !loading ? (
-        <div key={slide.token} className={`slideshow-frame relative grid min-h-0 h-full w-full place-items-center ${settings.effect === "none" ? "" : `slideshow-${settings.effect}`}`}>
-          {staticSlide ? <img src={imageUrl} alt={title} className="h-full w-full min-h-0 object-contain" onLoad={() => setReady(true)} onError={failMedia} /> : null}
-          {kind === "video" ? <video ref={(element) => { mediaRef.current = element; }} className="h-full w-full min-h-0 object-contain" src={mediaUrl(String(slide.item.id), "file")} playsInline muted={muted} preload="auto" onCanPlay={() => { setReady(true); setBuffering(false); }} onPlaying={() => setBuffering(false)} onWaiting={() => setBuffering(true)} onLoadedMetadata={syncMediaTime} onDurationChange={syncMediaTime} onTimeUpdate={syncMediaTime} onEnded={() => { syncMediaTime(); advance(); }} onError={failMedia} /> : null}
-          {kind === "audio" ? (
-            <div className="grid w-[min(420px,80vw)] justify-items-center gap-6 px-4">
-              <AudioArtwork item={slide.item} />
-              <audio ref={(element) => { mediaRef.current = element; }} src={mediaUrl(String(slide.item.id), "file")} muted={muted} preload="auto" onCanPlay={() => { setReady(true); setBuffering(false); }} onPlaying={() => setBuffering(false)} onWaiting={() => setBuffering(true)} onLoadedMetadata={syncMediaTime} onDurationChange={syncMediaTime} onTimeUpdate={syncMediaTime} onEnded={() => { syncMediaTime(); advance(); }} onError={failMedia} />
-            </div>
-          ) : null}
-        </div>
-      ) : null}
+      {[
+        ...(slide && !loading ? [{ item: slide.item, index: slide.index, active: true }] : []),
+        ...(preparedNext && (loading || preparedNext.index !== slide?.index) ? [{ ...preparedNext, active: false }] : []),
+      ].map((frame) => (
+        <SlideshowFrame
+          key={`${frame.index}:${String(frame.item.id)}`}
+          item={frame.item}
+          active={frame.active}
+          effect={settings.effect}
+          mediaRef={mediaRef}
+          onReady={() => { setReady(true); setBuffering(false); syncMediaTime(); }}
+          onBuffering={setBuffering}
+          onTime={syncMediaTime}
+          onEnded={() => { syncMediaTime(); advance(); }}
+          onError={failMedia}
+          onPreloadError={() => setPreparedNext(null)}
+          muted={muted}
+        />
+      ))}
       {(loading || (slide && !ready) || buffering) && !error && !finished && !blocked ? <div className="pointer-events-none absolute inset-0 grid place-items-center" role="status" aria-label="Loading slide"><span className="size-9 animate-spin rounded-full border-2 border-white/25 border-t-white" /></div> : null}
       {error ? <div className="absolute inset-0 grid place-items-center bg-black/80 p-6"><div className="grid max-w-sm justify-items-center gap-4 text-center" role="alert"><p className="text-sm leading-relaxed">{error}</p><div className="flex gap-3"><Button onClick={retry}>Retry</Button><Button variant="secondary" onClick={skip}>Skip</Button></div></div></div> : null}
       {finished ? <div className="absolute inset-0 grid place-items-center bg-black/65 p-6"><div className="grid justify-items-center gap-4"><p className="text-lg">Slideshow complete</p><Button onClick={togglePause}><RotateCcw className="size-4" />Replay</Button></div></div> : null}
@@ -323,10 +349,11 @@ export function SlideshowPlayer({ query, settings, onClose }: { query: Slideshow
         <div className={`flex shrink-0 items-center gap-1 transition-opacity duration-200 ${controlsVisibility}`} aria-hidden={!controlsShown}>
           <button type="button" className={`pointer-events-auto ${playerButton}`} aria-label="Previous slide" title="Previous item" disabled={loading || Boolean(error) || !slide || slide.index === 0} onClick={() => { void navigate(currentIndex.current - 1); }}><ChevronLeft /></button>
           <button type="button" className={`pointer-events-auto ${playerButton}`} aria-label="Next slide" title="Next item" disabled={loading || Boolean(error) || finished} onClick={advance}><ChevronRight /></button>
+          <Separator orientation="vertical" className="mx-1 h-4 w-0 border-l border-white/30 bg-transparent data-[orientation=vertical]:h-4 data-[orientation=vertical]:w-0" />
           <button type="button" className={`pointer-events-auto ${playerButton} ${controlsVisibility}`} aria-label="Close slideshow" title="Close slideshow (Esc)" onClick={onClose}><X /></button>
         </div>
       </header>
-      {!error && !finished ? (
+      {!error && !finished && !loading && ready && !buffering ? (
         <div className={`pointer-events-none absolute inset-0 flex items-center justify-center gap-5 transition-opacity duration-200 ${controlsVisibility}`} aria-hidden={!controlsShown}>
           <button type="button" className="pointer-events-auto inline-grid size-24 shrink-0 place-items-center rounded-full border-0 bg-black/45 text-white backdrop-blur-md transition-colors hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white disabled:pointer-events-none disabled:opacity-30 [&_svg]:size-10" aria-label={paused ? "Resume slideshow" : "Pause slideshow"} disabled={loading} onClick={togglePause}>{paused ? <Play fill="currentColor" /> : <Pause fill="currentColor" />}</button>
         </div>
@@ -351,6 +378,71 @@ export function SlideshowPlayer({ query, settings, onClose }: { query: Slideshow
         </div>
       </footer>
     </section>
+  );
+}
+
+function SlideshowFrame({ item, active, effect, mediaRef, onReady, onBuffering, onTime, onEnded, onError, onPreloadError, muted }: {
+  item: EagleItem;
+  active: boolean;
+  effect: SlideshowSettings["effect"];
+  mediaRef: { current: HTMLMediaElement | null };
+  onReady: () => void;
+  onBuffering: (buffering: boolean) => void;
+  onTime: () => void;
+  onEnded: () => void;
+  onError: () => void;
+  onPreloadError: () => void;
+  muted: boolean;
+}) {
+  const kind = slideshowMediaKind(item);
+  const [prepared, setPrepared] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const localMediaRef = useRef<HTMLMediaElement | null>(null);
+  const isStatic = kind === "image" || kind === "thumbnail";
+  const fail = () => { if (active) setFailed(true); else onPreloadError(); };
+  const prepareImage = (image: HTMLImageElement) => {
+    if (typeof image.decode === "function") {
+      void image.decode().catch(() => {}).then(() => setPrepared(true));
+    } else setPrepared(true);
+  };
+  // Keep the next frame mounted and promote it without recreating its image/media element.
+  useEffect(() => {
+    if (!active) return;
+    const media = localMediaRef.current;
+    if (media) { mediaRef.current = media; media.currentTime = 0; }
+  }, [active]);
+  useEffect(() => {
+    if (active && failed) onError();
+    else if (active && prepared) onReady();
+  }, [active, prepared, failed]);
+  useEffect(() => {
+    const media = localMediaRef.current;
+    return () => { media?.pause(); };
+  }, []);
+  const bindMedia = (element: HTMLMediaElement | null) => {
+    localMediaRef.current = element;
+    if (active) mediaRef.current = element;
+  };
+  const mediaEvents = {
+    onCanPlay: () => { setPrepared(true); if (active) onBuffering(false); },
+    onPlaying: () => { if (active) onBuffering(false); },
+    onWaiting: () => { if (active) onBuffering(true); },
+    onLoadedMetadata: () => { if (active) onTime(); },
+    onDurationChange: () => { if (active) onTime(); },
+    onTimeUpdate: () => { if (active) onTime(); },
+    onEnded: () => { if (active) onEnded(); },
+    onError: fail,
+  };
+  return (
+    <div
+      className={active ? `slideshow-frame relative grid h-full min-h-0 w-full place-items-center ${effect === "none" ? "" : `slideshow-${effect}`}` : "hidden"}
+      aria-hidden={!active}
+      data-slideshow-preload={active ? undefined : "true"}
+    >
+      {isStatic ? <img src={mediaUrl(String(item.id), kind === "image" ? "file" : "thumb")} alt={active ? displayFileName(item) || "Untitled" : ""} className="h-full min-h-0 w-full object-contain" decoding="async" onLoad={(event) => prepareImage(event.currentTarget)} onError={fail} /> : null}
+      {kind === "video" ? <video ref={bindMedia} className="h-full min-h-0 w-full object-contain" src={mediaUrl(String(item.id), "file")} playsInline muted={muted || !active} preload="auto" {...mediaEvents} /> : null}
+      {kind === "audio" ? <div className="grid w-[min(420px,80vw)] justify-items-center px-4"><AudioArtwork item={item} /><audio ref={bindMedia} src={mediaUrl(String(item.id), "file")} muted={muted || !active} preload="auto" {...mediaEvents} /></div> : null}
+    </div>
   );
 }
 
