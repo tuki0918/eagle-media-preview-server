@@ -27,6 +27,9 @@ import { PreviewMeta, PreviewOriginalName } from "./PreviewText";
 export function PreviewDialog() {
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const closeSwipeRef = useRef<{ pointerId: number; startX: number; startY: number } | null>(null);
+  const infoDragRef = useRef<{ pointerId: number; startY: number } | null>(null);
+  const suppressHandleClick = useRef(false);
+  const [infoDragOffset, setInfoDragOffset] = useState<number | null>(null);
   const [desktopInfoOpen, setDesktopInfoOpen] = useState(true);
   const [desktopViewport, setDesktopViewport] = useState(false);
   const [touchViewport, setTouchViewport] = useState(false);
@@ -65,8 +68,12 @@ export function PreviewDialog() {
     previewDialogState.infoOpen
       ? "translate-x-0 shadow-[-18px_0_44px_rgba(15,23,42,0.14)] max-[540px]:translate-y-0 max-[540px]:shadow-[0_-18px_44px_rgba(15,23,42,0.14)]"
       : "translate-x-full shadow-none max-[540px]:translate-x-0 max-[540px]:translate-y-full",
-    "max-[540px]:inset-x-0 max-[540px]:bottom-0 max-[540px]:top-auto max-[540px]:w-auto max-[540px]:max-h-[min(72dvh,560px)] max-[540px]:border-l-0 max-[540px]:border-t max-[540px]:border-border",
+    "max-[540px]:inset-x-0 max-[540px]:bottom-0 max-[540px]:top-[max(6rem,env(safe-area-inset-top))] max-[540px]:w-auto max-[540px]:max-h-none max-[540px]:border-l-0 max-[540px]:border-t max-[540px]:border-border max-[540px]:pt-0",
   ].join(" ");
+  useEffect(() => {
+    infoDragRef.current = null;
+    setInfoDragOffset(null);
+  }, [previewDialogState.infoOpen, previewDialogState.open, desktopViewport]);
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
@@ -248,7 +255,54 @@ export function PreviewDialog() {
       <aside
         className={previewInfoClassName}
         aria-label="Media info"
+        style={infoDragOffset === null ? undefined : { transform: `translateY(${infoDragOffset}px)`, transition: "none" }}
       >
+        <button
+          type="button"
+          className="preview-info-handle sticky top-0 z-10 -mx-5 -mb-3 flex h-11 shrink-0 touch-none cursor-grab items-center justify-center rounded-t-[24px] border-0 bg-card active:cursor-grabbing min-[541px]:hidden"
+          aria-label="Close item details"
+          title="Drag down or tap to close"
+          onPointerDown={(event) => {
+            if (event.button !== 0 || !previewDialogState.infoOpen) return;
+            event.stopPropagation();
+            suppressHandleClick.current = false;
+            infoDragRef.current = { pointerId: event.pointerId, startY: event.clientY };
+            setInfoDragOffset(0);
+            event.currentTarget.setPointerCapture?.(event.pointerId);
+          }}
+          onPointerMove={(event) => {
+            const drag = infoDragRef.current;
+            if (!drag || drag.pointerId !== event.pointerId) return;
+            event.stopPropagation();
+            setInfoDragOffset(Math.max(0, event.clientY - drag.startY));
+          }}
+          onPointerUp={(event) => {
+            const drag = infoDragRef.current;
+            if (!drag || drag.pointerId !== event.pointerId) return;
+            event.stopPropagation();
+            const distance = event.clientY - drag.startY;
+            infoDragRef.current = null;
+            setInfoDragOffset(null);
+            suppressHandleClick.current = Math.abs(distance) > 8;
+            if (distance > 72) togglePreviewInfo();
+          }}
+          onPointerCancel={() => {
+            infoDragRef.current = null;
+            setInfoDragOffset(null);
+          }}
+          onClick={(event) => {
+            if (suppressHandleClick.current && event.detail !== 0) {
+              suppressHandleClick.current = false;
+              return;
+            }
+            if (previewDialogState.infoOpen) togglePreviewInfo();
+          }}
+        >
+          <span className="grid gap-1" aria-hidden="true">
+            <span className="h-1 w-9 rounded-full bg-muted-foreground opacity-40" />
+            <span className="h-1 w-9 rounded-full bg-muted-foreground opacity-40" />
+          </span>
+        </button>
         <section className="preview-info-title grid gap-1.5">
           <div className="text-base font-semibold leading-snug [&_.preview-original-name-value]:text-base [&_.preview-original-name-value]:font-semibold [&_.preview-original-name-value]:leading-snug">
             <PreviewOriginalName id="previewInfoName" source="display" />
