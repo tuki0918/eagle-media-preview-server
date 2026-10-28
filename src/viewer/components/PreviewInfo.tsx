@@ -3,7 +3,7 @@ import { EllipsisIcon, ExternalLinkIcon as LucideExternalLinkIcon, FolderIcon, L
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { errorMessage } from "../api";
-import { directFileUrl } from "../fileLinks";
+import { directFileUrl, isStandaloneApp } from "../fileLinks";
 import { folderIds, itemTags } from "../format";
 import { uniqueValues, type MetadataSuggestion } from "../metadata";
 import { getPreviewInfoState, subscribePreviewInfoState } from "../previewInfoState";
@@ -141,6 +141,7 @@ export function PreviewInfoActions() {
 }
 
 export function PreviewActions({ canEditMetadata = false, canManageLibrary = false, item, onToggleTrash }: { canEditMetadata?: boolean; canManageLibrary?: boolean; item: EagleItem; onToggleTrash?: (item: EagleItem, isDeleted: boolean) => Promise<void> }) {
+  const standalone = isStandaloneApp();
   const [trashSaving, setTrashSaving] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const actionsRef = useRef<HTMLElement | null>(null);
@@ -184,12 +185,19 @@ export function PreviewActions({ canEditMetadata = false, canManageLibrary = fal
 
   return (
     <section ref={actionsRef} className={`preview-admin-actions relative grid gap-2 ${canShowAdminMenu ? "grid-cols-[minmax(0,1fr)_auto]" : "grid-cols-1"}`}>
-      <Button asChild className={directFileLinkClassName}>
-        <a href={directFileUrl(item)} target="_blank" rel="noopener" onClick={(event) => event.stopPropagation()}>
+      {standalone ? (
+        <Button type="button" disabled className={directFileLinkClassName}>
           <ExternalLinkIcon />
           Open file
-        </a>
-      </Button>
+        </Button>
+      ) : (
+        <Button asChild className={directFileLinkClassName}>
+          <a href={directFileUrl(item)} target="_blank" rel="noopener" onClick={(event) => event.stopPropagation()}>
+            <ExternalLinkIcon />
+            Open file
+          </a>
+        </Button>
+      )}
       {canShowAdminMenu ? (
         <>
           <Button
