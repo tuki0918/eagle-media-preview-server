@@ -6,7 +6,7 @@ import type { EagleItem } from "../types";
 import type { SlideshowQuery, SlideshowSettings } from "../slideshow";
 
 const query: SlideshowQuery = { query: "filtered", tags: ["alpha"], folderId: "folder-1", smartFolderId: "", ext: "", rating: "" };
-const settings: SlideshowSettings = { seconds: 3, effect: "fade", loop: false };
+const settings: SlideshowSettings = { seconds: 3, effect: "fade", loop: false, showTitle: true };
 let dom: JSDOM;
 let root: import("react-dom/client").Root;
 let container: HTMLElement;
@@ -151,13 +151,26 @@ test("opens settings, saves the choices, falls back from unavailable fullscreen,
   expect(document.querySelector("dialog")?.open).toBe(true);
   const seconds = document.querySelector<HTMLSelectElement>("select")!;
   await act(async () => { seconds.value = "10"; seconds.dispatchEvent(new dom.window.Event("change", { bubbles: true })); });
+  const titleToggle = Array.from(document.querySelectorAll<HTMLLabelElement>("label")).find((label) => label.textContent?.includes("Show title"))!.querySelector<HTMLInputElement>("input")!;
+  expect(titleToggle.checked).toBe(true);
+  await act(async () => { titleToggle.click(); });
   const start = Array.from(document.querySelectorAll("button")).find((element) => element.textContent === "Start slideshow")!;
   await act(async () => { start.click(); });
   expect(fullscreen).toHaveBeenCalledOnce();
   expect(document.querySelector('[aria-label="Slideshow player"]')).not.toBeNull();
   expect(JSON.parse(window.localStorage.getItem("eagleSlideshowSettings")!).seconds).toBe(10);
+  expect(JSON.parse(window.localStorage.getItem("eagleSlideshowSettings")!).showTitle).toBe(false);
   await click("Close slideshow");
   expect(close).toHaveBeenCalledOnce();
+});
+
+test("can hide the title while retaining the current position", async () => {
+  serve([{ id: "1", name: "Hidden title", ext: "jpg" }]);
+  await renderPlayer({ ...settings, showTitle: false });
+  await loaded();
+  const header = container.querySelector("header")!;
+  expect(header.textContent).not.toContain("Hidden title");
+  expect(header.textContent).toContain("1 / 1");
 });
 
 async function pointer(pointerType: string, type = "pointermove") {

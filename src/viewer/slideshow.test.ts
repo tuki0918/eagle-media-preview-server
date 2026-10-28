@@ -96,8 +96,10 @@ test("settings tolerate unavailable storage and validate persisted values", () =
   expect(readSlideshowSettings()).toEqual(DEFAULT_SLIDESHOW_SETTINGS);
   const values = new Map<string, string>();
   vi.stubGlobal("window", { localStorage: { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => values.set(key, value) } });
-  saveSlideshowSettings({ seconds: 10, effect: "slide", loop: true });
-  expect(readSlideshowSettings()).toEqual({ seconds: 10, effect: "slide", loop: true });
+  saveSlideshowSettings({ seconds: 10, effect: "slide", loop: true, showTitle: false });
+  expect(readSlideshowSettings()).toEqual({ seconds: 10, effect: "slide", loop: true, showTitle: false });
+  values.set("eagleSlideshowSettings", '{"seconds":10,"effect":"slide","loop":true}');
+  expect(readSlideshowSettings()).toEqual({ seconds: 10, effect: "slide", loop: true, showTitle: true });
   values.set("eagleSlideshowSettings", '{"seconds":0,"effect":"invalid","loop":"true"}');
   expect(readSlideshowSettings()).toEqual(DEFAULT_SLIDESHOW_SETTINGS);
 });

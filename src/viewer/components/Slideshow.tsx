@@ -26,10 +26,10 @@ export function SlideshowLauncher() {
   };
   return (
     <>
-      <div className="slideshow-launcher pointer-events-auto fixed bottom-[calc(16px+env(safe-area-inset-bottom))] left-[calc(16px+env(safe-area-inset-left))] z-20 min-[720px]:bottom-6 min-[720px]:left-6">
-        <Button type="button" variant="outline" className="size-12 rounded-full border-border bg-[color-mix(in_srgb,var(--card)_86%,transparent)] p-0 shadow-[0_10px_30px_-12px_rgba(15,23,42,0.28)] backdrop-blur-xl" aria-label="Slideshow" title="Slideshow" disabled={!available} onClick={open}>
-          <Presentation className="size-5" aria-hidden="true" />
-        </Button>
+      <div className="slideshow-launcher pointer-events-auto fixed bottom-[calc(16px+env(safe-area-inset-bottom))] left-[calc(16px+env(safe-area-inset-left))] z-20 flex h-12 items-center rounded-full bg-[color-mix(in_srgb,var(--card)_86%,transparent)] px-1.5 shadow-[0_10px_30px_-12px_rgba(15,23,42,0.28)] backdrop-blur-xl min-[720px]:bottom-6 min-[720px]:left-6">
+        <button type="button" className="inline-grid size-9 place-items-center rounded-full border-0 bg-transparent text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-40" aria-label="Slideshow" title="Slideshow" disabled={!available} onClick={open}>
+          <Presentation className="size-[18px]" aria-hidden="true" />
+        </button>
       </div>
       {query ? <SlideshowDialog query={query} onClose={close} /> : null}
     </>
@@ -104,6 +104,9 @@ export function SlideshowDialog({ query, onClose }: { query: SlideshowQuery; onC
                 <select className={selectClass} value={settings.effect} onChange={(event) => setSettings({ ...settings, effect: event.target.value as SlideshowSettings["effect"] })}>
                   <option value="none">None</option><option value="fade">Fade</option><option value="slide">Slide</option>
                 </select>
+              </label>
+              <label className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-border p-3 text-sm font-medium">Show title
+                <input type="checkbox" className="size-4 accent-primary" checked={settings.showTitle} onChange={(event) => setSettings({ ...settings, showTitle: event.target.checked })} />
               </label>
               <label className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-border p-3 text-sm font-medium">Loop
                 <input type="checkbox" className="size-4 accent-primary" checked={settings.loop} onChange={(event) => setSettings({ ...settings, loop: event.target.checked })} />
@@ -345,7 +348,7 @@ export function SlideshowPlayer({ query, settings, onClose }: { query: Slideshow
       {finished ? <div className="absolute inset-0 grid place-items-center bg-black/65 p-6"><div className="grid justify-items-center gap-4"><p className="text-lg">Slideshow complete</p><Button onClick={togglePause}><RotateCcw className="size-4" />Replay</Button></div></div> : null}
       {blocked ? <p className="pointer-events-none absolute inset-x-0 top-[calc(50%+64px)] text-center text-sm text-white/80" role="status">Tap to play</p> : null}
       <header className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between gap-4 bg-gradient-to-b from-black/70 to-transparent px-[max(16px,env(safe-area-inset-left))] pb-10 pt-[max(12px,env(safe-area-inset-top))]">
-        <div className="min-w-0"><p className="truncate text-sm font-medium" title={title}>{title}</p><p className="mt-1 text-xs text-white/60" aria-live="off">{slide ? `${slide.index + 1} / ${total ?? "…"}` : "Slideshow"}{kind === "thumbnail" ? " · Thumbnail" : ""}</p></div>
+        <div className="min-w-0">{settings.showTitle ? <p className="truncate text-sm font-medium" title={title}>{title}</p> : null}<p className={`${settings.showTitle ? "mt-1 " : ""}text-xs text-white/60`} aria-live="off">{slide ? `${slide.index + 1} / ${total ?? "…"}` : "Slideshow"}{kind === "thumbnail" ? " · Thumbnail" : ""}</p></div>
         <div className={`flex shrink-0 items-center gap-1 transition-opacity duration-200 ${controlsVisibility}`} aria-hidden={!controlsShown}>
           <button type="button" className={`pointer-events-auto ${playerButton}`} aria-label="Previous slide" title="Previous item" disabled={loading || Boolean(error) || !slide || slide.index === 0} onClick={() => { void navigate(currentIndex.current - 1); }}><ChevronLeft /></button>
           <button type="button" className={`pointer-events-auto ${playerButton}`} aria-label="Next slide" title="Next item" disabled={loading || Boolean(error) || finished} onClick={advance}><ChevronRight /></button>
