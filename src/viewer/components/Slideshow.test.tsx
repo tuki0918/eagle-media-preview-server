@@ -149,12 +149,13 @@ test("opens settings, saves the choices, falls back from unavailable fullscreen,
   serve([{ id: "1", ext: "jpg" }]);
   await act(async () => { root.render(<StrictMode><SlideshowDialog query={query} onClose={close} /></StrictMode>); });
   expect(document.querySelector("dialog")?.open).toBe(true);
+  expect(document.querySelector('[role="tooltip"]')).toBeNull();
   const seconds = document.querySelector<HTMLSelectElement>("select")!;
   await act(async () => { seconds.value = "10"; seconds.dispatchEvent(new dom.window.Event("change", { bubbles: true })); });
   const titleToggle = Array.from(document.querySelectorAll<HTMLLabelElement>("label")).find((label) => label.textContent?.includes("Show title"))!.querySelector<HTMLInputElement>("input")!;
   expect(titleToggle.checked).toBe(true);
   await act(async () => { titleToggle.click(); });
-  const start = Array.from(document.querySelectorAll("button")).find((element) => element.textContent === "Start slideshow")!;
+  const start = Array.from(document.querySelectorAll("button")).find((element) => element.textContent === "START")!;
   await act(async () => { start.click(); });
   expect(fullscreen).toHaveBeenCalledOnce();
   expect(document.querySelector('[aria-label="Slideshow player"]')).not.toBeNull();

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, Music, Pause, Play, Presentation, RotateCcw, Volume2, VolumeX, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Music, Pause, Play, Presentation, RotateCcw, Volume2, VolumeX, X } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { errorMessage, mediaUrl } from "../api";
@@ -13,7 +13,7 @@ import { DEFAULT_SLIDESHOW_SETTINGS, readSlideshowSettings, saveSlideshowSetting
 import type { EagleItem } from "../types";
 
 const playerButton = "inline-grid size-11 shrink-0 place-items-center rounded-full text-white/80 hover:bg-white/15 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white disabled:pointer-events-none disabled:opacity-30 [&_svg]:size-5";
-const selectClass = "h-10 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground";
+const selectClass = "h-10 w-full min-w-0 appearance-none rounded-xl border border-input bg-background pl-3 pr-9 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30";
 
 export function SlideshowLauncher() {
   const surface = useSyncExternalStore(subscribeResultSurfaceState, getResultSurfaceState, getResultSurfaceState);
@@ -85,38 +85,51 @@ export function SlideshowDialog({ query, onClose }: { query: SlideshowQuery; onC
   };
 
   return createPortal(
-    <dialog ref={dialogRef} aria-label="Slideshow" className={running ? "fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none overflow-hidden border-0 bg-black p-0 text-white backdrop:bg-black" : "fixed inset-0 m-auto max-h-[calc(100dvh-32px)] w-[min(420px,calc(100vw-32px))] overflow-auto rounded-2xl border border-border bg-card p-0 text-card-foreground shadow-xl backdrop:bg-black/50"} onCancel={(event) => { event.preventDefault(); close(); }}>
-      <div ref={screenRef} className={running ? "relative h-full w-full overflow-hidden bg-black text-white [&:fullscreen]:h-screen [&:fullscreen]:w-screen" : "bg-card p-6 text-card-foreground"}>
+    <dialog ref={dialogRef} aria-label="Slideshow" className={running ? "fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none overflow-hidden border-0 bg-black p-0 text-white backdrop:bg-black" : "fixed inset-0 m-auto max-h-[calc(100dvh-24px)] w-[min(480px,calc(100vw-24px))] overflow-hidden rounded-2xl border border-border bg-card p-0 text-card-foreground shadow-xl backdrop:bg-black/50"} onCancel={(event) => { event.preventDefault(); close(); }}>
+      <div ref={screenRef} className={running ? "relative h-full w-full overflow-hidden bg-black text-white [&:fullscreen]:h-screen [&:fullscreen]:w-screen" : "relative flex max-h-[inherit] flex-col bg-card text-card-foreground"}>
         {running ? <SlideshowPlayer query={query} settings={settings} onClose={close} /> : (
           <>
-            <div className="mb-5 flex items-center justify-between gap-3">
+            <header className="flex min-h-[60px] shrink-0 items-center gap-3 pb-3 pl-5 pr-14 pt-4">
               <h2 className="flex items-center gap-2 text-lg font-semibold"><Presentation className="size-5" aria-hidden="true" />Slideshow</h2>
-              <Button type="button" variant="ghost" size="icon" aria-label="Close slideshow settings" onClick={close}><X /></Button>
+              <Button type="button" variant="ghost" size="icon" className="absolute right-2 top-2 size-9 rounded-full text-muted-foreground" aria-label="Close slideshow settings" onClick={close}><X /></Button>
+            </header>
+            <div className="slideshow-settings-fields grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-auto px-5 pb-4 pt-1 min-[360px]:grid-cols-2">
+              <label className="grid min-w-0 content-start gap-2 text-xs font-medium text-muted-foreground"><span className="uppercase">Image display time</span>
+                <span className="relative block">
+                  <select className={selectClass} value={settings.seconds} onChange={(event) => setSettings({ ...settings, seconds: Number(event.target.value) })}>
+                    {[3, 5, 10, 15, 30, 60].map((seconds) => <option key={seconds} value={seconds}>{seconds} seconds</option>)}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                </span>
+              </label>
+              <label className="grid min-w-0 content-start gap-2 text-xs font-medium text-muted-foreground"><span className="uppercase">Transition</span>
+                <span className="relative block">
+                  <select className={selectClass} value={settings.effect} onChange={(event) => setSettings({ ...settings, effect: event.target.value as SlideshowSettings["effect"] })}>
+                    <option value="none">None</option><option value="fade">Fade</option><option value="slide">Slide</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                </span>
+              </label>
+              <SlideshowToggle label="Show title" checked={settings.showTitle} onChange={(showTitle) => setSettings({ ...settings, showTitle })} />
+              <SlideshowToggle label="Loop" checked={settings.loop} onChange={(loop) => setSettings({ ...settings, loop })} />
             </div>
-            <p className="mb-5 text-sm leading-relaxed text-muted-foreground">Play all items in the current results, across every page. Images use the display time; videos and audio play to the end. Other files use their thumbnails.</p>
-            <div className="grid gap-4">
-              <label className="grid gap-2 text-sm font-medium">Image display time
-                <select className={selectClass} value={settings.seconds} onChange={(event) => setSettings({ ...settings, seconds: Number(event.target.value) })}>
-                  {[3, 5, 10, 15, 30, 60].map((seconds) => <option key={seconds} value={seconds}>{seconds} seconds</option>)}
-                </select>
-              </label>
-              <label className="grid gap-2 text-sm font-medium">Transition
-                <select className={selectClass} value={settings.effect} onChange={(event) => setSettings({ ...settings, effect: event.target.value as SlideshowSettings["effect"] })}>
-                  <option value="none">None</option><option value="fade">Fade</option><option value="slide">Slide</option>
-                </select>
-              </label>
-              <label className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-border p-3 text-sm font-medium">Show title
-                <input type="checkbox" className="size-4 accent-primary" checked={settings.showTitle} onChange={(event) => setSettings({ ...settings, showTitle: event.target.checked })} />
-              </label>
-              <label className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-border p-3 text-sm font-medium">Loop
-                <input type="checkbox" className="size-4 accent-primary" checked={settings.loop} onChange={(event) => setSettings({ ...settings, loop: event.target.checked })} />
-              </label>
-            </div>
-            <Button type="button" className="mt-6 h-11 w-full rounded-full" onClick={start}><Play className="size-4" />Start slideshow</Button>
+            <footer className="shrink-0 border-t border-border bg-card px-5 py-4">
+              <Button type="button" className="h-11 w-full rounded-full" onClick={start}><Play className="size-4" />START</Button>
+            </footer>
           </>
         )}
       </div>
     </dialog>, document.body,
+  );
+}
+
+function SlideshowToggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
+  return (
+    <label className="flex min-h-11 cursor-pointer items-center justify-between gap-2 px-3 py-2.5 text-sm font-medium">
+      <span>{label}</span>
+      <input type="checkbox" className="peer sr-only" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+      <span aria-hidden="true" className="pointer-events-none relative h-5 w-9 shrink-0 rounded-full bg-border transition-colors after:absolute after:left-0.5 after:top-0.5 after:size-4 after:rounded-full after:bg-background after:shadow-sm after:transition-transform peer-checked:bg-primary peer-checked:after:translate-x-4 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ring" />
+    </label>
   );
 }
 
