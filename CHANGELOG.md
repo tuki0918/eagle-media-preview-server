@@ -7,6 +7,30 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-10-28
+
+### Added
+
+- Added a fullscreen slideshow for the current search and filters, with image, video, and audio playback, configurable image timing and transitions, looping, optional titles, and playback controls.
+- Added a sidebar filter for folders and smart folders, with highlighted matches and a clear button.
+- Added optional, collapsible subfolder cards with thumbnails and item counts; subfolder display is disabled by default and can be enabled from the sidebar menu.
+- Added a setting to show or hide item detail panel actions.
+- Added a Reset display settings action to restore the default viewer preferences.
+
+### Changed
+
+- The sidebar now starts wider and remembers its resized width between visits.
+- Clicking the library name in the sidebar now clears filters and shows all items.
+- Improved preview layouts on phones and tablets, with a draggable details panel handle on phones and a desktop-style inspector on landscape tablets.
+- Disabled Open file in the standalone PWA.
+
+### Fixed
+
+- Show loading and offline screens with a Retry action when the viewer cannot start or the server is unavailable.
+- Keep tag and folder suggestions visible when the mobile keyboard is open.
+- Show the correct header name for nested folders and smart folders.
+- Prevent long audio titles from overflowing the player layout.
+
 ## [0.5.0] - 2026-10-24
 
 ### Added
@@ -247,7 +271,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 - Initial release of Eagle Media Preview Server.
 
-[Unreleased]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.4.0...v0.4.1
