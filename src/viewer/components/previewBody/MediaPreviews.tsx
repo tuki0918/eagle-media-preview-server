@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Maximize, Minimize, Music, Pause, Play, Repeat, RotateCcw, RotateCw, Volume1, Volume2, VolumeX } from "lucide-react";
+import { Maximize, Minimize, Music, Pause, PictureInPicture2, Play, Repeat, RotateCcw, RotateCw, Volume1, Volume2, VolumeX } from "lucide-react";
 import { mediaUrl } from "../../api";
 import { displayFileName } from "../../format";
 import { hasNoThumbnail } from "../../media";
 import { bindMediaSession } from "../../mediaSession";
+import { usePictureInPicture } from "../../usePictureInPicture";
 import {
   getVideoOverlayControlsVisible,
   setVideoOverlayControlsVisible,
@@ -147,6 +148,7 @@ export function MediaControls({
   const [loop, setLoop] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [fullscreen, setFullscreen] = useState(false);
+  const pictureInPicture = usePictureInPicture(mediaRef, variant === "video", item.id);
   // Phones: keep the centre transport buttons out of the way during the initial autoplay.
   const [centerControlsReady, setCenterControlsReady] = useState(false);
   const hideTimerRef = useRef<number | null>(null);
@@ -457,7 +459,7 @@ export function MediaControls({
         onPointerMove={revealVideoControls}
       >
         {progressBar}
-        <div className="flex min-w-0 items-center gap-1">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0">
           <span className="contents max-[719px]:hidden">
             <button type="button" className={playButtonClassName} aria-label={paused ? "Play" : "Pause"} title={`${paused ? "Play" : "Pause"} (Space)`} onClick={togglePlay}>
               {playIcon}
@@ -470,11 +472,25 @@ export function MediaControls({
           <div className="ml-auto flex items-center gap-1">
             {rateButton}
             {repeatButton}
+            {pictureInPicture.supported ? (
+              <button
+                type="button"
+                className={mediaButtonClassName}
+                aria-label={pictureInPicture.active ? "Exit Picture-in-Picture" : "Picture-in-Picture"}
+                aria-pressed={pictureInPicture.active}
+                title={pictureInPicture.active ? "Exit Picture-in-Picture" : "Picture-in-Picture"}
+                disabled={!pictureInPicture.ready || pictureInPicture.pending}
+                onClick={() => { void pictureInPicture.toggle(); }}
+              >
+                <PictureInPicture2 aria-hidden="true" />
+              </button>
+            ) : null}
             <button type="button" className={mediaButtonClassName} aria-label={fullscreen ? "Exit full screen" : "Full screen"} title={`${fullscreen ? "Exit full screen" : "Full screen"} (F)`} onClick={toggleFullscreen}>
               {fullscreen ? <Minimize aria-hidden="true" /> : <Maximize aria-hidden="true" />}
             </button>
           </div>
         </div>
+        {pictureInPicture.error ? <p className="m-0 text-xs text-white/80" role="status">{pictureInPicture.error}</p> : null}
       </div>
     </>
   );

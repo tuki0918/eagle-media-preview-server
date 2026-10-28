@@ -2,6 +2,7 @@ import { mediaUrl } from "./api";
 import { displayFileName } from "./format";
 import { getLibraryName } from "./libraryNameState";
 import { hasNoThumbnail } from "./media";
+import { exitPictureInPicture, requestPictureInPicture, supportsPictureInPicture } from "./pictureInPicture";
 import type { EagleItem } from "./types";
 
 const APP_NAME = "Media Library";
@@ -23,14 +24,20 @@ export function mediaSessionMetadataInit(item: EagleItem, libraryName: string, b
 }
 
 const MEDIA_SESSION_ACTIONS: MediaSessionAction[] = ["play", "pause", "seekbackward", "seekforward", "seekto"];
+// This browser action is newer than the project's TypeScript DOM declarations.
+const ENTER_PICTURE_IN_PICTURE = "enterpictureinpicture" as MediaSessionAction;
+const mediaSessionBindings = new WeakMap<HTMLMediaElement, symbol>();
 
 // Publishes the playing item to the OS media controls; returns a cleanup that clears them.
 export function bindMediaSession(media: HTMLMediaElement, item: EagleItem) {
-  if (typeof navigator === "undefined" || !("mediaSession" in navigator) || typeof MediaMetadata === "undefined") {
+  if (typeof navigator === "undefined" || !("mediaSession" in navigator)) {
     return () => {};
   }
   const session = navigator.mediaSession;
+  const binding = Symbol();
+  mediaSessionBindings.set(media, binding);
   const publishMetadata = () => {
+    if (typeof MediaMetadata === "undefined") return;
     session.metadata = new MediaMetadata(mediaSessionMetadataInit(item, getLibraryName(), window.location.href));
   };
   publishMetadata();
@@ -54,17 +61,48 @@ export function bindMediaSession(media: HTMLMediaElement, item: EagleItem) {
   };
   for (const action of MEDIA_SESSION_ACTIONS) setActionHandler(session, action, handlers[action]);
 
+  let disposed = false;
+  let pictureInPictureRegistered = false;
+  const video = media.tagName === "VIDEO" ? media as HTMLVideoElement : null;
+  const enterPictureInPicture = async () => {
+    if (!video || disposed || video.paused || video.ended || video.readyState === 0 || !supportsPictureInPicture(video)) return;
+    const existing = video.ownerDocument.pictureInPictureElement;
+    if (existing && existing !== video) return;
+    try {
+      await requestPictureInPicture(video);
+      if (disposed && !mediaSessionBindings.has(media)) await exitPictureInPicture(video);
+    } catch {
+      // Automatic PiP remains subject to browser support, permission, and playback eligibility.
+    }
+  };
+  const syncPictureInPictureHandler = () => {
+    if (!video) return;
+    const supported = supportsPictureInPicture(video);
+    if (supported === pictureInPictureRegistered) return;
+    pictureInPictureRegistered = setActionHandler(session, ENTER_PICTURE_IN_PICTURE, supported ? enterPictureInPicture : null) && supported;
+  };
+  syncPictureInPictureHandler();
+  video?.addEventListener("loadedmetadata", syncPictureInPictureHandler);
+  video?.addEventListener("emptied", syncPictureInPictureHandler);
+
   return () => {
+    disposed = true;
+    if (mediaSessionBindings.get(media) === binding) mediaSessionBindings.delete(media);
     media.removeEventListener("playing", publishMetadata);
+    video?.removeEventListener("loadedmetadata", syncPictureInPictureHandler);
+    video?.removeEventListener("emptied", syncPictureInPictureHandler);
     session.metadata = null;
     for (const action of MEDIA_SESSION_ACTIONS) setActionHandler(session, action, null);
+    if (pictureInPictureRegistered) setActionHandler(session, ENTER_PICTURE_IN_PICTURE, null);
   };
 }
 
 function setActionHandler(session: MediaSession, action: MediaSessionAction, handler: MediaSessionActionHandler | null) {
   try {
     session.setActionHandler(action, handler);
+    return true;
   } catch {
     // Browsers throw for actions they do not support.
+    return false;
   }
 }
