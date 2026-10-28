@@ -28,7 +28,7 @@ afterEach(() => {
 });
 
 describe("main entrypoint", () => {
-  test("renders the React shell before viewerApp initializes", async () => {
+  test.each(["ready", "failed", "unreachable"])("renders the shell and reports startup state: %s", async (startup) => {
     const dom = installDom();
     let root: Root | undefined;
     vi.doMock("react-dom/client", async (importOriginal) => {
@@ -41,16 +41,22 @@ describe("main entrypoint", () => {
         },
       };
     });
-    const initViewer = vi.fn(() => {
+    const initViewer = vi.fn(async () => {
       const template = document.querySelector<HTMLTemplateElement>("#cardTemplate");
       expect(template?.content.firstElementChild).not.toBeNull();
       expect(template?.content.firstElementChild?.className).toBe("media-card");
+      if (startup === "failed") throw new Error("Viewer bundle unavailable");
+      if (startup === "unreachable") {
+        const { getLoginConnectState, setLoginConnectState } = await import("./viewer/loginConnectState");
+        setLoginConnectState({ ...getLoginConnectState(), serverStatus: "error" });
+      }
     });
     vi.doMock("./viewerApp", () => ({ initViewer }));
 
     try {
       await import("./main");
       await vi.waitFor(() => expect(initViewer).toHaveBeenCalledOnce());
+      await vi.waitFor(() => expect(document.body.dataset.appState).toBe(startup === "ready" ? "ready" : "failed"));
     } finally {
       try {
         root?.unmount();

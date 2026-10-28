@@ -41,6 +41,7 @@ test("service worker caches only the application shell", async () => {
   assert.match(worker, /request\.mode === "navigate"/);
   assert.match(worker, /url\.pathname\.startsWith\("\/api\/"\)/);
   assert.match(worker, /url\.pathname\.startsWith\("\/file\/"\)/);
-  assert.match(worker, /CACHE_NAME = `\$\{CACHE_PREFIX\}v3`/);
-  assert.match(worker, /fetch\(request\)[\s\S]*\.catch\(\(\) => caches\.match\(request\)\)/);
+  assert.match(worker, /CACHE_NAME = `\$\{CACHE_PREFIX\}v6`/);
+  assert.match(worker, /"\/bootstrap\.js"/);
+  assert.match(worker, /fetchWithTimeout\(request\)/);
 });

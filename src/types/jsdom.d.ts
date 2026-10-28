@@ -1,5 +1,6 @@
 declare module "jsdom" {
   export interface JSDOMOptions {
+    runScripts?: "outside-only" | "dangerously";
     url?: string;
   }
 

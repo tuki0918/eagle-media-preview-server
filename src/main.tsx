@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { initializeSubfoldersVisible } from "./viewer/subfolderVisibilityState";
+import { getLoginConnectState } from "./viewer/loginConnectState";
 import "./styles.css";
 
 const root = document.querySelector("#root");
@@ -21,7 +22,15 @@ flushSync(() => {
   );
 });
 
-void import("./viewerApp").then(({ initViewer }) => initViewer());
+void import("./viewerApp")
+  .then(({ initViewer }) => initViewer())
+  .then(() => reportStartup(getLoginConnectState().serverStatus !== "error"))
+  .catch(() => reportStartup(false));
+
+function reportStartup(ready: boolean) {
+  document.body.dataset.appState = ready ? "ready" : "failed";
+  window.dispatchEvent(new window.Event(ready ? "media-library-ready" : "media-library-startup-error"));
+}
 
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {

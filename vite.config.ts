@@ -29,6 +29,7 @@ function copyPluginPackageAssets() {
         cp("public/favicon.ico", resolve(distDir, "public/favicon.ico")),
         cp("public/manifest.webmanifest", resolve(distDir, "public/manifest.webmanifest")),
         cp("public/service-worker.js", resolve(distDir, "public/service-worker.js")),
+        cp("public/bootstrap.js", resolve(distDir, "public/bootstrap.js")),
         cp("public/assets", resolve(distDir, "public/assets"), { recursive: true }),
       ]);
       await cp(generatedPluginServiceDir, resolve(distDir, "plugin", "service"), { recursive: true });

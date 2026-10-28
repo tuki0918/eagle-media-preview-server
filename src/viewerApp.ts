@@ -135,7 +135,7 @@ const changeSearch = debounce((query: string) => {
 }, 220);
 
 export function initViewer() {
-  init();
+  return init();
 }
 
 async function init() {
