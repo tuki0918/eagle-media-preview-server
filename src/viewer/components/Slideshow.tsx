@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, Maximize, Music, Pause, Play, Presentation, RotateCcw, Volume2, VolumeX, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Music, Pause, Play, Presentation, RotateCcw, Volume2, VolumeX, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { errorMessage, mediaUrl } from "../api";
 import { displayFileName } from "../format";
@@ -86,7 +86,7 @@ export function SlideshowDialog({ query, onClose }: { query: SlideshowQuery; onC
   return createPortal(
     <dialog ref={dialogRef} aria-label="Slideshow" className={running ? "fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none overflow-hidden border-0 bg-black p-0 text-white backdrop:bg-black" : "fixed inset-0 m-auto max-h-[calc(100dvh-32px)] w-[min(420px,calc(100vw-32px))] overflow-auto rounded-2xl border border-border bg-card p-0 text-card-foreground shadow-xl backdrop:bg-black/50"} onCancel={(event) => { event.preventDefault(); close(); }}>
       <div ref={screenRef} className={running ? "relative h-full w-full overflow-hidden bg-black text-white [&:fullscreen]:h-screen [&:fullscreen]:w-screen" : "bg-card p-6 text-card-foreground"}>
-        {running ? <SlideshowPlayer query={query} settings={settings} onClose={close} onFullscreen={fullscreen} /> : (
+        {running ? <SlideshowPlayer query={query} settings={settings} onClose={close} /> : (
           <>
             <div className="mb-5 flex items-center justify-between gap-3">
               <h2 className="flex items-center gap-2 text-lg font-semibold"><Presentation className="size-5" aria-hidden="true" />Slideshow</h2>
@@ -117,7 +117,7 @@ export function SlideshowDialog({ query, onClose }: { query: SlideshowQuery; onC
 }
 
 interface Slide { item: EagleItem; index: number; token: number }
-export function SlideshowPlayer({ query, settings, onClose, onFullscreen }: { query: SlideshowQuery; settings: SlideshowSettings; onClose: () => void; onFullscreen: () => void }) {
+export function SlideshowPlayer({ query, settings, onClose }: { query: SlideshowQuery; settings: SlideshowSettings; onClose: () => void }) {
   const sourceRef = useRef<SlideshowSource | null>(null);
   const [total, setTotal] = useState<number | null>(null);
   const [slide, setSlide] = useState<Slide | null>(null);
@@ -129,6 +129,12 @@ export function SlideshowPlayer({ query, settings, onClose, onFullscreen }: { qu
   const [error, setError] = useState("");
   const [blocked, setBlocked] = useState(false);
   const [finished, setFinished] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [mediaDuration, setMediaDuration] = useState(0);
+  const [seekVersion, setSeekVersion] = useState(0);
+  const [controlsVisible, setControlsVisible] = useState(false);
+  const [focusWithin, setFocusWithin] = useState(false);
+  const controlsTimer = useRef<number | null>(null);
   const mediaRef = useRef<HTMLMediaElement | null>(null);
   const request = useRef(0);
   const targetIndex = useRef(0);
@@ -154,6 +160,7 @@ export function SlideshowPlayer({ query, settings, onClose, onFullscreen }: { qu
       if (!item) { setFinished(true); setPaused(true); setLoading(false); return; }
       currentIndex.current = index;
       remaining.current = { token: generation, ms: settings.seconds * 1000 };
+      setCurrentTime(0); setMediaDuration(0);
       setSlide({ item, index, token: generation });
       setLoading(false);
     } catch (cause) {
@@ -175,10 +182,17 @@ export function SlideshowPlayer({ query, settings, onClose, onFullscreen }: { qu
   const staticSlide = kind === "image" || kind === "thumbnail";
   useEffect(() => {
     if (!slide || !staticSlide || !ready || paused || loading || error || finished) return;
+    const budget = remaining.current;
     const started = performance.now();
-    const timer = window.setTimeout(advance, Math.max(0, remaining.current.ms));
-    return () => { window.clearTimeout(timer); if (remaining.current.token === slide.token) remaining.current.ms = Math.max(0, remaining.current.ms - (performance.now() - started)); };
-  }, [slide, staticSlide, ready, paused, loading, error, finished, advance]);
+    const elapsed = () => Math.min(settings.seconds, settings.seconds - Math.max(0, budget.ms - (performance.now() - started)) / 1000);
+    const interval = window.setInterval(() => setCurrentTime(elapsed()), 100);
+    const timer = window.setTimeout(() => { setCurrentTime(settings.seconds); advance(); }, Math.max(0, budget.ms));
+    return () => {
+      window.clearInterval(interval);
+      window.clearTimeout(timer);
+      if (remaining.current === budget) budget.ms = Math.max(0, budget.ms - (performance.now() - started));
+    };
+  }, [slide, staticSlide, ready, paused, loading, error, finished, advance, settings.seconds, seekVersion]);
 
   useEffect(() => {
     const media = mediaRef.current;
@@ -197,6 +211,23 @@ export function SlideshowPlayer({ query, settings, onClose, onFullscreen }: { qu
     const timer = window.setTimeout(() => { setError("This file is taking too long to load. Retry or skip it."); setPaused(true); }, 20000);
     return () => window.clearTimeout(timer);
   }, [slide, loading, ready, buffering, error, finished, paused]);
+
+  const clearControlsTimer = useCallback(() => {
+    if (controlsTimer.current !== null) window.clearTimeout(controlsTimer.current);
+    controlsTimer.current = null;
+  }, []);
+  const revealControls = useCallback(() => {
+    setControlsVisible(true);
+    clearControlsTimer();
+    if (!paused) controlsTimer.current = window.setTimeout(() => setControlsVisible(false), 2500);
+  }, [paused, clearControlsTimer]);
+  useEffect(() => {
+    clearControlsTimer();
+    if (controlsVisible && !paused && !focusWithin) {
+      controlsTimer.current = window.setTimeout(() => setControlsVisible(false), 2500);
+    }
+    return clearControlsTimer;
+  }, [paused, controlsVisible, focusWithin, clearControlsTimer]);
 
   const togglePause = useCallback(() => {
     if (finished) { setPaused(false); void navigate(0); return; }
@@ -220,22 +251,65 @@ export function SlideshowPlayer({ query, settings, onClose, onFullscreen }: { qu
     return () => document.removeEventListener("keydown", keydown);
   }, [togglePause, loading, error, finished, advance, navigate]);
 
+  const duration = staticSlide ? settings.seconds : mediaDuration;
+  const syncMediaTime = () => {
+    const media = mediaRef.current;
+    if (!media) return;
+    setCurrentTime(Number.isFinite(media.currentTime) ? media.currentTime : 0);
+    setMediaDuration(Number.isFinite(media.duration) ? media.duration : 0);
+  };
+  const seek = (value: number) => {
+    const time = Math.min(duration, Math.max(0, value));
+    if (staticSlide && slide) {
+      remaining.current = { token: slide.token, ms: (settings.seconds - time) * 1000 };
+      setSeekVersion((version) => version + 1);
+    } else if (mediaRef.current) {
+      mediaRef.current.currentTime = time;
+    }
+    setCurrentTime(time);
+    revealControls();
+  };
+  const controlsShown = controlsVisible || focusWithin || blocked || Boolean(error) || finished;
+  const controlsVisibility = controlsShown ? "visible opacity-100" : "pointer-events-none invisible opacity-0";
+  const progress = duration > 0 ? Math.min(100, Math.max(0, currentTime / duration * 100)) : 0;
   const failMedia = () => { setError("Unable to play this file. Retry or skip it."); setPaused(true); };
   const retry = () => { setPaused(false); void navigate(targetIndex.current); };
   const skip = () => { setPaused(false); void navigate(targetIndex.current + 1); };
   const title = slide ? displayFileName(slide.item) || "Untitled" : "Slideshow";
   const imageUrl = slide ? mediaUrl(String(slide.item.id || ""), kind === "image" ? "file" : "thumb") : "";
   return (
-    <section className="relative grid h-full w-full grid-rows-[minmax(0,1fr)] bg-black text-white" aria-label="Slideshow player">
+    <section
+      className="relative grid h-full w-full grid-rows-[minmax(0,1fr)] bg-black text-white outline-none"
+      aria-label="Slideshow player"
+      tabIndex={0}
+      onPointerDown={() => setFocusWithin(false)}
+      onPointerEnter={(event) => { if (event.pointerType === "mouse") revealControls(); }}
+      onPointerMove={(event) => { if (event.pointerType === "mouse") revealControls(); }}
+      onPointerLeave={(event) => {
+        if (event.pointerType !== "mouse") return;
+        clearControlsTimer(); setControlsVisible(false);
+      }}
+      onPointerUp={(event) => {
+        if (event.pointerType === "mouse" || (event.target as HTMLElement).closest("button,input")) return;
+        if (controlsVisible) { clearControlsTimer(); setControlsVisible(false); }
+        else revealControls();
+      }}
+      onFocusCapture={(event) => {
+        // Pointer focus must not pin the overlay open after a click.
+        if ((event.target as HTMLElement).matches(":focus-visible")) setFocusWithin(true);
+      }}
+      onBlurCapture={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocusWithin(false);
+      }}
+    >
       {slide && !loading ? (
         <div key={slide.token} className={`slideshow-frame relative grid min-h-0 h-full w-full place-items-center ${settings.effect === "none" ? "" : `slideshow-${settings.effect}`}`}>
           {staticSlide ? <img src={imageUrl} alt={title} className="h-full w-full min-h-0 object-contain" onLoad={() => setReady(true)} onError={failMedia} /> : null}
-          {kind === "video" ? <video ref={(element) => { mediaRef.current = element; }} className="h-full w-full min-h-0 object-contain" src={mediaUrl(String(slide.item.id), "file")} playsInline muted={muted} preload="auto" onCanPlay={() => { setReady(true); setBuffering(false); }} onPlaying={() => setBuffering(false)} onWaiting={() => setBuffering(true)} onEnded={advance} onError={failMedia} /> : null}
+          {kind === "video" ? <video ref={(element) => { mediaRef.current = element; }} className="h-full w-full min-h-0 object-contain" src={mediaUrl(String(slide.item.id), "file")} playsInline muted={muted} preload="auto" onCanPlay={() => { setReady(true); setBuffering(false); }} onPlaying={() => setBuffering(false)} onWaiting={() => setBuffering(true)} onLoadedMetadata={syncMediaTime} onDurationChange={syncMediaTime} onTimeUpdate={syncMediaTime} onEnded={() => { syncMediaTime(); advance(); }} onError={failMedia} /> : null}
           {kind === "audio" ? (
             <div className="grid w-[min(420px,80vw)] justify-items-center gap-6 px-4">
               <AudioArtwork item={slide.item} />
-              <p className="w-full truncate text-center text-lg font-medium" title={title}>{title}</p>
-              <audio ref={(element) => { mediaRef.current = element; }} src={mediaUrl(String(slide.item.id), "file")} muted={muted} preload="auto" onCanPlay={() => { setReady(true); setBuffering(false); }} onPlaying={() => setBuffering(false)} onWaiting={() => setBuffering(true)} onEnded={advance} onError={failMedia} />
+              <audio ref={(element) => { mediaRef.current = element; }} src={mediaUrl(String(slide.item.id), "file")} muted={muted} preload="auto" onCanPlay={() => { setReady(true); setBuffering(false); }} onPlaying={() => setBuffering(false)} onWaiting={() => setBuffering(true)} onLoadedMetadata={syncMediaTime} onDurationChange={syncMediaTime} onTimeUpdate={syncMediaTime} onEnded={() => { syncMediaTime(); advance(); }} onError={failMedia} />
             </div>
           ) : null}
         </div>
@@ -243,19 +317,37 @@ export function SlideshowPlayer({ query, settings, onClose, onFullscreen }: { qu
       {(loading || (slide && !ready) || buffering) && !error && !finished && !blocked ? <div className="pointer-events-none absolute inset-0 grid place-items-center" role="status" aria-label="Loading slide"><span className="size-9 animate-spin rounded-full border-2 border-white/25 border-t-white" /></div> : null}
       {error ? <div className="absolute inset-0 grid place-items-center bg-black/80 p-6"><div className="grid max-w-sm justify-items-center gap-4 text-center" role="alert"><p className="text-sm leading-relaxed">{error}</p><div className="flex gap-3"><Button onClick={retry}>Retry</Button><Button variant="secondary" onClick={skip}>Skip</Button></div></div></div> : null}
       {finished ? <div className="absolute inset-0 grid place-items-center bg-black/65 p-6"><div className="grid justify-items-center gap-4"><p className="text-lg">Slideshow complete</p><Button onClick={togglePause}><RotateCcw className="size-4" />Replay</Button></div></div> : null}
-      {blocked ? <div className="absolute inset-0 grid place-items-center bg-black/50"><Button className="h-12 rounded-full px-6" onClick={togglePause}><Play className="size-5" />Tap to play</Button></div> : null}
+      {blocked ? <p className="pointer-events-none absolute inset-x-0 top-[calc(50%+64px)] text-center text-sm text-white/80" role="status">Tap to play</p> : null}
       <header className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between gap-4 bg-gradient-to-b from-black/70 to-transparent px-[max(16px,env(safe-area-inset-left))] pb-10 pt-[max(12px,env(safe-area-inset-top))]">
         <div className="min-w-0"><p className="truncate text-sm font-medium" title={title}>{title}</p><p className="mt-1 text-xs text-white/60" aria-live="off">{slide ? `${slide.index + 1} / ${total ?? "…"}` : "Slideshow"}{kind === "thumbnail" ? " · Thumbnail" : ""}</p></div>
-        <button type="button" className={`pointer-events-auto ${playerButton}`} aria-label="Close slideshow" title="Close slideshow (Esc)" onClick={onClose}><X /></button>
+        <div className={`flex shrink-0 items-center gap-1 transition-opacity duration-200 ${controlsVisibility}`} aria-hidden={!controlsShown}>
+          <button type="button" className={`pointer-events-auto ${playerButton}`} aria-label="Previous slide" title="Previous item" disabled={loading || Boolean(error) || !slide || slide.index === 0} onClick={() => { void navigate(currentIndex.current - 1); }}><ChevronLeft /></button>
+          <button type="button" className={`pointer-events-auto ${playerButton}`} aria-label="Next slide" title="Next item" disabled={loading || Boolean(error) || finished} onClick={advance}><ChevronRight /></button>
+          <button type="button" className={`pointer-events-auto ${playerButton} ${controlsVisibility}`} aria-label="Close slideshow" title="Close slideshow (Esc)" onClick={onClose}><X /></button>
+        </div>
       </header>
-      <footer className="absolute inset-x-0 bottom-0 flex justify-center bg-gradient-to-t from-black/80 to-transparent px-3 pb-[max(16px,env(safe-area-inset-bottom))] pt-10">
-        <div className="flex items-center gap-1 rounded-full border border-white/15 bg-black/55 px-2 py-1 backdrop-blur-md">
-          <button type="button" className={playerButton} aria-label="Previous slide" disabled={loading || Boolean(error) || !slide || slide.index === 0} onClick={() => { void navigate(currentIndex.current - 1); }}><ChevronLeft /></button>
-          <button type="button" className={playerButton} aria-label={finished ? "Replay slideshow" : paused ? "Resume slideshow" : "Pause slideshow"} disabled={loading || Boolean(error)} onClick={togglePause}>{paused || finished ? <Play /> : <Pause />}</button>
-          <button type="button" className={playerButton} aria-label="Next slide" disabled={loading || Boolean(error) || finished} onClick={advance}><ChevronRight /></button>
-          <span className="mx-1 h-4 w-px bg-white/20" />
-          <button type="button" className={playerButton} aria-label={muted ? "Unmute slideshow" : "Mute slideshow"} onClick={() => setMuted((value) => !value)}>{muted ? <VolumeX /> : <Volume2 />}</button>
-          <button type="button" className={playerButton} aria-label="Fullscreen slideshow" onClick={onFullscreen}><Maximize /></button>
+      {!error && !finished ? (
+        <div className={`pointer-events-none absolute inset-0 flex items-center justify-center gap-5 transition-opacity duration-200 ${controlsVisibility}`} aria-hidden={!controlsShown}>
+          <button type="button" className="pointer-events-auto inline-grid size-24 shrink-0 place-items-center rounded-full border-0 bg-black/45 text-white backdrop-blur-md transition-colors hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white disabled:pointer-events-none disabled:opacity-30 [&_svg]:size-10" aria-label={paused ? "Resume slideshow" : "Pause slideshow"} disabled={loading} onClick={togglePause}>{paused ? <Play fill="currentColor" /> : <Pause fill="currentColor" />}</button>
+        </div>
+      ) : null}
+      <footer className={`absolute inset-x-0 bottom-0 grid gap-1 bg-gradient-to-t from-black/80 to-transparent px-[max(16px,env(safe-area-inset-left))] pb-[max(12px,env(safe-area-inset-bottom))] pt-12 transition-opacity duration-200 ${controlsVisibility}`} aria-hidden={!controlsShown}>
+        <input
+          type="range"
+          aria-label="Slide playback position"
+          aria-valuetext={`${playbackTime(currentTime)} of ${playbackTime(duration)}`}
+          className="media-range h-4 w-full cursor-pointer touch-manipulation appearance-none bg-transparent [&::-webkit-slider-runnable-track]:h-1 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-thumb]:mt-[-4px] [&::-webkit-slider-thumb]:size-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-moz-range-track]:h-1 [&::-moz-range-track]:rounded-full [&::-moz-range-thumb]:size-3 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-white"
+          min={0}
+          max={duration || 1}
+          step={0.01}
+          value={Math.min(currentTime, duration)}
+          style={{ ["--media-progress" as string]: `${progress}%` }}
+          disabled={loading || !ready || Boolean(error) || finished || duration <= 0}
+          onInput={(event) => seek(Number(event.currentTarget.value))}
+        />
+        <div className="flex min-h-9 items-center justify-between gap-3">
+          <span className="text-xs font-medium tabular-nums text-white/80" aria-label="Playback time">{playbackTime(currentTime)} / {playbackTime(duration)}</span>
+          {kind === "video" || kind === "audio" ? <button type="button" className={playerButton} aria-label={muted ? "Unmute slideshow" : "Mute slideshow"} onClick={() => setMuted((value) => !value)}>{muted ? <VolumeX /> : <Volume2 />}</button> : null}
         </div>
       </footer>
     </section>
@@ -265,4 +357,11 @@ export function SlideshowPlayer({ query, settings, onClose, onFullscreen }: { qu
 function AudioArtwork({ item }: { item: EagleItem }) {
   const [missing, setMissing] = useState(item.noThumbnail === true);
   return <div className="grid aspect-square w-[min(280px,44dvh)] place-items-center overflow-hidden rounded-2xl bg-white/10">{missing ? <Music className="size-16 text-white/60" strokeWidth={1.5} /> : <img className="h-full w-full object-cover" src={mediaUrl(String(item.id), "thumb")} alt="" onError={() => setMissing(true)} />}</div>;
+}
+
+function playbackTime(value: number) {
+  const seconds = Math.max(0, Math.floor(Number.isFinite(value) ? value : 0));
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor(seconds / 60) % 60;
+  return `${hours ? `${hours}:${String(minutes).padStart(2, "0")}` : minutes}:${String(seconds % 60).padStart(2, "0")}`;
 }

@@ -51,7 +51,7 @@ function serve(items: EagleItem[]) {
   return fetcher;
 }
 async function renderPlayer(options = settings) {
-  await act(async () => { root.render(<StrictMode><SlideshowPlayer query={query} settings={options} onClose={close} onFullscreen={() => {}} /></StrictMode>); });
+  await act(async () => { root.render(<StrictMode><SlideshowPlayer query={query} settings={options} onClose={close} /></StrictMode>); });
 }
 function button(label: string) {
   const element = document.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
@@ -158,4 +158,76 @@ test("opens settings, saves the choices, falls back from unavailable fullscreen,
   expect(JSON.parse(window.localStorage.getItem("eagleSlideshowSettings")!).seconds).toBe(10);
   await click("Close slideshow");
   expect(close).toHaveBeenCalledOnce();
+});
+
+async function pointer(pointerType: string, type = "pointermove") {
+  await act(async () => {
+    const event = new dom.window.MouseEvent(type, { bubbles: true, relatedTarget: document.body });
+    Object.defineProperty(event, "pointerType", { value: pointerType });
+    container.querySelector('[aria-label="Slideshow player"]')!.dispatchEvent(event);
+  });
+}
+
+test("keeps the title and position visible while revealing other controls on hover and touch", async () => {
+  vi.useFakeTimers();
+  serve([{ id: "1", name: "Always visible", ext: "jpg" }]);
+  await renderPlayer();
+  await loaded();
+  const footer = container.querySelector("footer")!;
+  expect(container.querySelector("header")?.textContent).toContain("Always visible");
+  expect(container.querySelector("header")?.textContent).toContain("1 / 1");
+  expect(footer.getAttribute("aria-hidden")).toBe("true");
+  expect(button("Close slideshow").className).toContain("invisible");
+  expect(container.querySelector('[aria-label="Fullscreen slideshow"]')).toBeNull();
+  await pointer("mouse");
+  expect(footer.getAttribute("aria-hidden")).toBe("false");
+  await pointer("mouse", "pointerout");
+  expect(footer.getAttribute("aria-hidden")).toBe("true");
+  await pointer("touch", "pointerup");
+  expect(footer.getAttribute("aria-hidden")).toBe("false");
+  await pointer("touch", "pointerup");
+  expect(footer.getAttribute("aria-hidden")).toBe("true");
+  expect(container.querySelector("header")?.textContent).toContain("Always visible");
+});
+
+test("shows a synthetic image timeline, supports seeking, and does not consume time while paused", async () => {
+  vi.useFakeTimers();
+  serve([{ id: "1", ext: "jpg" }, { id: "2", ext: "jpg" }]);
+  await renderPlayer();
+  await loaded();
+  await tick(1000);
+  expect(container.querySelector('[aria-label="Playback time"]')?.textContent).toBe("0:01 / 0:03");
+  await click("Pause slideshow");
+  const seek = container.querySelector<HTMLInputElement>('[aria-label="Slide playback position"]')!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")!.set!.call(seek, "2.5");
+    seek.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+  });
+  await tick(1000);
+  expect(seek.value).toBe("2.5");
+  expect(container.querySelector("img")?.getAttribute("src")).toBe("/file/1");
+  await click("Resume slideshow");
+  await tick(499);
+  expect(container.querySelector("img")?.getAttribute("src")).toBe("/file/1");
+  await tick(1);
+  expect(container.querySelector("img")?.getAttribute("src")).toBe("/file/2");
+});
+
+test("audio shows artwork with a single header title and the media's real playback time", async () => {
+  serve([{ id: "a", name: "Soundscape", ext: "mp3" }]);
+  await renderPlayer();
+  const audio = container.querySelector("audio")!;
+  Object.defineProperty(audio, "duration", { configurable: true, value: 125 });
+  audio.currentTime = 42;
+  await act(async () => { audio.dispatchEvent(new dom.window.Event("loadedmetadata")); });
+  expect(container.querySelector('[aria-label="Playback time"]')?.textContent).toBe("0:42 / 2:05");
+  expect(container.querySelector("img")?.getAttribute("src")).toBe("/api/items/a/thumb");
+  expect((container.textContent?.match(/Soundscape/g) || []).length).toBe(1);
+  await loaded("audio");
+  const seek = container.querySelector<HTMLInputElement>('[aria-label="Slide playback position"]')!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")!.set!.call(seek, "60");
+    seek.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+  });
+  expect(audio.currentTime).toBe(60);
 });
