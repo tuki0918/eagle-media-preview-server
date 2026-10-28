@@ -879,7 +879,8 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.doesNotMatch(html, /preview-edit-cancel/);
   assert.doesNotMatch(html, /Save changes/);
   assert.match(html, /const directFileLinkClassName =[\s\S]*min-h-11 w-full[\s\S]*bg-primary[\s\S]*text-primary-foreground/);
-  assert.match(html, /max-\[540px\]:max-h-\[min\(72dvh,560px\)\]/);
+  assert.match(html, /max-\[540px\]:top-\[max\(6rem,env\(safe-area-inset-top\)\)\]/);
+  assert.match(html, /max-\[540px\]:max-h-none/);
   assert.match(html, /preview-info-title grid gap-1\.5/);
   assert.doesNotMatch(html, /preview-info-cta[^"]*linear-gradient/);
 });

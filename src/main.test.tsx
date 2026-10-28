@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { JSDOM } from "jsdom";
+import type { Root } from "react-dom/client";
 
 function installDom() {
   const dom = new JSDOM('<!doctype html><div id="root"></div>', {
@@ -29,6 +30,17 @@ afterEach(() => {
 describe("main entrypoint", () => {
   test("renders the React shell before viewerApp initializes", async () => {
     const dom = installDom();
+    let root: Root | undefined;
+    vi.doMock("react-dom/client", async (importOriginal) => {
+      const client = await importOriginal<typeof import("react-dom/client")>();
+      return {
+        ...client,
+        createRoot: (...args: Parameters<typeof client.createRoot>) => {
+          root = client.createRoot(...args);
+          return root;
+        },
+      };
+    });
     const initViewer = vi.fn(() => {
       const template = document.querySelector<HTMLTemplateElement>("#cardTemplate");
       expect(template?.content.firstElementChild).not.toBeNull();
@@ -40,7 +52,12 @@ describe("main entrypoint", () => {
       await import("./main");
       await vi.waitFor(() => expect(initViewer).toHaveBeenCalledOnce());
     } finally {
-      dom.window.close();
+      try {
+        root?.unmount();
+      } finally {
+        vi.doUnmock("react-dom/client");
+        dom.window.close();
+      }
     }
   });
 });
