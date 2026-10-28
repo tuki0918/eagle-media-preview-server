@@ -759,6 +759,7 @@ describe("ViewerAppShell", () => {
     const previousHTMLElement = globalThis.HTMLElement;
     const previousIS_REACT_ACT_ENVIRONMENT = testGlobal.IS_REACT_ACT_ENVIRONMENT;
     const previousSearchState = getSearchControlsState();
+    const openAll = vi.spyOn(shellActions, "openAllItems").mockImplementation(() => {});
     globalThis.window = dom.window;
     globalThis.document = dom.window.document;
     globalThis.Node = dom.window.Node;
@@ -891,8 +892,16 @@ describe("ViewerAppShell", () => {
       expect(container.querySelector('[aria-label="Folder tree"]')?.textContent).toContain("Design");
       expect(container.querySelector("mark")).toBeNull();
       expect(getSearchControlsState()).toBe(itemSearchState);
+      await setFilter("photos");
+      const libraryButton = container.querySelector<HTMLButtonElement>('[aria-label="Show all items"]');
+      expect(libraryButton).not.toBeNull();
+      await act(async () => { libraryButton?.click(); });
+      expect(openAll).toHaveBeenCalledOnce();
+      expect(input.value).toBe("");
+      expect(container.querySelector('[aria-label="Folder tree"]')?.textContent).toContain("Design");
     } finally {
       if (root) await act(async () => { root?.unmount(); });
+      openAll.mockRestore();
       setSearchControlsState(previousSearchState);
       globalThis.window = previousWindow;
       globalThis.document = previousDocument;

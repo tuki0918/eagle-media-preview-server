@@ -37,6 +37,43 @@ describe("viewer app data refresh", () => {
     delete (globalThis as { fetch?: typeof fetch }).fetch;
   });
 
+  test.each(["folder=folder-1", "smartFolder=smart-1"])("opens All without filters or a pending search from %s", async (folder) => {
+    history.replaceState(null, "", `/viewer?${folder}&q=old&tag=alpha&ext=jpg&rating=5&filters=1`);
+    vi.spyOn(dom.window, "scrollTo").mockImplementation(() => {});
+    const requests: string[] = [];
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      requests.push(url);
+      if (url === "/api/auth/status") return jsonResponse({ authenticated: true, required: false });
+      if (url === "/api/connect") return jsonResponse({ app: { version: "1.0" }, library: { name: "Library" } });
+      if (url === "/api/folders" || url === "/api/smart-folders") return jsonResponse({ items: [] });
+      if (url.startsWith("/api/items?")) return jsonResponse({ items: [], total: 10 });
+      throw new Error(`Unexpected request: ${url}`);
+    }) });
+    const { initViewer } = await import("./viewerApp");
+    const { changeSearchQuery, openAllItems, submitConnection } = await import("./viewer/shellActions");
+    const { getLoginConnectState } = await import("./viewer/loginConnectState");
+    const { getSearchControlsState } = await import("./viewer/searchControlsState");
+    await initViewer();
+    await vi.waitFor(() => expect(getLoginConnectState().authenticated).toBe(true));
+    submitConnection({ currentTarget: document.querySelector<HTMLFormElement>("#connectForm")!, preventDefault() {} });
+    await vi.waitFor(() => expect(requests.some((url) => url.startsWith("/api/items?"))).toBe(true));
+
+    vi.useFakeTimers();
+    changeSearchQuery({ currentTarget: { value: "pending query" } });
+    const before = requests.length;
+    openAllItems();
+    await vi.advanceTimersByTimeAsync(250);
+    expect(getSearchControlsState()).toMatchObject({ section: "items", searchQuery: "", selectedFolderId: "", selectedSmartFolderId: "", selectedExt: "", selectedRating: "", hasActiveFilters: false, filtersOpen: false });
+    const itemRequests = requests.slice(before).filter((url) => url.startsWith("/api/items?"));
+    expect(itemRequests).toHaveLength(1);
+    expect([...new URLSearchParams(itemRequests[0].split("?")[1]).keys()].sort()).toEqual(["limit", "offset"]);
+    expect(new URLSearchParams(itemRequests[0].split("?")[1]).get("offset")).toBe("0");
+    for (const key of ["q", "tag", "folder", "smartFolder", "ext", "rating", "filters"]) {
+      expect(new URLSearchParams(window.location.search).has(key)).toBe(false);
+    }
+  });
+
   test("refreshes folder counts after opening a folder", async () => {
     let folderCount = 3;
     const requests: string[] = [];

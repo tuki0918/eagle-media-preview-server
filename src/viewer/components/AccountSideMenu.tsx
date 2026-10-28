@@ -45,7 +45,7 @@ import { getLibraryFooterName, subscribeLibraryFooterName } from "../libraryFoot
 import { getLoginConnectState, subscribeLoginConnectState } from "../loginConnectState";
 import { getSearchControlsState, subscribeSearchControlsState } from "../searchControlsState";
 import { PAGE_SIZE_OPTIONS } from "../shellConfig";
-import { changeFolder, changePageSize, changeSmartFolder, openTags, submitLogout } from "../shellActions";
+import { changeFolder, changePageSize, changeSmartFolder, openAllItems, openTags, submitLogout } from "../shellActions";
 import { getItemActionsVisible, setItemActionsVisible, subscribeItemActionsVisible } from "../itemActionsVisibilityState";
 import { getSubfoldersVisible, setSubfoldersVisible, subscribeSubfoldersVisible } from "../subfolderVisibilityState";
 import { getThemeState, setThemePreference, subscribeThemeState, type ThemePreference } from "../themeState";
@@ -68,6 +68,7 @@ const GUEST_USERNAME = "Guest";
 const GUEST_ROLE_LABEL = "No sign-in";
 
 export function AccountSideMenu() {
+  const { isMobile, setOpenMobile } = useSidebar();
   const libraryName = useSyncExternalStore(subscribeLibraryFooterName, getLibraryFooterName, getLibraryFooterName);
   const loginState = useSyncExternalStore(subscribeLoginConnectState, getLoginConnectState, getLoginConnectState);
   const eagleStatus = useSyncExternalStore(subscribeEagleStatus, getEagleStatus, getEagleStatus);
@@ -110,9 +111,18 @@ export function AccountSideMenu() {
               <SidebarMenuButton
                 asChild
                 size="lg"
-                className="pointer-events-none h-12 px-2 hover:bg-transparent hover:text-sidebar-foreground active:bg-transparent active:text-sidebar-foreground"
+                className="h-12 px-2"
               >
-                <div>
+                <button
+                  type="button"
+                  aria-label="Show all items"
+                  title="Show all items"
+                  onClick={() => {
+                    setFolderFilter("");
+                    openAllItems();
+                    if (isMobile) setOpenMobile(false);
+                  }}
+                >
                   <span className="relative shrink-0">
                     <img
                       className="block size-8 rounded-[9px] object-cover ring-1 ring-white/10"
@@ -125,7 +135,7 @@ export function AccountSideMenu() {
                   <span className="grid min-w-0 group-data-[collapsible=icon]:hidden">
                     <span className="truncate text-sm font-semibold leading-tight text-sidebar-foreground">{libraryName}</span>
                   </span>
-                </div>
+                </button>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>

@@ -11,6 +11,7 @@ export interface ViewerShellActions {
   folderChanged: (folderId: string) => void;
   smartFolderChanged: (smartFolderId: string) => void;
   tagsOpened: () => void;
+  allItemsOpened: () => void;
   mediaTypeChanged: (mediaType: string) => void;
   ratingChanged: (rating: string) => void;
   pageSizeChanged: (pageSize: number) => void;
@@ -40,6 +41,7 @@ let actions: ViewerShellActions = {
   folderChanged: noop,
   smartFolderChanged: noop,
   tagsOpened: noop,
+  allItemsOpened: noop,
   mediaTypeChanged: noop,
   ratingChanged: noop,
   pageSizeChanged: noop,
@@ -105,6 +107,10 @@ export function changeSmartFolder(event: { currentTarget: { value: string } }) {
 
 export function openTags() {
   actions.tagsOpened();
+}
+
+export function openAllItems() {
+  actions.allItemsOpened();
 }
 
 export function changeMediaType(mediaType: string) {

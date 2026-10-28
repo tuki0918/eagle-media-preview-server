@@ -180,6 +180,7 @@ async function init() {
       applyFilterChange({ folderId: "", smartFolderId });
     },
     tagsOpened: openTagList,
+    allItemsOpened: openAllItems,
     mediaTypeChanged: (ext: string) => {
       applyFilterChange({ ext });
     },
@@ -1251,6 +1252,17 @@ function renderEmptyState() {
     onClearFilters: resetFilters,
     viewMode: state.viewMode,
   });
+}
+
+function openAllItems() {
+  changeSearch.cancel();
+  hideTagSuggestions();
+  resetTagList();
+  state.filtersOpen = false;
+  applyFilterChange(resetFilterState());
+  renderTagChips();
+  renderSearchControlButtons();
+  window.scrollTo({ top: 0 });
 }
 
 function openTagList() {
