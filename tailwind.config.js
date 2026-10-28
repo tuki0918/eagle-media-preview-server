@@ -89,11 +89,11 @@ export default {
     },
   },
   plugins: [
-    // Touch-first devices (phones and tablets) versus wide pointer devices, regardless of orientation.
+    // Landscape tablets share the desktop inspector; portrait and compact touch screens use overlays.
     // Defined as variants rather than raw screens, which would disable the arbitrary min-[…]/max-[…] variants.
     plugin(({ addVariant }) => {
-      addVariant("touch", "@media (hover: none) and (pointer: coarse)");
-      addVariant("desktop", "@media (min-width: 900px) and (hover: hover), (min-width: 900px) and (pointer: fine)");
+      addVariant("touch", "@media (hover: none) and (pointer: coarse) and (max-width: 767px), (hover: none) and (pointer: coarse) and (max-height: 599px), (hover: none) and (pointer: coarse) and (orientation: portrait)");
+      addVariant("desktop", "@media (min-width: 768px) and (min-height: 600px) and (orientation: landscape), (min-width: 900px) and (hover: hover), (min-width: 900px) and (pointer: fine)");
     }),
   ],
 };

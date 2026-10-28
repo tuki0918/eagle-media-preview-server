@@ -33,7 +33,7 @@ export function PreviewDialog() {
   const previewDialogState = useSyncExternalStore(subscribePreviewDialogState, getPreviewDialogState, getPreviewDialogState);
   const videoControlsVisible = useSyncExternalStore(subscribeVideoOverlayControls, getVideoOverlayControlsVisible, getVideoOverlayControlsVisible);
   const videoMode = previewDialogState.mode === "video";
-  // On touch devices (phones and tablets) the video fills the screen and the header overlays it, fading with the player controls.
+  // Portrait and compact touch screens overlay the video header; landscape tablets share the desktop inspector.
   const previewHeaderClassName = [
     "preview-header grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 bg-background desktop:col-start-1 desktop:row-start-1",
     // On desktop match the results header (height and px-5) so the back button sits where the menu button was.
@@ -150,8 +150,8 @@ export function PreviewDialog() {
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
-    const mediaQuery = window.matchMedia("(min-width: 900px) and (hover: hover), (min-width: 900px) and (pointer: fine)");
-    const touchQuery = window.matchMedia("(hover: none) and (pointer: coarse)");
+    const mediaQuery = window.matchMedia("(min-width: 768px) and (min-height: 600px) and (orientation: landscape), (min-width: 900px) and (hover: hover), (min-width: 900px) and (pointer: fine)");
+    const touchQuery = window.matchMedia("(hover: none) and (pointer: coarse) and (max-width: 767px), (hover: none) and (pointer: coarse) and (max-height: 599px), (hover: none) and (pointer: coarse) and (orientation: portrait)");
     const syncViewport = () => {
       setDesktopViewport(mediaQuery.matches);
       setTouchViewport(touchQuery.matches);
