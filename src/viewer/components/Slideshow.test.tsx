@@ -165,6 +165,53 @@ test("opens settings, saves the choices, falls back from unavailable fullscreen,
   expect(close).toHaveBeenCalledOnce();
 });
 
+test("shows loading immediately after START until the first request and image are ready", async () => {
+  let resolvePage!: (response: Response) => void;
+  const page = new Promise<Response>((resolve) => { resolvePage = resolve; });
+  vi.stubGlobal("fetch", vi.fn(async () => (await page).clone()));
+  await act(async () => { root.render(<StrictMode><SlideshowDialog query={query} onClose={close} /></StrictMode>); });
+  const start = Array.from(document.querySelectorAll("button")).find((element) => element.textContent === "START")!;
+  await act(async () => { start.click(); });
+  expect(fullscreen).toHaveBeenCalledOnce();
+  const player = document.querySelector('[aria-label="Slideshow player"]')!;
+  expect(player.getAttribute("aria-busy")).toBe("true");
+  expect(player.querySelector('[role="status"]')?.textContent).toContain("Loading slide");
+  expect(player.querySelector("img")).toBeNull();
+
+  await act(async () => {
+    resolvePage(new Response(JSON.stringify({ items: [{ id: "first", ext: "jpg" }], total: 1 })));
+  });
+  expect(player.getAttribute("aria-busy")).toBe("true");
+  expect(player.querySelector('[role="status"]')?.textContent).toContain("Loading slide");
+  const image = player.querySelector("img")!;
+  expect(image.getAttribute("src")).toBe("/file/first");
+  await act(async () => { image.dispatchEvent(new dom.window.Event("load")); });
+  expect(player.getAttribute("aria-busy")).toBe("false");
+  expect(player.querySelector('[aria-label="Loading slide"]')).toBeNull();
+});
+
+test("replaces startup loading with a retryable error when the initial request fails", async () => {
+  const fetcher = vi.fn<typeof fetch>().mockRejectedValue(new Error("Server unavailable"));
+  vi.stubGlobal("fetch", fetcher);
+  await act(async () => { root.render(<StrictMode><SlideshowDialog query={query} onClose={close} /></StrictMode>); });
+  const start = Array.from(document.querySelectorAll("button")).find((element) => element.textContent === "START")!;
+  await act(async () => { start.click(); });
+  const player = document.querySelector('[aria-label="Slideshow player"]')!;
+  expect(player.getAttribute("aria-busy")).toBe("false");
+  expect(player.querySelector('[aria-label="Loading slide"]')).toBeNull();
+  expect(player.querySelector('[role="alert"]')?.textContent).toContain("Server unavailable");
+
+  fetcher.mockResolvedValue(new Response(JSON.stringify({ items: [{ id: "retry", ext: "jpg" }], total: 1 })));
+  const retry = Array.from(player.querySelectorAll("button")).find((element) => element.textContent === "Retry")!;
+  await act(async () => { retry.click(); });
+  expect(player.getAttribute("aria-busy")).toBe("true");
+  expect(player.querySelector('[aria-label="Loading slide"]')).not.toBeNull();
+  expect(player.querySelector('[role="alert"]')).toBeNull();
+  await act(async () => { player.querySelector("img")!.dispatchEvent(new dom.window.Event("load")); });
+  expect(player.getAttribute("aria-busy")).toBe("false");
+  expect(player.querySelector('[aria-label="Loading slide"]')).toBeNull();
+});
+
 test("can hide the title while retaining the current position", async () => {
   serve([{ id: "1", name: "Hidden title", ext: "jpg" }]);
   await renderPlayer({ ...settings, showTitle: false });

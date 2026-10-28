@@ -133,7 +133,7 @@ export function ConnectButton({ disabled }: ConnectButtonProps) {
   return (
     <Button
       id="connectButton"
-      className="min-h-12 rounded-full text-sm font-semibold shadow-sm"
+      className="primary-action-button min-h-12 rounded-full text-sm font-semibold shadow-sm"
       type="submit"
       disabled={disabled ?? state.disabled}
     >

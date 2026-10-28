@@ -114,7 +114,7 @@ export function SlideshowDialog({ query, onClose }: { query: SlideshowQuery; onC
               <SlideshowToggle label="Loop" checked={settings.loop} onChange={(loop) => setSettings({ ...settings, loop })} />
             </div>
             <footer className="shrink-0 border-t border-border bg-card px-5 py-4">
-              <Button type="button" className="h-11 w-full rounded-full" onClick={start}><Play className="size-4" />START</Button>
+              <Button type="button" className="primary-action-button h-11 w-full touch-manipulation rounded-full transition-colors active:not-aria-[haspopup]:translate-y-0" onClick={start}><Play className="size-4" />START</Button>
             </footer>
           </>
         )}
@@ -311,10 +311,12 @@ export function SlideshowPlayer({ query, settings, onClose }: { query: Slideshow
   const retry = () => { setPreparedNext(null); setPaused(false); void navigate(targetIndex.current); };
   const skip = () => { setPaused(false); void navigate(targetIndex.current + 1); };
   const title = slide ? displayFileName(slide.item) || "Untitled" : "Slideshow";
+  const slideLoading = Boolean((loading || (slide && !ready) || buffering) && !error && !finished && !blocked);
   return (
     <section
       className="relative grid h-full w-full grid-rows-[minmax(0,1fr)] bg-black text-white outline-none"
       aria-label="Slideshow player"
+      aria-busy={slideLoading}
       tabIndex={0}
       onPointerDown={() => setFocusWithin(false)}
       onPointerMove={(event) => {
@@ -356,7 +358,7 @@ export function SlideshowPlayer({ query, settings, onClose }: { query: Slideshow
           muted={muted}
         />
       ))}
-      {(loading || (slide && !ready) || buffering) && !error && !finished && !blocked ? <div className="pointer-events-none absolute inset-0 grid place-items-center" role="status" aria-label="Loading slide"><span className="size-9 animate-spin rounded-full border-2 border-white/25 border-t-white" /></div> : null}
+      {slideLoading ? <div className="pointer-events-none absolute inset-0 grid place-items-center" role="status" aria-label="Loading slide"><div className="grid justify-items-center gap-3 text-center"><span aria-hidden="true" className="size-9 animate-spin rounded-full border-2 border-white/25 border-t-white motion-reduce:animate-none" /><p className="text-sm text-white/80">Loading slide…</p></div></div> : null}
       {error ? <div className="absolute inset-0 grid place-items-center bg-black/80 p-6"><div className="grid max-w-sm justify-items-center gap-4 text-center" role="alert"><p className="text-sm leading-relaxed">{error}</p><div className="flex gap-3"><Button onClick={retry}>Retry</Button><Button variant="secondary" onClick={skip}>Skip</Button></div></div></div> : null}
       {finished ? <div className="absolute inset-0 grid place-items-center bg-black/65 p-6"><div className="grid justify-items-center gap-4"><p className="text-lg">Slideshow complete</p><Button onClick={togglePause}><RotateCcw className="size-4" />Replay</Button></div></div> : null}
       {blocked ? <p className="pointer-events-none absolute inset-x-0 top-[calc(50%+64px)] text-center text-sm text-white/80" role="status">Tap to play</p> : null}

@@ -87,7 +87,15 @@ async function fetchWithTimeout(request) {
 }
 
 function offlinePage() {
-  return new Response('<!doctype html><html lang="en"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Media Library is offline</title><svg aria-hidden="true" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-.722-3.25 M2 8a10.645 10.645 0 0 0 20 0 m-2 7-1.726-2.05 M4 15l1.726-2.05 M9 18l.722-3.25"/></svg><h1>Media Library is offline</h1><p>The server may be stopped. Start Media Preview Server in Eagle, then retry. If it is already running, check your network connection.</p><a href="/">Retry</a></html>', {
+  return new Response(`<!doctype html><html lang="en"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Media Library is offline</title>
+<style>
+.retry { display: inline-block; padding: 10px 32px; border-radius: 24px; background: #262626; color: #fff; font-weight: 600; text-decoration: none; touch-action: manipulation; -webkit-tap-highlight-color: transparent; transition: background-color 140ms ease; }
+@media (hover: hover) { .retry:hover { background: #404040; } }
+.retry:active { background: #525252; }
+.retry:focus-visible { outline: 3px solid #2563eb; outline-offset: 4px; }
+@media (prefers-reduced-motion: reduce) { .retry { transition: none; } }
+</style>
+<svg aria-hidden="true" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-.722-3.25 M2 8a10.645 10.645 0 0 0 20 0 m-2 7-1.726-2.05 M4 15l1.726-2.05 M9 18l.722-3.25"/></svg><h1>Media Library is offline</h1><p>The server may be stopped. Start Media Preview Server in Eagle, then retry. If it is already running, check your network connection.</p><a class="retry" href="/">Retry</a></html>`, {
     status: 503,
     headers: { "Content-Type": "text/html; charset=utf-8" },
   });

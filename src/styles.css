@@ -189,6 +189,26 @@
   }
 }
 
+/* Shared hover treatment for the main viewer actions, including links rendered as buttons. */
+.primary-action-button {
+  --primary-action-hover: #525252;
+  transition: background-color 140ms ease;
+}
+
+.dark .primary-action-button {
+  --primary-action-hover: #ffffff;
+}
+
+@media (hover: hover) {
+  .primary-action-button:not(:disabled):not([aria-disabled="true"]):hover {
+    background-color: var(--primary-action-hover);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .primary-action-button { transition: none; }
+}
+
 .folder-section-heading-open {
   color: var(--sidebar-foreground);
   opacity: 0.7;

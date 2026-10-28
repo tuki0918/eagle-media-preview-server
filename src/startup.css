@@ -18,14 +18,33 @@
 .startup-symbol { display: grid; place-items: center; width: 52px; height: 52px; margin: 0 auto 24px; color: #737373; }
 .startup-card h1 { margin: 0 0 12px; font-size: 22px; line-height: 1.4; }
 .startup-card p { margin: 0; color: #737373; }
-.startup-retry { display: inline-block; margin-top: 28px; padding: 10px 32px; border-radius: 24px; background: #262626; color: #fff; font-weight: 600; text-decoration: none; }
+.startup-retry {
+  display: inline-block;
+  margin-top: 28px;
+  padding: 10px 32px;
+  border-radius: 24px;
+  background: #262626;
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 140ms ease;
+}
+@media (hover: hover) { .startup-retry:hover { background: #404040; } }
+.startup-retry:active { background: #525252; }
 .startup-retry:focus-visible { outline: 3px solid #2563eb; outline-offset: 4px; }
+@media (prefers-reduced-motion: reduce) {
+  .startup-retry { transition: none; }
+}
 @media (prefers-color-scheme: dark) {
   #startupFallback { background: #18191c; color: #fafafa; }
   .startup-card p { color: #a3a3a3; }
   .startup-symbol { color: #a3a3a3; }
   .startup-spinner { border-color: #525252; border-top-color: #d4d4d4; }
   .startup-retry { background: #fafafa; color: #171717; }
+  @media (hover: hover) { .startup-retry:hover { background: #d4d4d4; } }
+  .startup-retry:active { background: #a3a3a3; }
 }
 
 body[data-app-state="starting"] .startup-loading { display: grid; }
