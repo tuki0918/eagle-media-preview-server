@@ -42,7 +42,7 @@ export function resetDisplaySettings() {
   for (const key of [
     SIDEBAR_WIDTH_STORAGE_KEY, SIDEBAR_OPEN_STORAGE_KEY, FOLDER_SECTIONS_OPEN_STORAGE_KEY,
     TAG_SECTIONS_COLLAPSED_STORAGE_KEY, "eagleSubfoldersCollapsed", "eagleShowSubfolders",
-    "eagleShowItemActions", "eagle-media-preview-theme", "eagleViewerZoomLevel", "eagleViewMode",
+    "eagleSlideshowSettings", "eagleShowItemActions", "eagle-media-preview-theme", "eagleViewerZoomLevel", "eagleViewMode",
   ]) {
     try { window.localStorage.removeItem(key); } catch { /* Storage is optional. */ }
   }

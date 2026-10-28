@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 import { LayoutDashboard, LayoutGrid, List, ZoomIn, type LucideIcon } from "lucide-react";
 import { getResultsStatusState, subscribeResultsStatusState } from "../resultsStatusState";
 import { selectViewMode } from "../shellActions";
+import { SlideshowLauncher } from "./Slideshow";
 import type { ViewerMode } from "../types";
 import { getZoomLevel, setZoomLevel, subscribeZoomLevel, ZOOM_LEVEL_MAX, ZOOM_LEVEL_MIN } from "../zoomState";
 
@@ -13,14 +14,17 @@ export function ViewerDock({ viewMode }: { viewMode?: ViewerMode }) {
   const displayViewMode = viewMode ?? storedStatus.viewMode;
 
   return (
-    <div className="viewer-dock pointer-events-none fixed bottom-[calc(16px+env(safe-area-inset-bottom))] right-[calc(16px+env(safe-area-inset-right))] z-20 flex items-center gap-2 min-[720px]:bottom-6 min-[720px]:right-6">
-      {displayViewMode === "list" ? null : <ZoomControl />}
-      <div className={dockSurfaceClassName} role="radiogroup" aria-label="View mode">
-        <ViewModeButton id="tilesViewButton" mode="tiles" label="Tiles" icon={LayoutDashboard} active={displayViewMode === "tiles"} />
-        <ViewModeButton id="gridViewButton" mode="grid" label="Grid" icon={LayoutGrid} active={displayViewMode === "grid"} />
-        <ViewModeButton id="listViewButton" mode="list" label="List" icon={List} active={displayViewMode === "list"} />
+    <>
+      <SlideshowLauncher />
+      <div className="viewer-dock pointer-events-none fixed bottom-[calc(16px+env(safe-area-inset-bottom))] right-[calc(16px+env(safe-area-inset-right))] z-20 flex items-center gap-2 min-[720px]:bottom-6 min-[720px]:right-6">
+        {displayViewMode === "list" ? null : <ZoomControl />}
+        <div className={dockSurfaceClassName} role="radiogroup" aria-label="View mode">
+          <ViewModeButton id="tilesViewButton" mode="tiles" label="Tiles" icon={LayoutDashboard} active={displayViewMode === "tiles"} />
+          <ViewModeButton id="gridViewButton" mode="grid" label="Grid" icon={LayoutGrid} active={displayViewMode === "grid"} />
+          <ViewModeButton id="listViewButton" mode="list" label="List" icon={List} active={displayViewMode === "list"} />
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 

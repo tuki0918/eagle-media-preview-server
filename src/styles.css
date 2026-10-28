@@ -254,3 +254,25 @@
     animation: none;
   }
 }
+
+/* Slideshow transitions affect only the incoming frame, including mixed media. */
+@keyframes slideshow-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slideshow-slide {
+  from { opacity: 0; transform: translateX(32px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.slideshow-fade { animation: slideshow-fade 450ms ease-out both; }
+.slideshow-slide { animation: slideshow-slide 450ms ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .slideshow-fade, .slideshow-slide { animation: none; }
+}
+
+/* Keep the left action inside the results area when the desktop sidebar is open. */
+@media (min-width: 768px) {
+  [data-slot="sidebar-wrapper"]:has(> [data-slot="sidebar"][data-state="expanded"]) .slideshow-launcher {
+    left: calc(var(--sidebar-width) + 24px);
+  }
+}
