@@ -21,20 +21,20 @@ function mockStorage(saved: string | null = null) {
 }
 
 describe("subfolder visibility preference", () => {
-  test("starts enabled and only restores an explicit false value as disabled", () => {
-    expect(getSubfoldersVisible()).toBe(true);
-    for (const saved of [null, "true", "invalid", "0"]) {
+  test("starts disabled and only restores an explicit true value as enabled", () => {
+    expect(getSubfoldersVisible()).toBe(false);
+    for (const saved of [null, "false", "invalid", "0"]) {
       mockStorage(saved);
       initializeSubfoldersVisible();
-      expect(getSubfoldersVisible()).toBe(true);
+      expect(getSubfoldersVisible()).toBe(false);
     }
-    mockStorage("false");
+    mockStorage("true");
     initializeSubfoldersVisible();
-    expect(getSubfoldersVisible()).toBe(false);
+    expect(getSubfoldersVisible()).toBe(true);
   });
 
   test("persists changes, updates subscribers, and restores the choice", () => {
-    const storage = mockStorage();
+    const storage = mockStorage("true");
     initializeSubfoldersVisible();
     const listener = vi.fn();
     const unsubscribe = subscribeSubfoldersVisible(listener);
@@ -68,7 +68,7 @@ describe("subfolder visibility preference", () => {
       },
     });
     expect(() => initializeSubfoldersVisible()).not.toThrow();
-    expect(getSubfoldersVisible()).toBe(true);
+    expect(getSubfoldersVisible()).toBe(false);
     expect(() => setSubfoldersVisible(false)).not.toThrow();
     expect(getSubfoldersVisible()).toBe(false);
     expect(() => setSubfoldersVisible(true)).not.toThrow();

@@ -46,14 +46,14 @@ test("resets display preferences and mounted views while preserving unrelated br
   for (const key of ["eagleSidebarWidth", "eagleSidebarOpen", "eagleFolderSectionsOpen", "eagleTagSectionsCollapsed", "eagleSubfoldersCollapsed"]) storage.setItem(key, "custom");
   setThemePreference("dark");
   setZoomLevel(5);
-  setSubfoldersVisible(false);
+  setSubfoldersVisible(true);
   const listener = vi.fn();
   const unsubscribe = subscribeDisplaySettingsReset(listener);
   try {
     resetDisplaySettings();
     expect(getThemeState().preference).toBe("system");
     expect(getZoomLevel()).toBe(2);
-    expect(getSubfoldersVisible()).toBe(true);
+    expect(getSubfoldersVisible()).toBe(false);
     expect(readSavedSidebarWidth()).toBe(256);
     expect(storage.getItem("eagleTagSectionsCollapsed")).toBeNull();
     expect(storage.getItem("eagleSubfoldersCollapsed")).toBeNull();

@@ -47,7 +47,7 @@ export function resetDisplaySettings() {
   }
   setThemePreference("system");
   setZoomLevel(DEFAULT_ZOOM_LEVEL);
-  setSubfoldersVisible(true);
+  setSubfoldersVisible(false);
   writeSavedViewerMode(DEFAULT_VIEW_MODE);
   changePageSize(DEFAULT_PAGE_SIZE);
   selectViewMode(DEFAULT_VIEW_MODE);

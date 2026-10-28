@@ -7,7 +7,7 @@ import { setLibraryName } from "../libraryNameState";
 import { setResultSurfaceState } from "../resultSurfaceState";
 import { setResultsStatusState } from "../resultsStatusState";
 import { setSearchControlsState } from "../searchControlsState";
-import { initializeSubfoldersVisible } from "../subfolderVisibilityState";
+import { setSubfoldersVisible } from "../subfolderVisibilityState";
 import { setThemePreference } from "../themeState";
 import { noop, sampleItems } from "./storyFixtures";
 import { ViewerShellLayout } from "./ViewerShellLayout";
@@ -33,7 +33,7 @@ export const Subfolders: Story = {
   decorators: [
     (Story) => {
       useEffect(() => {
-        initializeSubfoldersVisible();
+        setSubfoldersVisible(true);
         setThemePreference("light");
         setLibraryName("My Eagle Library");
         setLibraryFooterName("My Eagle Library");

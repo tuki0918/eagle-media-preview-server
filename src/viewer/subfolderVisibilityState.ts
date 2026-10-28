@@ -34,9 +34,9 @@ function updateVisibility(visible: boolean) {
 
 function readStoredVisibility() {
   try {
-    if (typeof window === "undefined") return true;
-    return window.localStorage.getItem(SUBFOLDERS_VISIBLE_STORAGE_KEY) !== "false";
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem(SUBFOLDERS_VISIBLE_STORAGE_KEY) === "true";
   } catch {
-    return true;
+    return false;
   }
 }
