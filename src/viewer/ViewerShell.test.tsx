@@ -1242,7 +1242,7 @@ describe("ViewerAppShell", () => {
       const itemActionsGroup = settingsGroup?.querySelector("#itemActionsDisplayGroup");
       expect(itemActionsGroup).not.toBeNull();
       expect(getItemActionsVisible()).toBe(true);
-      const hideActions = itemActionsGroup?.querySelector('[aria-label="Hide item actions"]');
+      const hideActions = itemActionsGroup?.querySelector('[aria-label="Hide item detail panel actions"]');
       await act(async () => {
         hideActions?.dispatchEvent(new dom.window.MouseEvent("mousedown", { bubbles: true, button: 0 }));
       });

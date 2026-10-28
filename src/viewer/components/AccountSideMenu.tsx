@@ -755,17 +755,17 @@ function ItemActionsMenuSection() {
 
   return (
     <div className="grid gap-2 px-2 pb-1.5 pt-2">
-      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Show item actions</span>
+      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Item detail panel actions</span>
       <Tabs
         id="itemActionsDisplayGroup"
         value={visible ? "on" : "off"}
         className="w-full"
-        aria-label="Item actions display"
+        aria-label="Item detail panel actions"
         onValueChange={(value) => setItemActionsVisible(value === "on")}
       >
-        <TabsList className="grid h-9 w-full grid-cols-2 rounded-xl bg-muted p-1 shadow-none" aria-label="Item actions display">
-          <TabsTrigger value="on" className={menuTabTriggerClassName} aria-label="Show item actions">On</TabsTrigger>
-          <TabsTrigger value="off" className={menuTabTriggerClassName} aria-label="Hide item actions">Off</TabsTrigger>
+        <TabsList className="grid h-9 w-full grid-cols-2 rounded-xl bg-muted p-1 shadow-none" aria-label="Item detail panel actions">
+          <TabsTrigger value="on" className={menuTabTriggerClassName} aria-label="Show item detail panel actions">On</TabsTrigger>
+          <TabsTrigger value="off" className={menuTabTriggerClassName} aria-label="Hide item detail panel actions">Off</TabsTrigger>
         </TabsList>
       </Tabs>
     </div>
