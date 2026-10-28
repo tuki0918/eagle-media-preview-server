@@ -1,4 +1,5 @@
 import { clearTagCovers } from "./viewer/tagCovers";
+import { clearFolderCovers } from "./viewer/folderCovers";
 import { setTagListState } from "./viewer/tagListState";
 import type { TagOverviewResponse } from "./viewer/tagOverview";
 import {
@@ -449,6 +450,7 @@ function clearViewerSessionState() {
 }
 
 function resetViewerResults({ resetOffset = false }: { resetOffset?: boolean } = {}) {
+  clearFolderCovers();
   pendingRatingItemIds.clear();
   state.tilesLoadingMore = false;
   state.items = [];

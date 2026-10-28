@@ -106,7 +106,7 @@ function TagSection({
           />
           {color ? <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: color }} aria-hidden="true" /> : null}
           <span className="min-w-0 truncate">{label}</span>
-          <span className="[font-variant-numeric:tabular-nums]">{tags.length.toLocaleString()}</span>
+          <span className="[font-variant-numeric:tabular-nums]">({tags.length.toLocaleString()})</span>
         </button>
       </h2>
       {collapsed ? null : (

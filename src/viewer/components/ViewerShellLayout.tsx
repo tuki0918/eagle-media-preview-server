@@ -2,12 +2,14 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type C
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { SIDEBAR_OPEN_STORAGE_KEY, UNCATEGORIZED_FOLDER_ID, UNTAGGED_FOLDER_ID } from "../constants";
 import { activeFilterLabels } from "../filters";
+import { findFolderById } from "../folderTree";
 import { getLibraryName, subscribeLibraryName } from "../libraryNameState";
 import { getResultsStatusState, subscribeResultsStatusState } from "../resultsStatusState";
 import { getSearchControlsState, subscribeSearchControlsState } from "../searchControlsState";
 import { getTagChipsState, subscribeTagChipsState } from "../tagChipsState";
 import { getTagListState, subscribeTagListState } from "../tagListState";
 import { buildTagSections } from "../tagOverview";
+import type { EagleFolder, EagleSmartFolder } from "../types";
 import { getZoomLevel, gridColumnWidth, subscribeZoomLevel, tileRowHeight } from "../zoomState";
 import { AccountSideMenu } from "./AccountSideMenu";
 import { CardTemplate } from "./CardTemplate";
@@ -21,6 +23,7 @@ import {
   TagSearchControls,
 } from "./SearchControls";
 import { TagList } from "./TagList";
+import { SubfolderList } from "./SubfolderList";
 import { TilesSentinel } from "./TilesSentinel";
 import { ViewerDock } from "./ViewerDock";
 
@@ -110,7 +113,7 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
                   aria-label={headerCountLabel}
                   title={headerCountLabel}
                 >
-                  {headerCount.toLocaleString()}
+                  {showingTags ? `(${headerCount.toLocaleString()})` : headerCount.toLocaleString()}
                 </span>
               </button>
               <div className="flex min-w-0 items-center justify-end">
@@ -137,6 +140,7 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
             </div>
           ) : (
             <div className="flex w-full flex-col gap-3 px-2 pb-28 pt-1 min-[720px]:px-6 min-[720px]:pt-2" style={contentStyle}>
+              <SubfolderList />
               <ResultSurface />
               <TilesSentinel />
               <Pager />
@@ -153,16 +157,16 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
 
 function selectedFolderName(
   selectedFolderId: string,
-  folders: readonly { id: string; name: string }[],
+  folders: readonly EagleFolder[],
   selectedSmartFolderId: string,
-  smartFolders: readonly { id: string; name: string }[],
+  smartFolders: readonly EagleSmartFolder[],
   libraryName = "",
 ) {
-  if (selectedSmartFolderId) return smartFolders.find((folder) => folder.id === selectedSmartFolderId)?.name || "Smart Folder";
+  if (selectedSmartFolderId) return findFolderById(smartFolders, selectedSmartFolderId)?.name || "Smart Folder";
   if (!selectedFolderId) return libraryName || "All";
   if (selectedFolderId === UNCATEGORIZED_FOLDER_ID) return "Uncategorized";
   if (selectedFolderId === UNTAGGED_FOLDER_ID) return "Untagged";
-  return folders.find((folder) => folder.id === selectedFolderId)?.name || "All";
+  return findFolderById(folders, selectedFolderId)?.name || "All";
 }
 
 function useHeaderHiddenOnScroll() {

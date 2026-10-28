@@ -51,6 +51,10 @@ import { setTagListState } from "./tagListState";
 import { TagList } from "./components/TagList";
 import { getThemeState, initializeThemeState, setThemePreference } from "./themeState";
 import { safeExternalUrl } from "./components/PreviewBody";
+import { SubfolderList } from "./components/SubfolderList";
+import { setFolderCoverFetcher } from "./folderCovers";
+import { getSubfoldersVisible, setSubfoldersVisible } from "./subfolderVisibilityState";
+import * as shellActions from "./shellActions";
 
 function renderAccountSideMenu() {
   return renderToStaticMarkup(
@@ -889,6 +893,157 @@ describe("ViewerAppShell", () => {
     } finally {
       if (root) await act(async () => { root?.unmount(); });
       setSearchControlsState(previousSearchState);
+      globalThis.window = previousWindow;
+      globalThis.document = previousDocument;
+      globalThis.Node = previousNode;
+      globalThis.HTMLElement = previousHTMLElement;
+      testGlobal.IS_REACT_ACT_ENVIRONMENT = previousIS_REACT_ACT_ENVIRONMENT;
+      dom.window.close();
+    }
+  });
+
+  test("shows only immediate subfolders for root, regular folders, and smart folders", () => {
+    const previousSearchState = getSearchControlsState();
+    const previousVisible = getSubfoldersVisible();
+    const state = {
+      ...previousSearchState,
+      section: "items" as const,
+      selectedFolderId: "",
+      selectedSmartFolderId: "",
+      folders: [
+        {
+          id: "design", name: "Design", imageCount: 12,
+          children: [
+            {
+              id: "brand", name: "Brand", imageCount: 8,
+              children: [{ id: "logos", name: "Logos", imageCount: 8 }],
+            },
+            { id: "layouts", name: "Layouts", imageCount: 4 },
+          ],
+        },
+        { id: "photos", name: "Photos", imageCount: 0 },
+      ],
+      smartFolders: [{
+        id: "smart-group", name: "Smart group",
+        children: [{ id: "smart-child", name: "Smart child", imageCount: 3 }],
+      }],
+    };
+    const cardsFor = (patch: Partial<typeof previousSearchState> = {}) => {
+      setSearchControlsState({ ...state, ...patch });
+      const dom = new JSDOM(renderToStaticMarkup(<SubfolderList />));
+      const titles = Array.from(dom.window.document.querySelectorAll('#subfolderList button[title]'), (button) => button.getAttribute("title"));
+      dom.window.close();
+      return titles;
+    };
+    try {
+      setSubfoldersVisible(true);
+      expect(cardsFor()).toEqual(["Design", "Photos"]);
+      expect(cardsFor({ selectedFolderId: "design" })).toEqual(["Brand", "Layouts"]);
+      expect(cardsFor({ selectedFolderId: "brand" })).toEqual(["Logos"]);
+      expect(cardsFor({ selectedFolderId: "layouts" })).toEqual([]);
+      expect(cardsFor({ selectedFolderId: "missing" })).toEqual([]);
+      expect(cardsFor({ selectedSmartFolderId: "smart-group" })).toEqual(["Smart child"]);
+      expect(cardsFor({ selectedSmartFolderId: "smart-child" })).toEqual([]);
+      expect(cardsFor({ section: "tags" })).toEqual([]);
+      expect(cardsFor({ selectedFolderId: "__uncategorized__" })).toEqual([]);
+      expect(cardsFor({ selectedFolderId: "__untagged__" })).toEqual([]);
+      setSubfoldersVisible(false);
+      expect(cardsFor()).toEqual([]);
+    } finally {
+      setSearchControlsState(previousSearchState);
+      setSubfoldersVisible(previousVisible);
+    }
+  });
+
+  test("opens subfolders above media items and toggles their visibility from the account menu", async () => {
+    const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
+    const testGlobal = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+    const previousWindow = globalThis.window;
+    const previousDocument = globalThis.document;
+    const previousNode = globalThis.Node;
+    const previousHTMLElement = globalThis.HTMLElement;
+    const previousIS_REACT_ACT_ENVIRONMENT = testGlobal.IS_REACT_ACT_ENVIRONMENT;
+    const previousSearchState = getSearchControlsState();
+    const previousVisible = getSubfoldersVisible();
+    const folderChanged = vi.spyOn(shellActions, "changeFolder").mockImplementation(() => {});
+    const smartFolderChanged = vi.spyOn(shellActions, "changeSmartFolder").mockImplementation(() => {});
+    globalThis.window = dom.window;
+    globalThis.document = dom.window.document;
+    globalThis.Node = dom.window.Node;
+    globalThis.HTMLElement = dom.window.HTMLElement;
+    testGlobal.IS_REACT_ACT_ENVIRONMENT = true;
+    setFolderCoverFetcher(async () => null);
+    setSubfoldersVisible(true);
+    setSearchControlsState({
+      ...previousSearchState,
+      section: "items",
+      selectedFolderId: "design",
+      selectedSmartFolderId: "",
+      folders: [{ id: "design", name: "Design", children: [{ id: "brand", name: "Brand", imageCount: 2 }] }],
+      smartFolders: [{ id: "smart-group", name: "Smart group", children: [{ id: "smart-child", name: "Smart child", imageCount: 3 }] }],
+    });
+    const { createRoot } = await import("react-dom/client");
+    let root: import("react-dom/client").Root | null = null;
+    try {
+      const container = dom.window.document.querySelector("#root");
+      if (!(container instanceof dom.window.HTMLElement)) throw new Error("Missing test root");
+      root = createRoot(container);
+      await act(async () => {
+        root?.render(<TooltipProvider><ViewerShellLayout hidden={false} /></TooltipProvider>);
+      });
+      const subfolders = container.querySelector('#subfolderList[aria-label="Subfolders"]');
+      const media = container.querySelector('#grid[aria-label="Media items"]');
+      expect(subfolders).not.toBeNull();
+      expect(media).not.toBeNull();
+      expect(Boolean(subfolders!.compareDocumentPosition(media!) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+      const heading = subfolders?.querySelector('button[aria-label="Collapse Subfolders"]');
+      if (!(heading instanceof dom.window.HTMLButtonElement)) throw new Error("Missing subfolder toggle");
+      const childCount = subfolders!.querySelectorAll(".subfolder-card").length;
+      expect(heading.textContent).toBe(`Subfolders(${childCount})`);
+      await act(async () => { heading.click(); });
+      expect(heading.getAttribute("aria-expanded")).toBe("false");
+      expect(subfolders!.querySelector("ul")).toBeNull();
+      expect(dom.window.localStorage.getItem("eagleSubfoldersCollapsed")).toBe("true");
+      expect(media).toBe(container.querySelector("#grid"));
+      await act(async () => { heading.click(); });
+      expect(heading.getAttribute("aria-expanded")).toBe("true");
+      expect(dom.window.localStorage.getItem("eagleSubfoldersCollapsed")).toBe("false");
+      expect(subfolders!.querySelectorAll(".subfolder-card")).toHaveLength(childCount);
+      const brand = subfolders?.querySelector('button[title="Brand"]');
+      if (!(brand instanceof dom.window.HTMLButtonElement)) throw new Error("Missing subfolder card");
+      await act(async () => { brand.click(); });
+      expect(folderChanged).toHaveBeenCalledWith({ currentTarget: { value: "brand" } });
+
+      const account = container.querySelector("#authAccountLabel");
+      if (!(account instanceof dom.window.HTMLButtonElement)) throw new Error("Missing account menu");
+      await act(async () => { account.click(); });
+      const tabs = Array.from(container.querySelectorAll('#authAccountMenu [role="tab"]'));
+      const off = tabs.find((tab) => tab.textContent?.trim() === "Off");
+      const on = tabs.find((tab) => tab.textContent?.trim() === "On");
+      if (!(off instanceof dom.window.HTMLButtonElement) || !(on instanceof dom.window.HTMLButtonElement)) throw new Error("Missing subfolder visibility settings");
+      expect(on.getAttribute("data-state")).toBe("active");
+      await act(async () => { off.dispatchEvent(new dom.window.MouseEvent("mousedown", { bubbles: true, button: 0 })); });
+      expect(container.querySelector("#subfolderList")).toBeNull();
+      expect(getSubfoldersVisible()).toBe(false);
+      expect(dom.window.localStorage.getItem("eagleShowSubfolders")).toBe("false");
+      await act(async () => { on.dispatchEvent(new dom.window.MouseEvent("mousedown", { bubbles: true, button: 0 })); });
+      expect(container.querySelector("#subfolderList")).not.toBeNull();
+      expect(dom.window.localStorage.getItem("eagleShowSubfolders")).toBe("true");
+
+      await act(async () => {
+        setSearchControlsState({ ...getSearchControlsState(), selectedFolderId: "", selectedSmartFolderId: "smart-group" });
+      });
+      const smartChild = container.querySelector('#subfolderList button[title="Smart child"]');
+      if (!(smartChild instanceof dom.window.HTMLButtonElement)) throw new Error("Missing smart subfolder card");
+      await act(async () => { smartChild.click(); });
+      expect(smartFolderChanged).toHaveBeenCalledWith({ currentTarget: { value: "smart-child" } });
+    } finally {
+      if (root) await act(async () => { root?.unmount(); });
+      folderChanged.mockRestore();
+      smartFolderChanged.mockRestore();
+      setFolderCoverFetcher(null);
+      setSearchControlsState(previousSearchState);
+      setSubfoldersVisible(previousVisible);
       globalThis.window = previousWindow;
       globalThis.document = previousDocument;
       globalThis.Node = previousNode;
@@ -2324,6 +2479,10 @@ describe("tag list", () => {
     expect(html).toContain("3 items");
     expect(html).toContain("1 item<");
     expect(html.match(/aria-label="Starred"/g)).toHaveLength(1);
+    const document = new JSDOM(html).window.document;
+    expect(Array.from(document.querySelectorAll("h2 button"), (button) => button.textContent)).toEqual([
+      "Starred Tags(1)", "Nature(1)", "Ungrouped(1)",
+    ]);
   });
 
   test("shows load errors and empty libraries", () => {
@@ -2382,7 +2541,7 @@ describe("tag list", () => {
       });
 
       expect(container.textContent).not.toContain("tree");
-      expect(container.textContent).toContain("Nature1");
+      expect(container.textContent).toContain("Nature(1)");
       expect(JSON.parse(dom.window.localStorage.getItem("eagleTagSectionsCollapsed") || "[]")).toEqual(["ungrouped", "group:g1"]);
 
       const ungroupedToggle = container.querySelector('[aria-label="Expand Ungrouped"]');
