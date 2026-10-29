@@ -3,7 +3,6 @@ import { clearFolderCovers } from "./viewer/folderCovers";
 import { setTagListState } from "./viewer/tagListState";
 import type { TagOverviewResponse } from "./viewer/tagOverview";
 import {
-  DEFAULT_EAGLE_CONNECTION,
   LIBRARY_EMPTY_LABEL,
   RECENT_FOLDERS_STORAGE_KEY,
   RECENT_TAGS_STORAGE_KEY,
@@ -270,8 +269,7 @@ async function connect(credentials?: { password: string; username: string }) {
       renderLoginConnect();
       setConnectMessage("Connecting", false);
     }
-    const connection = { ...DEFAULT_EAGLE_CONNECTION };
-    const data = await postJson<ConnectResponse>("/api/connect", connection);
+    const data = await postJson<ConnectResponse>("/api/connect", {});
     serverReachable = true;
     showViewer(data);
     await Promise.all([loadFolders(), loadSmartFolders(), loadItems(), loadAllFoldersTotal(), loadShortcutCounts(), loadItemTypes()]);

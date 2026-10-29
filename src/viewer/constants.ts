@@ -1,12 +1,6 @@
 export const UNCATEGORIZED_FOLDER_ID = "__uncategorized__";
 export const UNTAGGED_FOLDER_ID = "__untagged__";
 
-export const DEFAULT_EAGLE_CONNECTION = Object.freeze({
-  host: "127.0.0.1",
-  port: "41595",
-  token: "",
-});
-
 export const DEFAULT_PAGE_SIZE = 30;
 export const MAX_PAGE_SIZE = 1000;
 export const DEFAULT_VIEW_MODE = "tiles";
