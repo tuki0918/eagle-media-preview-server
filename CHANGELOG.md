@@ -7,6 +7,20 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Added
+
+- Added library protection: choose which Eagle libraries the viewer may serve from the new **Libraries** settings tab. If Eagle has a different library open, viewers see it as unavailable. Changes apply immediately, even while the server is running.
+
+### Changed
+
+- The viewer server now notices library switches in Eagle right away, and a viewer reloads when the shared library changes.
+- Viewers no longer receive library file paths; `/api/connect` and `/api/health` return only the library name and an opaque id.
+
+### Removed
+
+- **Breaking:** Removed `GET /api/libraries` and `POST /api/library/switch`. Libraries can only be switched in the Eagle app.
+- **Breaking:** `POST /api/connect` no longer changes the Eagle API host, port, or token; the server always uses its own local Eagle connection.
+
 ## [0.5.3] - 2026-10-29
 
 ### Added

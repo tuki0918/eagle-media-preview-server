@@ -29,12 +29,12 @@ Optional:
 - Public Network: allow access from other devices on the network.
 - HTTPS: use TLS when certificate paths are set.
 - Multiple users with Viewer, Editor, and Admin roles.
+- Library protection: share only the Eagle libraries you select.
 
 ## Future Plans
 
 - Expand support for additional file extensions
 - Add AI-related capabilities
-- Add protection for shared libraries
 
 ### Limitations
 
@@ -96,6 +96,14 @@ Use this tab to choose which users can sign in to the viewer. To let other devic
 - Admin: has all available permissions
 
 Authentication is optional. When password protection is enabled, browser access uses the built-in login screen and cookie-based sessions. Sessions expire after the configured session duration, 7 days by default.
+
+### Libraries
+
+Choose which Eagle libraries the viewer may serve.
+
+Eagle can only have one library open, and the viewer serves whichever library that is. Turn on **Share only selected libraries** and check the libraries to share. If you open a different library in Eagle, viewers are returned to the connect screen with a "not shared" message until a shared library is open again. Checked libraries are saved by path; use **Add library** to share a library that is not in Eagle's recent list.
+
+These settings apply immediately, even while the server is running. Viewers can never switch the library open in Eagle.
 
 ### Security
 

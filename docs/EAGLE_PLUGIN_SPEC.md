@@ -104,6 +104,7 @@ Build output is created under `dist`:
 - Configure the port
 - Configure Password protection
 - Configure multiple users with Viewer, Editor, and Admin roles
+- Choose which Eagle libraries the viewer may serve
 - Display and copy the Endpoint URL
 - Display the Endpoint URL as a QR code
 - Keep settings usable in the fixed-size Eagle window through a collapsible panel and resizable window
@@ -134,6 +135,7 @@ Build output is created under `dist`:
   - Users
   - Per-user role and password
   - Session duration
+  - Libraries: protection toggle, shared-library checklist (open library, Eagle's recent libraries, saved entries), and an Add library folder picker; these apply immediately, even while the server runs
 
 ### Persisted Settings
 
@@ -155,9 +157,13 @@ type Settings = {
   authEnabled: boolean;
   sessionSecret: string;
   lastServerStatus: "running" | "stopped" | "error";
+  libraryProtectionEnabled: boolean;
   sessionDurationDays: number;
+  sharedLibraries: Array<{ name: string; path: string }>;
 };
 ```
+
+`libraryProtectionEnabled` defaults to `false`, so the library open in Eagle is shared as before. When it is `true`, the viewer serves only libraries listed in `sharedLibraries`; an empty list shares nothing. Paths are compared after removing trailing separators, case-insensitively on macOS and Windows.
 
 Legacy settings with `basicAuthUser`, `passwordHash`, and `allowMetadataEditing` are read for migration, converted into `authUsers`, and rewritten with `settingsVersion: 2`.
 
@@ -183,6 +189,8 @@ Settings path:
 - Open the original file in a new tab
 - Sync search filters, page, view mode, and preview state into the URL
 - Clear viewer state and return to the login screen when an authenticated viewer API request returns `401`
+- Clear viewer state and return to the connect screen when the server reports that the open library is not shared
+- Reload from scratch when the library id reported by `/api/health` changes
 
 ### Supported Browsing Features
 
@@ -250,6 +258,8 @@ Settings path:
   - The request body is ignored; viewer clients cannot change the Eagle API host, port, or token
 - `GET /api/health`
   - Checks Eagle app/library health; library paths are never returned to clients
+  - Returns `libraryStatus` (`shared`, `not_shared`, or `null` when Eagle is unreachable) and, for a shared library, `library: { id, name }`, where `id` is an opaque per-install HMAC of the library path
+  - Always answered, even when the open library is not shared
 - `GET /api/folders`
   - Returns folder list
 - `GET /api/items`
@@ -264,6 +274,15 @@ Settings path:
   - Serves original file
 - `GET|HEAD /file/:id`
   - Direct original file access
+
+### Shared Library Protection
+
+- Eagle can only have one library open, and the viewer server serves whichever library that is
+- When library protection is on, every `/api/*` route except auth routes and `/api/health`, and every `/file/*` route, first checks the open library against `sharedLibraries`
+- A library that is not shared returns `503 { "error": "The library open in Eagle is not shared", "code": "LIBRARY_NOT_SHARED" }` before any library data is read
+- If Eagle cannot report the open library, the request fails instead of being served
+- Library info is cached for at most 3 seconds; the plugin also clears it on `eagle.onLibraryChanged`
+- The viewer server never calls Eagle's library switch API
 
 ### Media Streaming
 
