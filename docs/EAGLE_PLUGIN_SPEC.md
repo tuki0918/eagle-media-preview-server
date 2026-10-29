@@ -246,15 +246,12 @@ Settings path:
 - `POST /api/auth/logout`
   - Clears viewer session cookies and removes the server-side session token
 - `POST /api/connect`
-  - Connects to Eagle API and returns app/library information
+  - Checks the server-configured Eagle API connection and returns app info and the library display name
+  - The request body is ignored; viewer clients cannot change the Eagle API host, port, or token
 - `GET /api/health`
-  - Checks Eagle app/library health
+  - Checks Eagle app/library health; library paths are never returned to clients
 - `GET /api/folders`
   - Returns folder list
-- `GET /api/libraries`
-  - Returns current library and history
-- `POST /api/library/switch`
-  - Switches the Eagle library
 - `GET /api/items`
   - Returns item list or search results
 - `POST /api/items/:id/star`
@@ -309,7 +306,7 @@ Authorization:
 
 - Browsing is read-only by default
 - `POST /api/items/:id/star` and `POST /api/items/:id/metadata` require an Editor or Admin user
-- `POST /api/library/switch` requires an Admin user
+- The viewer server never calls Eagle's library switch API; switching libraries is only possible from the Eagle app
 - Unsafe methods reject mismatched `Origin` or `Referer` headers before API handlers run
 - JSON request bodies are capped at 1 MiB; malformed bodies return `400` and oversized bodies return `413`
 

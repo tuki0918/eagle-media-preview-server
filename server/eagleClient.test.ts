@@ -704,21 +704,10 @@ test("libraryHistory uses the legacy library history endpoint", async () => {
   assert.equal(calls[0].url, "http://localhost:41595/api/library/history");
 });
 
-test("switchLibrary uses the legacy library switch endpoint", async () => {
-  const calls: RequestCall[] = [];
-  const client = createEagleClient({
-    baseUrl: "http://localhost:41595",
-    fetchImpl: async (url: string, init: { method?: string; body: string }) => {
-      calls.push({ url, init });
-      return jsonResponse({ status: "success", data: {} });
-    },
-  });
+test("createEagleClient does not expose library switching", () => {
+  const client = createEagleClient({ baseUrl: "http://localhost:41595" });
 
-  await client.switchLibrary("/Users/me/B.library");
-
-  assert.equal(calls[0].url, "http://localhost:41595/api/library/switch");
-  assert.equal(calls[0].init.method, "POST");
-  assert.deepEqual(JSON.parse(calls[0].init.body), { libraryPath: "/Users/me/B.library" });
+  assert.equal("switchLibrary" in client, false);
 });
 
 test("updateItemStar uses V2 item/update with a 0-5 star value", async () => {

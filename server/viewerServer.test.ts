@@ -1839,24 +1839,25 @@ test("createViewerServer serves the login shell publicly and protects APIs with 
   await viewer.stop();
 });
 
-test("createViewerServer restricts library switching to admins", async () => {
-  const calls: unknown[] = [];
+test("createViewerServer does not expose library switching or library history", async () => {
+  const calls: string[] = [];
   const viewer = createViewerServer({
     host: "127.0.0.1",
     port: 0,
-    authUsers: [
-      { username: "reader", passwordHash: sha256("read"), role: "viewer" },
-      { username: "owner", passwordHash: sha256("own"), role: "admin" },
-    ],
+    authUsers: [{ username: "owner", passwordHash: sha256("own"), role: "admin" }],
     eagleClient: {
       async appInfo() {
         return { version: "1.0.0" };
       },
       async libraryInfo() {
-        return { path: calls.length ? "/tmp/B.library" : "/tmp/A.library", name: "Test Library" };
+        return { path: "/Users/me/A.library", name: "A" };
+      },
+      async libraryHistory() {
+        calls.push("libraryHistory");
+        return ["/Users/me/A.library", "/Users/me/B.library"];
       },
       async switchLibrary(libraryPath: string) {
-        calls.push(libraryPath);
+        calls.push(`switchLibrary:${libraryPath}`);
         return {};
       },
     },
@@ -1866,77 +1867,65 @@ test("createViewerServer restricts library switching to admins", async () => {
   try {
     const status = viewer.status();
     const origin = `http://127.0.0.1:${status.port}`;
-    const readerCookie = await loginCookie(origin, "reader", "read");
     const adminCookie = await loginCookie(origin, "owner", "own");
 
-    const denied = await fetch(`${origin}/api/library/switch`, {
-      method: "POST",
-      headers: {
-        Cookie: readerCookie,
-        "Content-Type": "application/json",
-        Origin: origin,
-      },
-      body: JSON.stringify({ libraryPath: "/tmp/B.library" }),
-    });
-    assert.equal(denied.status, 403);
-    assert.deepEqual(await denied.json(), { error: "Admin permission is required" });
+    const libraries = await fetch(`${origin}/api/libraries`, { headers: { Cookie: adminCookie } });
+    assert.equal(libraries.status, 404);
 
-    const allowed = await fetch(`${origin}/api/library/switch`, {
+    const switched = await fetch(`${origin}/api/library/switch`, {
       method: "POST",
       headers: {
         Cookie: adminCookie,
         "Content-Type": "application/json",
         Origin: origin,
       },
-      body: JSON.stringify({ libraryPath: "/tmp/B.library" }),
+      body: JSON.stringify({ libraryPath: "/Users/me/B.library" }),
     });
-    assert.equal(allowed.status, 200);
-    assert.deepEqual(calls, ["/tmp/B.library"]);
+    assert.equal(switched.status, 404);
+    assert.deepEqual(calls, []);
   } finally {
     await viewer.stop();
   }
 });
 
-test("createViewerServer restricts Eagle API connection changes to admins", async () => {
+test("createViewerServer keeps the Eagle API connection fixed and hides library paths", async () => {
   const viewer = createViewerServer({
     host: "127.0.0.1",
     port: 0,
-    authUsers: [
-      { username: "reader", passwordHash: sha256("read"), role: "viewer" },
-      { username: "owner", passwordHash: sha256("own"), role: "admin" },
-    ],
+    authUsers: [{ username: "owner", passwordHash: sha256("own"), role: "admin" }],
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/Users/me/A.library", name: "A" };
+      },
+    },
   });
 
   await viewer.start();
   try {
     const status = viewer.status();
     const origin = `http://127.0.0.1:${status.port}`;
-    const readerCookie = await loginCookie(origin, "reader", "read");
+    const adminCookie = await loginCookie(origin, "owner", "own");
 
-    const deniedRemoteHost = await fetch(`${origin}/api/connect`, {
+    const connected = await fetch(`${origin}/api/connect`, {
       method: "POST",
       headers: {
-        Cookie: readerCookie,
+        Cookie: adminCookie,
         "Content-Type": "application/json",
         Origin: origin,
       },
-      body: JSON.stringify({ host: "192.168.1.20", port: "41595", token: "secret" }),
+      body: JSON.stringify({ host: "192.168.1.20", port: "41596", token: "secret" }),
     });
-    assert.equal(deniedRemoteHost.status, 403);
-    assert.deepEqual(await deniedRemoteHost.json(), {
-      error: "Admin permission is required to change the Eagle API connection",
-    });
+    assert.equal(connected.status, 200);
+    assert.deepEqual(await connected.json(), { app: { version: "1.0.0" }, library: { name: "A" } });
 
-    const deniedLocalPort = await fetch(`${origin}/api/connect`, {
-      method: "POST",
-      headers: {
-        Cookie: readerCookie,
-        "Content-Type": "application/json",
-        Origin: origin,
-      },
-      body: JSON.stringify({ host: "127.0.0.1", port: "41596" }),
-    });
-    assert.equal(deniedLocalPort.status, 403);
+    const health = await fetch(`${origin}/api/health`, { headers: { Cookie: adminCookie } });
+    assert.equal(health.status, 200);
+    const healthBody = await health.json();
+    assert.deepEqual(healthBody.library, { name: "A" });
+    assert.equal(JSON.stringify(healthBody).includes("/Users/me"), false);
   } finally {
     await viewer.stop();
   }

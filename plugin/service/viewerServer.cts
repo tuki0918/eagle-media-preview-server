@@ -4,7 +4,7 @@ const { createServer: createHttpsServer } = require("https");
 const { randomBytes } = require("crypto");
 const { normalizeCustomDomain } = require("./customDomain.cjs");
 const { EagleRequestError, createEagleClient, normalizeStringArray } = require("./eagleClient.cjs");
-const { buildConnectionCandidates, createConnectionContext } = require("./connection.cjs");
+const { createConnectionContext } = require("./connection.cjs");
 const { readInternetShortcutUrl, streamItemMedia } = require("./media.cjs");
 const { resolveDefaultPublicDir, securityHeaders, serveStatic } = require("./static.cjs");
 const {
@@ -73,13 +73,6 @@ interface JsonObject {
   [key: string]: unknown;
 }
 
-interface ConnectionCandidate {
-  baseUrl: string;
-  host: string;
-  port: number;
-  token: string;
-}
-
 const INVALID_LOGIN_MESSAGE = "Invalid username or password";
 const LOGIN_RATE_LIMIT_MESSAGE = "Too many failed login attempts. Try again later.";
 const RATING_WRITE_FORBIDDEN_MESSAGE = "Rating editing is not allowed for this viewer";
@@ -88,6 +81,7 @@ const ADMIN_WRITE_FORBIDDEN_MESSAGE = "Admin actions are not allowed for this vi
 const UNTAGGED_FOLDER_ID = "__untagged__";
 
 interface EagleLibraryInfo {
+  name?: string;
   path?: string;
 }
 
@@ -113,7 +107,6 @@ interface EagleClient {
   itemById(id: string): Promise<EagleItem>;
   itemExtensions(): Promise<Array<{ count: number; ext: string }>>;
   legacyThumbnailPath(id: string): Promise<unknown>;
-  libraryHistory(): Promise<unknown[]>;
   listItems(options: {
     ext?: string | null;
     folderId?: string | null;
@@ -131,7 +124,6 @@ interface EagleClient {
   smartFolders(): Promise<unknown>;
   tagCoverItem(tag: string): Promise<unknown>;
   tagOverview(): Promise<{ groups: unknown[]; starred: unknown[]; tags: unknown[] }>;
-  switchLibrary(libraryPath: string): Promise<unknown>;
   updateItemMetadata(id: string, input: { folders?: unknown; tags?: unknown }): Promise<EagleItem>;
   updateItemStar(id: string, star: unknown): Promise<EagleItem>;
   updateItemTrash(id: string, isDeleted: boolean): Promise<EagleItem>;
@@ -150,7 +142,6 @@ interface EagleSession {
 
 interface ApiContext {
   getSession: () => EagleSession;
-  setSession: (nextSession: EagleSession) => void;
 }
 
 const defaultPublicDir = resolveDefaultPublicDir();
@@ -203,7 +194,7 @@ function createViewerServer({
   const authSessions = new Map<string, AuthSession>();
   const revokedAuthSessions = new Set<string>();
   const loginFailures = new Map<string, LoginFailure>();
-  let currentSession = createConnectionContext({
+  const currentSession = createConnectionContext({
     connection: {
       host: "127.0.0.1",
       port: 41595,
@@ -233,9 +224,6 @@ function createViewerServer({
         await handleApi(req, url, res, {
           auth,
           getSession: () => currentSession,
-          setSession: (nextSession: EagleSession) => {
-            currentSession = nextSession;
-          },
         });
         return;
       }
@@ -353,17 +341,17 @@ async function cachedItemTypes(session: { client: EagleClient; libraryInfo(): Pr
   return value;
 }
 
-async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { auth, getSession, setSession }: ApiContext & { auth: AuthContext }) {
+async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { auth, getSession }: ApiContext & { auth: AuthContext }) {
+  const session = getSession();
+
   if (url.pathname === "/api/connect") {
     if (req.method !== "POST") {
       sendMethodNotAllowed(res, ["POST"]);
       return;
     }
-    await handleConnect(req, res, setSession, auth);
+    await handleConnect(req, res, session);
     return;
   }
-
-  const session = getSession();
 
   if (url.pathname === "/api/health") {
     if (req.method !== "GET") {
@@ -376,7 +364,7 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
     ]);
     sendJson(res, 200, {
       app: app.status === "fulfilled" ? app.value : null,
-      library: library.status === "fulfilled" ? library.value : null,
+      library: library.status === "fulfilled" ? publicLibraryInfo(library.value) : null,
       error: app.status === "rejected" ? app.reason.message : null,
     });
     return;
@@ -397,45 +385,6 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       return;
     }
     sendJson(res, 200, await session.client.smartFolders());
-    return;
-  }
-
-  if (url.pathname === "/api/libraries") {
-    if (req.method !== "GET") {
-      sendMethodNotAllowed(res, ["GET"]);
-      return;
-    }
-    const [library, history] = await Promise.all([
-      session.libraryInfo(),
-      session.client.libraryHistory(),
-    ]);
-    const paths = uniquePaths([library?.path, ...(Array.isArray(history) ? history.filter((path): path is string => typeof path === "string") : [])]);
-    sendJson(res, 200, {
-      current: library?.path || "",
-      items: paths.map((path) => ({ path, name: libraryNameFromPath(path) })),
-    });
-    return;
-  }
-
-  if (url.pathname === "/api/library/switch") {
-    if (req.method !== "POST") {
-      sendMethodNotAllowed(res, ["POST"]);
-      return;
-    }
-    if (!hasAdminAccess(req, auth)) {
-      sendJson(res, 403, { error: "Admin permission is required" });
-      return;
-    }
-    const body = await readJson(req);
-    const libraryPath = String(body.libraryPath || "").trim();
-    if (!libraryPath) {
-      sendJson(res, 400, { error: "libraryPath is required" });
-      return;
-    }
-    await session.client.switchLibrary(libraryPath);
-    session.clearLibraryInfo?.();
-    const library = await waitForLibrarySwitch(session, libraryPath);
-    sendJson(res, 200, { library });
     return;
   }
 
@@ -772,57 +721,23 @@ function sendLoginRateLimited(res: ServerResponse, retryAfterSeconds: number) {
   res.end(JSON.stringify({ error: LOGIN_RATE_LIMIT_MESSAGE }));
 }
 
-async function handleConnect(req: IncomingMessage, res: ServerResponse, setSession: (nextSession: EagleSession) => void, auth: AuthContext) {
-  const input = await readJson(req);
-  if (!hasAdminAccess(req, auth) && !isDefaultLocalEagleConnectionInput(input)) {
-    sendJson(res, 403, { error: "Admin permission is required to change the Eagle API connection" });
-    return;
-  }
-  let candidates: ConnectionCandidate[] = [];
+// The Eagle API connection is fixed server-side; viewer clients can only check it, never repoint it.
+async function handleConnect(req: IncomingMessage, res: ServerResponse, session: EagleSession) {
+  await readJson(req);
   try {
-    candidates = buildConnectionCandidates({
-      input,
-      requestHost: req.headers.host || "",
-    }) as ConnectionCandidate[];
+    const [app, library] = await Promise.all([
+      session.client.appInfo(),
+      session.libraryInfo(),
+    ]);
+    sendJson(res, 200, { app, library: publicLibraryInfo(library) });
   } catch (error) {
-    sendJson(res, 400, { error: errorMessage(error) });
-    return;
+    sendJson(res, 502, { error: `Unable to connect to Eagle API: ${errorMessage(error)}` });
   }
-  const errors: string[] = [];
-  const requestedHost = String(input.host || "127.0.0.1").trim() || "127.0.0.1";
-
-  for (const connection of candidates) {
-    try {
-      const session = createConnectionContext({ connection }) as EagleSession;
-      const [app, library] = await Promise.all([
-        session.client.appInfo(),
-        session.libraryInfo(),
-      ]);
-      setSession(session);
-      sendJson(res, 200, {
-        app,
-        library,
-        connection: {
-          host: session.connection.host,
-          port: session.connection.port,
-          hasToken: Boolean(session.connection.token),
-          fallbackToLocalhost: requestedHost !== session.connection.host,
-        },
-      });
-      return;
-    } catch (error) {
-      errors.push(`${connection.baseUrl}: ${errorMessage(error)}`);
-    }
-  }
-
-  sendJson(res, 502, { error: `Unable to connect to Eagle API: ${errors.join(" / ")}` });
 }
 
-function isDefaultLocalEagleConnectionInput(input: JsonObject) {
-  const host = String(input.host || "127.0.0.1").trim() || "127.0.0.1";
-  const port = String(input.port || "41595").trim() || "41595";
-  const token = String(input.token || "").trim();
-  return ["127.0.0.1", "localhost", "::1"].includes(host) && port === "41595" && !token;
+// Library paths reveal the host's directory layout, so clients only get the display name.
+function publicLibraryInfo(library: EagleLibraryInfo | null | undefined) {
+  return library ? { name: String(library.name || "") } : null;
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown) {
@@ -899,28 +814,6 @@ async function readJson(req: IncomingMessage): Promise<JsonObject> {
   } catch {
     throw new HttpError(400, "Invalid JSON body");
   }
-}
-
-function uniquePaths(paths: Array<string | undefined | null>) {
-  return [...new Set(paths.filter((path): path is string => Boolean(path)).map((path) => path.replace(/\/+$/, "")))];
-}
-
-function libraryNameFromPath(path: string) {
-  return path.split(/[\\/]/).filter(Boolean).at(-1)?.replace(/\.library$/i, "") || path;
-}
-
-async function waitForLibrarySwitch(session: EagleSession, expectedPath: string) {
-  const expected = expectedPath.replace(/\/+$/, "");
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    session.clearLibraryInfo?.();
-    const library = await session.libraryInfo();
-    if ((library?.path || "").replace(/\/+$/, "") === expected) {
-      return library;
-    }
-    await new Promise((resolveDelay) => setTimeout(resolveDelay, 250));
-  }
-  session.clearLibraryInfo?.();
-  return session.libraryInfo();
 }
 
 function errorMessage(error: unknown) {
