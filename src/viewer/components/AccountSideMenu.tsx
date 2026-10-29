@@ -735,7 +735,7 @@ function PreferencesDialog({ onClose }: { onClose: () => void }) {
         <ItemActionsMenuSection visible={draft.showItemActions} onChange={(showItemActions) => updateDraft({ showItemActions })} />
       </div>
       <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3">
-        <Button variant="outline" className="h-9 gap-2 rounded-full px-3 text-xs" aria-label="Reset to default" title="Reset display settings" onClick={() => { setDraft({ ...DEFAULT_DISPLAY_PREFERENCES }); setResetPending(true); }}><RotateCcwIcon className="size-4" aria-hidden="true" />Reset to default</Button>
+        <Button variant="outline" className="h-9 gap-2 rounded-full px-3 text-xs max-[540px]:w-9 max-[540px]:px-0" aria-label="Reset to default" title="Reset display settings" onClick={() => { setDraft({ ...DEFAULT_DISPLAY_PREFERENCES }); setResetPending(true); }}><RotateCcwIcon className="size-4" aria-hidden="true" /><span className="max-[540px]:hidden">Reset to default</span></Button>
         <div className="ml-auto flex items-center gap-2">
           <Button variant="outline" className="h-9 rounded-full px-4" onClick={onClose}>Cancel</Button>
           <Button className="primary-action-button h-9 rounded-full px-4" onClick={apply}><CheckIcon className="size-4" aria-hidden="true" />Done</Button>
