@@ -224,8 +224,7 @@ function createViewerServer({
   const currentSession: EagleSession = createConnectionContext({ client: eagleClient });
   // Bumped whenever the plugin reports a library switch.
   let libraryGeneration = 0;
-  const trackLibrary = (res: ServerResponse, admittedLibraryId: string) => {
-    const admittedGeneration = libraryGeneration;
+  const trackLibrary = (res: ServerResponse, admittedLibraryId: string, admittedGeneration: number) => {
     const currentLibraryId = () => {
       const library = currentSession.lastLibraryInfo?.() as EagleLibraryInfo | null | undefined;
       return library ? libraryId(library.path) : "";
@@ -234,6 +233,53 @@ function createViewerServer({
       currentLibraryId,
       stillOpen: () => admittedGeneration === libraryGeneration && currentLibraryId() === admittedLibraryId,
     });
+  };
+  // One snapshot of the open library decides sharing, the id check, and the X-Library-Id header.
+  // The switch generation is read before that snapshot, so a switch at any point (between checks,
+  // or while Eagle answers) fails closed instead of admitting the new library.
+  const admitLibraryRequest = async (req: IncomingMessage, url: URL, res: ServerResponse) => {
+    const isHealth = url.pathname === "/api/health";
+    const pin = libraryPinFor(url.pathname);
+    const protectedLibraries = libraryAccess.status(null) !== "unrestricted";
+    const admittedGeneration = libraryGeneration;
+    let openLibrary: EagleLibraryInfo | null = null;
+    try {
+      openLibrary = await currentSession.libraryInfo();
+    } catch (error) {
+      // With protection on, a library that cannot be read is never served; health still answers.
+      if (protectedLibraries && !isHealth) throw error;
+    }
+    const switched = admittedGeneration !== libraryGeneration;
+    const shared = Boolean(openLibrary) && libraryAccess.status(openLibrary?.path) !== "not_shared";
+    // The id of an unshared library is never sent, so it cannot be replayed after a switch.
+    const openLibraryId = openLibrary && shared && !switched ? libraryId(openLibrary.path) : "";
+    if (openLibraryId) res.setHeader("X-Library-Id", openLibraryId);
+    if (isHealth) return true;
+    if (switched) {
+      sendJson(res, 409, { error: LIBRARY_CHANGED_MESSAGE, code: "LIBRARY_CHANGED" });
+      return false;
+    }
+    if (protectedLibraries && !shared) {
+      sendLibraryNotShared(res);
+      return false;
+    }
+    if (pin === "none") return true;
+    const expectedLibraryId = String(req.headers["x-library-id"] || url.searchParams.get("library") || "").trim();
+    if (!expectedLibraryId) {
+      sendJson(res, 400, { error: LIBRARY_REQUIRED_MESSAGE, code: "LIBRARY_REQUIRED" });
+      return false;
+    }
+    if (!openLibraryId) {
+      // The open library cannot be confirmed, so a pinned request is never answered.
+      sendJson(res, 502, { error: "Unable to reach Eagle API" });
+      return false;
+    }
+    if (expectedLibraryId !== openLibraryId) {
+      sendJson(res, 409, { error: LIBRARY_CHANGED_MESSAGE, code: "LIBRARY_CHANGED" });
+      return false;
+    }
+    trackLibrary(res, openLibraryId, admittedGeneration);
+    return true;
   };
   const confirmLibraryBeforeWrite = async (res: ServerResponse) => {
     const guard = libraryGuards.get(res);
@@ -264,11 +310,7 @@ function createViewerServer({
           sendAuthRequired(res);
           return;
         }
-        if (url.pathname !== "/api/health" && !(await isOpenLibraryShared(currentSession, libraryAccess))) {
-          sendLibraryNotShared(res);
-          return;
-        }
-        if (!(await matchesConnectedLibrary(req, url, res, currentSession, libraryId, trackLibrary))) return;
+        if (!(await admitLibraryRequest(req, url, res))) return;
         await handleApi(req, url, res, {
           auth,
           confirmLibraryBeforeWrite,
@@ -287,13 +329,8 @@ function createViewerServer({
         attachRequestCounter(res, () => {
           requestCount += 1;
         });
-        const session = currentSession;
-        if (!(await isOpenLibraryShared(session, libraryAccess))) {
-          sendLibraryNotShared(res);
-          return;
-        }
-        if (!(await matchesConnectedLibrary(req, url, res, session, libraryId, trackLibrary))) return;
-        await streamItemMedia(decodeURIComponent(fileMatch[1]), "file", req, res, session, libraryGuards.get(res)?.stillOpen);
+        if (!(await admitLibraryRequest(req, url, res))) return;
+        await streamItemMedia(decodeURIComponent(fileMatch[1]), "file", req, res, currentSession, libraryGuards.get(res)?.stillOpen);
         return;
       }
       await serveStatic(url.pathname, res, publicDir);
@@ -394,6 +431,8 @@ async function handleLibraryStatus(req: IncomingMessage, res: ServerResponse, se
 
 type LibraryPin = "none" | "required";
 
+// Viewers send the library id they connected to, as the X-Library-Id header on fetches or a
+// `library` query parameter on media URLs (media elements cannot send headers).
 // Every request that reads or changes library data must name the library it expects, because an
 // item or folder id alone could match whichever library Eagle has open. `/api/connect` and
 // `/api/health` hand out the id, so they are never pinned (auth routes and /api/library-status are
@@ -401,39 +440,6 @@ type LibraryPin = "none" | "required";
 function libraryPinFor(pathname: string): LibraryPin {
   if (pathname === "/api/connect" || pathname === "/api/health") return "none";
   return "required";
-}
-
-// Viewers send the library id they connected to, as the X-Library-Id header on fetches or a
-// `library` query parameter on media URLs. The library is checked first; only a request for the
-// library that is open goes on to look up the item, so nothing from another library is returned.
-async function matchesConnectedLibrary(req: IncomingMessage, url: URL, res: ServerResponse, session: EagleSession, libraryId: ApiContext["libraryId"], trackLibrary: (res: ServerResponse, admittedLibraryId: string) => void) {
-  const pin = libraryPinFor(url.pathname);
-  const openLibrary = await session.libraryInfo().catch(() => null);
-  const openLibraryId = openLibrary ? libraryId(openLibrary.path) : "";
-  if (openLibraryId) res.setHeader("X-Library-Id", openLibraryId);
-  if (pin === "none") return true;
-  const expectedLibraryId = String(req.headers["x-library-id"] || url.searchParams.get("library") || "").trim();
-  if (!expectedLibraryId) {
-    sendJson(res, 400, { error: LIBRARY_REQUIRED_MESSAGE, code: "LIBRARY_REQUIRED" });
-    return false;
-  }
-  if (!openLibraryId) {
-    // The open library cannot be confirmed, so a pinned request is never answered.
-    sendJson(res, 502, { error: "Unable to reach Eagle API" });
-    return false;
-  }
-  if (expectedLibraryId === openLibraryId) {
-    trackLibrary(res, openLibraryId);
-    return true;
-  }
-  sendJson(res, 409, { error: LIBRARY_CHANGED_MESSAGE, code: "LIBRARY_CHANGED" });
-  return false;
-}
-
-async function isOpenLibraryShared(session: EagleSession, libraryAccess: LibraryAccessPolicy) {
-  if (libraryAccess.status(null) === "unrestricted") return true;
-  const library = await session.libraryInfo();
-  return libraryAccess.status(library?.path) === "shared";
 }
 
 function createProtocolServer({ httpsCertPath = "", httpsEnabled = false, httpsKeyPath = "" }: {

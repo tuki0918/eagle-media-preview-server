@@ -2142,6 +2142,105 @@ test("createViewerServer drops an answer when Eagle switches libraries while the
   }
 });
 
+test("createViewerServer never sends the id of an unshared library", async () => {
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    sharedLibraries: ["/Users/me/Shared.library"],
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/Users/me/Private.library", name: "Private" };
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const responses = [
+      await globalThis.fetch(`${origin}/api/health`),
+      await globalThis.fetch(`${origin}/api/folders`, { headers: { "X-Library-Id": "guess" } }),
+      await globalThis.fetch(`${origin}/api/connect`, { method: "POST", headers: { "Content-Type": "application/json", Origin: origin }, body: "{}" }),
+      await globalThis.fetch(`${origin}/file/ITEM1?library=guess`),
+    ];
+    assert.deepEqual(responses.map((response) => response.status), [200, 503, 503, 503]);
+    assert.deepEqual(responses.map((response) => response.headers.get("x-library-id")), [null, null, null, null]);
+    const health = await responses[0].json();
+    assert.equal(health.libraryStatus, "not_shared");
+    assert.equal(health.library, null);
+  } finally {
+    await viewer.stop();
+  }
+});
+
+for (const route of ["/api/folders", "/file/ITEM1"]) {
+  test(`createViewerServer refuses ${route} when Eagle switches while the request is being admitted`, async () => {
+    const root = join(tmpdir(), `eagle-media-preview-server-admit-${Date.now()}`);
+    await mkdir(root, { recursive: true });
+    const filePath = join(root, "private.jpg");
+    await writeFile(filePath, "private-file");
+    const shared = { path: "/Users/me/Shared.library", name: "Shared" };
+    const unshared = { path: "/Users/me/Private.library", name: "Private" };
+    let open = unshared;
+    let switchAfterNextRead = false;
+    let viewer: ReturnType<typeof createViewerServer>;
+    viewer = createViewerServer({
+      host: "127.0.0.1",
+      port: 0,
+      sharedLibraries: [shared.path],
+      sessionSecret: "fixed-test-secret",
+      eagleClient: {
+        async appInfo() {
+          return { version: "1.0.0" };
+        },
+        async libraryInfo() {
+          const current = open;
+          if (switchAfterNextRead) {
+            switchAfterNextRead = false;
+            // Eagle reports the shared library, then switches to the unshared one right away.
+            queueMicrotask(() => {
+              open = unshared;
+              viewer.notifyLibraryChanged();
+            });
+          }
+          return current;
+        },
+        async folders() {
+          return { items: [{ id: "F1", name: `folder of ${open.name}` }], total: 1, offset: 0, limit: 1 };
+        },
+        async itemById(id: string) {
+          return { data: [{ id, filePath }] };
+        },
+      },
+    });
+
+    await viewer.start();
+    try {
+      const origin = `http://127.0.0.1:${viewer.status().port}`;
+      // The real id of the unshared library, as a client could have learned it earlier.
+      const { createHmac } = await import("node:crypto");
+      const { libraryPathKey } = require("../dist/.generated/plugin-service/libraryAccess.cjs");
+      const guessedId = createHmac("sha256", "fixed-test-secret").update(libraryPathKey(unshared.path)).digest("base64url").slice(0, 16);
+      open = shared;
+      viewer.notifyLibraryChanged();
+      switchAfterNextRead = true;
+      const separator = route.includes("?") ? "&" : "?";
+      const response = await globalThis.fetch(`${origin}${route}${route.startsWith("/file/") ? `${separator}library=${guessedId}` : ""}`, {
+        headers: route.startsWith("/api/") ? { "X-Library-Id": guessedId } : {},
+      });
+      const text = await response.text();
+      assert.notEqual(response.status, 200);
+      assert.equal(text.includes("Private"), false);
+      assert.equal(text.includes("private-file"), false);
+    } finally {
+      await viewer.stop();
+    }
+  });
+}
+
 test("createViewerServer re-checks the open library right before a write", async () => {
   let open = { path: "/Users/me/Shared.library", name: "Shared" };
   const writes: string[] = [];

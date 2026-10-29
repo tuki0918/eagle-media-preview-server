@@ -14,7 +14,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ### Changed
 
 - The viewer server now notices library switches in Eagle right away. Viewer requests are tied to the library they connected to, and the check is repeated before each answer and each write, so a switch, even in the middle of a request, never returns or changes data in the new library. Viewers then return to the connect screen.
-- Viewers no longer receive library file paths; `/api/connect` and `/api/health` return only the library name and an opaque id.
+- Viewers no longer receive library file paths; `/api/connect` and `/api/health` return only the library name and an opaque id, and never the id of an unshared library.
 
 ### Removed
 
