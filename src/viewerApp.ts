@@ -134,7 +134,7 @@ const pendingRatingItemIds = new Set<string>();
 const DEFAULT_DOCUMENT_TITLE = "Media Library";
 const OFFLINE_PAGE_TITLE = "Media Library is offline";
 const LIBRARY_NOT_SHARED_MESSAGE = "This library isn't shared right now. Please try again later.";
-const LIBRARY_CHANGED_MESSAGE = "The media server switched to a different library. Connect to browse it.";
+const LIBRARY_CHANGED_MESSAGE = "The media server switched to a different library.";
 const changeSearch = debounce((query: string) => {
   applyFilterChange({ query: query.trim() });
   loadTagSuggestions();

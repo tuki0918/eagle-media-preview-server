@@ -487,7 +487,7 @@ describe("viewer app data refresh", () => {
     health = { app: { version: "1.0" }, library: { id: "lib-b", name: "B" }, libraryStatus: "shared" };
     window.dispatchEvent(new window.Event("online"));
     await vi.waitFor(() => expect(getShellView()).toBe("login"));
-    expect(getLoginConnectState()).toMatchObject({ isError: false, message: "The media server switched to a different library. Connect to browse it." });
+    expect(getLoginConnectState()).toMatchObject({ isError: false, message: "The media server switched to a different library." });
     expect(getLibraryName()).toBe("");
     expect(requests.filter((url) => url === "/api/connect")).toHaveLength(1);
   });
@@ -521,7 +521,7 @@ describe("viewer app data refresh", () => {
     vi.spyOn(window, "scrollTo").mockImplementation(() => {});
     openAllItems();
     await vi.waitFor(() => expect(getShellView()).toBe("login"));
-    expect(getLoginConnectState().message).toBe("The media server switched to a different library. Connect to browse it.");
+    expect(getLoginConnectState().message).toBe("The media server switched to a different library.");
   });
 
   test("sends the connected library id and returns to the connect screen when a pinned media load fails", async () => {
@@ -559,7 +559,7 @@ describe("viewer app data refresh", () => {
     document.body.append(image);
     image.dispatchEvent(new window.Event("error"));
     await vi.waitFor(() => expect(getShellView()).toBe("login"));
-    expect(getLoginConnectState().message).toBe("The media server switched to a different library. Connect to browse it.");
+    expect(getLoginConnectState().message).toBe("The media server switched to a different library.");
     expect(mediaUrl("ITEM1", "thumb")).toBe("/api/items/ITEM1/thumb");
   });
 });
