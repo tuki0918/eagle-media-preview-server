@@ -653,11 +653,13 @@ describe("ViewerAppShell", () => {
     };
     const previousWindow = globalThis.window;
     const previousDocument = globalThis.document;
+    const previousCustomEvent = globalThis.CustomEvent;
     const previousNode = globalThis.Node;
     const previousHTMLElement = globalThis.HTMLElement;
     const previousIS_REACT_ACT_ENVIRONMENT = testGlobal.IS_REACT_ACT_ENVIRONMENT;
     globalThis.window = dom.window;
     globalThis.document = dom.window.document;
+    globalThis.CustomEvent = dom.window.CustomEvent;
     globalThis.Node = dom.window.Node;
     globalThis.HTMLElement = dom.window.HTMLElement;
     testGlobal.IS_REACT_ACT_ENVIRONMENT = true;
@@ -731,17 +733,27 @@ describe("ViewerAppShell", () => {
         accountButton.click();
       });
 
+      expect(container.querySelector("#themeModeGroup")).toBeNull();
+      const preferences = container.querySelector<HTMLButtonElement>('#authAccountMenu [aria-controls="preferencesDialog"]')!;
+      expect(preferences.textContent).toBe("Preferences");
+      expect(preferences.querySelector("svg")).not.toBeNull();
+      await act(async () => { preferences.click(); });
+      expect(container.querySelector("#authAccountMenu")).toBeNull();
+      expect(container.querySelector("#preferencesDialog")?.hasAttribute("open")).toBe(true);
       const themeGroup = container.querySelector("#themeModeGroup");
       expect(themeGroup).not.toBeNull();
       expect(themeGroup?.getAttribute("aria-label")).toBe("Theme color");
-      expect(container.querySelector('#authAccountMenu [aria-label="Light"]')).not.toBeNull();
-      expect(container.querySelector('#authAccountMenu [aria-label="Dark"]')).not.toBeNull();
-      expect(container.querySelector('#authAccountMenu [aria-label="System"]')).not.toBeNull();
+      expect(container.querySelector('#preferencesDialog [aria-label="Light"]')).not.toBeNull();
+      expect(container.querySelector('#preferencesDialog [aria-label="Dark"]')).not.toBeNull();
+      expect(container.querySelector('#preferencesDialog [aria-label="System"]')).not.toBeNull();
       const pageSizeGroup = container.querySelector("#pageSizeGroup");
       expect(pageSizeGroup?.getAttribute("aria-label")).toBe("Items per page");
-      expect(container.querySelector('#authAccountMenu [aria-label="30 items per page"]')?.getAttribute("data-state")).toBe("active");
-      expect(container.querySelector('#authAccountMenu [aria-label="240 items per page"]')?.getAttribute("data-state")).toBe("inactive");
+      expect(container.querySelector('#preferencesDialog [aria-label="30 items per page"]')?.getAttribute("data-state")).toBe("active");
+      expect(container.querySelector('#preferencesDialog [aria-label="240 items per page"]')?.getAttribute("data-state")).toBe("inactive");
       expect(container.querySelector("#logoutButton")).toBeNull();
+      await act(async () => { container.querySelector<HTMLButtonElement>('[aria-label="Close preferences"]')!.click(); });
+      expect(container.querySelector("#preferencesDialog")).toBeNull();
+      expect(dom.window.document.body.style.overflow).toBe("");
     } finally {
       if (root) {
         await act(async () => {
@@ -750,6 +762,7 @@ describe("ViewerAppShell", () => {
       }
       globalThis.window = previousWindow;
       globalThis.document = previousDocument;
+      globalThis.CustomEvent = previousCustomEvent;
       globalThis.Node = previousNode;
       globalThis.HTMLElement = previousHTMLElement;
       testGlobal.IS_REACT_ACT_ENVIRONMENT = previousIS_REACT_ACT_ENVIRONMENT;
@@ -976,6 +989,7 @@ describe("ViewerAppShell", () => {
     const testGlobal = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
     const previousWindow = globalThis.window;
     const previousDocument = globalThis.document;
+    const previousCustomEvent = globalThis.CustomEvent;
     const previousNode = globalThis.Node;
     const previousHTMLElement = globalThis.HTMLElement;
     const previousIS_REACT_ACT_ENVIRONMENT = testGlobal.IS_REACT_ACT_ENVIRONMENT;
@@ -985,6 +999,7 @@ describe("ViewerAppShell", () => {
     const smartFolderChanged = vi.spyOn(shellActions, "changeSmartFolder").mockImplementation(() => {});
     globalThis.window = dom.window;
     globalThis.document = dom.window.document;
+    globalThis.CustomEvent = dom.window.CustomEvent;
     globalThis.Node = dom.window.Node;
     globalThis.HTMLElement = dom.window.HTMLElement;
     testGlobal.IS_REACT_ACT_ENVIRONMENT = true;
@@ -1033,16 +1048,22 @@ describe("ViewerAppShell", () => {
       const account = container.querySelector("#authAccountLabel");
       if (!(account instanceof dom.window.HTMLButtonElement)) throw new Error("Missing account menu");
       await act(async () => { account.click(); });
-      const tabs = Array.from(container.querySelectorAll('#authAccountMenu [role="tab"]'));
-      const off = tabs.find((tab) => tab.textContent?.trim() === "Off");
-      const on = tabs.find((tab) => tab.textContent?.trim() === "On");
-      if (!(off instanceof dom.window.HTMLButtonElement) || !(on instanceof dom.window.HTMLButtonElement)) throw new Error("Missing subfolder visibility settings");
-      expect(on.getAttribute("data-state")).toBe("active");
+      await act(async () => { container.querySelector<HTMLButtonElement>('#authAccountMenu [aria-controls="preferencesDialog"]')!.click(); });
+      const off = container.querySelector<HTMLButtonElement>('#preferencesDialog [aria-label="Hide subfolders"]')!;
       await act(async () => { off.dispatchEvent(new dom.window.MouseEvent("mousedown", { bubbles: true, button: 0 })); });
-      expect(container.querySelector("#subfolderList")).toBeNull();
+      expect(getSubfoldersVisible()).toBe(true);
+      expect(container.querySelector("#subfolderList")).not.toBeNull();
+      const done = () => Array.from(container.querySelectorAll<HTMLButtonElement>("#preferencesDialog button")).find((button) => button.textContent === "Done")!;
+      await act(async () => { done().click(); });
       expect(getSubfoldersVisible()).toBe(false);
+      expect(container.querySelector("#subfolderList")).toBeNull();
       expect(dom.window.localStorage.getItem("eagleShowSubfolders")).toBe("false");
+      await act(async () => { account.click(); });
+      await act(async () => { container.querySelector<HTMLButtonElement>('#authAccountMenu [aria-controls="preferencesDialog"]')!.click(); });
+      const on = container.querySelector<HTMLButtonElement>('#preferencesDialog [aria-label="Show subfolders"]')!;
       await act(async () => { on.dispatchEvent(new dom.window.MouseEvent("mousedown", { bubbles: true, button: 0 })); });
+      expect(getSubfoldersVisible()).toBe(false);
+      await act(async () => { done().click(); });
       expect(container.querySelector("#subfolderList")).not.toBeNull();
       expect(dom.window.localStorage.getItem("eagleShowSubfolders")).toBe("true");
 
@@ -1062,6 +1083,7 @@ describe("ViewerAppShell", () => {
       setSubfoldersVisible(previousVisible);
       globalThis.window = previousWindow;
       globalThis.document = previousDocument;
+      globalThis.CustomEvent = previousCustomEvent;
       globalThis.Node = previousNode;
       globalThis.HTMLElement = previousHTMLElement;
       testGlobal.IS_REACT_ACT_ENVIRONMENT = previousIS_REACT_ACT_ENVIRONMENT;
@@ -1176,11 +1198,13 @@ describe("ViewerAppShell", () => {
     };
     const previousWindow = globalThis.window;
     const previousDocument = globalThis.document;
+    const previousCustomEvent = globalThis.CustomEvent;
     const previousNode = globalThis.Node;
     const previousHTMLElement = globalThis.HTMLElement;
     const previousIS_REACT_ACT_ENVIRONMENT = testGlobal.IS_REACT_ACT_ENVIRONMENT;
     globalThis.window = dom.window;
     globalThis.document = dom.window.document;
+    globalThis.CustomEvent = dom.window.CustomEvent;
     globalThis.Node = dom.window.Node;
     globalThis.HTMLElement = dom.window.HTMLElement;
     testGlobal.IS_REACT_ACT_ENVIRONMENT = true;
@@ -1245,12 +1269,11 @@ describe("ViewerAppShell", () => {
       expect(resetWrapper.getAttribute("style")).toBeNull();
       const account = container.querySelector<HTMLButtonElement>("#authAccountLabel");
       await act(async () => { account?.click(); });
-      const resetButton = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
-        .find((button) => button.getAttribute("aria-label") === "Reset display settings");
-      expect(resetButton).toBeDefined();
-      const settingsGroup = container.querySelector('[role="group"][aria-labelledby="accountSettingsLabel"]');
-      expect(settingsGroup?.querySelector("#accountSettingsLabel")?.textContent).toBe("SETTINGS");
-      expect(settingsGroup?.contains(resetButton!)).toBe(true);
+      await act(async () => { container.querySelector<HTMLButtonElement>('#authAccountMenu [aria-controls="preferencesDialog"]')!.click(); });
+      const settingsGroup = container.querySelector("#preferencesDialog");
+      const resetButton = settingsGroup?.querySelector<HTMLButtonElement>('[aria-label="Reset to default"]');
+      expect(resetButton).not.toBeNull();
+      expect(settingsGroup?.querySelector("#preferencesTitle")?.textContent).toBe("Preferences");
       expect(settingsGroup?.querySelector("#themeModeGroup")).not.toBeNull();
       expect(settingsGroup?.querySelector("#pageSizeGroup")).not.toBeNull();
       expect(settingsGroup?.querySelector("#subfoldersDisplayGroup")).not.toBeNull();
@@ -1261,13 +1284,30 @@ describe("ViewerAppShell", () => {
       await act(async () => {
         hideActions?.dispatchEvent(new dom.window.MouseEvent("mousedown", { bubbles: true, button: 0 }));
       });
+      expect(getItemActionsVisible()).toBe(true);
+      const footerButton = (label: string) => Array.from(container.querySelectorAll<HTMLButtonElement>("#preferencesDialog footer button")).find((button) => button.textContent === label)!;
+      expect(resetButton?.textContent).toBe("Reset to default");
+      expect(resetButton?.getAttribute("title")).toBe("Reset display settings");
+      expect(settingsGroup?.textContent).not.toContain("Customize appearance and browsing.");
+      await act(async () => { footerButton("Done").click(); });
       expect(getItemActionsVisible()).toBe(false);
       expect(dom.window.localStorage.getItem("eagleShowItemActions")).toBe("false");
       expect(renderToStaticMarkup(<PreviewActions canManageLibrary item={{ id: "item-1" }} />)).toBe("");
       expect(renderToStaticMarkup(<PreviewInfoActions />)).toBe("");
-
-      expect(resetButton?.textContent).toBe("");
-      await act(async () => { resetButton?.click(); });
+      const openPreferences = async () => {
+        await act(async () => { account?.click(); });
+        await act(async () => { container.querySelector<HTMLButtonElement>('#authAccountMenu [aria-controls="preferencesDialog"]')!.click(); });
+      };
+      await openPreferences();
+      await act(async () => { footerButton("Reset to default").click(); });
+      expect(resetWrapper.classList.contains("sidebar-width-352")).toBe(true);
+      expect(getItemActionsVisible()).toBe(false);
+      await act(async () => { footerButton("Cancel").click(); });
+      expect(resetWrapper.classList.contains("sidebar-width-352")).toBe(true);
+      expect(getItemActionsVisible()).toBe(false);
+      await openPreferences();
+      await act(async () => { footerButton("Reset to default").click(); });
+      await act(async () => { footerButton("Done").click(); });
       expect(resetWrapper.classList.contains("sidebar-width-256")).toBe(true);
       expect(getItemActionsVisible()).toBe(true);
       expect(dom.window.localStorage.getItem("eagleSidebarWidth")).toBeNull();
@@ -1279,6 +1319,7 @@ describe("ViewerAppShell", () => {
       }
       globalThis.window = previousWindow;
       globalThis.document = previousDocument;
+      globalThis.CustomEvent = previousCustomEvent;
       globalThis.Node = previousNode;
       globalThis.HTMLElement = previousHTMLElement;
       testGlobal.IS_REACT_ACT_ENVIRONMENT = previousIS_REACT_ACT_ENVIRONMENT;

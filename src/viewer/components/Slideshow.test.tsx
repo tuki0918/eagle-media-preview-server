@@ -227,6 +227,19 @@ test("pauses on a media error and allows skipping the failed item", async () => 
   expect(container.querySelector("img")?.getAttribute("src")).toBe("/file/good");
 });
 
+test("closes slideshow settings on backdrop clicks, while clicks inside keep them open", async () => {
+  await act(async () => { root.render(<StrictMode><SlideshowDialog query={query} onClose={close} /></StrictMode>); });
+  const dialog = document.querySelector("dialog")!;
+  vi.spyOn(dialog, "getBoundingClientRect").mockReturnValue({ x: 100, y: 100, left: 100, top: 100, right: 500, bottom: 400, width: 400, height: 300, toJSON: () => ({}) });
+  await act(async () => {
+    dialog.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, clientX: 150, clientY: 150 }));
+    dialog.querySelector("header")!.click();
+  });
+  expect(close).not.toHaveBeenCalled();
+  await act(async () => { dialog.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, clientX: 50, clientY: 150 })); });
+  expect(close).toHaveBeenCalledOnce();
+});
+
 test("opens settings, saves the choices, falls back from unavailable fullscreen, and closes", async () => {
   serve([{ id: "1", ext: "jpg" }]);
   await act(async () => { root.render(<StrictMode><SlideshowDialog query={query} onClose={close} /></StrictMode>); });
@@ -243,6 +256,8 @@ test("opens settings, saves the choices, falls back from unavailable fullscreen,
   expect(document.querySelector('[aria-label="Slideshow player"]')).not.toBeNull();
   expect(JSON.parse(window.localStorage.getItem("eagleSlideshowSettings")!).seconds).toBe(10);
   expect(JSON.parse(window.localStorage.getItem("eagleSlideshowSettings")!).showTitle).toBe(false);
+  await act(async () => { document.querySelector("dialog")!.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, clientX: -1, clientY: -1 })); });
+  expect(close).not.toHaveBeenCalled();
   await click("Close slideshow");
   expect(close).toHaveBeenCalledOnce();
 });

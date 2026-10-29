@@ -2,9 +2,23 @@ import { DEFAULT_PAGE_SIZE, DEFAULT_VIEW_MODE, FOLDER_SECTIONS_OPEN_STORAGE_KEY,
 import { changePageSize, selectViewMode } from "./shellActions";
 import { setItemActionsVisible } from "./itemActionsVisibilityState";
 import { setSubfoldersVisible } from "./subfolderVisibilityState";
-import { setThemePreference } from "./themeState";
+import { setThemePreference, type ThemePreference } from "./themeState";
 import { writeSavedViewerMode } from "./viewMode";
 import { DEFAULT_ZOOM_LEVEL, setZoomLevel } from "./zoomState";
+
+export interface DisplayPreferences {
+  theme: ThemePreference;
+  pageSize: number;
+  showSubfolders: boolean;
+  showItemActions: boolean;
+}
+
+export const DEFAULT_DISPLAY_PREFERENCES: DisplayPreferences = {
+  theme: "system",
+  pageSize: DEFAULT_PAGE_SIZE,
+  showSubfolders: false,
+  showItemActions: true,
+};
 
 export const DEFAULT_SIDEBAR_WIDTH = 256;
 export const SIDEBAR_WIDTH_STORAGE_KEY = "eagleSidebarWidth";
@@ -38,7 +52,7 @@ export function subscribeDisplaySettingsReset(listener: () => void) {
 }
 
 /** Resets browser display preferences while retaining library data and recent metadata. */
-export function resetDisplaySettings() {
+export function resetDisplaySettings(preferences: DisplayPreferences = DEFAULT_DISPLAY_PREFERENCES) {
   for (const key of [
     SIDEBAR_WIDTH_STORAGE_KEY, SIDEBAR_OPEN_STORAGE_KEY, FOLDER_SECTIONS_OPEN_STORAGE_KEY,
     TAG_SECTIONS_COLLAPSED_STORAGE_KEY, "eagleSubfoldersCollapsed", "eagleShowSubfolders",
@@ -46,12 +60,12 @@ export function resetDisplaySettings() {
   ]) {
     try { window.localStorage.removeItem(key); } catch { /* Storage is optional. */ }
   }
-  setThemePreference("system");
+  setThemePreference(preferences.theme);
   setZoomLevel(DEFAULT_ZOOM_LEVEL);
-  setSubfoldersVisible(false);
-  setItemActionsVisible(true);
+  setSubfoldersVisible(preferences.showSubfolders);
+  setItemActionsVisible(preferences.showItemActions);
   writeSavedViewerMode(DEFAULT_VIEW_MODE);
-  changePageSize(DEFAULT_PAGE_SIZE);
+  changePageSize(preferences.pageSize);
   selectViewMode(DEFAULT_VIEW_MODE);
   for (const listener of resetListeners) listener();
 }

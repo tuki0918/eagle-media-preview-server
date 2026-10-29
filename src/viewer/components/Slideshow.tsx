@@ -12,6 +12,7 @@ import { getSearchControlsState } from "../searchControlsState";
 import { getTagChipsState } from "../tagChipsState";
 import { DEFAULT_SLIDESHOW_SETTINGS, readSlideshowSettings, saveSlideshowSettings, SlideshowSource, slideshowMediaKind, type SlideshowQuery, type SlideshowSettings } from "../slideshow";
 import type { EagleItem } from "../types";
+import { settingsDialogClassName, settingsDialogCloseClassName, settingsDialogHeaderClassName, settingsDialogTitleClassName } from "./settingsDialogStyles";
 import { dockSurfaceClassName } from "./viewerDockStyles";
 
 const playerButton = "inline-grid size-11 shrink-0 place-items-center rounded-full text-white/80 hover:bg-white/15 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white disabled:pointer-events-none disabled:opacity-30 [&_svg]:size-5";
@@ -90,15 +91,25 @@ export function SlideshowDialog({ query, onClose }: { query: SlideshowQuery; onC
   };
 
   return createPortal(
-    <dialog ref={dialogRef} aria-label="Slideshow" className={running ? "fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none overflow-hidden border-0 bg-black p-0 text-white backdrop:bg-black" : "fixed inset-0 m-auto max-h-[calc(100dvh-24px)] w-[min(480px,calc(100vw-24px))] overflow-hidden rounded-2xl border border-border bg-card p-0 text-card-foreground shadow-xl backdrop:bg-black/50"} onCancel={(event) => { event.preventDefault(); close(); }}>
+    <dialog
+      ref={dialogRef}
+      aria-label="Slideshow"
+      className={running ? "fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none overflow-hidden border-0 bg-black p-0 text-white backdrop:bg-black" : settingsDialogClassName}
+      onCancel={(event) => { event.preventDefault(); close(); }}
+      onClick={(event) => {
+        if (running || event.target !== event.currentTarget) return;
+        const bounds = event.currentTarget.getBoundingClientRect();
+        if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) close();
+      }}
+    >
       <div ref={screenRef} className={running ? "relative h-full w-full overflow-hidden bg-black text-white [&:fullscreen]:h-screen [&:fullscreen]:w-screen" : "relative flex max-h-[inherit] flex-col bg-card text-card-foreground"}>
         {running ? <SlideshowPlayer query={query} settings={settings} onClose={close} /> : (
           <>
-            <header className="flex min-h-[60px] shrink-0 items-center gap-3 pb-3 pl-5 pr-14 pt-4">
-              <h2 className="flex items-center gap-2 text-lg font-semibold"><Presentation className="size-5" aria-hidden="true" />Slideshow</h2>
-              <Button type="button" variant="ghost" size="icon" className="absolute right-2 top-2 size-9 rounded-full text-muted-foreground" aria-label="Close slideshow settings" onClick={close}><X /></Button>
+            <header className={settingsDialogHeaderClassName}>
+              <h2 className={settingsDialogTitleClassName}><Presentation className="size-5" aria-hidden="true" />Slideshow</h2>
+              <Button type="button" variant="ghost" size="icon" className={settingsDialogCloseClassName} aria-label="Close slideshow settings" onClick={close}><X /></Button>
             </header>
-            <div className="slideshow-settings-fields grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-auto px-5 pb-4 pt-1 min-[360px]:grid-cols-2">
+            <div className="slideshow-settings-fields grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-auto px-5 py-4 min-[360px]:grid-cols-2">
               <label className="grid min-w-0 content-start gap-2 text-xs font-medium text-muted-foreground"><span className="uppercase">Image display time</span>
                 <span className="relative block">
                   <select className={selectClass} value={settings.seconds} onChange={(event) => setSettings({ ...settings, seconds: Number(event.target.value) })}>

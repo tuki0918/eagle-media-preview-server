@@ -1,4 +1,5 @@
 import {
+  CheckIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   ChevronsUpDownIcon,
@@ -13,14 +14,17 @@ import {
   MoonIcon,
   RotateCcwIcon,
   SunIcon,
+  SettingsIcon,
   TagIcon,
   TagsIcon,
   UserRoundIcon,
   XIcon,
 } from "lucide-react";
 import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
+import { settingsDialogClassName, settingsDialogCloseClassName, settingsDialogHeaderClassName, settingsDialogTitleClassName } from "./settingsDialogStyles";
 import appIconUrl from "../../assets/app_icon.svg";
 import {
   Sidebar,
@@ -40,15 +44,15 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FOLDER_SECTIONS_OPEN_STORAGE_KEY, UNCATEGORIZED_FOLDER_ID, UNTAGGED_FOLDER_ID } from "../constants";
 import { getEagleStatus, subscribeEagleStatus, type EagleStatus } from "../eagleStatusState";
 import { displayFolderCount } from "../format";
-import { resetDisplaySettings, subscribeDisplaySettingsReset } from "../displayPreferences";
+import { DEFAULT_DISPLAY_PREFERENCES, resetDisplaySettings, subscribeDisplaySettingsReset, type DisplayPreferences } from "../displayPreferences";
 import { getLibraryFooterName, subscribeLibraryFooterName } from "../libraryFooterState";
 import { getLoginConnectState, subscribeLoginConnectState } from "../loginConnectState";
 import { getSearchControlsState, subscribeSearchControlsState } from "../searchControlsState";
 import { PAGE_SIZE_OPTIONS } from "../shellConfig";
 import { changeFolder, changePageSize, changeSmartFolder, openAllItems, openTags, submitLogout } from "../shellActions";
-import { getItemActionsVisible, setItemActionsVisible, subscribeItemActionsVisible } from "../itemActionsVisibilityState";
-import { getSubfoldersVisible, setSubfoldersVisible, subscribeSubfoldersVisible } from "../subfolderVisibilityState";
-import { getThemeState, setThemePreference, subscribeThemeState, type ThemePreference } from "../themeState";
+import { getItemActionsVisible, setItemActionsVisible } from "../itemActionsVisibilityState";
+import { getSubfoldersVisible, setSubfoldersVisible } from "../subfolderVisibilityState";
+import { getThemeState, setThemePreference, type ThemePreference } from "../themeState";
 import type { EagleFolder, EagleSmartFolder } from "../types";
 
 // Puts the resize handle on the floating card's edge; hovering it outlines the whole card (see sidebar-inner).
@@ -80,6 +84,7 @@ export function AccountSideMenu() {
   const accountStatusLabel = [accountLabel, roleDescription].filter(Boolean).join(". ");
   const authError = loginState.isError ? loginState.message.trim() : "";
   const signedIn = loginState.authRequired && loginState.authenticated;
+  const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [folderFilter, setFolderFilter] = useState("");
   useEffect(() => subscribeDisplaySettingsReset(() => setFolderFilter("")), []);
   const folderFilterFormRef = useRef<HTMLFormElement>(null);
@@ -210,6 +215,7 @@ export function AccountSideMenu() {
           </form>
           {signedIn ? (
             <AccountDropdown
+              onOpenPreferences={() => setPreferencesOpen(true)}
               disabled={loginState.disabled}
               roleDescription={roleDescription}
               roleLabel={roleLabel}
@@ -219,6 +225,7 @@ export function AccountSideMenu() {
             />
           ) : (
             <AccountDropdown
+              onOpenPreferences={() => setPreferencesOpen(true)}
               disabled={loginState.disabled}
               roleDescription=""
               roleLabel={GUEST_ROLE_LABEL}
@@ -235,6 +242,7 @@ export function AccountSideMenu() {
         </SidebarFooter>
         <SidebarRail className={floatingSidebarRailClassName} />
       </Sidebar>
+      {preferencesOpen ? <PreferencesDialog onClose={() => setPreferencesOpen(false)} /> : null}
     </>
   );
 }
@@ -664,11 +672,83 @@ function collectFolderExpansionSignature(folders: readonly EagleFolder[], parts:
   }
 }
 
+function PreferencesDialog({ onClose }: { onClose: () => void }) {
+  const [draft, setDraft] = useState<DisplayPreferences>(() => ({
+    theme: getThemeState().preference,
+    pageSize: getSearchControlsState().selectedLimit,
+    showSubfolders: getSubfoldersVisible(),
+    showItemActions: getItemActionsVisible(),
+  }));
+  const [resetPending, setResetPending] = useState(false);
+  const updateDraft = (patch: Partial<DisplayPreferences>) => setDraft((current) => ({ ...current, ...patch }));
+  const apply = () => {
+    if (resetPending) {
+      resetDisplaySettings(draft);
+    } else {
+      if (draft.theme !== getThemeState().preference) setThemePreference(draft.theme);
+      if (draft.showSubfolders !== getSubfoldersVisible()) setSubfoldersVisible(draft.showSubfolders);
+      if (draft.showItemActions !== getItemActionsVisible()) setItemActionsVisible(draft.showItemActions);
+      if (draft.pageSize !== getSearchControlsState().selectedLimit) changePageSize(draft.pageSize);
+    }
+    onClose();
+  };
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const previousFocus = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "");
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      if (dialog.open && typeof dialog.close === "function") dialog.close();
+      const restoreFocus = previousFocus instanceof HTMLElement && previousFocus.isConnected && previousFocus !== document.body
+        ? previousFocus : document.getElementById("authAccountLabel") ?? document.querySelector<HTMLElement>('[data-slot="sidebar-trigger"]');
+      restoreFocus?.focus({ preventScroll: true });
+    };
+  }, []);
+
+  return (
+    <dialog
+      ref={dialogRef}
+      id="preferencesDialog"
+      aria-labelledby="preferencesTitle"
+      className={`${settingsDialogClassName} flex-col open:flex`}
+      onCancel={(event) => { event.preventDefault(); onClose(); }}
+      onClose={onClose}
+      onClick={(event) => {
+        if (event.target !== event.currentTarget) return;
+        const bounds = event.currentTarget.getBoundingClientRect();
+        if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) onClose();
+      }}
+    >
+      <header className={settingsDialogHeaderClassName}>
+        <h2 id="preferencesTitle" className={settingsDialogTitleClassName}><SettingsIcon className="size-5" aria-hidden="true" />Preferences</h2>
+        <Button variant="ghost" size="icon" className={settingsDialogCloseClassName} aria-label="Close preferences" onClick={onClose}><XIcon className="size-4" aria-hidden="true" /></Button>
+      </header>
+      <div className="grid min-h-0 gap-4 overflow-y-auto px-3 py-4">
+        <ThemeMenuSection value={draft.theme} onChange={(theme) => updateDraft({ theme })} />
+        <PageSizeMenuSection value={draft.pageSize} onChange={(pageSize) => updateDraft({ pageSize })} />
+        <SubfoldersMenuSection visible={draft.showSubfolders} onChange={(showSubfolders) => updateDraft({ showSubfolders })} />
+        <ItemActionsMenuSection visible={draft.showItemActions} onChange={(showItemActions) => updateDraft({ showItemActions })} />
+      </div>
+      <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3">
+        <Button variant="outline" className="h-9 gap-2 rounded-full px-3 text-xs" aria-label="Reset to default" title="Reset display settings" onClick={() => { setDraft({ ...DEFAULT_DISPLAY_PREFERENCES }); setResetPending(true); }}><RotateCcwIcon className="size-4" aria-hidden="true" />Reset to default</Button>
+        <div className="ml-auto flex items-center gap-2">
+          <Button variant="outline" className="h-9 rounded-full px-4" onClick={onClose}>Cancel</Button>
+          <Button className="primary-action-button h-9 rounded-full px-4" onClick={apply}><CheckIcon className="size-4" aria-hidden="true" />Done</Button>
+        </div>
+      </footer>
+    </dialog>
+  );
+}
+
 const menuTabTriggerClassName =
   "h-7 gap-1.5 rounded-lg px-2 text-xs font-medium text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:hover:text-foreground data-active:bg-background data-active:text-foreground data-active:shadow-sm data-active:hover:text-foreground";
 
-function ThemeMenuSection() {
-  const themeState = useSyncExternalStore(subscribeThemeState, getThemeState, getThemeState);
+function ThemeMenuSection({ value, onChange }: { value: ThemePreference; onChange: (value: ThemePreference) => void }) {
   const themeOptions: { icon: typeof SunIcon; label: string; value: ThemePreference }[] = [
     { icon: SunIcon, label: "Light", value: "light" },
     { icon: MoonIcon, label: "Dark", value: "dark" },
@@ -680,11 +760,11 @@ function ThemeMenuSection() {
       <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Theme</span>
       <Tabs
         id="themeModeGroup"
-        value={themeState.preference}
+        value={value}
         className="w-full"
         aria-label="Theme color"
         onValueChange={(value) => {
-          setThemePreference(value as ThemePreference);
+          onChange(value as ThemePreference);
         }}
       >
         <TabsList className="grid h-9 w-full grid-cols-3 rounded-xl bg-muted p-1 shadow-none" aria-label="Theme color">
@@ -706,19 +786,18 @@ function ThemeMenuSection() {
   );
 }
 
-function PageSizeMenuSection() {
-  const { selectedLimit } = useSyncExternalStore(subscribeSearchControlsState, getSearchControlsState, getSearchControlsState);
+function PageSizeMenuSection({ value, onChange }: { value: number; onChange: (value: number) => void }) {
 
   return (
     <div className="grid gap-2 px-2 pb-1.5 pt-2">
       <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Items per page</span>
       <Tabs
         id="pageSizeGroup"
-        value={String(selectedLimit)}
+        value={String(value)}
         className="w-full"
         aria-label="Items per page"
         onValueChange={(value) => {
-          changePageSize(Number(value));
+          onChange(Number(value));
         }}
       >
         <TabsList className="grid h-9 w-full grid-cols-4 rounded-xl bg-muted p-1 shadow-none" aria-label="Items per page">
@@ -738,8 +817,7 @@ function PageSizeMenuSection() {
   );
 }
 
-function SubfoldersMenuSection() {
-  const visible = useSyncExternalStore(subscribeSubfoldersVisible, getSubfoldersVisible, getSubfoldersVisible);
+function SubfoldersMenuSection({ visible, onChange }: { visible: boolean; onChange: (value: boolean) => void }) {
 
   return (
     <div className="grid gap-2 px-2 pb-1.5 pt-2">
@@ -749,7 +827,7 @@ function SubfoldersMenuSection() {
         value={visible ? "on" : "off"}
         className="w-full"
         aria-label="Subfolder display"
-        onValueChange={(value) => setSubfoldersVisible(value === "on")}
+        onValueChange={(value) => onChange(value === "on")}
       >
         <TabsList className="grid h-9 w-full grid-cols-2 rounded-xl bg-muted p-1 shadow-none" aria-label="Subfolder display">
           <TabsTrigger value="on" className={menuTabTriggerClassName} aria-label="Show subfolders">On</TabsTrigger>
@@ -760,8 +838,7 @@ function SubfoldersMenuSection() {
   );
 }
 
-function ItemActionsMenuSection() {
-  const visible = useSyncExternalStore(subscribeItemActionsVisible, getItemActionsVisible, getItemActionsVisible);
+function ItemActionsMenuSection({ visible, onChange }: { visible: boolean; onChange: (value: boolean) => void }) {
 
   return (
     <div className="grid gap-2 px-2 pb-1.5 pt-2">
@@ -771,7 +848,7 @@ function ItemActionsMenuSection() {
         value={visible ? "on" : "off"}
         className="w-full"
         aria-label="Item detail panel actions"
-        onValueChange={(value) => setItemActionsVisible(value === "on")}
+        onValueChange={(value) => onChange(value === "on")}
       >
         <TabsList className="grid h-9 w-full grid-cols-2 rounded-xl bg-muted p-1 shadow-none" aria-label="Item detail panel actions">
           <TabsTrigger value="on" className={menuTabTriggerClassName} aria-label="Show item detail panel actions">On</TabsTrigger>
@@ -974,6 +1051,7 @@ function folderNavIcon(icon: FolderNavIconName) {
 }
 
 function AccountDropdown({
+  onOpenPreferences,
   disabled,
   roleDescription,
   roleLabel,
@@ -981,6 +1059,7 @@ function AccountDropdown({
   statusLabel,
   username,
 }: {
+  onOpenPreferences: () => void;
   disabled: boolean;
   roleDescription: string;
   roleLabel: string;
@@ -1067,28 +1146,21 @@ function AccountDropdown({
               </div>
             </div>
             <div className="-mx-1.5 my-1 h-px bg-border" />
-            <div role="group" aria-labelledby="accountSettingsLabel">
-              <div className="mt-1 flex items-center justify-between gap-2 rounded-lg px-2 py-1">
-                <span id="accountSettingsLabel" className="text-xs font-semibold tracking-[0.06em] text-foreground">SETTINGS</span>
-                <button
-                  type="button"
-                  role="menuitem"
-                  aria-label="Reset display settings"
-                  className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
-                  title="Reset display settings"
-                  onClick={() => {
-                    resetDisplaySettings();
-                    setOpen(false);
-                  }}
-                >
-                  <RotateCcwIcon className="size-3.5" aria-hidden="true" />
-                </button>
-              </div>
-              <ThemeMenuSection />
-              <PageSizeMenuSection />
-              <SubfoldersMenuSection />
-              <ItemActionsMenuSection />
-            </div>
+            <button
+              type="button"
+              role="menuitem"
+              aria-haspopup="dialog"
+              aria-controls="preferencesDialog"
+              className="relative flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 text-sm text-foreground outline-hidden select-none hover:bg-accent hover:text-accent-foreground [&_svg]:size-4 [&_svg]:shrink-0"
+              onClick={() => {
+                setOpen(false);
+                if (isMobile) setOpenMobile(false);
+                onOpenPreferences();
+              }}
+            >
+              <SettingsIcon aria-hidden="true" />
+              <span>Preferences</span>
+            </button>
             {signedIn ? (
               <>
                 <div className="-mx-1.5 my-1 h-px bg-border" />
