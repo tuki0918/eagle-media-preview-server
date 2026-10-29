@@ -233,6 +233,10 @@ function createViewerServer({
           requestCount += 1;
         });
         if (await handleAuthRoutes(req, url, res, auth)) return;
+        if (url.pathname === "/api/library-status") {
+          await handleLibraryStatus(req, res, currentSession, libraryAccess);
+          return;
+        }
         if (!isAuthorized(req, auth)) {
           sendAuthRequired(res);
           return;
@@ -342,6 +346,21 @@ function createViewerServer({
 
     server,
   };
+}
+
+// Public so the viewer can show the offline page before sign-in. It never names the library,
+// and with protection off it answers without asking Eagle.
+async function handleLibraryStatus(req: IncomingMessage, res: ServerResponse, session: EagleSession, libraryAccess: LibraryAccessPolicy) {
+  if (req.method !== "GET") {
+    sendMethodNotAllowed(res, ["GET"]);
+    return;
+  }
+  let libraryStatus: "not_shared" | "shared" | null = "shared";
+  if (libraryAccess.status(null) !== "unrestricted") {
+    const library = await session.libraryInfo().catch(() => null);
+    libraryStatus = library ? (libraryAccess.status(library.path) === "shared" ? "shared" : "not_shared") : null;
+  }
+  sendJson(res, 200, { libraryStatus });
 }
 
 async function isOpenLibraryShared(session: EagleSession, libraryAccess: LibraryAccessPolicy) {

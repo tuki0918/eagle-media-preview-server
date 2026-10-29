@@ -382,6 +382,43 @@ describe("viewer app data refresh", () => {
     expect(new URLSearchParams(window.location.search).has("q")).toBe(false);
   });
 
+  test("shows the offline page on startup when the open library is not shared", async () => {
+    const requests: string[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      requests.push(url);
+      if (url === "/api/auth/status") return jsonResponse({ authenticated: false, required: true });
+      if (url === "/api/library-status") return jsonResponse({ libraryStatus: "not_shared" });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: fetchMock });
+
+    const { initViewer } = await import("./viewerApp");
+    await initViewer();
+
+    expect(document.body.dataset.appState).toBe("failed");
+    expect(document.querySelector("#startupMessage")?.textContent).toBe("This library isn't shared right now. Please try again later.");
+    expect(requests).toEqual(["/api/auth/status", "/api/library-status"]);
+  });
+
+  test("stays on the sign-in screen at startup when the library is shared or the check is unavailable", async () => {
+    for (const response of [jsonResponse({ libraryStatus: "shared" }), errorResponse(404, { error: "Not found" })]) {
+      vi.resetModules();
+      delete document.body.dataset.appState;
+      Object.defineProperty(globalThis, "fetch", { configurable: true, value: vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/auth/status") return jsonResponse({ authenticated: false, required: true });
+        if (url === "/api/library-status") return response;
+        throw new Error(`Unexpected request: ${url}`);
+      }) });
+      const { initViewer } = await import("./viewerApp");
+      const { getShellView } = await import("./viewer/shellVisibility");
+      await initViewer();
+      expect(document.body.dataset.appState).toBeUndefined();
+      expect(getShellView()).toBe("login");
+    }
+  });
+
   test("shows the offline page when the server stops sharing the open library", async () => {
     let health: unknown = { app: { version: "1.0" }, library: { id: "lib-a", name: "A" }, libraryStatus: "shared" };
     let connectResponse: Response = jsonResponse({ app: { version: "1.0" }, library: { id: "lib-a", name: "A" } });

@@ -189,7 +189,8 @@ Settings path:
 - Open the original file in a new tab
 - Sync search filters, page, view mode, and preview state into the URL
 - Clear viewer state and return to the login screen when an authenticated viewer API request returns `401`
-- Clear viewer state and show the "Media Library is offline" page when the server reports that the open library is not shared
+- Show the "Media Library is offline" page on load, before sign-in, when `/api/library-status` reports that the open library is not shared
+- Clear viewer state and show the same page when health polling or Connect reports that the open library is not shared
 - Reload from scratch when the library id reported by `/api/health` changes
 
 ### Supported Browsing Features
@@ -260,6 +261,10 @@ Settings path:
   - Checks Eagle app/library health; library paths are never returned to clients
   - Returns `libraryStatus` (`shared`, `not_shared`, or `null` when Eagle is unreachable) and, for a shared library, `library: { id, name }`, where `id` is an opaque per-install HMAC of the library path
   - Always answered, even when the open library is not shared
+- `GET /api/library-status`
+  - Public (no sign-in required) so the viewer can show the offline page on load
+  - Returns only `{ libraryStatus: "shared" | "not_shared" | null }`; never the library name, path, or id
+  - Answers `shared` without calling Eagle when library protection is off
 - `GET /api/folders`
   - Returns folder list
 - `GET /api/items`
@@ -299,6 +304,7 @@ When password protection is enabled, viewer API routes and media routes require 
 
 - `/api/auth/status`
 - `/api/auth/login`
+- `/api/library-status`
 
 Static viewer routes stay available so unauthenticated browsers can load the login screen.
 

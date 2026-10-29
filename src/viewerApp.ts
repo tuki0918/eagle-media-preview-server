@@ -233,6 +233,17 @@ async function init() {
     },
   });
   showLogin();
+  if (serverReachable) await showOfflinePageIfLibraryNotShared();
+}
+
+// Checked at startup so visitors land on the offline page instead of discovering it after Connect.
+async function showOfflinePageIfLibraryNotShared() {
+  try {
+    const data = await getJson<{ libraryStatus?: string | null }>("/api/library-status");
+    if (data.libraryStatus === "not_shared") handleLibraryNotShared();
+  } catch {
+    // Older servers lack this route; Connect still reports an unshared library.
+  }
 }
 
 async function connect(credentials?: { password: string; username: string }) {
@@ -382,7 +393,7 @@ function isLibraryNotSharedError(error: unknown) {
 function handleLibraryNotShared() {
   clearViewerSessionState();
   showLogin();
-  showOfflinePage({ title: OFFLINE_PAGE_TITLE, message: LIBRARY_NOT_SHARED_MESSAGE });
+  showOfflinePage({ reason: "library-not-shared", title: OFFLINE_PAGE_TITLE, message: LIBRARY_NOT_SHARED_MESSAGE });
 }
 
 function connectErrorMessage(error: unknown) {

@@ -28,6 +28,28 @@ afterEach(() => {
 });
 
 describe("main entrypoint", () => {
+  test("keeps the viewer's offline page instead of reporting startup ready", async () => {
+    const dom = installDom();
+    const initViewer = vi.fn(async () => {
+      const { showOfflinePage } = await import("./viewer/offlinePage");
+      showOfflinePage({ reason: "library-not-shared", title: "Media Library is offline", message: "Not shared" });
+    });
+    vi.doMock("./viewerApp", () => ({ initViewer }));
+    const readyEvents: string[] = [];
+    window.addEventListener("media-library-ready", () => readyEvents.push("ready"));
+    window.addEventListener("media-library-startup-error", () => readyEvents.push("error"));
+
+    try {
+      await import("./main");
+      await vi.waitFor(() => expect(initViewer).toHaveBeenCalledOnce());
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(document.body.dataset.appState).toBe("failed");
+      expect(readyEvents).toEqual([]);
+    } finally {
+      dom.window.close();
+    }
+  });
+
   test.each(["ready", "failed", "unreachable"])("renders the shell and reports startup state: %s", async (startup) => {
     const dom = installDom();
     let root: Root | undefined;

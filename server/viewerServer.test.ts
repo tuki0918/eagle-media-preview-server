@@ -2000,6 +2000,57 @@ test("createViewerServer only serves the library when Eagle has a shared library
   }
 });
 
+test("createViewerServer reports library sharing publicly without naming the library", async () => {
+  let openLibrary = "/Users/me/Shared.library";
+  let libraryInfoCalls = 0;
+  const eagleClient = {
+    async appInfo() {
+      return { version: "1.0.0" };
+    },
+    async libraryInfo() {
+      libraryInfoCalls += 1;
+      if (!openLibrary) throw new Error("offline");
+      return { path: openLibrary, name: "Secret Name" };
+    },
+  };
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    authUsers: [{ username: "owner", passwordHash: sha256("own"), role: "admin" }],
+    sharedLibraries: ["/Users/me/Shared.library"],
+    eagleClient,
+  });
+  const unrestricted = createViewerServer({ host: "127.0.0.1", port: 0, eagleClient });
+
+  await viewer.start();
+  await unrestricted.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const shared = await fetch(`${origin}/api/library-status`);
+    assert.equal(shared.status, 200);
+    assert.deepEqual(await shared.json(), { libraryStatus: "shared" });
+
+    openLibrary = "/Users/me/Private.library";
+    viewer.notifyLibraryChanged();
+    const notShared = await fetch(`${origin}/api/library-status`);
+    const notSharedText = await notShared.text();
+    assert.deepEqual(JSON.parse(notSharedText), { libraryStatus: "not_shared" });
+    assert.equal(notSharedText.includes("Secret Name"), false);
+
+    openLibrary = "";
+    viewer.notifyLibraryChanged();
+    assert.deepEqual(await (await fetch(`${origin}/api/library-status`)).json(), { libraryStatus: null });
+
+    const callsBefore = libraryInfoCalls;
+    const unrestrictedStatus = await fetch(`http://127.0.0.1:${unrestricted.status().port}/api/library-status`);
+    assert.deepEqual(await unrestrictedStatus.json(), { libraryStatus: "shared" });
+    assert.equal(libraryInfoCalls, callsBefore);
+  } finally {
+    await viewer.stop();
+    await unrestricted.stop();
+  }
+});
+
 test("createViewerServer serves direct file routes from /file/:id", async () => {
   const root = join(tmpdir(), `eagle-media-preview-server-${Date.now()}`);
   await mkdir(root, { recursive: true });
