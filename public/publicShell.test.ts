@@ -565,7 +565,7 @@ test("public UI exposes direct original file URLs for each media item", async ()
   assert.doesNotMatch(html, /class="direct-file-link"/);
   assert.match(app, /function directFileUrl\(item[^)]*\)/);
   assert.match(app, /function previewFileName\(item[^)]*\)/);
-  assert.match(directFileUrlSource, /return new URL\(`\/file\/\$\{encodeURIComponent\(String\(item\.id \|\| ""\)\)\}`,\s*baseUrl\)\.href;/);
+  assert.match(directFileUrlSource, /return new URL\(mediaUrl\(String\(item\.id \|\| ""\), "file"\),\s*baseUrl\)\.href;/);
   assert.match(actions, /class="[^"]*\bdirect-file-link\b[^"]*\bpreview-info-cta\b/);
   assert.match(actions, /preview-admin-actions/);
   assert.match(actions, /href="http:\/\/localhost\/file\/item%201"/);

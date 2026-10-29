@@ -279,7 +279,7 @@ Settings path:
 - `GET|HEAD /api/items/:id/file`
   - Serves original file
 - `GET|HEAD /file/:id`
-  - Direct original file access
+  - Direct original file access; requires `?library=<id>`
 
 ### Shared Library Protection
 
@@ -290,7 +290,9 @@ Settings path:
 - Library info is cached for at most 3 seconds; the plugin also clears it on `eagle.onLibraryChanged`
 - Authorized `/api/*` and `/file/*` responses carry `X-Library-Id`, the same opaque id as `/api/health`
 - After Connect, the viewer pins every request to the library it connected to: fetches send the id as the `X-Library-Id` request header, and media URLs (`/file/:id`, `/api/items/:id/thumb|file`) carry it as a `library` query parameter, since media elements cannot send headers. The address bar never contains it
-- A pinned request whose id differs from the open library returns `409 { "error": "The library open in Eagle has changed", "code": "LIBRARY_CHANGED" }` before any library data is read. `/api/connect` and `/api/health` are never pinned, and requests without an id (old links, files opened in a new tab) are not pinned
+- Media routes (`/file/:id`, `/api/items/:id/thumb`, `/api/items/:id/file`) require the id; without it they return `400 { "error": "A library id is required for media requests", "code": "LIBRARY_REQUIRED" }`. The library is checked before the item id is looked up, so an item id alone never returns a file. The "Open file" link that opens the original in a new tab carries the id too; older bookmarks without it no longer work
+- Other API routes are pinned when the viewer sends an id; `/api/connect` and `/api/health` are never pinned
+- A pinned request whose id differs from the open library returns `409 { "error": "The library open in Eagle has changed", "code": "LIBRARY_CHANGED" }`, and one made while Eagle cannot report the open library returns `502`, in both cases before any library data is read
 - The viewer server never calls Eagle's library switch API
 
 ### Media Streaming

@@ -68,6 +68,12 @@ j9au/Rn/iKVsbCyRku14oFc=
 -----END PRIVATE KEY-----
 `;
 
+// Media routes require the library id a viewer gets from /api/health or /api/connect.
+async function libraryQuery(origin: string) {
+  const health = await (await fetch(`${origin}/api/health`)).json();
+  return `?library=${encodeURIComponent(health.library.id)}`;
+}
+
 async function loginCookie(origin: string, username: string, password: string) {
   const response = await fetch(`${origin}/api/auth/login`, {
     method: "POST",
@@ -2051,6 +2057,39 @@ test("createViewerServer reports library sharing publicly without naming the lib
   }
 });
 
+test("createViewerServer refuses pinned media requests while the open library cannot be confirmed", async () => {
+  let eagleUp = true;
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        if (!eagleUp) throw new Error("offline");
+        return { path: "/Users/me/A.library", name: "A" };
+      },
+      async itemById() {
+        throw new Error("item lookup must not run");
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const query = await libraryQuery(origin);
+    eagleUp = false;
+    viewer.notifyLibraryChanged();
+    const response = await fetch(`${origin}/file/ITEM1${query}`);
+    assert.equal(response.status, 502);
+    assert.deepEqual(await response.json(), { error: "Unable to reach Eagle API" });
+  } finally {
+    await viewer.stop();
+  }
+});
+
 test("createViewerServer tags API responses with the open library id", async () => {
   let openLibrary = "/Users/me/A.library";
   const viewer = createViewerServer({
@@ -2087,7 +2126,7 @@ test("createViewerServer tags API responses with the open library id", async () 
   }
 });
 
-test("createViewerServer rejects requests pinned to a library that is no longer open", async () => {
+test("createViewerServer requires media requests to name the open library", async () => {
   let openLibrary = "/Users/me/A.library";
   const itemLookups: string[] = [];
   const viewer = createViewerServer({
@@ -2132,7 +2171,14 @@ test("createViewerServer rejects requests pinned to a library that is no longer 
     assert.equal(pinnedFile.status, 409);
     assert.deepEqual(itemLookups, []);
 
-    assert.equal((await fetch(`${origin}/api/folders`)).status, 200, "requests without an id are not pinned");
+    assert.equal((await fetch(`${origin}/api/folders`)).status, 200, "API requests without an id are not pinned");
+    const unpinnedFile = await fetch(`${origin}/file/ITEM1`);
+    assert.equal(unpinnedFile.status, 400);
+    assert.deepEqual(await unpinnedFile.json(), { error: "A library id is required for media requests", code: "LIBRARY_REQUIRED" });
+    assert.equal((await fetch(`${origin}/file/ITEM1/name.png`)).status, 400);
+    assert.equal((await fetch(`${origin}/api/items/ITEM1/thumb`)).status, 400);
+    assert.equal((await fetch(`${origin}/api/items/ITEM1/file`)).status, 400);
+    assert.deepEqual(itemLookups, [], "media requests check the library before looking up the item");
     assert.equal((await fetch(`${origin}/api/health`, { headers: { "X-Library-Id": connectedId } })).status, 200);
     const reconnect = await fetch(`${origin}/api/connect`, { method: "POST", headers: { "Content-Type": "application/json", Origin: origin, "X-Library-Id": connectedId }, body: "{}" });
     assert.equal(reconnect.status, 200);
@@ -2167,7 +2213,7 @@ test("createViewerServer serves direct file routes from /file/:id", async () => 
 
   await viewer.start();
   const status = viewer.status();
-  const response = await fetch(`http://127.0.0.1:${status.port}/file/ITEM123`);
+  const response = await fetch(`http://127.0.0.1:${status.port}/file/ITEM123${await libraryQuery(`http://127.0.0.1:${status.port}`)}`);
 
   assert.equal(response.status, 200);
   assert.equal(await response.text(), "demo-file");
@@ -2213,7 +2259,7 @@ test("createViewerServer falls back to the library original when Eagle reports n
   await viewer.start();
   try {
     const status = viewer.status();
-    const response = await fetch(`http://127.0.0.1:${status.port}/file/${itemId}`);
+    const response = await fetch(`http://127.0.0.1:${status.port}/file/${itemId}${await libraryQuery(`http://127.0.0.1:${status.port}`)}`);
 
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("content-type"), "image/png");
@@ -2248,7 +2294,7 @@ test("createViewerServer rejects direct file routes that resolve to a directory"
   await viewer.start();
   try {
     const status = viewer.status();
-    const response = await fetch(`http://127.0.0.1:${status.port}/file/DIR123`);
+    const response = await fetch(`http://127.0.0.1:${status.port}/file/DIR123${await libraryQuery(`http://127.0.0.1:${status.port}`)}`);
 
     assert.equal(response.status, 404);
     assertSecurityHeaders(response.headers);
@@ -2284,7 +2330,7 @@ test("createViewerServer rejects direct file routes that resolve to a missing fi
   await viewer.start();
   try {
     const status = viewer.status();
-    const response = await fetch(`http://127.0.0.1:${status.port}/file/MISSING123`);
+    const response = await fetch(`http://127.0.0.1:${status.port}/file/MISSING123${await libraryQuery(`http://127.0.0.1:${status.port}`)}`);
 
     assert.equal(response.status, 404);
     assert.deepEqual(await response.json(), { error: "Media file is unavailable" });
@@ -2319,7 +2365,7 @@ test("createViewerServer serves text and markdown direct file routes inline as r
 
   await viewer.start();
   const status = viewer.status();
-  const response = await fetch(`http://127.0.0.1:${status.port}/file/TEXT123`);
+  const response = await fetch(`http://127.0.0.1:${status.port}/file/TEXT123${await libraryQuery(`http://127.0.0.1:${status.port}`)}`);
 
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("content-type"), "text/plain; charset=utf-8");
@@ -2362,10 +2408,11 @@ test("createViewerServer prevents active library files from executing in the vie
   await viewer.start();
   try {
     const { port } = viewer.status();
+    const query = await libraryQuery(`http://127.0.0.1:${port}`);
     const [htmlResponse, jsResponse, svgResponse] = await Promise.all([
-      fetch(`http://127.0.0.1:${port}/file/html`),
-      fetch(`http://127.0.0.1:${port}/file/js`),
-      fetch(`http://127.0.0.1:${port}/file/svg`),
+      fetch(`http://127.0.0.1:${port}/file/html${query}`),
+      fetch(`http://127.0.0.1:${port}/file/js${query}`),
+      fetch(`http://127.0.0.1:${port}/file/svg${query}`),
     ]);
 
     assert.equal(htmlResponse.headers.get("content-type"), "text/plain; charset=utf-8");
@@ -2407,7 +2454,7 @@ test("createViewerServer uses Eagle item extension as a PDF MIME fallback", asyn
   await viewer.start();
   try {
     const status = viewer.status();
-    const response = await fetch(`http://127.0.0.1:${status.port}/file/PDF123/sample.pdf`);
+    const response = await fetch(`http://127.0.0.1:${status.port}/file/PDF123/sample.pdf${await libraryQuery(`http://127.0.0.1:${status.port}`)}`);
 
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("content-type"), "application/pdf");
