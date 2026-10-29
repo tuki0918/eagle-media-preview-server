@@ -148,7 +148,7 @@ export function SlideshowPlayer({ query, settings, onClose }: { query: Slideshow
   const [ready, setReady] = useState(false);
   const [buffering, setBuffering] = useState(false);
   const [paused, setPaused] = useState(false);
-  const [muted, setMuted] = useState(false);
+  const [muted, setMuted] = useState(true);
   const [error, setError] = useState("");
   const [blocked, setBlocked] = useState(false);
   const [finished, setFinished] = useState(false);
@@ -228,12 +228,11 @@ export function SlideshowPlayer({ query, settings, onClose }: { query: Slideshow
     const budget = remaining.current;
     const started = performance.now();
     const elapsed = () => Math.min(settings.seconds, settings.seconds - Math.max(0, budget.ms - (performance.now() - started)) / 1000);
-    const timerWindow = window;
-    const interval = timerWindow.setInterval(() => setCurrentTime(elapsed()), 100);
-    const timer = timerWindow.setTimeout(() => { setCurrentTime(settings.seconds); advance(); }, Math.max(0, budget.ms));
+    const interval = window.setInterval(() => setCurrentTime(elapsed()), 100);
+    const timer = window.setTimeout(() => { setCurrentTime(settings.seconds); advance(); }, Math.max(0, budget.ms));
     return () => {
-      timerWindow.clearInterval(interval);
-      timerWindow.clearTimeout(timer);
+      window.clearInterval(interval);
+      window.clearTimeout(timer);
       if (remaining.current === budget) budget.ms = Math.max(0, budget.ms - (performance.now() - started));
     };
   }, [slide, staticSlide, ready, paused, loading, error, finished, advance, settings.seconds, seekVersion]);
@@ -242,9 +241,25 @@ export function SlideshowPlayer({ query, settings, onClose }: { query: Slideshow
     const media = mediaRef.current;
     if (!media || !slide || loading || error || finished || !ready) return;
     let cancelled = false;
+    let retryTimer: number | undefined;
+    const attempt = (retried = false) => {
+      void media.play().catch((cause: unknown) => {
+        if (cancelled) return;
+        const name = cause instanceof Error || cause instanceof DOMException ? cause.name : "";
+        if (name === "AbortError" && !retried) {
+          // A load/seek can interrupt play() without denying autoplay. Retry once,
+          // and cancel the retry if the user pauses or leaves this slide.
+          retryTimer = window.setTimeout(() => attempt(true), 200);
+          return;
+        }
+        if (name === "NotAllowedError") setBlocked(true);
+        else setError("Unable to start playback. Retry or skip this file.");
+        setPaused(true);
+      });
+    };
     if (paused) media.pause();
-    else void media.play().catch(() => { if (!cancelled) { setBlocked(true); setPaused(true); } });
-    return () => { cancelled = true; };
+    else attempt();
+    return () => { cancelled = true; window.clearTimeout(retryTimer); };
   }, [slide, ready, paused, loading, error, finished]);
   useEffect(() => {
     const media = mediaRef.current;
@@ -440,16 +455,18 @@ function SlideshowFrame({ item, active, playbackToken, sessionEnabled, effect, m
   const localMediaRef = useRef<HTMLMediaElement | null>(null);
   const isStatic = kind === "image" || kind === "thumbnail";
   const fail = () => { if (active) setFailed(true); else onPreloadError(); };
-  const prepareImage = (image: HTMLImageElement) => {
-    if (typeof image.decode === "function") {
-      void image.decode().catch(() => {}).then(() => setPrepared(true));
-    } else setPrepared(true);
-  };
+  // A load event is sufficient to display an image. Waiting on another decode()
+  // promise here can leave an already loaded image behind the loading overlay.
+  const prepareImage = () => setPrepared(true);
   // Keep the next frame mounted and promote it without recreating its image/media element.
   useEffect(() => {
     if (!active) return;
     const media = localMediaRef.current;
-    if (media) { mediaRef.current = media; media.currentTime = 0; }
+    if (media) {
+      mediaRef.current = media;
+      media.currentTime = 0;
+      if (media.readyState >= 1) setPrepared(true);
+    }
   }, [active, playbackToken]);
   const { id, name, ext, noThumbnail } = item;
   useEffect(() => {
@@ -463,7 +480,14 @@ function SlideshowFrame({ item, active, playbackToken, sessionEnabled, effect, m
   }, [active, playbackToken, prepared, failed]);
   useEffect(() => {
     const media = localMediaRef.current;
-    return () => { media?.pause(); };
+    if (!media) return;
+    // Restore the source when React StrictMode replays the effect during development.
+    if (!media.getAttribute("src")) media.src = mediaUrl(String(item.id), "file");
+    return () => {
+      media.pause();
+      media.removeAttribute("src");
+      media.load();
+    };
   }, []);
   const bindMedia = (element: HTMLMediaElement | null) => {
     localMediaRef.current = element;
@@ -471,12 +495,14 @@ function SlideshowFrame({ item, active, playbackToken, sessionEnabled, effect, m
   };
   const mediaEvents = {
     onCanPlay: () => { setPrepared(true); if (active) onBuffering(false); },
-    onPlaying: () => { if (active) onBuffering(false); },
+    onPlaying: () => { setPrepared(true); if (active) onBuffering(false); },
     onPlay: () => { if (active) onPlaybackChange(false); },
     onPause: () => { if (active && !localMediaRef.current?.ended) onPlaybackChange(true); },
     onVolumeChange: () => { if (active && localMediaRef.current) onMutedChange(localMediaRef.current.muted); },
     onWaiting: () => { if (active) onBuffering(true); },
-    onLoadedMetadata: () => { if (active) onTime(); },
+    // iOS may stop preloading at metadata until play() is called. Do not make
+    // play() depend on a canplay event that itself requires playback to start.
+    onLoadedMetadata: () => { setPrepared(true); if (active) onTime(); },
     onDurationChange: () => { if (active) onTime(); },
     onTimeUpdate: () => { if (active) onTime(); },
     onEnded: () => { if (active) onEnded(); },
@@ -488,7 +514,7 @@ function SlideshowFrame({ item, active, playbackToken, sessionEnabled, effect, m
       aria-hidden={!active}
       data-slideshow-preload={active ? undefined : "true"}
     >
-      {isStatic ? <img src={mediaUrl(String(item.id), kind === "image" ? "file" : "thumb")} alt={active ? displayFileName(item) || "Untitled" : ""} className="h-full min-h-0 w-full object-contain" decoding="async" onLoad={(event) => prepareImage(event.currentTarget)} onError={fail} /> : null}
+      {isStatic ? <img src={mediaUrl(String(item.id), kind === "image" ? "file" : "thumb")} alt={active ? displayFileName(item) || "Untitled" : ""} className="h-full min-h-0 w-full object-contain" decoding="async" onLoad={prepareImage} onError={fail} /> : null}
       {kind === "video" ? <video ref={bindMedia} className="h-full min-h-0 w-full object-contain" src={mediaUrl(String(item.id), "file")} playsInline disablePictureInPicture muted={muted || !active} preload="auto" {...mediaEvents} /> : null}
       {kind === "audio" ? <div className="grid w-[min(420px,80vw)] justify-items-center px-4"><AudioArtwork item={item} /><audio ref={bindMedia} src={mediaUrl(String(item.id), "file")} muted={muted || !active} preload="auto" {...mediaEvents} /></div> : null}
     </div>
