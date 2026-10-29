@@ -27,7 +27,12 @@ interface ConnectionContextOptions {
   connection?: EagleConnection;
   fetchImpl?: typeof fetch;
   input?: ConnectionInput;
+  libraryInfoTtlMs?: number;
 }
+
+// The open library can change in the Eagle app at any time, so the cached info is only
+// trusted briefly; the plugin also clears it as soon as Eagle reports a library change.
+const DEFAULT_LIBRARY_INFO_TTL_MS = 3000;
 
 function normalizeConnectionInput(input: ConnectionInput = {}, { requestHost = "", requireRemoteToken = false }: NormalizeConnectionOptions = {}) {
   const host = String(input.host || "127.0.0.1").trim() || "127.0.0.1";
@@ -79,21 +84,28 @@ function requiresToken({ host, requestHost = "" }: { host: string; requestHost?:
   return !["127.0.0.1", "localhost", "::1", viewerHost].includes(host);
 }
 
-function createConnectionContext({ input, connection, fetchImpl = globalThis.fetch, client }: ConnectionContextOptions = {}) {
+function createConnectionContext({ input, connection, fetchImpl = globalThis.fetch, client, libraryInfoTtlMs = DEFAULT_LIBRARY_INFO_TTL_MS }: ConnectionContextOptions = {}) {
   const resolvedConnection = connection || normalizeConnectionInput(input);
   const resolvedClient = client || createEagleClient({
     baseUrl: resolvedConnection.baseUrl,
     token: resolvedConnection.token,
     fetchImpl,
   });
-  let libraryInfoCache: unknown = null;
+  let libraryInfoCache: { expiresAt: number; value: Promise<unknown> } | null = null;
 
   return {
     connection: resolvedConnection,
     client: resolvedClient,
     async libraryInfo() {
-      libraryInfoCache ??= await resolvedClient.libraryInfo();
-      return libraryInfoCache;
+      const now = Date.now();
+      if (!libraryInfoCache || libraryInfoCache.expiresAt <= now) {
+        const entry = { expiresAt: now + libraryInfoTtlMs, value: resolvedClient.libraryInfo() };
+        libraryInfoCache = entry;
+        entry.value.catch(() => {
+          if (libraryInfoCache === entry) libraryInfoCache = null;
+        });
+      }
+      return libraryInfoCache.value;
     },
     clearLibraryInfo() {
       libraryInfoCache = null;

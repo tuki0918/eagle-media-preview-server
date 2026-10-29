@@ -1931,6 +1931,73 @@ test("createViewerServer keeps the Eagle API connection fixed and hides library 
   }
 });
 
+test("createViewerServer only serves the library when Eagle has a shared library open", async () => {
+  let openLibrary = "/Users/me/Shared.library";
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    sharedLibraries: ["/Users/me/Shared.library"],
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: openLibrary, name: openLibrary.includes("Shared") ? "Shared" : "Private" };
+      },
+      async folders() {
+        return { items: [{ id: "F1", name: "Folder" }], total: 1, offset: 0, limit: 1 };
+      },
+      async itemById() {
+        throw new Error("item lookup must not run for unshared libraries");
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const origin = `http://127.0.0.1:${status.port}`;
+
+    const shared = await fetch(`${origin}/api/folders`);
+    assert.equal(shared.status, 200);
+    const sharedHealth = await (await fetch(`${origin}/api/health`)).json();
+    assert.equal(sharedHealth.libraryStatus, "shared");
+    assert.deepEqual(sharedHealth.library, { name: "Shared" });
+
+    openLibrary = "/Users/me/Private.library";
+    viewer.notifyLibraryChanged();
+
+    const folders = await fetch(`${origin}/api/folders`);
+    assert.equal(folders.status, 503);
+    assert.deepEqual(await folders.json(), { error: "The library open in Eagle is not shared", code: "LIBRARY_NOT_SHARED" });
+
+    const connect = await fetch(`${origin}/api/connect`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: origin },
+      body: "{}",
+    });
+    assert.equal(connect.status, 503);
+
+    const file = await fetch(`${origin}/file/ITEM1`);
+    assert.equal(file.status, 503);
+
+    const health = await fetch(`${origin}/api/health`);
+    assert.equal(health.status, 200);
+    const healthBody = await health.json();
+    assert.equal(healthBody.libraryStatus, "not_shared");
+    assert.equal(healthBody.library, null);
+    assert.deepEqual(healthBody.app, { version: "1.0.0" });
+
+    viewer.setSharedLibraries(["/Users/me/Shared.library", "/Users/me/Private.library"]);
+    assert.equal((await fetch(`${origin}/api/folders`)).status, 200);
+
+    viewer.setSharedLibraries(null);
+    assert.equal((await (await fetch(`${origin}/api/health`)).json()).libraryStatus, "shared");
+  } finally {
+    await viewer.stop();
+  }
+});
+
 test("createViewerServer serves direct file routes from /file/:id", async () => {
   const root = join(tmpdir(), `eagle-media-preview-server-${Date.now()}`);
   await mkdir(root, { recursive: true });

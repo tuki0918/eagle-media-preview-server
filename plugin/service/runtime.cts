@@ -5,6 +5,7 @@ const { homedir, networkInterfaces } = require("os");
 const { createViewerServer } = require("./viewerServer.cjs");
 const { serverRestartSettingsChanged } = require("./settingsChange.cjs");
 const { normalizeCustomDomain } = require("./customDomain.cjs");
+const { normalizeSharedLibraries } = require("./libraryAccess.cjs");
 
 type ServerStatus = "error" | "running" | "stopped";
 type UserRole = "admin" | "editor" | "viewer";
@@ -13,6 +14,11 @@ interface AuthUser {
   passwordHash: string;
   role: UserRole;
   username: string;
+}
+
+interface SharedLibrary {
+  name: string;
+  path: string;
 }
 
 interface PluginSettings {
@@ -27,11 +33,13 @@ interface PluginSettings {
   httpsEnabled: boolean;
   httpsKeyPath: string;
   lastServerStatus: ServerStatus;
+  libraryProtectionEnabled: boolean;
   passwordHash: string;
   port: number;
   sessionDurationDays: number;
   sessionSecret: string;
   settingsVersion: number;
+  sharedLibraries: SharedLibrary[];
 }
 
 type SettingsInput = Partial<Omit<PluginSettings, "port">> & {
@@ -58,6 +66,8 @@ interface ViewerStatus {
 }
 
 interface ManagedViewer {
+  notifyLibraryChanged?(): void;
+  setSharedLibraries?(paths: string[] | null): void;
   start(): Promise<unknown>;
   stop(): Promise<unknown>;
   status(): ViewerStatus;
@@ -76,6 +86,7 @@ interface ServerManagerOptions {
     port: number;
     sessionMaxAgeSeconds: number;
     sessionSecret: string;
+    sharedLibraries: string[] | null;
   }) => ManagedViewer;
 }
 
@@ -99,9 +110,11 @@ const DEFAULT_SETTINGS: PluginSettings = {
   httpsKeyPath: "",
   passwordHash: "",
   lastServerStatus: "stopped",
+  libraryProtectionEnabled: false,
   sessionDurationDays: 7,
   sessionSecret: "",
   settingsVersion: 2,
+  sharedLibraries: [],
 };
 const CURRENT_SETTINGS_VERSION = 2;
 const MIN_SESSION_DURATION_DAYS = 1;
@@ -231,6 +244,8 @@ function normalizeSettings(input: SettingsInput = {}): PluginSettings {
     lastServerStatus: isServerStatus(input.lastServerStatus)
       ? input.lastServerStatus
       : DEFAULT_SETTINGS.lastServerStatus,
+    libraryProtectionEnabled: Boolean(input.libraryProtectionEnabled ?? DEFAULT_SETTINGS.libraryProtectionEnabled),
+    sharedLibraries: normalizeSharedLibraries(input.sharedLibraries),
   };
 }
 
@@ -246,9 +261,11 @@ function canonicalSettings(settings: PluginSettings) {
     httpsEnabled: settings.httpsEnabled,
     httpsKeyPath: settings.httpsKeyPath,
     lastServerStatus: settings.lastServerStatus,
+    libraryProtectionEnabled: settings.libraryProtectionEnabled,
     port: settings.port,
     sessionDurationDays: settings.sessionDurationDays,
     sessionSecret: settings.sessionSecret,
+    sharedLibraries: settings.sharedLibraries,
   };
 }
 
@@ -425,6 +442,10 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
+function sharedLibraryPaths(settings: PluginSettings) {
+  return settings.libraryProtectionEnabled ? settings.sharedLibraries.map((library) => library.path) : null;
+}
+
 function getLanAddresses() {
   const output: LanAddress[] = [];
   for (const [label, entries] of Object.entries(networkInterfaces()) as Array<[string, NetworkEntry[]]>) {
@@ -499,6 +520,7 @@ function createServerManager({
       port: settings.port,
       sessionMaxAgeSeconds: settings.sessionDurationDays * 24 * 60 * 60,
       sessionSecret: settings.sessionSecret,
+      sharedLibraries: sharedLibraryPaths(settings),
       authUsers: settings.authEnabled ? settings.authUsers : [],
     });
   }
@@ -548,7 +570,12 @@ function createServerManager({
         await this.stop();
         if (wasRunning) return this.start();
       }
+      viewer?.setSharedLibraries?.(sharedLibraryPaths(settings));
       return snapshot(settings);
+    },
+
+    libraryChanged() {
+      viewer?.notifyLibraryChanged?.();
     },
 
     async status() {

@@ -102,3 +102,28 @@ test("createConnectionContext returns a client and isolated library cache", asyn
   assert.equal((await context.libraryInfo()).path, "/tmp/Library.library");
   assert.equal((await context.libraryInfo()).path, "/tmp/Library.library");
 });
+
+test("createConnectionContext refreshes library info after the TTL and on clear", async () => {
+  let current = "/tmp/A.library";
+  let calls = 0;
+  const context = createConnectionContext({
+    connection: { host: "127.0.0.1", port: 41595, token: "", baseUrl: "http://127.0.0.1:41595" },
+    client: {
+      async libraryInfo() {
+        calls += 1;
+        return { path: current };
+      },
+    },
+    libraryInfoTtlMs: 20,
+  });
+
+  assert.equal((await context.libraryInfo()).path, "/tmp/A.library");
+  current = "/tmp/B.library";
+  assert.equal((await context.libraryInfo()).path, "/tmp/A.library");
+  context.clearLibraryInfo();
+  assert.equal((await context.libraryInfo()).path, "/tmp/B.library");
+  current = "/tmp/C.library";
+  await new Promise((resolveDelay) => setTimeout(resolveDelay, 30));
+  assert.equal((await context.libraryInfo()).path, "/tmp/C.library");
+  assert.equal(calls, 3);
+});

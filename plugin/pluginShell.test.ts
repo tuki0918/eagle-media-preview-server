@@ -1084,6 +1084,7 @@ test("plugin CommonJS runtime avoids node protocol requires for older Eagle runt
     "media.cjs",
     "static.cjs",
     "customDomain.cjs",
+    "libraryAccess.cjs",
   ];
 
   for (const file of files) {

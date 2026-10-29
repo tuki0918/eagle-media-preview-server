@@ -897,3 +897,76 @@ test("generated server manager discards a failed viewer after its settings chang
     ["start", 6123],
   ]);
 });
+
+test("generated settings normalize shared libraries and keep protection off by default", () => {
+  assert.equal(normalizeSettings({}).libraryProtectionEnabled, false);
+  assert.deepEqual(normalizeSettings({}).sharedLibraries, []);
+  assert.deepEqual(normalizeSettings({
+    libraryProtectionEnabled: true,
+    sharedLibraries: [
+      { path: "/Users/me/Work.library/" },
+      { path: "/Users/me/Work.library", name: "Duplicate" },
+      "/Users/me/Photos.library",
+      { path: "  " },
+      null,
+    ],
+  }).sharedLibraries, [
+    { path: "/Users/me/Work.library", name: "Work" },
+    { path: "/Users/me/Photos.library", name: "Photos" },
+  ]);
+});
+
+test("generated server manager applies shared library changes without restarting", async () => {
+  const calls: unknown[] = [];
+  let settings = {
+    ...DEFAULT_SETTINGS,
+    host: "127.0.0.1",
+    port: 41532,
+    sessionSecret: "persisted-secret",
+  };
+  const manager = createServerManager({
+    settingsStore: {
+      async load() {
+        return settings;
+      },
+      async save(input: Record<string, unknown>) {
+        settings = normalizeSettings({ ...settings, ...input });
+        return settings;
+      },
+    },
+    viewerServerFactory(options: { sharedLibraries: string[] | null }) {
+      calls.push(["create", options.sharedLibraries]);
+      return {
+        async start() {
+          calls.push(["start"]);
+        },
+        async stop() {
+          calls.push(["stop"]);
+        },
+        setSharedLibraries(paths: string[] | null) {
+          calls.push(["shared", paths]);
+        },
+        notifyLibraryChanged() {
+          calls.push(["libraryChanged"]);
+        },
+        status() {
+          return { state: "running", host: "127.0.0.1", port: 41532 };
+        },
+      };
+    },
+    lanAddressProvider() {
+      return [{ label: "lo0", address: "127.0.0.1" }];
+    },
+  });
+
+  await manager.start();
+  await manager.saveSettings({ libraryProtectionEnabled: true, sharedLibraries: [{ path: "/Users/me/Work.library" }] });
+  manager.libraryChanged();
+
+  assert.deepEqual(calls, [
+    ["create", null],
+    ["start"],
+    ["shared", ["/Users/me/Work.library"]],
+    ["libraryChanged"],
+  ]);
+});

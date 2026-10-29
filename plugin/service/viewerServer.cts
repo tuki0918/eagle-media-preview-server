@@ -5,6 +5,7 @@ const { randomBytes } = require("crypto");
 const { normalizeCustomDomain } = require("./customDomain.cjs");
 const { EagleRequestError, createEagleClient, normalizeStringArray } = require("./eagleClient.cjs");
 const { createConnectionContext } = require("./connection.cjs");
+const { createLibraryAccessPolicy } = require("./libraryAccess.cjs");
 const { readInternetShortcutUrl, streamItemMedia } = require("./media.cjs");
 const { resolveDefaultPublicDir, securityHeaders, serveStatic } = require("./static.cjs");
 const {
@@ -46,6 +47,7 @@ interface ViewerServerOptions {
   publicDir?: string;
   sessionMaxAgeSeconds?: number;
   sessionSecret?: string;
+  sharedLibraries?: string[] | null;
   viewerPassword?: string;
 }
 
@@ -78,6 +80,7 @@ const LOGIN_RATE_LIMIT_MESSAGE = "Too many failed login attempts. Try again late
 const RATING_WRITE_FORBIDDEN_MESSAGE = "Rating editing is not allowed for this viewer";
 const METADATA_WRITE_FORBIDDEN_MESSAGE = "Metadata editing is not allowed for this viewer";
 const ADMIN_WRITE_FORBIDDEN_MESSAGE = "Admin actions are not allowed for this viewer";
+const LIBRARY_NOT_SHARED_MESSAGE = "The library open in Eagle is not shared";
 const UNTAGGED_FOLDER_ID = "__untagged__";
 
 interface EagleLibraryInfo {
@@ -140,8 +143,14 @@ interface EagleSession {
   libraryInfo(): Promise<EagleLibraryInfo>;
 }
 
+interface LibraryAccessPolicy {
+  setSharedLibraries(paths: string[] | null): void;
+  status(libraryPath: unknown): "not_shared" | "shared" | "unrestricted";
+}
+
 interface ApiContext {
   getSession: () => EagleSession;
+  libraryAccess: LibraryAccessPolicy;
 }
 
 const defaultPublicDir = resolveDefaultPublicDir();
@@ -180,6 +189,7 @@ function createViewerServer({
   httpsKeyPath = "",
   sessionMaxAgeSeconds = AUTH_SESSION_MAX_AGE_SECONDS,
   sessionSecret = "",
+  sharedLibraries = null,
   eagleClient = createEagleClient(),
 }: ViewerServerOptions = {}) {
   let serverInstance: NetServer | null = null;
@@ -194,6 +204,7 @@ function createViewerServer({
   const authSessions = new Map<string, AuthSession>();
   const revokedAuthSessions = new Set<string>();
   const loginFailures = new Map<string, LoginFailure>();
+  const libraryAccess: LibraryAccessPolicy = createLibraryAccessPolicy(sharedLibraries);
   const currentSession = createConnectionContext({
     connection: {
       host: "127.0.0.1",
@@ -221,9 +232,14 @@ function createViewerServer({
           sendAuthRequired(res);
           return;
         }
+        if (url.pathname !== "/api/health" && !(await isOpenLibraryShared(currentSession, libraryAccess))) {
+          sendLibraryNotShared(res);
+          return;
+        }
         await handleApi(req, url, res, {
           auth,
           getSession: () => currentSession,
+          libraryAccess,
         });
         return;
       }
@@ -237,6 +253,10 @@ function createViewerServer({
           requestCount += 1;
         });
         const session = getSession(currentSession);
+        if (!(await isOpenLibraryShared(session, libraryAccess))) {
+          sendLibraryNotShared(res);
+          return;
+        }
         await streamItemMedia(decodeURIComponent(fileMatch[1]), "file", req, res, session);
         return;
       }
@@ -309,8 +329,24 @@ function createViewerServer({
       };
     },
 
+    // Applied without a restart; the next request is checked against the new list.
+    setSharedLibraries(paths: string[] | null) {
+      libraryAccess.setSharedLibraries(paths);
+    },
+
+    // Called when Eagle reports a library switch so no request is answered from stale library info.
+    notifyLibraryChanged() {
+      currentSession.clearLibraryInfo?.();
+    },
+
     server,
   };
+}
+
+async function isOpenLibraryShared(session: EagleSession, libraryAccess: LibraryAccessPolicy) {
+  if (libraryAccess.status(null) === "unrestricted") return true;
+  const library = await session.libraryInfo();
+  return libraryAccess.status(library?.path) === "shared";
 }
 
 function createProtocolServer({ httpsCertPath = "", httpsEnabled = false, httpsKeyPath = "" }: {
@@ -341,7 +377,7 @@ async function cachedItemTypes(session: { client: EagleClient; libraryInfo(): Pr
   return value;
 }
 
-async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { auth, getSession }: ApiContext & { auth: AuthContext }) {
+async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { auth, getSession, libraryAccess }: ApiContext & { auth: AuthContext }) {
   const session = getSession();
 
   if (url.pathname === "/api/connect") {
@@ -362,9 +398,12 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       session.client.appInfo(),
       session.libraryInfo(),
     ]);
+    const libraryInfo = library.status === "fulfilled" ? library.value : null;
+    const libraryStatus = libraryInfo ? (libraryAccess.status(libraryInfo.path) === "not_shared" ? "not_shared" : "shared") : null;
     sendJson(res, 200, {
       app: app.status === "fulfilled" ? app.value : null,
-      library: library.status === "fulfilled" ? publicLibraryInfo(library.value) : null,
+      library: libraryStatus === "shared" ? publicLibraryInfo(libraryInfo) : null,
+      libraryStatus,
       error: app.status === "rejected" ? app.reason.message : null,
     });
     return;
@@ -770,6 +809,10 @@ function normalizeStar(value: unknown) {
     throw new HttpError(400, "star must be an integer from 0-5");
   }
   return star;
+}
+
+function sendLibraryNotShared(res: ServerResponse) {
+  sendJson(res, 503, { error: LIBRARY_NOT_SHARED_MESSAGE, code: "LIBRARY_NOT_SHARED" });
 }
 
 function sendAuthRequired(res: ServerResponse) {
