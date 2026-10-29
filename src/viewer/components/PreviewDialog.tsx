@@ -11,6 +11,7 @@ import {
 } from "../shellActions";
 import { getPreviewDialogState, subscribePreviewDialogState } from "../previewDialogState";
 import { getVideoOverlayControlsVisible, subscribeVideoOverlayControls } from "../videoOverlayState";
+import { getImageOverlayControlsVisible, subscribeImageOverlayControls } from "../imageOverlayState";
 import { PREVIEW_TOASTER_ID } from "../toasts";
 import { PreviewBodyHost } from "./PreviewBody";
 import {
@@ -36,17 +37,22 @@ export function PreviewDialog() {
   const previewDialogState = useSyncExternalStore(subscribePreviewDialogState, getPreviewDialogState, getPreviewDialogState);
   const videoControlsVisible = useSyncExternalStore(subscribeVideoOverlayControls, getVideoOverlayControlsVisible, getVideoOverlayControlsVisible);
   const videoMode = previewDialogState.mode === "video";
-  // Portrait and compact touch screens overlay the video header; landscape tablets share the desktop inspector.
+  const imageControlsVisible = useSyncExternalStore(subscribeImageOverlayControls, getImageOverlayControlsVisible, getImageOverlayControlsVisible);
+  const overlayMode = videoMode || previewDialogState.mode === "image";
+  const overlayControlsVisible = videoMode ? videoControlsVisible : imageControlsVisible;
+  // Portrait and compact touch screens overlay media headers; landscape tablets share the desktop inspector.
   const previewHeaderClassName = [
-    "preview-header grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 bg-background desktop:col-start-1 desktop:row-start-1",
+    "preview-header grid w-full min-w-0 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 bg-background desktop:col-start-1 desktop:row-start-1",
     // On desktop match the results header (height and px-5) so the back button sits where the menu button was.
-    desktopViewport ? "h-[72px] px-5" : "h-12 px-2 min-[720px]:h-14 min-[720px]:px-3",
-    videoMode
-      ? "touch:absolute touch:inset-x-0 touch:top-0 touch:z-[5] touch:!h-[calc(3rem+env(safe-area-inset-top)+1.5rem)] touch:bg-transparent touch:bg-[linear-gradient(180deg,rgba(5,7,10,0.78),transparent)] touch:pb-6 touch:pt-[env(safe-area-inset-top)] touch:!pl-[max(0.5rem,env(safe-area-inset-left))] touch:!pr-[max(0.5rem,env(safe-area-inset-right))] touch:text-white touch:transition-opacity touch:duration-200 touch:[&_.icon-button]:!text-white touch:[&_.preview-original-name-value]:!text-white touch:[&_[data-slot=separator]]:!border-white/30"
+    desktopViewport ? "h-[72px] px-5 [--preview-header-height:72px]" : "h-12 px-2 [--preview-header-height:3rem] min-[720px]:h-14 min-[720px]:px-3 min-[720px]:[--preview-header-height:3.5rem]",
+    // Share horizontal spacing and control-row height with document previews, including in landscape.
+    // Safe-area side insets constrain the whole screen and unnecessarily squeeze this top header.
+    overlayMode
+      ? "touch:absolute touch:inset-x-0 touch:top-0 touch:z-[5] touch:!h-[calc(var(--preview-header-height)+env(safe-area-inset-top)+1.5rem)] touch:bg-transparent touch:bg-[linear-gradient(180deg,rgba(5,7,10,0.78),transparent)] touch:pb-6 touch:pt-[env(safe-area-inset-top)] touch:text-white touch:transition-opacity touch:duration-200 touch:[&_.icon-button]:!text-white touch:[&_.preview-original-name-value]:!text-white touch:[&_[data-slot=separator]]:!border-white/30"
       : "",
-    videoMode && !videoControlsVisible ? "touch:pointer-events-none touch:opacity-0" : "",
-    // The header sits on the black video on touch devices, so it always uses the dark palette (hover colours included).
-    videoMode && touchViewport ? "dark" : "",
+    overlayMode && !overlayControlsVisible ? "touch:pointer-events-none touch:opacity-0" : "",
+    // Overlaid headers use a dark gradient and palette for contrast over the media.
+    overlayMode && touchViewport ? "dark" : "",
   ].filter(Boolean).join(" ");
   const dialogClassName = [
     "fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none touch-none grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] overscroll-none rounded-none border-0 bg-background p-0 text-foreground open:grid desktop:transition-[grid-template-columns] desktop:duration-200 desktop:ease-out",
@@ -54,7 +60,8 @@ export function PreviewDialog() {
     "backdrop:bg-foreground/30",
     previewDialogState.mode ? `${previewDialogState.mode}-mode` : "",
     previewDialogState.infoOpen ? "info-open" : "",
-    videoMode ? "bg-[#05070a] touch:grid-rows-[minmax(0,1fr)]" : "",
+    videoMode ? "bg-[#05070a]" : "",
+    overlayMode ? "touch:grid-rows-[minmax(0,1fr)]" : "",
   ].filter(Boolean).join(" ");
   const previewBodyColumnClassName = [
     "preview-layout relative min-h-0 overflow-hidden",
