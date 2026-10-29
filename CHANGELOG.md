@@ -7,13 +7,15 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-29
+
 ### Added
 
 - Added library protection: choose which Eagle libraries the viewer may serve from the new **Libraries** settings tab. If Eagle has a different library open, viewers see the "Media Library is offline" page. Changes take effect when the server starts.
 
 ### Changed
 
-- The viewer server now notices library switches in Eagle right away. Viewer requests are tied to the library they connected to, and the check is repeated before each answer and each write, so a switch, even in the middle of a request, never returns or changes data in the new library. Viewers then return to the connect screen.
+- When the library open in Eagle changes, viewers return to the connect screen, and requests never read or change data in the newly opened library.
 - Viewers no longer receive library file paths; `/api/connect` and `/api/health` return only the library name and an opaque id, and never the id of an unshared library.
 
 ### Removed
@@ -318,7 +320,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 - Initial release of Eagle Media Preview Server.
 
-[Unreleased]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.5.3...HEAD
+[Unreleased]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.5.3...v0.6.0
 [0.5.3]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.5.0...v0.5.1
