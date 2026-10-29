@@ -20,7 +20,6 @@ export interface LibraryCandidate extends SharedLibrary {
 
 export interface LibraryList {
   current: SharedLibrary | null;
-  eagleAvailable: boolean;
   items: LibraryCandidate[];
 }
 

@@ -1,11 +1,10 @@
-const { chmod, mkdir, readFile, writeFile } = require("fs").promises;
+const { chmod, mkdir, readFile, stat, writeFile } = require("fs").promises;
 const { createPrivateKey, createPublicKey, pbkdf2Sync, randomBytes, X509Certificate } = require("crypto");
 const { dirname, join } = require("path");
 const { homedir, networkInterfaces } = require("os");
 const { createViewerServer } = require("./viewerServer.cjs");
 const { serverRestartSettingsChanged } = require("./settingsChange.cjs");
 const { normalizeCustomDomain } = require("./customDomain.cjs");
-const { createEagleClient } = require("./eagleClient.cjs");
 const { libraryNameFromPath, libraryPathKey, normalizeSharedLibraries } = require("./libraryAccess.cjs");
 
 type ServerStatus = "error" | "running" | "stopped";
@@ -73,9 +72,11 @@ interface ManagedViewer {
   status(): ViewerStatus;
 }
 
-interface LibraryClient {
-  libraryHistory(): Promise<unknown>;
-  libraryInfo(): Promise<unknown>;
+interface LibraryListInput {
+  /** The library open in Eagle, from the plugin API (`eagle.library`). */
+  current?: { name?: unknown; path?: unknown } | null;
+  /** Eagle's user data folder (`eagle.app.getPath("userData")`), which holds its `Settings` file. */
+  userDataPath?: unknown;
 }
 
 interface LibraryCandidate extends SharedLibrary {
@@ -85,7 +86,7 @@ interface LibraryCandidate extends SharedLibrary {
 
 interface ServerManagerOptions {
   lanAddressProvider?: () => LanAddress[];
-  libraryClient?: LibraryClient;
+  defaultEagleUserDataPath?: () => string;
   settingsStore?: SettingsStore;
   viewerServerFactory?: (settings: {
     customDomain: string;
@@ -453,6 +454,35 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
+function defaultEagleUserDataDir() {
+  if (process.platform === "darwin") return join(homedir(), "Library", "Application Support", "Eagle");
+  if (process.platform === "win32") return join(process.env.APPDATA || join(homedir(), "AppData", "Roaming"), "Eagle");
+  return join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), "Eagle");
+}
+
+// Eagle's Settings file also holds unrelated data (such as account tokens); only libraryHistory is read.
+async function readEagleLibraryHistory(userDataPath: string): Promise<string[]> {
+  try {
+    const parsed = JSON.parse(await readFile(join(userDataPath, "Settings"), "utf8")) as { libraryHistory?: unknown };
+    return Array.isArray(parsed?.libraryHistory)
+      ? parsed.libraryHistory.filter((path): path is string => typeof path === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+async function existingPaths(paths: string[]) {
+  const checks = await Promise.all(paths.map(async (path) => {
+    try {
+      return (await stat(path)).isDirectory();
+    } catch {
+      return false;
+    }
+  }));
+  return paths.filter((_, index) => checks[index]);
+}
+
 function sharedLibraryPaths(settings: PluginSettings) {
   return settings.libraryProtectionEnabled ? settings.sharedLibraries.map((library) => library.path) : null;
 }
@@ -492,7 +522,7 @@ function createServerManager({
   settingsStore = createSettingsStore(),
   viewerServerFactory = createViewerServer,
   lanAddressProvider = getLanAddresses,
-  libraryClient = createEagleClient(),
+  defaultEagleUserDataPath = defaultEagleUserDataDir,
 }: ServerManagerOptions = {}) {
   let viewer: ManagedViewer | null = null;
   let stateOverride: ServerStatus = "stopped";
@@ -589,28 +619,22 @@ function createServerManager({
       viewer?.notifyLibraryChanged?.();
     },
 
-    // Candidates for the shared-library picker: the library open in Eagle, Eagle's recent
-    // libraries, and anything already shared (even if Eagle has since forgotten it).
-    async libraries() {
+    // Candidates for the shared-library picker on the admin's own machine: anything already
+    // shared, the library open in Eagle, and Eagle's recent libraries that still exist.
+    async libraries({ current = null, userDataPath = "" }: LibraryListInput = {}) {
       const settings = await settingsStore.load();
-      const [info, history] = await Promise.allSettled([libraryClient.libraryInfo(), libraryClient.libraryHistory()]);
-      const currentPath = info.status === "fulfilled" && info.value && typeof info.value === "object"
-        ? String((info.value as { path?: unknown }).path || "")
-        : "";
-      const historyPaths = history.status === "fulfilled" && Array.isArray(history.value)
-        ? history.value.filter((path): path is string => typeof path === "string")
-        : [];
+      const currentPath = String(current?.path || "").trim();
+      const historyPaths = await existingPaths(await readEagleLibraryHistory(String(userDataPath || "") || defaultEagleUserDataPath()));
       const sharedKeys = new Set(settings.sharedLibraries.map((library) => libraryPathKey(library.path)));
       const currentKey = libraryPathKey(currentPath);
       // Saved entries go first so the picker shows (and later removes) the exact saved path.
       const candidates = normalizeSharedLibraries([
         ...settings.sharedLibraries,
-        ...(currentPath ? [currentPath] : []),
+        ...(currentPath ? [{ path: currentPath, name: current?.name }] : []),
         ...historyPaths,
       ]) as SharedLibrary[];
       return {
-        current: currentPath ? { path: currentPath, name: libraryNameFromPath(currentPath) } : null,
-        eagleAvailable: info.status === "fulfilled",
+        current: currentPath ? { path: currentPath, name: String(current?.name || "") || libraryNameFromPath(currentPath) } : null,
         items: candidates.map((library): LibraryCandidate => {
           const key = libraryPathKey(library.path);
           return { ...library, current: key === currentKey, shared: sharedKeys.has(key) };

@@ -245,11 +245,8 @@ export function SettingsForm({
               <span>Share only selected libraries</span>
             </label>
           </SettingRow>
-          <SettingRow label="Libraries" help="Applied when the server starts. Libraries come from Eagle's recent list.">
+          <SettingRow label="Libraries">
             <div className="grid gap-2">
-              {libraries && !libraries.eagleAvailable ? (
-                <p className="m-0 text-[11px] leading-snug text-[#8a5a00]" role="note">Eagle API is unavailable, so only saved libraries are listed.</p>
-              ) : null}
               {currentLibraryUnshared ? (
                 <p className="m-0 rounded-lg border border-[#f5dfa8] bg-[#fffaeb] px-2.5 py-1.5 text-[11px] leading-snug text-[#8a5a00]" role="note">
                   The library open in Eagle is not shared. Viewers see the server as offline.
@@ -387,13 +384,13 @@ function FilePathInput({
   );
 }
 
-function SettingRow({ children, help, label }: { children: ReactNode; help: string; label: string }) {
+function SettingRow({ children, help, label }: { children: ReactNode; help?: string; label: string }) {
   return (
     <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-3 border-t border-[#efeff1] py-3 first:border-t-0 max-[520px]:grid-cols-1">
       <span className="pt-[7px] text-[12px] font-medium text-[#171717]">{label}</span>
       <span className="grid gap-1.5">
         {children}
-        <small className="text-[10.5px] leading-snug text-[#7a808a]">{help}</small>
+        {help ? <small className="text-[10.5px] leading-snug text-[#7a808a]">{help}</small> : null}
       </span>
     </div>
   );

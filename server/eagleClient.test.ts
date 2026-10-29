@@ -688,26 +688,11 @@ test("smartFolderItems uses the requested nested smart folder when the detail en
   ]);
 });
 
-test("libraryHistory uses the legacy library history endpoint", async () => {
-  const calls: RequestCall[] = [];
-  const client = createEagleClient({
-    baseUrl: "http://localhost:41595",
-    fetchImpl: async (url: string, init: { method?: string; body: string }) => {
-      calls.push({ url, init });
-      return jsonResponse({ status: "success", data: ["/Users/me/A.library"] });
-    },
-  });
-
-  const result = await client.libraryHistory();
-
-  assert.deepEqual(result, ["/Users/me/A.library"]);
-  assert.equal(calls[0].url, "http://localhost:41595/api/library/history");
-});
-
-test("createEagleClient does not expose library switching", () => {
+test("createEagleClient does not expose library switching or history", () => {
   const client = createEagleClient({ baseUrl: "http://localhost:41595" });
 
   assert.equal("switchLibrary" in client, false);
+  assert.equal("libraryHistory" in client, false);
 });
 
 test("updateItemStar uses V2 item/update with a 0-5 star value", async () => {

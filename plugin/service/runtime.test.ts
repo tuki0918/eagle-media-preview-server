@@ -1,6 +1,6 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -971,10 +971,20 @@ test("generated server manager passes shared libraries to the viewer when it sta
   ]);
 });
 
-test("generated server manager lists library candidates with shared and open flags", async () => {
+test("generated server manager lists libraries from Eagle's own settings and the open library", async () => {
+  const root = await mkdtemp(join(tmpdir(), "eagle-libraries-"));
+  const userData = join(root, "Eagle");
+  const work = join(root, "Work.library");
+  const open = join(root, "Private.library");
+  const archived = join(root, "Archive", "Old.library");
+  await Promise.all([mkdir(userData, { recursive: true }), mkdir(work), mkdir(open)]);
+  await writeFile(join(userData, "Settings"), JSON.stringify({
+    libraryHistory: [open, `${work}/`, join(root, "Deleted.library"), 42],
+    pinterestAccessToken: "must-not-leak",
+  }));
   const settings = normalizeSettings({
     libraryProtectionEnabled: true,
-    sharedLibraries: [{ path: "/Users/me/Work.library" }, { path: "/Volumes/Archive/Old.library" }],
+    sharedLibraries: [{ path: work }, { path: archived }],
   });
   const manager = createServerManager({
     settingsStore: {
@@ -985,31 +995,25 @@ test("generated server manager lists library candidates with shared and open fla
         return settings;
       },
     },
-    libraryClient: {
-      async libraryInfo() {
-        return { path: "/Users/me/Private.library", name: "Private" };
-      },
-      async libraryHistory() {
-        return ["/Users/me/Private.library", "/Users/me/Work.library/", 42];
-      },
-    },
     lanAddressProvider() {
       return [];
     },
   });
 
-  assert.deepEqual(await manager.libraries(), {
-    current: { path: "/Users/me/Private.library", name: "Private" },
-    eagleAvailable: true,
+  const libraries = await manager.libraries({ current: { path: open, name: "Private" }, userDataPath: userData });
+
+  assert.deepEqual(libraries, {
+    current: { path: open, name: "Private" },
     items: [
-      { path: "/Users/me/Work.library", name: "Work", current: false, shared: true },
-      { path: "/Volumes/Archive/Old.library", name: "Old", current: false, shared: true },
-      { path: "/Users/me/Private.library", name: "Private", current: true, shared: false },
+      { path: work, name: "Work", current: false, shared: true },
+      { path: archived, name: "Old", current: false, shared: true },
+      { path: open, name: "Private", current: true, shared: false },
     ],
   });
+  assert.equal(JSON.stringify(libraries).includes("must-not-leak"), false);
 });
 
-test("generated server manager still lists saved libraries when Eagle is unavailable", async () => {
+test("generated server manager still lists saved libraries without Eagle settings", async () => {
   const settings = normalizeSettings({ sharedLibraries: [{ path: "/Users/me/Work.library" }] });
   const manager = createServerManager({
     settingsStore: {
@@ -1020,14 +1024,7 @@ test("generated server manager still lists saved libraries when Eagle is unavail
         return settings;
       },
     },
-    libraryClient: {
-      async libraryInfo() {
-        throw new Error("offline");
-      },
-      async libraryHistory() {
-        throw new Error("offline");
-      },
-    },
+    defaultEagleUserDataPath: () => join(tmpdir(), "missing-eagle-user-data"),
     lanAddressProvider() {
       return [];
     },
@@ -1035,7 +1032,6 @@ test("generated server manager still lists saved libraries when Eagle is unavail
 
   assert.deepEqual(await manager.libraries(), {
     current: null,
-    eagleAvailable: false,
     items: [{ path: "/Users/me/Work.library", name: "Work", current: false, shared: true }],
   });
 });

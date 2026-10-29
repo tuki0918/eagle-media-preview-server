@@ -329,10 +329,6 @@ function createEagleClient({
       return unwrapData(await request("/api/v2/library/info"));
     },
 
-    async libraryHistory() {
-      return unwrapData(await request("/api/library/history"));
-    },
-
     async folders({ offset = 0, limit = 1000 }: PageOptions = {}) {
       return normalizePaginatedResponse(
         await request("/api/v2/folder/get", {

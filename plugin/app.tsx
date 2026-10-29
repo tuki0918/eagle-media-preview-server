@@ -9,7 +9,7 @@ import type { AuthUser, LibraryCandidate, LibraryList, PluginSettings, PluginSta
 
 interface ServerManager {
   init(): Promise<PluginStatus>;
-  libraries?(): Promise<LibraryList>;
+  libraries?(input: { current: SharedLibrary | null; userDataPath: string }): Promise<LibraryList>;
   libraryChanged?(): void;
   saveSettings(payload: Record<string, unknown>): Promise<PluginStatus>;
   start(): Promise<PluginStatus>;
@@ -18,7 +18,9 @@ interface ServerManager {
 }
 
 interface EagleRuntime {
+  app?: { getPath?: (name: string) => Promise<string> };
   clipboard?: { writeText?: (value: string) => Promise<void> };
+  library?: { name?: string; path?: string };
   dialog?: {
     showOpenDialog?: (options: {
       defaultPath?: string;
@@ -234,7 +236,11 @@ function App() {
 
   async function refreshLibraries({ reportErrors = false } = {}) {
     try {
-      const next = await managerRef.current?.libraries?.();
+      // This panel runs on the admin's machine, so it reads Eagle's own state directly.
+      const eagleLibrary = globalThis.eagle?.library;
+      const current = eagleLibrary?.path ? { name: eagleLibrary.name || "", path: eagleLibrary.path } : null;
+      const userDataPath = await globalThis.eagle?.app?.getPath?.("userData").catch(() => "") || "";
+      const next = await managerRef.current?.libraries?.({ current, userDataPath });
       if (next) setLibraries(next);
     } catch (error) {
       // The picker keeps the last list; sharing itself is enforced by the server.
