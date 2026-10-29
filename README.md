@@ -34,6 +34,7 @@ Optional:
 
 - Expand support for additional file extensions
 - Add AI-related capabilities
+- Add protection for shared libraries
 
 ### Limitations
 
