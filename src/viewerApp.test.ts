@@ -381,12 +381,91 @@ describe("viewer app data refresh", () => {
     await vi.waitFor(() => expect(getShellView()).toBe("login"));
     expect(new URLSearchParams(window.location.search).has("q")).toBe(false);
   });
+
+  test("returns to the connect screen when the server stops sharing the open library", async () => {
+    let health: unknown = { app: { version: "1.0" }, library: { id: "lib-a", name: "A" }, libraryStatus: "shared" };
+    let connectResponse: Response = jsonResponse({ app: { version: "1.0" }, library: { id: "lib-a", name: "A" } });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/auth/status") return jsonResponse({ authenticated: true, required: false });
+      if (url === "/api/connect" && options?.method === "POST") return connectResponse;
+      if (url === "/api/health") return jsonResponse(health);
+      if (url === "/api/folders" || url === "/api/smart-folders") return jsonResponse({ items: [] });
+      if (url.startsWith("/api/items?")) return jsonResponse({ items: [], total: 0 });
+      if (url.startsWith("/api/item-types")) return jsonResponse({ items: [] });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: fetchMock });
+
+    const { initViewer } = await import("./viewerApp");
+    const { submitConnection } = await import("./viewer/shellActions");
+    const { getLoginConnectState } = await import("./viewer/loginConnectState");
+    const { getShellView } = await import("./viewer/shellVisibility");
+    initViewer();
+    await vi.waitFor(() => expect(getLoginConnectState().authenticated).toBe(true));
+    submitConnection({ currentTarget: document.querySelector<HTMLFormElement>("#connectForm")!, preventDefault: () => {} });
+    await vi.waitFor(() => expect(getShellView()).toBe("viewer"));
+
+    health = { app: { version: "1.0" }, library: null, libraryStatus: "not_shared" };
+    window.dispatchEvent(new window.Event("online"));
+    await vi.waitFor(() => expect(getShellView()).toBe("login"));
+    expect(getLoginConnectState()).toMatchObject({ isError: true, message: "This library isn't shared right now. Please try again later." });
+
+    connectResponse = errorResponse(503, { error: "The library open in Eagle is not shared", code: "LIBRARY_NOT_SHARED" });
+    submitConnection({ currentTarget: document.querySelector<HTMLFormElement>("#connectForm")!, preventDefault: () => {} });
+    await vi.waitFor(() => expect(getLoginConnectState().disabled).toBe(false));
+    expect(getShellView()).toBe("login");
+    expect(getLoginConnectState().message).toBe("This library isn't shared right now. Please try again later.");
+  });
+
+  test("reconnects when Eagle switches to a different shared library", async () => {
+    let health: unknown = { app: { version: "1.0" }, library: { id: "lib-a", name: "A" }, libraryStatus: "shared" };
+    let library = { id: "lib-a", name: "A" };
+    const requests: string[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      const url = String(input);
+      requests.push(url);
+      if (url === "/api/auth/status") return jsonResponse({ authenticated: true, required: false });
+      if (url === "/api/connect" && options?.method === "POST") return jsonResponse({ app: { version: "1.0" }, library });
+      if (url === "/api/health") return jsonResponse(health);
+      if (url === "/api/folders" || url === "/api/smart-folders") return jsonResponse({ items: [] });
+      if (url.startsWith("/api/items?")) return jsonResponse({ items: [], total: 0 });
+      if (url.startsWith("/api/item-types")) return jsonResponse({ items: [] });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: fetchMock });
+
+    const { initViewer } = await import("./viewerApp");
+    const { submitConnection } = await import("./viewer/shellActions");
+    const { getLoginConnectState } = await import("./viewer/loginConnectState");
+    const { getShellView } = await import("./viewer/shellVisibility");
+    const { getLibraryName } = await import("./viewer/libraryNameState");
+    initViewer();
+    await vi.waitFor(() => expect(getLoginConnectState().authenticated).toBe(true));
+    submitConnection({ currentTarget: document.querySelector<HTMLFormElement>("#connectForm")!, preventDefault: () => {} });
+    await vi.waitFor(() => expect(getLibraryName()).toBe("A"));
+
+    library = { id: "lib-b", name: "B" };
+    health = { app: { version: "1.0" }, library, libraryStatus: "shared" };
+    window.dispatchEvent(new window.Event("online"));
+    await vi.waitFor(() => expect(getLibraryName()).toBe("B"));
+    expect(getShellView()).toBe("viewer");
+    expect(requests.filter((url) => url === "/api/connect")).toHaveLength(2);
+  });
 });
 
 function jsonResponse(body: unknown) {
   return {
     ok: true,
     status: 200,
+    json: async () => body,
+  } as Response;
+}
+
+function errorResponse(status: number, body: unknown) {
+  return {
+    ok: false,
+    status,
     json: async () => body,
   } as Response;
 }

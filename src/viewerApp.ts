@@ -88,6 +88,7 @@ import {
 } from "./viewer/tileLoading";
 import type {
   ConnectResponse,
+  HealthResponse,
   AuthStatusResponse,
   EagleItem,
   ItemPatch,
@@ -114,6 +115,7 @@ let authAuthenticated = false;
 let authRequired = false;
 let authUser: NonNullable<AuthStatusResponse["user"]> | null = null;
 let serverReachable = true;
+let currentLibraryId = "";
 let sessionMaxAgeSeconds = 7 * 24 * 60 * 60;
 let allFoldersTotal = 0;
 let availableExts: string[] = [];
@@ -129,6 +131,7 @@ let unsubscribeEagleStatusRequests: (() => void) | null = null;
 const EAGLE_STATUS_POLL_INTERVAL_MS = 30_000;
 const pendingRatingItemIds = new Set<string>();
 const DEFAULT_DOCUMENT_TITLE = "Media Library";
+const LIBRARY_NOT_SHARED_MESSAGE = "This library isn't shared right now. Please try again later.";
 const changeSearch = debounce((query: string) => {
   applyFilterChange({ query: query.trim() });
   loadTagSuggestions();
@@ -365,7 +368,19 @@ function isLoginAuthFailure(error: unknown) {
   return error instanceof ApiError && error.status === 401;
 }
 
+function isLibraryNotSharedError(error: unknown) {
+  return error instanceof ApiError && error.code === "LIBRARY_NOT_SHARED";
+}
+
+// The host opened a library that is not shared: drop what was loaded and wait at the connect screen.
+function handleLibraryNotShared() {
+  clearViewerSessionState();
+  showLogin();
+  setConnectMessage(LIBRARY_NOT_SHARED_MESSAGE, true);
+}
+
 function connectErrorMessage(error: unknown) {
+  if (isLibraryNotSharedError(error)) return LIBRARY_NOT_SHARED_MESSAGE;
   const message = errorMessage(error);
   if (isEagleConnectionError(error, message)) {
     return "Can't reach the media server right now. Please try again in a bit.";
@@ -377,6 +392,13 @@ function connectErrorMessage(error: unknown) {
 }
 
 function loadErrorMessage(error: unknown) {
+  if (isLibraryNotSharedError(error)) {
+    return {
+      title: "Library not shared",
+      text: "The library open on the media server isn't shared.",
+      detail: "Please try again later.",
+    };
+  }
   const message = errorMessage(error);
   if (isEagleConnectionError(error, message)) {
     return {
@@ -414,6 +436,7 @@ function showViewer(data: ConnectResponse) {
   setShellView("viewer");
   setLibraryFooterName(libraryLabel(data));
   setLibraryName(data.library?.name || "");
+  currentLibraryId = data.library?.id || "";
   setEagleStatus(data.app ? "online" : "offline");
   startEagleStatusPolling();
   document.title = libraryTitle(data);
@@ -443,6 +466,7 @@ function clearViewerSessionState() {
   syncUrlState({ replace: true });
   setLibraryFooterName("");
   setLibraryName("");
+  currentLibraryId = "";
   stopEagleStatusPolling();
   renderTagChips();
   renderSearchControlButtons();
@@ -524,8 +548,19 @@ async function checkEagleStatus() {
   const requestId = ++eagleStatusRequestId;
   eagleStatusCheckInFlight = true;
   try {
-    const data = await getJson<{ app?: unknown }>("/api/health");
+    const data = await getJson<HealthResponse>("/api/health");
     if (requestId !== eagleStatusRequestId) return;
+    if (data.libraryStatus === "not_shared") {
+      handleLibraryNotShared();
+      return;
+    }
+    const libraryId = data.library?.id || "";
+    if (currentLibraryId && libraryId && libraryId !== currentLibraryId) {
+      // Eagle switched to another shared library; folders and items from the old one are invalid.
+      clearViewerSessionState();
+      void connect();
+      return;
+    }
     setEagleStatus(data.app ? "online" : "offline");
   } catch (error) {
     if (requestId !== eagleStatusRequestId) return;

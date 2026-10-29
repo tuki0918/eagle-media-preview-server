@@ -1,11 +1,11 @@
 const { readFileSync } = require("fs");
 const { createServer: createHttpServer } = require("http");
 const { createServer: createHttpsServer } = require("https");
-const { randomBytes } = require("crypto");
+const { createHmac, randomBytes } = require("crypto");
 const { normalizeCustomDomain } = require("./customDomain.cjs");
 const { EagleRequestError, createEagleClient, normalizeStringArray } = require("./eagleClient.cjs");
 const { createConnectionContext } = require("./connection.cjs");
-const { createLibraryAccessPolicy } = require("./libraryAccess.cjs");
+const { createLibraryAccessPolicy, libraryPathKey } = require("./libraryAccess.cjs");
 const { readInternetShortcutUrl, streamItemMedia } = require("./media.cjs");
 const { resolveDefaultPublicDir, securityHeaders, serveStatic } = require("./static.cjs");
 const {
@@ -151,6 +151,7 @@ interface LibraryAccessPolicy {
 interface ApiContext {
   getSession: () => EagleSession;
   libraryAccess: LibraryAccessPolicy;
+  libraryId: (libraryPath: unknown) => string;
 }
 
 const defaultPublicDir = resolveDefaultPublicDir();
@@ -205,6 +206,11 @@ function createViewerServer({
   const revokedAuthSessions = new Set<string>();
   const loginFailures = new Map<string, LoginFailure>();
   const libraryAccess: LibraryAccessPolicy = createLibraryAccessPolicy(sharedLibraries);
+  // An opaque, per-install id lets viewers notice a library switch without learning the path.
+  const libraryId = (libraryPath: unknown) => {
+    const key = libraryPathKey(libraryPath);
+    return key ? createHmac("sha256", resolvedSessionSecret).update(key).digest("base64url").slice(0, 16) : "";
+  };
   const currentSession = createConnectionContext({
     connection: {
       host: "127.0.0.1",
@@ -240,6 +246,7 @@ function createViewerServer({
           auth,
           getSession: () => currentSession,
           libraryAccess,
+          libraryId,
         });
         return;
       }
@@ -377,7 +384,7 @@ async function cachedItemTypes(session: { client: EagleClient; libraryInfo(): Pr
   return value;
 }
 
-async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { auth, getSession, libraryAccess }: ApiContext & { auth: AuthContext }) {
+async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { auth, getSession, libraryAccess, libraryId }: ApiContext & { auth: AuthContext }) {
   const session = getSession();
 
   if (url.pathname === "/api/connect") {
@@ -385,7 +392,7 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       sendMethodNotAllowed(res, ["POST"]);
       return;
     }
-    await handleConnect(req, res, session);
+    await handleConnect(req, res, session, libraryId);
     return;
   }
 
@@ -402,7 +409,7 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
     const libraryStatus = libraryInfo ? (libraryAccess.status(libraryInfo.path) === "not_shared" ? "not_shared" : "shared") : null;
     sendJson(res, 200, {
       app: app.status === "fulfilled" ? app.value : null,
-      library: libraryStatus === "shared" ? publicLibraryInfo(libraryInfo) : null,
+      library: libraryStatus === "shared" ? publicLibraryInfo(libraryInfo, libraryId) : null,
       libraryStatus,
       error: app.status === "rejected" ? app.reason.message : null,
     });
@@ -761,22 +768,22 @@ function sendLoginRateLimited(res: ServerResponse, retryAfterSeconds: number) {
 }
 
 // The Eagle API connection is fixed server-side; viewer clients can only check it, never repoint it.
-async function handleConnect(req: IncomingMessage, res: ServerResponse, session: EagleSession) {
+async function handleConnect(req: IncomingMessage, res: ServerResponse, session: EagleSession, libraryId: ApiContext["libraryId"]) {
   await readJson(req);
   try {
     const [app, library] = await Promise.all([
       session.client.appInfo(),
       session.libraryInfo(),
     ]);
-    sendJson(res, 200, { app, library: publicLibraryInfo(library) });
+    sendJson(res, 200, { app, library: publicLibraryInfo(library, libraryId) });
   } catch (error) {
     sendJson(res, 502, { error: `Unable to connect to Eagle API: ${errorMessage(error)}` });
   }
 }
 
 // Library paths reveal the host's directory layout, so clients only get the display name.
-function publicLibraryInfo(library: EagleLibraryInfo | null | undefined) {
-  return library ? { name: String(library.name || "") } : null;
+function publicLibraryInfo(library: EagleLibraryInfo | null | undefined, libraryId: ApiContext["libraryId"]) {
+  return library ? { id: libraryId(library.path), name: String(library.name || "") } : null;
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown) {

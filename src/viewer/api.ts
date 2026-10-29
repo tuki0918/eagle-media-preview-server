@@ -1,9 +1,12 @@
 export class ApiError extends Error {
+  /** Machine-readable reason from the server body, such as "LIBRARY_NOT_SHARED". */
+  code: string;
   status: number;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code = "") {
     super(message);
     this.name = "ApiError";
+    this.code = code;
     this.status = status;
   }
 }
@@ -60,7 +63,7 @@ async function requestJson<T>(url: string, options?: RequestInit): Promise<T> {
   }
   notifyRequestOutcome({ ok: response.ok, status: response.status, url });
   const data = await safeJson(response);
-  if (!response.ok) throw new ApiError(response.status, responseErrorMessage(data, response.status));
+  if (!response.ok) throw new ApiError(response.status, responseErrorMessage(data, response.status), responseErrorCode(data));
   return data as T;
 }
 
@@ -78,6 +81,14 @@ function responseErrorMessage(data: unknown, status: number) {
     if (error) return String(error);
   }
   return `HTTP ${status}`;
+}
+
+function responseErrorCode(data: unknown) {
+  if (data && typeof data === "object" && "code" in data) {
+    const code = (data as { code?: unknown }).code;
+    if (typeof code === "string") return code;
+  }
+  return "";
 }
 
 export function mediaUrl(id: string, kind: string) {

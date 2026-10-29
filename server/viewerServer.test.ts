@@ -1919,12 +1919,16 @@ test("createViewerServer keeps the Eagle API connection fixed and hides library 
       body: JSON.stringify({ host: "192.168.1.20", port: "41596", token: "secret" }),
     });
     assert.equal(connected.status, 200);
-    assert.deepEqual(await connected.json(), { app: { version: "1.0.0" }, library: { name: "A" } });
+    const connectedBody = await connected.json();
+    assert.deepEqual(connectedBody.app, { version: "1.0.0" });
+    assert.equal(connectedBody.library.name, "A");
+    assert.match(connectedBody.library.id, /^[A-Za-z0-9_-]{16}$/);
 
     const health = await fetch(`${origin}/api/health`, { headers: { Cookie: adminCookie } });
     assert.equal(health.status, 200);
     const healthBody = await health.json();
-    assert.deepEqual(healthBody.library, { name: "A" });
+    assert.equal(healthBody.library.name, "A");
+    assert.equal(healthBody.library.id, connectedBody.library.id);
     assert.equal(JSON.stringify(healthBody).includes("/Users/me"), false);
   } finally {
     await viewer.stop();
@@ -1962,7 +1966,7 @@ test("createViewerServer only serves the library when Eagle has a shared library
     assert.equal(shared.status, 200);
     const sharedHealth = await (await fetch(`${origin}/api/health`)).json();
     assert.equal(sharedHealth.libraryStatus, "shared");
-    assert.deepEqual(sharedHealth.library, { name: "Shared" });
+    assert.equal(sharedHealth.library.name, "Shared");
 
     openLibrary = "/Users/me/Private.library";
     viewer.notifyLibraryChanged();
