@@ -192,7 +192,7 @@ Settings path:
 - Clear viewer state and return to the login screen when an authenticated viewer API request returns `401`
 - Show the "Media Library is offline" page on load, before sign-in, when `/api/library-status` reports that the open library is not shared
 - Clear viewer state and show the same page when health polling or Connect reports that the open library is not shared
-- Reload from scratch when the library id reported by `/api/health` changes
+- Clear viewer state and return to the connect screen when Eagle switches to a different library, detected from the `X-Library-Id` header on any API response or the id reported by `/api/health`
 
 ### Supported Browsing Features
 
@@ -288,6 +288,7 @@ Settings path:
 - A library that is not shared returns `503 { "error": "The library open in Eagle is not shared", "code": "LIBRARY_NOT_SHARED" }` before any library data is read
 - If Eagle cannot report the open library, the request fails instead of being served
 - Library info is cached for at most 3 seconds; the plugin also clears it on `eagle.onLibraryChanged`
+- Authorized `/api/*` responses carry `X-Library-Id`, the same opaque id as `/api/health`, so viewers notice a library switch on the first response from the new library
 - The viewer server never calls Eagle's library switch API
 
 ### Media Streaming

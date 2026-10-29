@@ -245,6 +245,10 @@ function createViewerServer({
           sendLibraryNotShared(res);
           return;
         }
+        // Lets viewers notice, on any response, that Eagle switched to a different library.
+        const openLibrary = await currentSession.libraryInfo().catch(() => null);
+        const openLibraryId = openLibrary ? libraryId(openLibrary.path) : "";
+        if (openLibraryId) res.setHeader("X-Library-Id", openLibraryId);
         await handleApi(req, url, res, {
           auth,
           getSession: () => currentSession,

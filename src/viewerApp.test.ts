@@ -458,15 +458,14 @@ describe("viewer app data refresh", () => {
     expect(getShellView()).toBe("login");
   });
 
-  test("reconnects when Eagle switches to a different shared library", async () => {
+  test("returns to the connect screen when health polling sees a different shared library", async () => {
     let health: unknown = { app: { version: "1.0" }, library: { id: "lib-a", name: "A" }, libraryStatus: "shared" };
-    let library = { id: "lib-a", name: "A" };
     const requests: string[] = [];
     const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
       const url = String(input);
       requests.push(url);
       if (url === "/api/auth/status") return jsonResponse({ authenticated: true, required: false });
-      if (url === "/api/connect" && options?.method === "POST") return jsonResponse({ app: { version: "1.0" }, library });
+      if (url === "/api/connect" && options?.method === "POST") return jsonResponse({ app: { version: "1.0" }, library: { id: "lib-a", name: "A" } });
       if (url === "/api/health") return jsonResponse(health);
       if (url === "/api/folders" || url === "/api/smart-folders") return jsonResponse({ items: [] });
       if (url.startsWith("/api/items?")) return jsonResponse({ items: [], total: 0 });
@@ -485,12 +484,44 @@ describe("viewer app data refresh", () => {
     submitConnection({ currentTarget: document.querySelector<HTMLFormElement>("#connectForm")!, preventDefault: () => {} });
     await vi.waitFor(() => expect(getLibraryName()).toBe("A"));
 
-    library = { id: "lib-b", name: "B" };
-    health = { app: { version: "1.0" }, library, libraryStatus: "shared" };
+    health = { app: { version: "1.0" }, library: { id: "lib-b", name: "B" }, libraryStatus: "shared" };
     window.dispatchEvent(new window.Event("online"));
-    await vi.waitFor(() => expect(getLibraryName()).toBe("B"));
+    await vi.waitFor(() => expect(getShellView()).toBe("login"));
+    expect(getLoginConnectState()).toMatchObject({ isError: false, message: "The media server switched to a different library. Connect to browse it." });
+    expect(getLibraryName()).toBe("");
+    expect(requests.filter((url) => url === "/api/connect")).toHaveLength(1);
+  });
+
+  test("returns to the connect screen as soon as a response comes from a different library", async () => {
+    let responseLibraryId = "lib-a";
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      const url = String(input);
+      const tagged = (body: unknown) => ({ ...jsonResponse(body), headers: new Headers({ "X-Library-Id": responseLibraryId }) }) as Response;
+      if (url === "/api/auth/status") return jsonResponse({ authenticated: true, required: false });
+      if (url === "/api/connect" && options?.method === "POST") return tagged({ app: { version: "1.0" }, library: { id: "lib-a", name: "A" } });
+      if (url === "/api/folders" || url === "/api/smart-folders") return tagged({ items: [] });
+      if (url.startsWith("/api/items?")) return tagged({ items: [], total: 0 });
+      if (url.startsWith("/api/item-types")) return tagged({ items: [] });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: fetchMock });
+
+    const { initViewer } = await import("./viewerApp");
+    const { openAllItems, submitConnection } = await import("./viewer/shellActions");
+    const { getLoginConnectState } = await import("./viewer/loginConnectState");
+    const { getShellView } = await import("./viewer/shellVisibility");
+    initViewer();
+    await vi.waitFor(() => expect(getLoginConnectState().authenticated).toBe(true));
+    submitConnection({ currentTarget: document.querySelector<HTMLFormElement>("#connectForm")!, preventDefault: () => {} });
+    await vi.waitFor(() => expect(getShellView()).toBe("viewer"));
+    await new Promise((resolve) => setTimeout(resolve, 20));
     expect(getShellView()).toBe("viewer");
-    expect(requests.filter((url) => url === "/api/connect")).toHaveLength(2);
+
+    responseLibraryId = "lib-b";
+    vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+    openAllItems();
+    await vi.waitFor(() => expect(getShellView()).toBe("login"));
+    expect(getLoginConnectState().message).toBe("The media server switched to a different library. Connect to browse it.");
   });
 });
 

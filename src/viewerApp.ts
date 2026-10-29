@@ -134,6 +134,7 @@ const pendingRatingItemIds = new Set<string>();
 const DEFAULT_DOCUMENT_TITLE = "Media Library";
 const OFFLINE_PAGE_TITLE = "Media Library is offline";
 const LIBRARY_NOT_SHARED_MESSAGE = "This library isn't shared right now. Please try again later.";
+const LIBRARY_CHANGED_MESSAGE = "The media server switched to a different library. Connect to browse it.";
 const changeSearch = debounce((query: string) => {
   applyFilterChange({ query: query.trim() });
   loadTagSuggestions();
@@ -396,6 +397,18 @@ function handleLibraryNotShared() {
   showOfflinePage({ reason: "library-not-shared", title: OFFLINE_PAGE_TITLE, message: LIBRARY_NOT_SHARED_MESSAGE });
 }
 
+// Eagle switched to another shared library; folders and items from the old one are invalid,
+// so drop them and let the visitor reconnect on purpose.
+function handleLibraryChanged() {
+  clearViewerSessionState();
+  showLogin();
+  setConnectMessage(LIBRARY_CHANGED_MESSAGE, false);
+}
+
+function libraryChangedSinceConnect(libraryId: string) {
+  return Boolean(currentLibraryId && libraryId && libraryId !== currentLibraryId);
+}
+
 function connectErrorMessage(error: unknown) {
   if (isLibraryNotSharedError(error)) return LIBRARY_NOT_SHARED_MESSAGE;
   const message = errorMessage(error);
@@ -551,7 +564,11 @@ function checkEagleStatusWhenVisible() {
 }
 
 // Reacts to regular API traffic so the dot changes without waiting for the next poll.
-function recheckEagleStatusAfterRequest({ ok, status, url }: RequestOutcome) {
+function recheckEagleStatusAfterRequest({ libraryId, ok, status, url }: RequestOutcome) {
+  if (libraryChangedSinceConnect(libraryId)) {
+    handleLibraryChanged();
+    return;
+  }
   if (url.startsWith("/api/health")) return;
   const failedLikeOffline = !ok && (status === 0 || status >= 500);
   const current = getEagleStatus();
@@ -571,11 +588,8 @@ async function checkEagleStatus() {
       handleLibraryNotShared();
       return;
     }
-    const libraryId = data.library?.id || "";
-    if (currentLibraryId && libraryId && libraryId !== currentLibraryId) {
-      // Eagle switched to another shared library; folders and items from the old one are invalid.
-      clearViewerSessionState();
-      void connect();
+    if (libraryChangedSinceConnect(data.library?.id || "")) {
+      handleLibraryChanged();
       return;
     }
     setEagleStatus(data.app ? "online" : "offline");

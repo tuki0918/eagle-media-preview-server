@@ -12,6 +12,8 @@ export class ApiError extends Error {
 }
 
 export interface RequestOutcome {
+  /** Opaque id of the library that answered (X-Library-Id); empty when the server sent none. */
+  libraryId: string;
   ok: boolean;
   /** 0 when the request never got a response (network failure). */
   status: number;
@@ -58,10 +60,10 @@ async function requestJson<T>(url: string, options?: RequestInit): Promise<T> {
   try {
     response = await fetch(url, requestOptions);
   } catch (error) {
-    notifyRequestOutcome({ ok: false, status: 0, url });
+    notifyRequestOutcome({ libraryId: "", ok: false, status: 0, url });
     throw error;
   }
-  notifyRequestOutcome({ ok: response.ok, status: response.status, url });
+  notifyRequestOutcome({ libraryId: response.headers?.get?.("X-Library-Id") || "", ok: response.ok, status: response.status, url });
   const data = await safeJson(response);
   if (!response.ok) throw new ApiError(response.status, responseErrorMessage(data, response.status), responseErrorCode(data));
   return data as T;

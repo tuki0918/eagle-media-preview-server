@@ -2051,6 +2051,42 @@ test("createViewerServer reports library sharing publicly without naming the lib
   }
 });
 
+test("createViewerServer tags API responses with the open library id", async () => {
+  let openLibrary = "/Users/me/A.library";
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: openLibrary, name: "Library" };
+      },
+      async folders() {
+        return { items: [], total: 0, offset: 0, limit: 0 };
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const first = await fetch(`${origin}/api/folders`);
+    const firstId = first.headers.get("x-library-id");
+    assert.match(firstId || "", /^[A-Za-z0-9_-]{16}$/);
+    const health = await (await fetch(`${origin}/api/health`)).json();
+    assert.equal(health.library.id, firstId);
+
+    openLibrary = "/Users/me/B.library";
+    viewer.notifyLibraryChanged();
+    const second = await fetch(`${origin}/api/folders`);
+    assert.notEqual(second.headers.get("x-library-id"), firstId);
+  } finally {
+    await viewer.stop();
+  }
+});
+
 test("createViewerServer serves direct file routes from /file/:id", async () => {
   const root = join(tmpdir(), `eagle-media-preview-server-${Date.now()}`);
   await mkdir(root, { recursive: true });

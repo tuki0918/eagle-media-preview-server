@@ -25,7 +25,7 @@ describe("viewer API helpers", () => {
     const outcomes: RequestOutcome[] = [];
     const unsubscribe = subscribeRequestOutcome((outcome) => outcomes.push(outcome));
     const fetchMock = vi.spyOn(globalThis, "fetch");
-    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({}) } as Response);
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, headers: new Headers({ "X-Library-Id": "lib-a" }), json: async () => ({}) } as Response);
     fetchMock.mockResolvedValueOnce({ ok: false, status: 502, json: async () => ({ error: "Unable to connect to Eagle API" }) } as Response);
     fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
 
@@ -37,9 +37,9 @@ describe("viewer API helpers", () => {
     await getJson("/api/items");
 
     expect(outcomes).toEqual([
-      { ok: true, status: 200, url: "/api/items" },
-      { ok: false, status: 502, url: "/api/folders" },
-      { ok: false, status: 0, url: "/api/tags" },
+      { libraryId: "lib-a", ok: true, status: 200, url: "/api/items" },
+      { libraryId: "", ok: false, status: 502, url: "/api/folders" },
+      { libraryId: "", ok: false, status: 0, url: "/api/tags" },
     ]);
   });
 
