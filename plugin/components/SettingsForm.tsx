@@ -255,10 +255,11 @@ export function SettingsForm({
               <ul className="m-0 grid list-none gap-0 overflow-hidden rounded-xl border border-[#e6e6e9] p-0" aria-label="Libraries">
                 {libraries?.items.length ? libraries.items.map((library) => {
                   const checked = sharedLibraryPaths.has(library.path);
-                  // Locked inputs only dim the checkbox, so shared and unshared rows stay distinct while the server runs.
+                  // Locked inputs only dim the checkbox, so shared rows (white) and unshared rows (gray, muted text)
+                  // stay distinct while the server runs.
                   const shared = libraryProtectionEnabled && checked;
                   return (
-                    <li key={library.path} className={`border-b border-[#efeff1] last:border-b-0 ${shared ? "bg-[#f3fbf5]" : ""}`}>
+                    <li key={library.path} className={`border-b border-[#efeff1] last:border-b-0 ${shared ? "bg-white" : "bg-[#f7f7f8]"}`}>
                       <label className="grid grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-2.5 px-3 py-2">
                         <input
                           className="accent-[#16803a] disabled:opacity-50"
