@@ -7,6 +7,22 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-10-29
+
+### Added
+
+- Added a Picture-in-Picture button for video previews on supported desktop and mobile browsers, including Safari's native presentation mode; desktop Chrome can also open PiP automatically when switching tabs during playback.
+
+### Changed
+
+- Slideshows now start muted on all devices; use the speaker button in the playback bar to turn sound on.
+- Primary action buttons now show clearer hover and pressed states.
+
+### Fixed
+
+- Improved slideshow loading and playback reliability.
+- Keep sidebar popovers above the floating viewer controls.
+
 ## [0.5.1] - 2026-10-28
 
 ### Added
@@ -271,7 +287,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 - Initial release of Eagle Media Preview Server.
 
-[Unreleased]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.4.1...v0.4.2
