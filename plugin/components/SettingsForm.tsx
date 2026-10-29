@@ -262,7 +262,7 @@ export function SettingsForm({
                     <li key={library.path} className={`border-b border-[#efeff1] last:border-b-0 ${shared ? "bg-white" : "bg-[#f7f7f8]"}`}>
                       <label className="grid grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-2.5 px-3 py-2">
                         <input
-                          className="accent-[#16803a] disabled:opacity-50"
+                          className="disabled:opacity-50"
                           type="checkbox"
                           aria-label={`Share ${library.name}`}
                           disabled={settingsInputDisabled || !libraryProtectionEnabled}
