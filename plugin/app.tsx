@@ -5,10 +5,12 @@ import { CloseIcon } from "./components/Icons";
 import { ServerStatusPanel } from "./components/ServerStatusPanel";
 import { SettingsForm, type HttpsFileField } from "./components/SettingsForm";
 import { serverRestartSettingsChanged, settingsPayloadChanged } from "./settingsChange";
-import type { AuthUser, PluginSettings, PluginStatus, ServerState, SettingsTab, UserRole } from "./types";
+import type { AuthUser, LibraryCandidate, LibraryList, PluginSettings, PluginStatus, ServerState, SettingsTab, SharedLibrary, UserRole } from "./types";
 
 interface ServerManager {
   init(): Promise<PluginStatus>;
+  libraries?(): Promise<LibraryList>;
+  libraryChanged?(): void;
   saveSettings(payload: Record<string, unknown>): Promise<PluginStatus>;
   start(): Promise<PluginStatus>;
   status(): Promise<PluginStatus>;
@@ -25,6 +27,7 @@ interface EagleRuntime {
       title?: string;
     }) => Promise<{ canceled: boolean; filePaths: string[] }>;
   };
+  onLibraryChanged?: (callback: (libraryPath: string) => void) => void;
   onPluginCreate?: (callback: () => void) => void;
   onPluginShow?: (callback: () => void) => void;
   shell?: { openExternal?: (value: string) => Promise<void> };
@@ -58,6 +61,7 @@ function App() {
   const [settingsExpanded, setSettingsExpanded] = useState(true);
   const [passwordDraftRevision, setPasswordDraftRevision] = useState(0);
   const userPasswordsRef = useRef<Record<string, string>>({});
+  const [libraries, setLibraries] = useState<LibraryList | null>(null);
   const [status, setStatus] = useState<PluginStatus>(() => ({
     settings: {
       customDomain: "",
@@ -100,10 +104,19 @@ function App() {
       const runtimePath = pluginRequirePath("service/runtime.cjs");
       const runtime = window.require(runtimePath) as { createServerManager: () => ServerManager };
       managerRef.current = runtime.createServerManager();
-      const init = () => runCommand(() => managerRef.current?.init(), { quiet: true });
+      const init = () => {
+        void runCommand(() => managerRef.current?.init(), { quiet: true }).then(refreshLibraries);
+      };
+      // The viewer server must stop answering from the previous library the moment Eagle switches.
+      globalThis.eagle?.onLibraryChanged?.(() => {
+        managerRef.current?.libraryChanged?.();
+        void refreshLibraries();
+      });
       if (globalThis.eagle?.onPluginCreate) {
         globalThis.eagle.onPluginCreate(init);
-        globalThis.eagle.onPluginShow?.(() => runCommand(() => managerRef.current?.status(), { quiet: true }));
+        globalThis.eagle.onPluginShow?.(() => {
+          void runCommand(() => managerRef.current?.status(), { quiet: true }).then(refreshLibraries);
+        });
       } else {
         init();
       }
@@ -214,6 +227,46 @@ function App() {
     } catch (error) {
       setErrorMessage(error);
       return false;
+    }
+  }
+
+  async function refreshLibraries() {
+    try {
+      const next = await managerRef.current?.libraries?.();
+      if (next) setLibraries(next);
+    } catch {
+      // The picker falls back to the saved list; sharing itself is enforced by the server.
+    }
+  }
+
+  async function saveLibrarySettings(patch: { libraryProtectionEnabled?: boolean; sharedLibraries?: SharedLibrary[] }) {
+    updateSettings(patch);
+    const saved = await saveSettings({ patch });
+    if (saved) await refreshLibraries();
+  }
+
+  function changeLibraryShared(library: LibraryCandidate, shared: boolean) {
+    const current = Array.isArray(settings.sharedLibraries) ? settings.sharedLibraries : [];
+    const others = current.filter((entry) => entry.path !== library.path);
+    void saveLibrarySettings({
+      sharedLibraries: shared ? [...others, { name: library.name, path: library.path }] : others,
+    });
+  }
+
+  async function addSharedLibrary() {
+    const showOpenDialog = globalThis.eagle?.dialog?.showOpenDialog;
+    if (!showOpenDialog) return;
+    try {
+      const result = await showOpenDialog({
+        title: "Choose an Eagle library",
+        properties: ["openDirectory"],
+      });
+      const libraryPath = result.canceled ? "" : result.filePaths[0];
+      if (!libraryPath) return;
+      const current = Array.isArray(settings.sharedLibraries) ? settings.sharedLibraries : [];
+      await saveLibrarySettings({ sharedLibraries: [...current, { name: "", path: libraryPath }] });
+    } catch (error) {
+      setErrorMessage(error);
     }
   }
 
@@ -469,6 +522,8 @@ function App() {
           authUsers={authUsers}
           busy={busy}
           httpsEnabled={httpsEnabled}
+          libraries={libraries}
+          libraryControlsDisabled={formDisabled}
           message={message}
           messageIsError={messageIsError}
           passwordDraftRevision={passwordDraftRevision}
@@ -480,10 +535,13 @@ function App() {
           settingsTab={settingsTab}
           userPasswords={userPasswordsRef.current}
           onAddAuthUser={addAuthUser}
+          onAddSharedLibrary={globalThis.eagle?.dialog?.showOpenDialog ? addSharedLibrary : undefined}
           onChooseHttpsFile={globalThis.eagle?.dialog?.showOpenDialog ? chooseHttpsFile : undefined}
           onCustomDomainChange={(value) => updateSettings({ customDomain: value })}
           onHttpsCertPathChange={(value) => updateSettings({ httpsCertPath: value })}
           onHttpsKeyPathChange={(value) => updateSettings({ httpsKeyPath: value })}
+          onLibraryProtectionChange={(checked) => void saveLibrarySettings({ libraryProtectionEnabled: checked })}
+          onLibrarySharedChange={changeLibraryShared}
           onPortChange={(value) => updateSettings({ port: value })}
           onRemoveAuthUser={removeAuthUser}
           onSaveSettings={() => saveSettings({ forceSave: true, successMessage: "Saved" })}

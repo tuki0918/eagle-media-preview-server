@@ -102,7 +102,7 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(uiSource, /<option value="viewer">Viewer<\/option>/);
   assert.match(uiSource, /<option value="editor">Editor<\/option>/);
   assert.match(uiSource, /<option value="admin">Admin<\/option>/);
-  assert.match(uiSource, /type SettingsTab = "access" \| "general" \| "security";/);
+  assert.match(uiSource, /type SettingsTab = "access" \| "general" \| "libraries" \| "security";/);
   assert.match(app, /const \[settingsTab, setSettingsTab\] = useState<SettingsTab>\("general"\);/);
   assert.match(uiSource, /role="tablist" aria-label="Settings sections"/);
   assert.match(uiSource, /<SettingsTabButton active=\{settingsTab === "general"\} controls="generalSettingsPanel" id="generalSettingsTab" onClick=\{\(\) => onSettingsTabChange\("general"\)\}>General<\/SettingsTabButton>/);
@@ -1322,3 +1322,89 @@ function createPluginRequirePath(pathname: string): PluginRequirePath {
     return path.win32.join(pluginDir, relativePath);
   };
 }
+
+test("plugin shares selected libraries while the server runs and reacts to Eagle library switches", async () => {
+  const bundle = await esbuild({
+    bundle: true,
+    define: { "process.env.NODE_ENV": JSON.stringify("test") },
+    entryPoints: [new URL("./app.tsx", import.meta.url).pathname],
+    format: "iife", platform: "browser", write: false,
+  });
+  const dom = new JSDOM('<!doctype html><div id="root"></div>', {
+    runScripts: "outside-only", url: "file:///tmp/eagle-plugin/plugin/index.html",
+  } as unknown as ConstructorParameters<typeof JSDOM>[1]);
+  const pluginWindow = dom.window as unknown as Window & {
+    eval: (source: string) => unknown;
+    require: (id: string) => unknown;
+    eagle: unknown;
+  };
+  const saves: Record<string, unknown>[] = [];
+  let libraryChangedCalls = 0;
+  let onLibraryChanged: ((libraryPath: string) => void) | null = null;
+  let openPath = "/Users/me/Work.library";
+  let status: { settings: Record<string, unknown>; state: string; url: string } = {
+    settings: { host: "127.0.0.1", port: 41532, libraryProtectionEnabled: false, sharedLibraries: [] },
+    state: "running", url: "http://localhost:41532",
+  };
+  const sharedPaths = () => ((status.settings.sharedLibraries as Array<{ path: string }>) || []).map((library) => library.path);
+  pluginWindow.eagle = {
+    onLibraryChanged(callback: (libraryPath: string) => void) {
+      onLibraryChanged = callback;
+    },
+  };
+  pluginWindow.require = (id: string) => id === "path" ? path : {
+    createServerManager: () => ({
+      async init() { return status; },
+      async status() { return status; },
+      async saveSettings(payload: Record<string, unknown>) {
+        saves.push(payload);
+        status = { ...status, settings: { ...status.settings, ...payload } };
+        return status;
+      },
+      async start() { return status; },
+      async stop() { return status; },
+      libraryChanged() { libraryChangedCalls += 1; },
+      async libraries() {
+        return {
+          current: { path: openPath, name: openPath.includes("Work") ? "Work" : "Private" },
+          eagleAvailable: true,
+          items: ["/Users/me/Work.library", "/Users/me/Private.library"].map((libraryPath) => ({
+            path: libraryPath,
+            name: libraryPath.includes("Work") ? "Work" : "Private",
+            current: libraryPath === openPath,
+            shared: sharedPaths().includes(libraryPath),
+          })),
+        };
+      },
+    }),
+  };
+  try {
+    pluginWindow.eval(bundle.outputFiles[0].text);
+    const doc = dom.window.document;
+    await waitFor(() => Boolean(doc.querySelector('[aria-label="Share Work"]')));
+    doc.querySelector<HTMLButtonElement>("#librariesSettingsTab")?.click();
+
+    const protection = doc.querySelector<HTMLInputElement>('[aria-label="Share only selected libraries"]');
+    assert.ok(protection);
+    assert.equal(protection.disabled, false, "library settings stay editable while running");
+    assert.equal(doc.querySelector<HTMLInputElement>('[aria-label="Share Work"]')?.disabled, true);
+
+    protection.click();
+    await waitFor(() => saves.length === 1 && doc.querySelector<HTMLInputElement>('[aria-label="Share Work"]')?.disabled === false);
+    assert.equal(saves[0].libraryProtectionEnabled, true);
+    assert.match(doc.body.textContent || "", /The library open in Eagle is not shared/);
+
+    doc.querySelector<HTMLInputElement>('[aria-label="Share Work"]')?.click();
+    await waitFor(() => saves.length === 2 && doc.querySelector<HTMLInputElement>('[aria-label="Share Work"]')?.checked === true);
+    assert.equal(JSON.stringify(saves[1].sharedLibraries), JSON.stringify([{ name: "Work", path: "/Users/me/Work.library" }]));
+    assert.doesNotMatch(doc.body.textContent || "", /The library open in Eagle is not shared/);
+
+    openPath = "/Users/me/Private.library";
+    assert.ok(onLibraryChanged);
+    (onLibraryChanged as (libraryPath: string) => void)(openPath);
+    await waitFor(() => /The library open in Eagle is not shared/.test(doc.body.textContent || ""));
+    assert.equal(libraryChangedCalls, 1);
+  } finally {
+    dom.window.close();
+  }
+});

@@ -5,7 +5,8 @@ const { homedir, networkInterfaces } = require("os");
 const { createViewerServer } = require("./viewerServer.cjs");
 const { serverRestartSettingsChanged } = require("./settingsChange.cjs");
 const { normalizeCustomDomain } = require("./customDomain.cjs");
-const { normalizeSharedLibraries } = require("./libraryAccess.cjs");
+const { createEagleClient } = require("./eagleClient.cjs");
+const { libraryNameFromPath, libraryPathKey, normalizeSharedLibraries } = require("./libraryAccess.cjs");
 
 type ServerStatus = "error" | "running" | "stopped";
 type UserRole = "admin" | "editor" | "viewer";
@@ -73,8 +74,19 @@ interface ManagedViewer {
   status(): ViewerStatus;
 }
 
+interface LibraryClient {
+  libraryHistory(): Promise<unknown>;
+  libraryInfo(): Promise<unknown>;
+}
+
+interface LibraryCandidate extends SharedLibrary {
+  current: boolean;
+  shared: boolean;
+}
+
 interface ServerManagerOptions {
   lanAddressProvider?: () => LanAddress[];
+  libraryClient?: LibraryClient;
   settingsStore?: SettingsStore;
   viewerServerFactory?: (settings: {
     customDomain: string;
@@ -481,6 +493,7 @@ function createServerManager({
   settingsStore = createSettingsStore(),
   viewerServerFactory = createViewerServer,
   lanAddressProvider = getLanAddresses,
+  libraryClient = createEagleClient(),
 }: ServerManagerOptions = {}) {
   let viewer: ManagedViewer | null = null;
   let stateOverride: ServerStatus = "stopped";
@@ -576,6 +589,35 @@ function createServerManager({
 
     libraryChanged() {
       viewer?.notifyLibraryChanged?.();
+    },
+
+    // Candidates for the shared-library picker: the library open in Eagle, Eagle's recent
+    // libraries, and anything already shared (even if Eagle has since forgotten it).
+    async libraries() {
+      const settings = await settingsStore.load();
+      const [info, history] = await Promise.allSettled([libraryClient.libraryInfo(), libraryClient.libraryHistory()]);
+      const currentPath = info.status === "fulfilled" && info.value && typeof info.value === "object"
+        ? String((info.value as { path?: unknown }).path || "")
+        : "";
+      const historyPaths = history.status === "fulfilled" && Array.isArray(history.value)
+        ? history.value.filter((path): path is string => typeof path === "string")
+        : [];
+      const sharedKeys = new Set(settings.sharedLibraries.map((library) => libraryPathKey(library.path)));
+      const currentKey = libraryPathKey(currentPath);
+      // Saved entries go first so the picker shows (and later removes) the exact saved path.
+      const candidates = normalizeSharedLibraries([
+        ...settings.sharedLibraries,
+        ...(currentPath ? [currentPath] : []),
+        ...historyPaths,
+      ]) as SharedLibrary[];
+      return {
+        current: currentPath ? { path: currentPath, name: libraryNameFromPath(currentPath) } : null,
+        eagleAvailable: info.status === "fulfilled",
+        items: candidates.map((library): LibraryCandidate => {
+          const key = libraryPathKey(library.path);
+          return { ...library, current: key === currentKey, shared: sharedKeys.has(key) };
+        }),
+      };
     },
 
     async status() {

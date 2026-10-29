@@ -7,8 +7,10 @@ export interface ServerRestartSettings {
   httpsCertPath?: unknown;
   httpsEnabled?: unknown;
   httpsKeyPath?: unknown;
+  libraryProtectionEnabled?: unknown;
   port?: unknown;
   sessionDurationDays?: unknown;
+  sharedLibraries?: unknown;
 }
 
 export type SettingsPatch = Record<string, unknown>;
@@ -16,6 +18,8 @@ export type SettingsPatch = Record<string, unknown>;
 export function settingsPayloadChanged(current: ServerRestartSettings | undefined, nextSettings: SettingsPatch) {
   if (!current) return true;
   if (Boolean(nextSettings.autoStart ?? current.autoStart) !== Boolean(current.autoStart)) return true;
+  if (Boolean(nextSettings.libraryProtectionEnabled ?? current.libraryProtectionEnabled) !== Boolean(current.libraryProtectionEnabled)) return true;
+  if (JSON.stringify(nextSettings.sharedLibraries ?? current.sharedLibraries ?? []) !== JSON.stringify(current.sharedLibraries ?? [])) return true;
   return serverSettingsChanged(current, nextSettings);
 }
 

@@ -970,3 +970,72 @@ test("generated server manager applies shared library changes without restarting
     ["libraryChanged"],
   ]);
 });
+
+test("generated server manager lists library candidates with shared and open flags", async () => {
+  const settings = normalizeSettings({
+    libraryProtectionEnabled: true,
+    sharedLibraries: [{ path: "/Users/me/Work.library" }, { path: "/Volumes/Archive/Old.library" }],
+  });
+  const manager = createServerManager({
+    settingsStore: {
+      async load() {
+        return settings;
+      },
+      async save() {
+        return settings;
+      },
+    },
+    libraryClient: {
+      async libraryInfo() {
+        return { path: "/Users/me/Private.library", name: "Private" };
+      },
+      async libraryHistory() {
+        return ["/Users/me/Private.library", "/Users/me/Work.library/", 42];
+      },
+    },
+    lanAddressProvider() {
+      return [];
+    },
+  });
+
+  assert.deepEqual(await manager.libraries(), {
+    current: { path: "/Users/me/Private.library", name: "Private" },
+    eagleAvailable: true,
+    items: [
+      { path: "/Users/me/Work.library", name: "Work", current: false, shared: true },
+      { path: "/Volumes/Archive/Old.library", name: "Old", current: false, shared: true },
+      { path: "/Users/me/Private.library", name: "Private", current: true, shared: false },
+    ],
+  });
+});
+
+test("generated server manager still lists saved libraries when Eagle is unavailable", async () => {
+  const settings = normalizeSettings({ sharedLibraries: [{ path: "/Users/me/Work.library" }] });
+  const manager = createServerManager({
+    settingsStore: {
+      async load() {
+        return settings;
+      },
+      async save() {
+        return settings;
+      },
+    },
+    libraryClient: {
+      async libraryInfo() {
+        throw new Error("offline");
+      },
+      async libraryHistory() {
+        throw new Error("offline");
+      },
+    },
+    lanAddressProvider() {
+      return [];
+    },
+  });
+
+  assert.deepEqual(await manager.libraries(), {
+    current: null,
+    eagleAvailable: false,
+    items: [{ path: "/Users/me/Work.library", name: "Work", current: false, shared: true }],
+  });
+});
