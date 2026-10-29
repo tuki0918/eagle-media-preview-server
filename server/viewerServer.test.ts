@@ -1992,11 +1992,9 @@ test("createViewerServer only serves the library when Eagle has a shared library
     assert.equal(healthBody.library, null);
     assert.deepEqual(healthBody.app, { version: "1.0.0" });
 
-    viewer.setSharedLibraries(["/Users/me/Shared.library", "/Users/me/Private.library"]);
+    openLibrary = "/Users/me/Shared.library";
+    viewer.notifyLibraryChanged();
     assert.equal((await fetch(`${origin}/api/folders`)).status, 200);
-
-    viewer.setSharedLibraries(null);
-    assert.equal((await (await fetch(`${origin}/api/health`)).json()).libraryStatus, "shared");
   } finally {
     await viewer.stop();
   }

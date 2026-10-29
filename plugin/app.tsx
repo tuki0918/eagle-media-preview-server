@@ -105,7 +105,7 @@ function App() {
       const runtime = window.require(runtimePath) as { createServerManager: () => ServerManager };
       managerRef.current = runtime.createServerManager();
       const init = () => {
-        void runCommand(() => managerRef.current?.init(), { quiet: true }).then(refreshLibraries);
+        void runCommand(() => managerRef.current?.init(), { quiet: true }).then(() => refreshLibraries());
       };
       // The viewer server must stop answering from the previous library the moment Eagle switches.
       globalThis.eagle?.onLibraryChanged?.(() => {
@@ -115,7 +115,7 @@ function App() {
       if (globalThis.eagle?.onPluginCreate) {
         globalThis.eagle.onPluginCreate(init);
         globalThis.eagle.onPluginShow?.(() => {
-          void runCommand(() => managerRef.current?.status(), { quiet: true }).then(refreshLibraries);
+          void runCommand(() => managerRef.current?.status(), { quiet: true }).then(() => refreshLibraries());
         });
       } else {
         init();
@@ -193,6 +193,8 @@ function App() {
       httpsKeyPath: settings.httpsKeyPath || "",
       port: settings.port || 41532,
       sessionDurationDays: settings.sessionDurationDays || 7,
+      libraryProtectionEnabled: Boolean(settings.libraryProtectionEnabled),
+      sharedLibraries: Array.isArray(settings.sharedLibraries) ? settings.sharedLibraries : [],
       ...patch,
       authEnabled: nextAuthEnabled,
       authUsers: effectiveAuthUsers,
@@ -230,44 +232,20 @@ function App() {
     }
   }
 
-  async function refreshLibraries() {
+  async function refreshLibraries({ reportErrors = false } = {}) {
     try {
       const next = await managerRef.current?.libraries?.();
       if (next) setLibraries(next);
-    } catch {
-      // The picker falls back to the saved list; sharing itself is enforced by the server.
+    } catch (error) {
+      // The picker keeps the last list; sharing itself is enforced by the server.
+      if (reportErrors) setErrorMessage(error);
     }
-  }
-
-  async function saveLibrarySettings(patch: { libraryProtectionEnabled?: boolean; sharedLibraries?: SharedLibrary[] }) {
-    updateSettings(patch);
-    const saved = await saveSettings({ patch });
-    if (saved) await refreshLibraries();
   }
 
   function changeLibraryShared(library: LibraryCandidate, shared: boolean) {
-    const current = Array.isArray(settings.sharedLibraries) ? settings.sharedLibraries : [];
+    const current: SharedLibrary[] = Array.isArray(settings.sharedLibraries) ? settings.sharedLibraries : [];
     const others = current.filter((entry) => entry.path !== library.path);
-    void saveLibrarySettings({
-      sharedLibraries: shared ? [...others, { name: library.name, path: library.path }] : others,
-    });
-  }
-
-  async function addSharedLibrary() {
-    const showOpenDialog = globalThis.eagle?.dialog?.showOpenDialog;
-    if (!showOpenDialog) return;
-    try {
-      const result = await showOpenDialog({
-        title: "Choose an Eagle library",
-        properties: ["openDirectory"],
-      });
-      const libraryPath = result.canceled ? "" : result.filePaths[0];
-      if (!libraryPath) return;
-      const current = Array.isArray(settings.sharedLibraries) ? settings.sharedLibraries : [];
-      await saveLibrarySettings({ sharedLibraries: [...current, { name: "", path: libraryPath }] });
-    } catch (error) {
-      setErrorMessage(error);
-    }
+    updateSettings({ sharedLibraries: shared ? [...others, { name: library.name, path: library.path }] : others });
   }
 
   function setMessage(value: string, isError = false) {
@@ -523,7 +501,6 @@ function App() {
           busy={busy}
           httpsEnabled={httpsEnabled}
           libraries={libraries}
-          libraryControlsDisabled={formDisabled}
           message={message}
           messageIsError={messageIsError}
           passwordDraftRevision={passwordDraftRevision}
@@ -535,13 +512,13 @@ function App() {
           settingsTab={settingsTab}
           userPasswords={userPasswordsRef.current}
           onAddAuthUser={addAuthUser}
-          onAddSharedLibrary={globalThis.eagle?.dialog?.showOpenDialog ? addSharedLibrary : undefined}
           onChooseHttpsFile={globalThis.eagle?.dialog?.showOpenDialog ? chooseHttpsFile : undefined}
           onCustomDomainChange={(value) => updateSettings({ customDomain: value })}
           onHttpsCertPathChange={(value) => updateSettings({ httpsCertPath: value })}
           onHttpsKeyPathChange={(value) => updateSettings({ httpsKeyPath: value })}
-          onLibraryProtectionChange={(checked) => void saveLibrarySettings({ libraryProtectionEnabled: checked })}
+          onLibraryProtectionChange={(checked) => updateSettings({ libraryProtectionEnabled: checked })}
           onLibrarySharedChange={changeLibraryShared}
+          onReloadLibraries={() => void refreshLibraries({ reportErrors: true })}
           onPortChange={(value) => updateSettings({ port: value })}
           onRemoveAuthUser={removeAuthUser}
           onSaveSettings={() => saveSettings({ forceSave: true, successMessage: "Saved" })}

@@ -36,17 +36,13 @@ function normalizeSharedLibraries(value: unknown, platform: string = process.pla
 }
 
 // `null` means protection is off and whichever library Eagle has open is shared.
+// The list is fixed for the lifetime of a server; changing it requires a restart.
 function createLibraryAccessPolicy(sharedLibraryPaths: string[] | null = null, platform: string = process.platform) {
-  let allowedKeys: Set<string> | null = null;
-
-  function setSharedLibraries(paths: string[] | null) {
-    allowedKeys = paths ? new Set(paths.map((path) => libraryPathKey(path, platform)).filter(Boolean)) : null;
-  }
-
-  setSharedLibraries(sharedLibraryPaths);
+  const allowedKeys = sharedLibraryPaths
+    ? new Set(sharedLibraryPaths.map((path) => libraryPathKey(path, platform)).filter(Boolean))
+    : null;
 
   return {
-    setSharedLibraries,
     status(libraryPath: unknown): LibraryStatus {
       if (!allowedKeys) return "unrestricted";
       const key = libraryPathKey(libraryPath, platform);

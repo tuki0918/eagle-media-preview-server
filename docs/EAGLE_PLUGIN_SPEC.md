@@ -135,7 +135,7 @@ Build output is created under `dist`:
   - Users
   - Per-user role and password
   - Session duration
-  - Libraries: protection toggle, shared-library checklist (open library, Eagle's recent libraries, saved entries), and an Add library folder picker; these apply immediately, even while the server runs
+  - Libraries: protection toggle, shared-library checklist (open library, Eagle's recent libraries, saved entries), and a Reload libraries button; like other settings, they are locked while the server runs and take effect when it starts
 
 ### Persisted Settings
 

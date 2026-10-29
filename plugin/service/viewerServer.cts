@@ -144,7 +144,6 @@ interface EagleSession {
 }
 
 interface LibraryAccessPolicy {
-  setSharedLibraries(paths: string[] | null): void;
   status(libraryPath: unknown): "not_shared" | "shared" | "unrestricted";
 }
 
@@ -334,11 +333,6 @@ function createViewerServer({
         activeSessions: authSessions.size,
         requestCount,
       };
-    },
-
-    // Applied without a restart; the next request is checked against the new list.
-    setSharedLibraries(paths: string[] | null) {
-      libraryAccess.setSharedLibraries(paths);
     },
 
     // Called when Eagle reports a library switch so no request is answered from stale library info.

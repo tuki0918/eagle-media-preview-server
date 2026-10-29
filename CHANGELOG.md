@@ -9,7 +9,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Added
 
-- Added library protection: choose which Eagle libraries the viewer may serve from the new **Libraries** settings tab. If Eagle has a different library open, viewers see it as unavailable. Changes apply immediately, even while the server is running.
+- Added library protection: choose which Eagle libraries the viewer may serve from the new **Libraries** settings tab. If Eagle has a different library open, viewers see the "Media Library is offline" page. Changes take effect when the server starts.
 
 ### Changed
 

@@ -23,11 +23,11 @@ test("createLibraryAccessPolicy only shares listed libraries and fails closed on
   assert.equal(policy.status("/Users/me/B.library"), "not_shared");
   assert.equal(policy.status(""), "not_shared");
   assert.equal(policy.status(undefined), "not_shared");
+});
 
-  policy.setSharedLibraries([]);
+test("createLibraryAccessPolicy shares nothing when protection is on with an empty list", () => {
+  const policy = createLibraryAccessPolicy([], "linux");
   assert.equal(policy.status("/Users/me/A.library"), "not_shared");
-  policy.setSharedLibraries(null);
-  assert.equal(policy.status("/Users/me/B.library"), "unrestricted");
 });
 
 test("normalizeSharedLibraries de-duplicates by normalized path", () => {

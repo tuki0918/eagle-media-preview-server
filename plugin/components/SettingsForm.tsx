@@ -1,14 +1,12 @@
 import type { ReactNode } from "react";
 import type { AuthUser, LibraryCandidate, LibraryList, PluginSettings, SettingsTab, UserRole } from "../types";
-import { ChevronIcon, CloseIcon, EyeIcon, EyeOffIcon, FolderOpenIcon, PlusIcon, SettingsIcon } from "./Icons";
+import { ChevronIcon, CloseIcon, EyeIcon, EyeOffIcon, FolderOpenIcon, PlusIcon, RefreshIcon, SettingsIcon } from "./Icons";
 
 interface SettingsFormProps {
   authEnabled: boolean;
   authUsers: AuthUser[];
   busy: boolean;
   httpsEnabled: boolean;
-  /** Library settings apply without a restart, so they stay editable while the server runs. */
-  libraryControlsDisabled: boolean;
   libraries: LibraryList | null;
   message: string;
   messageIsError: boolean;
@@ -21,8 +19,6 @@ interface SettingsFormProps {
   settingsTab: SettingsTab;
   userPasswords: Record<string, string>;
   onAddAuthUser: () => void;
-  /** Opens Eagle's folder picker to share a library that is not in Eagle's history; omitted when unavailable. */
-  onAddSharedLibrary?: () => void;
   /** Opens Eagle's file picker for a TLS file; omitted when the dialog API is unavailable. */
   onChooseHttpsFile?: (field: HttpsFileField) => void;
   onCustomDomainChange: (value: string) => void;
@@ -31,6 +27,7 @@ interface SettingsFormProps {
   onLibraryProtectionChange: (checked: boolean) => void;
   onLibrarySharedChange: (library: LibraryCandidate, shared: boolean) => void;
   onPortChange: (value: string) => void;
+  onReloadLibraries: () => void;
   onRemoveAuthUser: (index: number) => void;
   onSaveSettings: () => void;
   onSessionDurationDaysChange: (value: string) => void;
@@ -55,7 +52,6 @@ export function SettingsForm({
   authUsers,
   busy,
   httpsEnabled,
-  libraryControlsDisabled,
   libraries,
   message,
   messageIsError,
@@ -68,7 +64,6 @@ export function SettingsForm({
   settingsTab,
   userPasswords,
   onAddAuthUser,
-  onAddSharedLibrary,
   onChooseHttpsFile,
   onCustomDomainChange,
   onHttpsCertPathChange,
@@ -76,6 +71,7 @@ export function SettingsForm({
   onLibraryProtectionChange,
   onLibrarySharedChange,
   onPortChange,
+  onReloadLibraries,
   onRemoveAuthUser,
   onSaveSettings,
   onSessionDurationDaysChange,
@@ -86,7 +82,9 @@ export function SettingsForm({
   onUserPasswordDraftChange,
 }: SettingsFormProps) {
   const libraryProtectionEnabled = Boolean(settings.libraryProtectionEnabled);
-  const currentLibraryUnshared = libraryProtectionEnabled && Boolean(libraries?.items.some((library) => library.current && !library.shared));
+  // Checkboxes reflect the unsaved draft; the running server keeps the list it started with.
+  const sharedLibraryPaths = new Set((settings.sharedLibraries || []).map((library) => library.path));
+  const currentLibraryUnshared = libraryProtectionEnabled && Boolean(libraries?.items.some((library) => library.current && !sharedLibraryPaths.has(library.path)));
   return (
     <form
       className="rounded-2xl border border-[#e6e6e9] bg-white px-4 pb-3 pt-3.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)]"
@@ -235,19 +233,19 @@ export function SettingsForm({
         </div>
 
         <div id="librariesSettingsPanel" role="tabpanel" aria-labelledby="librariesSettingsTab" hidden={settingsTab !== "libraries"}>
-          <SettingRow label="Protection" help="When on, the viewer serves only the libraries checked below. While another library is open in Eagle, viewers see it as offline.">
+          <SettingRow label="Protection" help={serverRunning ? "Stop the server before changing shared libraries." : "When on, the viewer serves only the libraries checked below. While another library is open in Eagle, viewers see it as offline."}>
             <label className="inline-flex items-center gap-2 text-[12px] text-[#171717] has-[:disabled]:opacity-60">
               <input
                 type="checkbox"
                 aria-label="Share only selected libraries"
-                disabled={libraryControlsDisabled}
+                disabled={settingsInputDisabled}
                 checked={libraryProtectionEnabled}
                 onChange={(event) => onLibraryProtectionChange(event.currentTarget.checked)}
               />
               <span>Share only selected libraries</span>
             </label>
           </SettingRow>
-          <SettingRow label="Libraries" help="Changes apply immediately, even while the server is running.">
+          <SettingRow label="Libraries" help="Applied when the server starts. Libraries come from Eagle's recent list.">
             <div className="grid gap-2">
               {libraries && !libraries.eagleAvailable ? (
                 <p className="m-0 text-[11px] leading-snug text-[#8a5a00]" role="note">Eagle API is unavailable, so only saved libraries are listed.</p>
@@ -264,8 +262,8 @@ export function SettingsForm({
                       <input
                         type="checkbox"
                         aria-label={`Share ${library.name}`}
-                        disabled={libraryControlsDisabled || !libraryProtectionEnabled}
-                        checked={library.shared}
+                        disabled={settingsInputDisabled || !libraryProtectionEnabled}
+                        checked={sharedLibraryPaths.has(library.path)}
                         onChange={(event) => onLibrarySharedChange(library, event.currentTarget.checked)}
                       />
                       <span className="min-w-0">
@@ -281,14 +279,12 @@ export function SettingsForm({
                   <li className="px-3 py-2 text-[11.5px] text-[#7a808a]">No libraries found.</li>
                 )}
               </ul>
-              {onAddSharedLibrary ? (
-                <div className="flex items-center justify-start gap-2">
-                  <button className={`inline-flex h-8 items-center gap-1.5 rounded-full border-dashed px-3 text-[12px] font-medium text-[#171717] ${authActionButtonClassName}`} type="button" disabled={libraryControlsDisabled || !libraryProtectionEnabled} onClick={onAddSharedLibrary}>
-                    <PlusIcon className="h-[12px] w-[12px]" />
-                    <span>Add library</span>
-                  </button>
-                </div>
-              ) : null}
+              <div className="flex items-center justify-start gap-2">
+                <button className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] font-medium text-[#171717] ${authActionButtonClassName}`} type="button" disabled={busy} onClick={onReloadLibraries}>
+                  <RefreshIcon className="h-[12px] w-[12px]" />
+                  <span>Reload libraries</span>
+                </button>
+              </div>
             </div>
           </SettingRow>
         </div>

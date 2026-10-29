@@ -68,7 +68,6 @@ interface ViewerStatus {
 
 interface ManagedViewer {
   notifyLibraryChanged?(): void;
-  setSharedLibraries?(paths: string[] | null): void;
   start(): Promise<unknown>;
   stop(): Promise<unknown>;
   status(): ViewerStatus;
@@ -583,7 +582,6 @@ function createServerManager({
         await this.stop();
         if (wasRunning) return this.start();
       }
-      viewer?.setSharedLibraries?.(sharedLibraryPaths(settings));
       return snapshot(settings);
     },
 

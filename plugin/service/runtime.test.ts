@@ -916,7 +916,7 @@ test("generated settings normalize shared libraries and keep protection off by d
   ]);
 });
 
-test("generated server manager applies shared library changes without restarting", async () => {
+test("generated server manager passes shared libraries to the viewer when it starts", async () => {
   const calls: unknown[] = [];
   let settings = {
     ...DEFAULT_SETTINGS,
@@ -943,9 +943,6 @@ test("generated server manager applies shared library changes without restarting
         async stop() {
           calls.push(["stop"]);
         },
-        setSharedLibraries(paths: string[] | null) {
-          calls.push(["shared", paths]);
-        },
         notifyLibraryChanged() {
           calls.push(["libraryChanged"]);
         },
@@ -959,15 +956,18 @@ test("generated server manager applies shared library changes without restarting
     },
   });
 
-  await manager.start();
   await manager.saveSettings({ libraryProtectionEnabled: true, sharedLibraries: [{ path: "/Users/me/Work.library" }] });
+  await manager.start();
   manager.libraryChanged();
+  await manager.saveSettings({ sharedLibraries: [] });
 
   assert.deepEqual(calls, [
-    ["create", null],
+    ["create", ["/Users/me/Work.library"]],
     ["start"],
-    ["shared", ["/Users/me/Work.library"]],
     ["libraryChanged"],
+    ["stop"],
+    ["create", []],
+    ["start"],
   ]);
 });
 
