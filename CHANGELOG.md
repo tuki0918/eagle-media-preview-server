@@ -7,6 +7,22 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-10-29
+
+### Added
+
+- Added a full-screen button to image previews; it stays in full screen while moving between images.
+
+### Changed
+
+- Display settings (theme, items per page, subfolders, and item actions) now open in a Preferences dialog from the account menu.
+- On phones and tablets, image previews now overlay the header on the image, and the header hides together with the image controls.
+- Fit now scales images to fill the preview area.
+
+### Fixed
+
+- Show the Picture-in-Picture button more reliably in Safari.
+
 ## [0.5.2] - 2026-10-29
 
 ### Added
@@ -287,7 +303,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 - Initial release of Eagle Media Preview Server.
 
-[Unreleased]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.5.3...HEAD
+[0.5.3]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.4.2...v0.5.0
