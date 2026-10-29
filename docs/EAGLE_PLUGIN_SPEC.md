@@ -290,9 +290,11 @@ Settings path:
 - Library info is cached for at most 3 seconds; the plugin also clears it on `eagle.onLibraryChanged`
 - Authorized `/api/*` and `/file/*` responses carry `X-Library-Id`, the same opaque id as `/api/health`
 - After Connect, the viewer pins every request to the library it connected to: fetches send the id as the `X-Library-Id` request header, and media URLs (`/file/:id`, `/api/items/:id/thumb|file`) carry it as a `library` query parameter, since media elements cannot send headers. The address bar never contains it
-- Media routes (`/file/:id`, `/api/items/:id/thumb`, `/api/items/:id/file`) require the id; without it they return `400 { "error": "A library id is required for media requests", "code": "LIBRARY_REQUIRED" }`. The library is checked before the item id is looked up, so an item id alone never returns a file. The "Open file" link that opens the original in a new tab carries the id too; older bookmarks without it no longer work
-- Other API routes are pinned when the viewer sends an id; `/api/connect` and `/api/health` are never pinned
-- A pinned request whose id differs from the open library returns `409 { "error": "The library open in Eagle has changed", "code": "LIBRARY_CHANGED" }`, and one made while Eagle cannot report the open library returns `502`, in both cases before any library data is read
+- Every route that reads or changes library data (`/api/*` except auth routes, `/api/library-status`, `/api/connect`, and `/api/health`, plus `/file/:id`) requires the id; without it they return `400 { "error": "A library id is required for library requests", "code": "LIBRARY_REQUIRED" }`. The library is checked before an item id is looked up, so an item id alone never returns a file. The "Open file" link that opens the original in a new tab carries the id too; older bookmarks without it no longer work
+- A request whose id differs from the open library returns `409 { "error": "The library open in Eagle has changed", "code": "LIBRARY_CHANGED" }`, and one made while Eagle cannot report the open library returns `502`, in both cases before any library data is read
+- The check is repeated within the request, without extra Eagle calls for reads: each request remembers the library it was admitted for and a switch counter bumped by `eagle.onLibraryChanged`. Right before a JSON answer or a media stream is sent, the cached library info and the counter must still match; otherwise the answer is replaced with `409 LIBRARY_CHANGED` and `X-Library-Id` reports the new library
+- Writes (rating, tags, categories, trash) re-read the open library from Eagle right after the request body arrives and right before calling Eagle, so holding back the body cannot redirect a write to another library
+- A media stream that has already started is sent to the end
 - The viewer server never calls Eagle's library switch API
 
 ### Media Streaming

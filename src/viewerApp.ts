@@ -572,6 +572,11 @@ function recheckEagleStatusAfterRequest({ libraryId, ok, status, url }: RequestO
     return;
   }
   if (url.startsWith("/api/health")) return;
+  // 409 means the server refused an answer because Eagle switched libraries mid-request.
+  if (status === 409) {
+    void checkEagleStatus();
+    return;
+  }
   const failedLikeOffline = !ok && (status === 0 || status >= 500);
   const current = getEagleStatus();
   if ((failedLikeOffline && current !== "offline") || (ok && current === "offline")) {

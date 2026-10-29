@@ -82,7 +82,7 @@ const METADATA_WRITE_FORBIDDEN_MESSAGE = "Metadata editing is not allowed for th
 const ADMIN_WRITE_FORBIDDEN_MESSAGE = "Admin actions are not allowed for this viewer";
 const LIBRARY_NOT_SHARED_MESSAGE = "The library open in Eagle is not shared";
 const LIBRARY_CHANGED_MESSAGE = "The library open in Eagle has changed";
-const LIBRARY_REQUIRED_MESSAGE = "A library id is required for media requests";
+const LIBRARY_REQUIRED_MESSAGE = "A library id is required for library requests";
 const UNTAGGED_FOLDER_ID = "__untagged__";
 
 interface EagleLibraryInfo {
@@ -137,6 +137,7 @@ interface EagleClient {
 interface EagleSession {
   clearLibraryInfo?: () => void;
   client: EagleClient;
+  lastLibraryInfo?: () => unknown;
   libraryInfo(): Promise<EagleLibraryInfo>;
 }
 
@@ -145,6 +146,8 @@ interface LibraryAccessPolicy {
 }
 
 interface ApiContext {
+  /** Re-reads the open library from Eagle right before a write and throws if it changed. */
+  confirmLibraryBeforeWrite: (res: ServerResponse) => Promise<void>;
   getSession: () => EagleSession;
   libraryAccess: LibraryAccessPolicy;
   libraryId: (libraryPath: unknown) => string;
@@ -163,13 +166,24 @@ const LOGIN_FAILURE_WINDOW_MS = 10 * 60 * 1000;
 const LOGIN_LOCK_MS = 5 * 60 * 1000;
 
 class HttpError extends Error {
+  code: string;
   status: number;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code = "") {
     super(message);
+    this.code = code;
     this.status = status;
   }
 }
+
+interface LibraryGuard {
+  currentLibraryId(): string;
+  stillOpen(): boolean;
+}
+
+// Pinned requests remember which library they were admitted for; sendJson and media streaming
+// consult this right before responding so a switch during the request never leaks the new library.
+const libraryGuards = new WeakMap<ServerResponse, LibraryGuard>();
 
 function createViewerServer({
   customDomain = "",
@@ -208,6 +222,26 @@ function createViewerServer({
     return key ? createHmac("sha256", resolvedSessionSecret).update(key).digest("base64url").slice(0, 16) : "";
   };
   const currentSession: EagleSession = createConnectionContext({ client: eagleClient });
+  // Bumped whenever the plugin reports a library switch.
+  let libraryGeneration = 0;
+  const trackLibrary = (res: ServerResponse, admittedLibraryId: string) => {
+    const admittedGeneration = libraryGeneration;
+    const currentLibraryId = () => {
+      const library = currentSession.lastLibraryInfo?.() as EagleLibraryInfo | null | undefined;
+      return library ? libraryId(library.path) : "";
+    };
+    libraryGuards.set(res, {
+      currentLibraryId,
+      stillOpen: () => admittedGeneration === libraryGeneration && currentLibraryId() === admittedLibraryId,
+    });
+  };
+  const confirmLibraryBeforeWrite = async (res: ServerResponse) => {
+    const guard = libraryGuards.get(res);
+    if (!guard) return;
+    currentSession.clearLibraryInfo?.();
+    await currentSession.libraryInfo();
+    if (!guard.stillOpen()) throw new HttpError(409, LIBRARY_CHANGED_MESSAGE, "LIBRARY_CHANGED");
+  };
 
   const server = createProtocolServer({ httpsCertPath, httpsEnabled, httpsKeyPath }, async (req: IncomingMessage, res: ServerResponse) => {
     try {
@@ -234,9 +268,10 @@ function createViewerServer({
           sendLibraryNotShared(res);
           return;
         }
-        if (!(await matchesConnectedLibrary(req, url, res, currentSession, libraryId))) return;
+        if (!(await matchesConnectedLibrary(req, url, res, currentSession, libraryId, trackLibrary))) return;
         await handleApi(req, url, res, {
           auth,
+          confirmLibraryBeforeWrite,
           getSession: () => currentSession,
           libraryAccess,
           libraryId,
@@ -257,8 +292,8 @@ function createViewerServer({
           sendLibraryNotShared(res);
           return;
         }
-        if (!(await matchesConnectedLibrary(req, url, res, session, libraryId))) return;
-        await streamItemMedia(decodeURIComponent(fileMatch[1]), "file", req, res, session);
+        if (!(await matchesConnectedLibrary(req, url, res, session, libraryId, trackLibrary))) return;
+        await streamItemMedia(decodeURIComponent(fileMatch[1]), "file", req, res, session, libraryGuards.get(res)?.stillOpen);
         return;
       }
       await serveStatic(url.pathname, res, publicDir);
@@ -266,7 +301,8 @@ function createViewerServer({
       const status = error instanceof HttpError || error instanceof EagleRequestError
         ? (error as { status: number }).status
         : 500;
-      sendJson(res, status, { error: errorMessage(error) || "Internal server error" });
+      const code = error instanceof HttpError && error.code ? { code: error.code } : {};
+      sendJson(res, status, { error: errorMessage(error) || "Internal server error", ...code });
     }
   });
 
@@ -330,8 +366,10 @@ function createViewerServer({
       };
     },
 
-    // Called when Eagle reports a library switch so no request is answered from stale library info.
+    // Called when Eagle reports a library switch so no request is answered from stale library info,
+    // including requests that are already in progress.
     notifyLibraryChanged() {
+      libraryGeneration += 1;
       currentSession.clearLibraryInfo?.();
     },
 
@@ -354,21 +392,21 @@ async function handleLibraryStatus(req: IncomingMessage, res: ServerResponse, se
   sendJson(res, 200, { libraryStatus });
 }
 
-type LibraryPin = "none" | "optional" | "required";
+type LibraryPin = "none" | "required";
 
-// Media URLs (`/file/:id`, `/api/items/:id/thumb|file`) must name the library, because an item id
-// alone could match an item in whichever library Eagle has open; other API routes are pinned when
-// the viewer sends an id. `/api/connect` and `/api/health` hand out the id, so they are never pinned.
+// Every request that reads or changes library data must name the library it expects, because an
+// item or folder id alone could match whichever library Eagle has open. `/api/connect` and
+// `/api/health` hand out the id, so they are never pinned (auth routes and /api/library-status are
+// answered before this check).
 function libraryPinFor(pathname: string): LibraryPin {
   if (pathname === "/api/connect" || pathname === "/api/health") return "none";
-  if (/^\/file\/[^/]+(?:\/[^/]+)?$/.test(pathname) || /^\/api\/items\/[^/]+\/(?:thumb|file)$/.test(pathname)) return "required";
-  return "optional";
+  return "required";
 }
 
 // Viewers send the library id they connected to, as the X-Library-Id header on fetches or a
 // `library` query parameter on media URLs. The library is checked first; only a request for the
 // library that is open goes on to look up the item, so nothing from another library is returned.
-async function matchesConnectedLibrary(req: IncomingMessage, url: URL, res: ServerResponse, session: EagleSession, libraryId: ApiContext["libraryId"]) {
+async function matchesConnectedLibrary(req: IncomingMessage, url: URL, res: ServerResponse, session: EagleSession, libraryId: ApiContext["libraryId"], trackLibrary: (res: ServerResponse, admittedLibraryId: string) => void) {
   const pin = libraryPinFor(url.pathname);
   const openLibrary = await session.libraryInfo().catch(() => null);
   const openLibraryId = openLibrary ? libraryId(openLibrary.path) : "";
@@ -376,7 +414,6 @@ async function matchesConnectedLibrary(req: IncomingMessage, url: URL, res: Serv
   if (pin === "none") return true;
   const expectedLibraryId = String(req.headers["x-library-id"] || url.searchParams.get("library") || "").trim();
   if (!expectedLibraryId) {
-    if (pin === "optional") return true;
     sendJson(res, 400, { error: LIBRARY_REQUIRED_MESSAGE, code: "LIBRARY_REQUIRED" });
     return false;
   }
@@ -385,7 +422,10 @@ async function matchesConnectedLibrary(req: IncomingMessage, url: URL, res: Serv
     sendJson(res, 502, { error: "Unable to reach Eagle API" });
     return false;
   }
-  if (expectedLibraryId === openLibraryId) return true;
+  if (expectedLibraryId === openLibraryId) {
+    trackLibrary(res, openLibraryId);
+    return true;
+  }
   sendJson(res, 409, { error: LIBRARY_CHANGED_MESSAGE, code: "LIBRARY_CHANGED" });
   return false;
 }
@@ -424,7 +464,7 @@ async function cachedItemTypes(session: { client: EagleClient; libraryInfo(): Pr
   return value;
 }
 
-async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { auth, getSession, libraryAccess, libraryId }: ApiContext & { auth: AuthContext }) {
+async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { auth, confirmLibraryBeforeWrite, getSession, libraryAccess, libraryId }: ApiContext & { auth: AuthContext }) {
   const session = getSession();
 
   if (url.pathname === "/api/connect") {
@@ -566,6 +606,7 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
     const itemId = decodeURIComponent(starMatch[1]);
     const body = await readJson(req);
     const star = normalizeStar(body.star);
+    await confirmLibraryBeforeWrite(res);
     const item = await session.client.updateItemStar(itemId, star);
     sendJson(res, 200, { id: item.id || itemId, star: item.star ?? star });
     return;
@@ -584,6 +625,7 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
     const itemId = decodeURIComponent(metadataMatch[1]);
     const body = await readJson(req);
     const metadataPatch = normalizeMetadataPatch(body);
+    await confirmLibraryBeforeWrite(res);
     const item = await session.client.updateItemMetadata(itemId, metadataPatch);
     sendJson(res, 200, {
       id: item.id || itemId,
@@ -608,6 +650,7 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
     if (typeof body.isDeleted !== "boolean") {
       throw new HttpError(400, "isDeleted must be a boolean");
     }
+    await confirmLibraryBeforeWrite(res);
     const item = await session.client.updateItemTrash(itemId, body.isDeleted);
     sendJson(res, 200, {
       id: item.id || itemId,
@@ -633,7 +676,7 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
 
   const mediaMatch = url.pathname.match(/^\/api\/items\/([^/]+)\/(thumb|file)$/);
   if (mediaMatch) {
-    await streamItemMedia(decodeURIComponent(mediaMatch[1]), mediaMatch[2], req, res, session);
+    await streamItemMedia(decodeURIComponent(mediaMatch[1]), mediaMatch[2], req, res, session, libraryGuards.get(res)?.stillOpen);
     return;
   }
 
@@ -827,6 +870,17 @@ function publicLibraryInfo(library: EagleLibraryInfo | null | undefined, library
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown) {
+  const guard = libraryGuards.get(res);
+  if (guard && !guard.stillOpen()) {
+    // Eagle switched libraries while this request was in progress: report the new id and never
+    // send a successful answer that may come from the new library.
+    const currentLibraryId = guard.currentLibraryId();
+    if (currentLibraryId) res.setHeader("X-Library-Id", currentLibraryId);
+    if (status < 400) {
+      status = 409;
+      body = { error: LIBRARY_CHANGED_MESSAGE, code: "LIBRARY_CHANGED" };
+    }
+  }
   res.writeHead(status, {
     ...securityHeaders,
     "Content-Type": "application/json; charset=utf-8",

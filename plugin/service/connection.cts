@@ -14,6 +14,7 @@ const DEFAULT_LIBRARY_INFO_TTL_MS = 3000;
 // Wraps the server's own Eagle client with a short-lived cache of the open library.
 function createConnectionContext({ client, libraryInfoTtlMs = DEFAULT_LIBRARY_INFO_TTL_MS }: ConnectionContextOptions) {
   let libraryInfoCache: { expiresAt: number; value: Promise<unknown> } | null = null;
+  let lastLibraryInfo: unknown = null;
 
   return {
     client,
@@ -22,11 +23,17 @@ function createConnectionContext({ client, libraryInfoTtlMs = DEFAULT_LIBRARY_IN
       if (!libraryInfoCache || libraryInfoCache.expiresAt <= now) {
         const entry = { expiresAt: now + libraryInfoTtlMs, value: client.libraryInfo() };
         libraryInfoCache = entry;
-        entry.value.catch(() => {
+        entry.value.then((value) => {
+          if (libraryInfoCache === entry) lastLibraryInfo = value;
+        }, () => {
           if (libraryInfoCache === entry) libraryInfoCache = null;
         });
       }
       return libraryInfoCache.value;
+    },
+    // The most recently resolved library info, read synchronously without asking Eagle.
+    lastLibraryInfo() {
+      return lastLibraryInfo;
     },
     clearLibraryInfo() {
       libraryInfoCache = null;

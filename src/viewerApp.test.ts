@@ -524,6 +524,38 @@ describe("viewer app data refresh", () => {
     expect(getLoginConnectState().message).toBe("The media server switched to a different library.");
   });
 
+  test("re-checks the library when the server refuses an answer with 409", async () => {
+    let health: unknown = { app: { version: "1.0" }, library: { id: "lib-a", name: "A" }, libraryStatus: "shared" };
+    let refuseItems = false;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/auth/status") return jsonResponse({ authenticated: true, required: false });
+      if (url === "/api/connect" && options?.method === "POST") return jsonResponse({ app: { version: "1.0" }, library: { id: "lib-a", name: "A" } });
+      if (url === "/api/health") return jsonResponse(health);
+      if (url === "/api/folders" || url === "/api/smart-folders") return jsonResponse({ items: [] });
+      if (url.startsWith("/api/items?")) return refuseItems ? errorResponse(409, { error: "The library open in Eagle has changed", code: "LIBRARY_CHANGED" }) : jsonResponse({ items: [], total: 0 });
+      if (url.startsWith("/api/item-types")) return jsonResponse({ items: [] });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: fetchMock });
+
+    const { initViewer } = await import("./viewerApp");
+    const { openAllItems, submitConnection } = await import("./viewer/shellActions");
+    const { getLoginConnectState } = await import("./viewer/loginConnectState");
+    const { getShellView } = await import("./viewer/shellVisibility");
+    initViewer();
+    await vi.waitFor(() => expect(getLoginConnectState().authenticated).toBe(true));
+    submitConnection({ currentTarget: document.querySelector<HTMLFormElement>("#connectForm")!, preventDefault: () => {} });
+    await vi.waitFor(() => expect(getShellView()).toBe("viewer"));
+
+    refuseItems = true;
+    health = { app: { version: "1.0" }, library: { id: "lib-b", name: "B" }, libraryStatus: "shared" };
+    vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+    openAllItems();
+    await vi.waitFor(() => expect(getShellView()).toBe("login"));
+    expect(getLoginConnectState().message).toBe("The media server switched to a different library.");
+  });
+
   test("sends the connected library id and returns to the connect screen when a pinned media load fails", async () => {
     let health: unknown = { app: { version: "1.0" }, library: { id: "lib-a", name: "A" }, libraryStatus: "shared" };
     const libraryHeaders: Array<string | undefined> = [];
