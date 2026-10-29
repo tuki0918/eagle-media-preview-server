@@ -2,7 +2,7 @@ import { mediaUrl } from "./api";
 import { displayFileName } from "./format";
 import { getLibraryName } from "./libraryNameState";
 import { hasNoThumbnail } from "./media";
-import { exitPictureInPicture, requestPictureInPicture, supportsPictureInPicture } from "./pictureInPicture";
+import { PICTURE_IN_PICTURE_SUPPORT_EVENTS, exitPictureInPicture, requestPictureInPicture, supportsPictureInPicture } from "./pictureInPicture";
 import type { EagleItem } from "./types";
 
 const APP_NAME = "Media Library";
@@ -81,15 +81,13 @@ export function bindMediaSession(media: HTMLMediaElement, item: EagleItem, allow
     pictureInPictureRegistered = setActionHandler(session, ENTER_PICTURE_IN_PICTURE, supported ? enterPictureInPicture : null) && supported;
   };
   syncPictureInPictureHandler();
-  video?.addEventListener("loadedmetadata", syncPictureInPictureHandler);
-  video?.addEventListener("emptied", syncPictureInPictureHandler);
+  for (const event of PICTURE_IN_PICTURE_SUPPORT_EVENTS) video?.addEventListener(event, syncPictureInPictureHandler);
 
   return () => {
     disposed = true;
     if (mediaSessionBindings.get(media) === binding) mediaSessionBindings.delete(media);
     media.removeEventListener("playing", publishMetadata);
-    video?.removeEventListener("loadedmetadata", syncPictureInPictureHandler);
-    video?.removeEventListener("emptied", syncPictureInPictureHandler);
+    for (const event of PICTURE_IN_PICTURE_SUPPORT_EVENTS) video?.removeEventListener(event, syncPictureInPictureHandler);
     session.metadata = null;
     for (const action of MEDIA_SESSION_ACTIONS) setActionHandler(session, action, null);
     if (pictureInPictureRegistered) setActionHandler(session, ENTER_PICTURE_IN_PICTURE, null);

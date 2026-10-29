@@ -57,9 +57,15 @@ Slideshows start muted on all devices. To hear video or audio, use the speaker b
 
 ## Video Picture-in-Picture
 
-Open a video preview and use the **Picture-in-Picture** button beside the full-screen button. It appears when the browser and device expose PiP support and becomes available after the video metadata loads. Standard PiP and Safari's native video presentation API are supported. Closing the preview or changing items also closes its PiP window.
+Open a video preview and use the **Picture-in-Picture** button beside the full-screen button. It appears when the browser confirms PiP support for the loaded video. Safari may confirm support after video data becomes available rather than at the initial metadata event. Standard PiP and Safari's native video presentation API are supported. Closing the preview or changing items also closes its PiP window.
+
+For automatic PiP in this server, use **HTTPS**. Chrome excludes HTTP URLs, including `http://localhost` and HTTP LAN IP addresses, even when the site's automatic PiP permission is allowed. This is stricter than the loopback exception used by some other browser features. See [Chromium's automatic PiP eligibility checks](https://chromium.googlesource.com/chromium/src/+/lkgr/chrome/browser/picture_in_picture/auto_picture_in_picture_tab_helper.cc) and [HTTPS setup](docs/https-mkcert.md).
 
 On desktop Chrome, playing a video and switching tabs can open PiP automatically. This requires Chrome's automatic Picture-in-Picture permission for the site and audible playback; Chrome also checks playback focus and site engagement when permission has not been granted explicitly. The browser decides when to trigger it and closes an automatically opened PiP window when you return to the tab. See [Chrome's automatic PiP requirements](https://developer.chrome.com/blog/automatic-picture-in-picture-media-playback).
+
+If automatic PiP is switched on but the site permission still says **Can ask to enter picture-in-picture**, Chrome continues to require sufficient media engagement. Explicitly allowing the site bypasses that engagement threshold; the video must still be playing with audible sound. Check the permission for the exact origin, including its port.
+
+On macOS Safari, automatic PiP when switching tabs is provided by Safari's **Video Viewer**, rather than ordinary inline playback. Start the video, open Safari's Page Menu, and choose **Video Viewer**. Safari can then move it to PiP when you switch tabs or cover the page with another window. The viewer's own PiP button remains available for manual use. See [Safari Video Viewer](https://webkit.org/blog/15865/webkit-features-in-safari-18-0/#viewer).
 
 Mobile PiP depends on the browser, OS, and how the viewer is opened. Safari supports a native PiP control, but installed Home Screen web apps may expose less support than a Safari tab. If PiP is unavailable from a Home Screen app, try the same URL in Safari. Automatic PiP on every mobile app switch cannot be guaranteed. Background playback and PiP are separate browser capabilities.
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  PICTURE_IN_PICTURE_SUPPORT_EVENTS,
   exitPictureInPicture,
   isPictureInPictureActive,
   supportsPictureInPicture,
@@ -31,7 +32,7 @@ export function usePictureInPicture(
       active: isPictureInPictureActive(video),
       ready: video.readyState >= 1,
     }));
-    const events = ["loadedmetadata", "emptied", "enterpictureinpicture", "leavepictureinpicture", "webkitpresentationmodechanged"];
+    const events = [...PICTURE_IN_PICTURE_SUPPORT_EVENTS, "enterpictureinpicture", "leavepictureinpicture", "webkitpresentationmodechanged"];
     setState(INITIAL_STATE);
     sync();
     for (const event of events) video.addEventListener(event, sync);

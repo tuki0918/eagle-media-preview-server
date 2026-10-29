@@ -15,11 +15,12 @@ async function withPlayer(
     request: ReturnType<typeof vi.fn>;
     exit: ReturnType<typeof vi.fn>;
     button: () => HTMLButtonElement | null;
-    metadata: (ready: number) => Promise<void>;
+    metadata: (ready: number, event?: string) => Promise<void>;
     present: (active: boolean) => Promise<void>;
     unmount: () => Promise<void>;
   }) => Promise<void>,
   variant: "video" | "audio" = "video",
+  safariSupportReadyState = 1,
 ) {
   const dom = new JSDOM('<!doctype html><div id="root"></div>', { url: "http://localhost" });
   let root: Root | undefined;
@@ -51,7 +52,7 @@ async function withPlayer(
     if (mode === "safari") {
       Object.defineProperties(proto, {
         webkitPresentationMode: { configurable: true, get: () => presentationMode },
-        webkitSupportsPresentationMode: { configurable: true, value: () => readyState > 0 },
+        webkitSupportsPresentationMode: { configurable: true, value: () => readyState >= safariSupportReadyState },
         webkitSetPresentationMode: {
           configurable: true,
           value: function (this: HTMLVideoElement, next: PresentationMode) {
@@ -77,9 +78,9 @@ async function withPlayer(
     await run({
       dom, container, video, request, exit,
       button: () => container.querySelector('button[aria-label$="Picture-in-Picture"]'),
-      metadata: async (ready) => {
+      metadata: async (ready, event) => {
         readyState = ready;
-        await act(async () => { video.dispatchEvent(new dom.window.Event(ready ? "loadedmetadata" : "emptied")); });
+        await act(async () => { video.dispatchEvent(new dom.window.Event(event ?? (ready ? "loadedmetadata" : "emptied"))); });
       },
       present: async (isActive) => {
         active = isActive ? video : null;
@@ -156,4 +157,19 @@ test("reports rejected requests, ignores repeat clicks, and closes a late reques
     await act(async () => { resolveRequest({} as PictureInPictureWindow); });
     expect(exit).toHaveBeenCalledTimes(1);
   });
+});
+
+
+test.each(["loadeddata", "canplay", "playing", "resize"])("shows Safari PiP when support becomes available after metadata on %s", async (event) => {
+  await withPlayer("safari", async ({ button, metadata, request }) => {
+    await metadata(1);
+    expect(button()).toBeNull();
+    await metadata(3, event);
+    expect(button()?.disabled).toBe(false);
+    await act(async () => { button()!.click(); });
+    expect(request).not.toHaveBeenCalled();
+    expect(button()?.getAttribute("aria-pressed")).toBe("true");
+    await metadata(0);
+    expect(button()).toBeNull();
+  }, "video", 3);
 });

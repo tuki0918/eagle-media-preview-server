@@ -5,6 +5,9 @@ type SafariVideo = HTMLVideoElement & {
   webkitSetPresentationMode?: (mode: PresentationMode) => void;
 };
 
+// Safari can report PiP as unavailable until video data or its presentation size is ready.
+export const PICTURE_IN_PICTURE_SUPPORT_EVENTS = ["loadedmetadata", "loadeddata", "canplay", "playing", "resize", "emptied"] as const;
+
 const pendingRequests = new WeakMap<HTMLVideoElement, Promise<void>>();
 const requestVersions = new WeakMap<HTMLVideoElement, number>();
 

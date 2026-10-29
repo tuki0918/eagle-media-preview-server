@@ -176,6 +176,24 @@ describe("Media Session automatic Picture-in-Picture", () => {
     expect(handlers.get("enterpictureinpicture")).toBeNull();
   });
 
+  test.each(["loadeddata", "canplay", "playing", "resize"])("registers browser PiP if support becomes available after metadata on %s", (event) => {
+    const { media, handlers } = setup();
+    let supported = false;
+    Object.assign(media, {
+      webkitSupportsPresentationMode: () => supported,
+      webkitSetPresentationMode: vi.fn(),
+    });
+    const cleanup = bindMediaSession(media, { id: "video" });
+    media.dispatchEvent(new dom!.window.Event("loadedmetadata"));
+    expect(handlers.has("enterpictureinpicture")).toBe(false);
+    supported = true;
+    media.dispatchEvent(new dom!.window.Event(event));
+    expect(handlers.get("enterpictureinpicture")).toBeTypeOf("function");
+    cleanup();
+    media.dispatchEvent(new dom!.window.Event(event));
+    expect(handlers.get("enterpictureinpicture")).toBeNull();
+  });
+
   test("closes a pending automatic PiP that completes after the binding is disposed", async () => {
     const { media, doc, request, invoke } = setup();
     let resolve!: (value: PictureInPictureWindow) => void;
