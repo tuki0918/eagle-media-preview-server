@@ -5,12 +5,14 @@ import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { errorMessage, mediaUrl } from "../api";
 import { displayFileName } from "../format";
+import { bindMediaSession } from "../mediaSession";
 import { subscribeDisplaySettingsReset } from "../displayPreferences";
 import { getResultSurfaceState, subscribeResultSurfaceState } from "../resultSurfaceState";
 import { getSearchControlsState } from "../searchControlsState";
 import { getTagChipsState } from "../tagChipsState";
 import { DEFAULT_SLIDESHOW_SETTINGS, readSlideshowSettings, saveSlideshowSettings, SlideshowSource, slideshowMediaKind, type SlideshowQuery, type SlideshowSettings } from "../slideshow";
 import type { EagleItem } from "../types";
+import { dockSurfaceClassName } from "./viewerDockStyles";
 
 const playerButton = "inline-grid size-11 shrink-0 place-items-center rounded-full text-white/80 hover:bg-white/15 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white disabled:pointer-events-none disabled:opacity-30 [&_svg]:size-5";
 const selectClass = "h-10 w-full min-w-0 appearance-none rounded-xl border border-input bg-background pl-3 pr-9 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30";
@@ -26,7 +28,7 @@ export function SlideshowLauncher() {
   };
   return (
     <>
-      <div className="slideshow-launcher pointer-events-auto fixed bottom-[calc(16px+env(safe-area-inset-bottom))] left-[calc(16px+env(safe-area-inset-left))] z-20 flex h-12 items-center rounded-full bg-[color-mix(in_srgb,var(--card)_86%,transparent)] px-1.5 shadow-[0_10px_30px_-12px_rgba(15,23,42,0.28)] backdrop-blur-xl min-[720px]:bottom-6 min-[720px]:left-6">
+      <div className={`slideshow-launcher fixed bottom-[calc(16px+env(safe-area-inset-bottom))] left-[calc(16px+env(safe-area-inset-left))] z-20 min-[720px]:bottom-6 min-[720px]:left-6 ${dockSurfaceClassName}`}>
         <button type="button" className="inline-grid size-9 place-items-center rounded-full border-0 bg-transparent text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-40" aria-label="Slideshow" title="Slideshow" disabled={!available} onClick={open}>
           <Presentation className="size-[18px]" aria-hidden="true" />
         </button>
@@ -68,7 +70,10 @@ export function SlideshowDialog({ query, onClose }: { query: SlideshowQuery; onC
     let entered = false;
     const changed = () => {
       if (document.fullscreenElement === screenRef.current) entered = true;
-      else if (entered) close();
+      else if (entered) {
+        entered = false;
+        close();
+      }
     };
     document.addEventListener("fullscreenchange", changed);
     return () => document.removeEventListener("fullscreenchange", changed);
@@ -114,6 +119,7 @@ export function SlideshowDialog({ query, onClose }: { query: SlideshowQuery; onC
               <SlideshowToggle label="Loop" checked={settings.loop} onChange={(loop) => setSettings({ ...settings, loop })} />
             </div>
             <footer className="shrink-0 border-t border-border bg-card px-5 py-4">
+              <p className="mb-3 text-center text-xs leading-relaxed text-muted-foreground">Slideshows start muted. To hear video or audio, turn on sound using the speaker button during playback.</p>
               <Button type="button" className="primary-action-button h-11 w-full touch-manipulation rounded-full transition-colors active:not-aria-[haspopup]:translate-y-0" onClick={start}><Play className="size-4" />START</Button>
             </footer>
           </>
@@ -143,7 +149,7 @@ export function SlideshowPlayer({ query, settings, onClose }: { query: Slideshow
   const [ready, setReady] = useState(false);
   const [buffering, setBuffering] = useState(false);
   const [paused, setPaused] = useState(false);
-  const [muted, setMuted] = useState(false);
+  const [muted, setMuted] = useState(true);
   const [error, setError] = useState("");
   const [blocked, setBlocked] = useState(false);
   const [finished, setFinished] = useState(false);
@@ -154,6 +160,8 @@ export function SlideshowPlayer({ query, settings, onClose }: { query: Slideshow
   const [focusWithin, setFocusWithin] = useState(false);
   const controlsTimer = useRef<number | null>(null);
   const mediaRef = useRef<HTMLMediaElement | null>(null);
+  const playbackEventsEnabled = useRef(false);
+  playbackEventsEnabled.current = ready && !loading && !error && !finished;
   const request = useRef(0);
   const targetIndex = useRef(0);
   const currentIndex = useRef(-1);
@@ -163,6 +171,7 @@ export function SlideshowPlayer({ query, settings, onClose }: { query: Slideshow
     if (!source) return;
     const generation = ++request.current;
     targetIndex.current = index;
+    playbackEventsEnabled.current = false;
     mediaRef.current?.pause();
     setLoading(true); setReady(false); setError(""); setBlocked(false); setFinished(false); setBuffering(false);
     try {
@@ -233,9 +242,25 @@ export function SlideshowPlayer({ query, settings, onClose }: { query: Slideshow
     const media = mediaRef.current;
     if (!media || !slide || loading || error || finished || !ready) return;
     let cancelled = false;
+    let retryTimer: number | undefined;
+    const attempt = (retried = false) => {
+      void media.play().catch((cause: unknown) => {
+        if (cancelled) return;
+        const name = cause instanceof Error || cause instanceof DOMException ? cause.name : "";
+        if (name === "AbortError" && !retried) {
+          // A load/seek can interrupt play() without denying autoplay. Retry once,
+          // and cancel the retry if the user pauses or leaves this slide.
+          retryTimer = window.setTimeout(() => attempt(true), 200);
+          return;
+        }
+        if (name === "NotAllowedError") setBlocked(true);
+        else setError("Unable to start playback. Retry or skip this file.");
+        setPaused(true);
+      });
+    };
     if (paused) media.pause();
-    else void media.play().catch(() => { if (!cancelled) { setBlocked(true); setPaused(true); } });
-    return () => { cancelled = true; };
+    else attempt();
+    return () => { cancelled = true; window.clearTimeout(retryTimer); };
   }, [slide, ready, paused, loading, error, finished]);
   useEffect(() => {
     const media = mediaRef.current;
@@ -277,14 +302,15 @@ export function SlideshowPlayer({ query, settings, onClose }: { query: Slideshow
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
       if (event.altKey || event.ctrlKey || event.metaKey || /^(INPUT|SELECT|TEXTAREA)$/.test((event.target as HTMLElement)?.tagName)) return;
-      if ((event.target as HTMLElement)?.closest("button") && (event.key === " " || event.key === "Enter")) return;
+      if ((event.target as HTMLElement)?.closest?.("button") && (event.key === " " || event.key === "Enter")) return;
       if (event.key === " ") { event.preventDefault(); togglePause(); }
       if (event.key === "ArrowRight" && !loading && !error && !finished) { event.preventDefault(); advance(); }
       if (event.key === "ArrowLeft" && !loading && !error && currentIndex.current > 0) { event.preventDefault(); void navigate(currentIndex.current - 1); }
+      if (event.key === "Escape") { event.preventDefault(); onClose(); }
     };
     document.addEventListener("keydown", keydown);
     return () => document.removeEventListener("keydown", keydown);
-  }, [togglePause, loading, error, finished, advance, navigate]);
+  }, [togglePause, loading, error, finished, advance, navigate, onClose]);
 
   const duration = staticSlide ? settings.seconds : mediaDuration;
   const syncMediaTime = () => {
@@ -347,6 +373,8 @@ export function SlideshowPlayer({ query, settings, onClose }: { query: Slideshow
           key={`${frame.index}:${String(frame.item.id)}`}
           item={frame.item}
           active={frame.active}
+          playbackToken={frame.active ? slide?.token : undefined}
+          sessionEnabled={frame.active && !error && !finished}
           effect={settings.effect}
           mediaRef={mediaRef}
           onReady={() => { setReady(true); setBuffering(false); syncMediaTime(); }}
@@ -355,6 +383,10 @@ export function SlideshowPlayer({ query, settings, onClose }: { query: Slideshow
           onEnded={() => { syncMediaTime(); advance(); }}
           onError={failMedia}
           onPreloadError={() => setPreparedNext(null)}
+          onPlaybackChange={(nextPaused) => {
+            if (playbackEventsEnabled.current) { setPaused(nextPaused); if (!nextPaused) setBlocked(false); }
+          }}
+          onMutedChange={setMuted}
           muted={muted}
         />
       ))}
@@ -392,16 +424,20 @@ export function SlideshowPlayer({ query, settings, onClose }: { query: Slideshow
         />
         <div className="flex min-h-9 items-center justify-between gap-3">
           <span className="text-xs font-medium tabular-nums text-white/80" aria-label="Playback time">{playbackTime(currentTime)} / {playbackTime(duration)}</span>
-          {kind === "video" || kind === "audio" ? <button type="button" className={playerButton} aria-label={muted ? "Unmute slideshow" : "Mute slideshow"} onClick={() => setMuted((value) => !value)}>{muted ? <VolumeX /> : <Volume2 />}</button> : null}
+          <div className="flex items-center gap-1">
+            {kind === "video" || kind === "audio" ? <button type="button" className={playerButton} aria-label={muted ? "Unmute slideshow" : "Mute slideshow"} onClick={() => setMuted((value) => !value)}>{muted ? <VolumeX /> : <Volume2 />}</button> : null}
+          </div>
         </div>
       </footer>
     </section>
   );
 }
 
-function SlideshowFrame({ item, active, effect, mediaRef, onReady, onBuffering, onTime, onEnded, onError, onPreloadError, muted }: {
+function SlideshowFrame({ item, active, playbackToken, sessionEnabled, effect, mediaRef, onReady, onBuffering, onTime, onEnded, onError, onPreloadError, onPlaybackChange, onMutedChange, muted }: {
   item: EagleItem;
   active: boolean;
+  playbackToken?: number;
+  sessionEnabled: boolean;
   effect: SlideshowSettings["effect"];
   mediaRef: { current: HTMLMediaElement | null };
   onReady: () => void;
@@ -410,6 +446,8 @@ function SlideshowFrame({ item, active, effect, mediaRef, onReady, onBuffering, 
   onEnded: () => void;
   onError: () => void;
   onPreloadError: () => void;
+  onPlaybackChange: (paused: boolean) => void;
+  onMutedChange: (muted: boolean) => void;
   muted: boolean;
 }) {
   const kind = slideshowMediaKind(item);
@@ -418,24 +456,39 @@ function SlideshowFrame({ item, active, effect, mediaRef, onReady, onBuffering, 
   const localMediaRef = useRef<HTMLMediaElement | null>(null);
   const isStatic = kind === "image" || kind === "thumbnail";
   const fail = () => { if (active) setFailed(true); else onPreloadError(); };
-  const prepareImage = (image: HTMLImageElement) => {
-    if (typeof image.decode === "function") {
-      void image.decode().catch(() => {}).then(() => setPrepared(true));
-    } else setPrepared(true);
-  };
+  // A load event is sufficient to display an image. Waiting on another decode()
+  // promise here can leave an already loaded image behind the loading overlay.
+  const prepareImage = () => setPrepared(true);
   // Keep the next frame mounted and promote it without recreating its image/media element.
   useEffect(() => {
     if (!active) return;
     const media = localMediaRef.current;
-    if (media) { mediaRef.current = media; media.currentTime = 0; }
-  }, [active]);
+    if (media) {
+      mediaRef.current = media;
+      media.currentTime = 0;
+      if (media.readyState >= 1) setPrepared(true);
+    }
+  }, [active, playbackToken]);
+  const { id, name, ext, noThumbnail } = item;
+  useEffect(() => {
+    const media = localMediaRef.current;
+    if (!sessionEnabled || !media) return;
+    return bindMediaSession(media, { id, name, ext, noThumbnail }, false);
+  }, [sessionEnabled, id, name, ext, noThumbnail]);
   useEffect(() => {
     if (active && failed) onError();
     else if (active && prepared) onReady();
-  }, [active, prepared, failed]);
+  }, [active, playbackToken, prepared, failed]);
   useEffect(() => {
     const media = localMediaRef.current;
-    return () => { media?.pause(); };
+    if (!media) return;
+    // Restore the source when React StrictMode replays the effect during development.
+    if (!media.getAttribute("src")) media.src = mediaUrl(String(item.id), "file");
+    return () => {
+      media.pause();
+      media.removeAttribute("src");
+      media.load();
+    };
   }, []);
   const bindMedia = (element: HTMLMediaElement | null) => {
     localMediaRef.current = element;
@@ -443,9 +496,14 @@ function SlideshowFrame({ item, active, effect, mediaRef, onReady, onBuffering, 
   };
   const mediaEvents = {
     onCanPlay: () => { setPrepared(true); if (active) onBuffering(false); },
-    onPlaying: () => { if (active) onBuffering(false); },
+    onPlaying: () => { setPrepared(true); if (active) onBuffering(false); },
+    onPlay: () => { if (active) onPlaybackChange(false); },
+    onPause: () => { if (active && !localMediaRef.current?.ended) onPlaybackChange(true); },
+    onVolumeChange: () => { if (active && localMediaRef.current) onMutedChange(localMediaRef.current.muted); },
     onWaiting: () => { if (active) onBuffering(true); },
-    onLoadedMetadata: () => { if (active) onTime(); },
+    // iOS may stop preloading at metadata until play() is called. Do not make
+    // play() depend on a canplay event that itself requires playback to start.
+    onLoadedMetadata: () => { setPrepared(true); if (active) onTime(); },
     onDurationChange: () => { if (active) onTime(); },
     onTimeUpdate: () => { if (active) onTime(); },
     onEnded: () => { if (active) onEnded(); },
@@ -457,8 +515,8 @@ function SlideshowFrame({ item, active, effect, mediaRef, onReady, onBuffering, 
       aria-hidden={!active}
       data-slideshow-preload={active ? undefined : "true"}
     >
-      {isStatic ? <img src={mediaUrl(String(item.id), kind === "image" ? "file" : "thumb")} alt={active ? displayFileName(item) || "Untitled" : ""} className="h-full min-h-0 w-full object-contain" decoding="async" onLoad={(event) => prepareImage(event.currentTarget)} onError={fail} /> : null}
-      {kind === "video" ? <video ref={bindMedia} className="h-full min-h-0 w-full object-contain" src={mediaUrl(String(item.id), "file")} playsInline muted={muted || !active} preload="auto" {...mediaEvents} /> : null}
+      {isStatic ? <img src={mediaUrl(String(item.id), kind === "image" ? "file" : "thumb")} alt={active ? displayFileName(item) || "Untitled" : ""} className="h-full min-h-0 w-full object-contain" decoding="async" onLoad={prepareImage} onError={fail} /> : null}
+      {kind === "video" ? <video ref={bindMedia} className="h-full min-h-0 w-full object-contain" src={mediaUrl(String(item.id), "file")} playsInline disablePictureInPicture muted={muted || !active} preload="auto" {...mediaEvents} /> : null}
       {kind === "audio" ? <div className="grid w-[min(420px,80vw)] justify-items-center px-4"><AudioArtwork item={item} /><audio ref={bindMedia} src={mediaUrl(String(item.id), "file")} muted={muted || !active} preload="auto" {...mediaEvents} /></div> : null}
     </div>
   );

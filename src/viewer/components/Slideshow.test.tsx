@@ -24,6 +24,7 @@ beforeEach(async () => {
   play = vi.fn().mockResolvedValue(undefined);
   vi.spyOn(dom.window.HTMLMediaElement.prototype, "play").mockImplementation(play);
   vi.spyOn(dom.window.HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+  vi.spyOn(dom.window.HTMLMediaElement.prototype, "load").mockImplementation(() => {});
   fullscreen = vi.fn().mockRejectedValue(new Error("Fullscreen unavailable"));
   dom.window.HTMLElement.prototype.requestFullscreen = fullscreen;
   dom.window.HTMLDialogElement.prototype.showModal = function () { this.setAttribute("open", ""); };
@@ -64,6 +65,87 @@ async function loaded(selector = "img") {
 }
 async function tick(ms: number) { await act(async () => { await vi.advanceTimersByTimeAsync(ms); }); }
 
+test("starts media after metadata without waiting for canplay", async () => {
+  serve([{ id: "video", ext: "mp4" }]);
+  await renderPlayer();
+  const video = container.querySelector("video")!;
+  await act(async () => { video.dispatchEvent(new dom.window.Event("loadedmetadata")); });
+  expect(play).toHaveBeenCalled();
+  expect(container.querySelector('[aria-label="Loading slide"]')).toBeNull();
+});
+
+test("shows a loaded image without waiting for an extra decode promise", async () => {
+  serve([{ id: "image", ext: "jpg" }]);
+  dom.window.HTMLImageElement.prototype.decode = vi.fn(() => new Promise<void>(() => {}));
+  await renderPlayer();
+  await loaded();
+  expect(container.querySelector('[aria-label="Loading slide"]')).toBeNull();
+});
+
+test("releases discarded media sources as the slideshow advances", async () => {
+  serve([{ id: "video", ext: "mp4" }, { id: "image", ext: "jpg" }]);
+  await renderPlayer();
+  const video = container.querySelector("video")!;
+  await loaded("video");
+  const load = vi.mocked(dom.window.HTMLMediaElement.prototype.load);
+  load.mockClear();
+  await click("Next slide");
+  expect(video.hasAttribute("src")).toBe(false);
+  expect(load).toHaveBeenCalled();
+});
+
+test("disables slideshow PiP while retaining OS playback controls", async () => {
+  const handlers = new Map<string, MediaSessionActionHandler | null>();
+  Object.defineProperty(navigator, "mediaSession", { value: {
+    metadata: null,
+    setActionHandler: (action: string, handler: MediaSessionActionHandler | null) => handlers.set(action, handler),
+  } });
+  Object.defineProperty(document, "pictureInPictureEnabled", { value: true });
+  dom.window.HTMLVideoElement.prototype.requestPictureInPicture = vi.fn();
+  serve([{ id: "video", ext: "mp4" }]);
+  await renderPlayer();
+  await loaded("video");
+  expect(container.querySelector("video")?.hasAttribute("disablepictureinpicture")).toBe(true);
+  expect(container.querySelector('button[aria-label*="Picture-in-Picture"]')).toBeNull();
+  expect(handlers.get("enterpictureinpicture")).toBeUndefined();
+  expect(handlers.get("play")).toBeTypeOf("function");
+});
+
+test("automatically retries an interrupted play without asking for a tap", async () => {
+  vi.useFakeTimers();
+  serve([{ id: "video", ext: "mp4" }]);
+  play.mockRejectedValueOnce(new DOMException("Loading interrupted playback", "AbortError"));
+  await renderPlayer();
+  await loaded("video");
+  expect(container.textContent).not.toContain("Tap to play");
+  await tick(200);
+  expect(play).toHaveBeenCalledTimes(2);
+  expect(container.querySelector('[role="alert"]')).toBeNull();
+});
+
+test("cancels a pending playback retry when advancing to an image", async () => {
+  vi.useFakeTimers();
+  serve([{ id: "video", ext: "mp4" }, { id: "image", ext: "jpg" }]);
+  play.mockRejectedValueOnce(new DOMException("Interrupted", "AbortError"));
+  await renderPlayer();
+  await loaded("video");
+  await click("Next slide");
+  await tick(200);
+  expect(play).toHaveBeenCalledOnce();
+});
+
+test("shows a retryable file error after repeated interruption instead of an autoplay prompt", async () => {
+  vi.useFakeTimers();
+  serve([{ id: "video", ext: "mp4" }]);
+  play.mockRejectedValue(new DOMException("Interrupted", "AbortError"));
+  await renderPlayer();
+  await loaded("video");
+  await tick(200);
+  expect(play).toHaveBeenCalledTimes(2);
+  expect(container.textContent).not.toContain("Tap to play");
+  expect(container.querySelector('[role="alert"]')?.textContent).toContain("Unable to start playback");
+});
+
 test("counts image display time after loading and preserves remaining time through pause and resume", async () => {
   vi.useFakeTimers();
   serve([{ id: "1", ext: "jpg" }, { id: "2", ext: "jpg" }]);
@@ -90,7 +172,7 @@ test("counts image display time after loading and preserves remaining time throu
 test("waits for video and audio endings, and provides a user gesture when autoplay is blocked", async () => {
   vi.useFakeTimers();
   serve([{ id: "v", ext: "mp4" }, { id: "a", ext: "mp3", noThumbnail: true }, { id: "i", ext: "jpg" }]);
-  play.mockRejectedValueOnce(new Error("Autoplay blocked"));
+  play.mockRejectedValueOnce(new DOMException("Autoplay blocked", "NotAllowedError"));
   await renderPlayer();
   await loaded("video");
   expect(container.textContent).toContain("Tap to play");

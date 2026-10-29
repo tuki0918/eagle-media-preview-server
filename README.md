@@ -20,6 +20,7 @@ Anyone on the same network can then browse it from phones, tablets, and other co
 - Endpoint URL and QR code for quick access, with an optional custom hostname
 - Installable PWA (**Media Library**) with a cached application shell
 - Background audio and video playback shows the file name and thumbnail in the OS media controls
+- Picture-in-Picture controls for video previews on supported desktop and mobile browsers, with automatic PiP in supported desktop Chrome versions
 
 Optional:
 
@@ -48,6 +49,18 @@ These are planned, but on hold until the Eagle API supports them:
 The browser viewer can be installed from a supported desktop or mobile browser. Service workers require a secure context, so use HTTPS when opening the viewer from another device on your LAN. Loopback addresses such as `localhost` are also treated as secure by browsers.
 
 The PWA caches only the application shell. Eagle API responses and library media are intentionally excluded from the service-worker cache, so browsing library content still requires a connection to the running plugin server.
+
+## Slideshow
+
+Slideshows start muted on all devices. To hear video or audio, use the speaker button in the bottom playback bar to turn sound on during playback.
+
+## Video Picture-in-Picture
+
+Open a video preview and use the **Picture-in-Picture** button beside the full-screen button. It appears when the browser and device expose PiP support and becomes available after the video metadata loads. Standard PiP and Safari's native video presentation API are supported. Closing the preview or changing items also closes its PiP window.
+
+On desktop Chrome, playing a video and switching tabs can open PiP automatically. This requires Chrome's automatic Picture-in-Picture permission for the site and audible playback; Chrome also checks playback focus and site engagement when permission has not been granted explicitly. The browser decides when to trigger it and closes an automatically opened PiP window when you return to the tab. See [Chrome's automatic PiP requirements](https://developer.chrome.com/blog/automatic-picture-in-picture-media-playback).
+
+Mobile PiP depends on the browser, OS, and how the viewer is opened. Safari supports a native PiP control, but installed Home Screen web apps may expose less support than a Safari tab. If PiP is unavailable from a Home Screen app, try the same URL in Safari. Automatic PiP on every mobile app switch cannot be guaranteed. Background playback and PiP are separate browser capabilities.
 
 ## Settings
 
