@@ -220,6 +220,8 @@ function App() {
       if (!saved) setStatus(previousStatus);
       if (saved && hasUserPasswords) clearUserPasswordDrafts();
       if (saved) setMessage(successMessage);
+      // The Shared badges follow the saved settings, so refresh them after every save.
+      if (saved) void refreshLibraries();
       return saved;
     }
     try {
@@ -227,6 +229,7 @@ function App() {
       if (nextStatus) setStatus(nextStatus);
       if (hasUserPasswords) clearUserPasswordDrafts();
       setMessage(successMessage);
+      void refreshLibraries();
       return true;
     } catch (error) {
       setErrorMessage(error);

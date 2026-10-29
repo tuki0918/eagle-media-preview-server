@@ -637,7 +637,8 @@ function createServerManager({
         current: currentPath ? { path: currentPath, name: String(current?.name || "") || libraryNameFromPath(currentPath) } : null,
         items: candidates.map((library): LibraryCandidate => {
           const key = libraryPathKey(library.path);
-          return { ...library, current: key === currentKey, shared: sharedKeys.has(key) };
+          // `shared` reflects the saved settings, not unsaved edits in the panel.
+          return { ...library, current: key === currentKey, shared: settings.libraryProtectionEnabled && sharedKeys.has(key) };
         }),
       };
     },

@@ -15,6 +15,7 @@ export interface SharedLibrary {
 
 export interface LibraryCandidate extends SharedLibrary {
   current: boolean;
+  /** Shared by the saved settings (unsaved checkbox edits do not count). */
   shared: boolean;
 }
 

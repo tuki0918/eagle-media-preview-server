@@ -277,7 +277,7 @@ export function SettingsForm({
                           {library.current ? (
                             <span className="rounded-full bg-[#eef4ff] px-2 py-0.5 text-[10px] font-semibold text-[#1d4ed8]">Open in Eagle</span>
                           ) : null}
-                          {shared ? (
+                          {library.shared ? (
                             <span className="inline-flex items-center gap-1 rounded-full bg-[#e3f6e8] px-2 py-0.5 text-[10px] font-semibold text-[#16803a]">
                               <CheckIcon className="h-[10px] w-[10px]" />
                               Shared

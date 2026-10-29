@@ -1377,7 +1377,8 @@ test("plugin saves shared libraries with the settings and reacts to Eagle librar
             path: libraryPath,
             name: libraryPath.includes("Work") ? "Work" : "Private",
             current: libraryPath === openPath,
-            shared: false,
+            shared: Boolean(status.settings.libraryProtectionEnabled)
+              && ((status.settings.sharedLibraries as Array<{ path: string }> | undefined) || []).some((library) => library.path === libraryPath),
           })),
         };
       },
@@ -1404,11 +1405,13 @@ test("plugin saves shared libraries with the settings and reacts to Eagle librar
     await waitFor(() => doc.querySelector<HTMLInputElement>('[aria-label="Share Work"]')?.checked === true);
     assert.doesNotMatch(doc.body.textContent || "", /The library open in Eagle is not shared/);
     assert.equal(saves.length, 0, "library changes are drafts until settings are saved");
+    assert.doesNotMatch(doc.body.textContent || "", /Shared/, "the Shared badge waits for the saved settings");
 
     doc.querySelector("form")?.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }));
     await waitFor(() => saves.length === 1 && /Saved/.test(doc.querySelector("[aria-live]")?.textContent || "") && doc.querySelector<HTMLInputElement>('label[aria-label="Start or stop server"] input')?.disabled === false);
     assert.equal(saves[0].libraryProtectionEnabled, true);
     assert.equal(JSON.stringify(saves[0].sharedLibraries), JSON.stringify([{ name: "Work", path: "/Users/me/Work.library" }]));
+    await waitFor(() => /Shared/.test(doc.body.textContent || ""));
 
     doc.querySelector<HTMLInputElement>('label[aria-label="Start or stop server"] input')?.click();
     await waitFor(() => /Stop the server before changing shared libraries/.test(doc.body.textContent || ""));

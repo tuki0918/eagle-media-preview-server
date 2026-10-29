@@ -1013,7 +1013,7 @@ test("generated server manager lists libraries from Eagle's own settings and the
   assert.equal(JSON.stringify(libraries).includes("must-not-leak"), false);
 });
 
-test("generated server manager still lists saved libraries without Eagle settings", async () => {
+test("generated server manager still lists saved libraries without Eagle settings, unshared while protection is off", async () => {
   const settings = normalizeSettings({ sharedLibraries: [{ path: "/Users/me/Work.library" }] });
   const manager = createServerManager({
     settingsStore: {
@@ -1032,6 +1032,6 @@ test("generated server manager still lists saved libraries without Eagle setting
 
   assert.deepEqual(await manager.libraries(), {
     current: null,
-    items: [{ path: "/Users/me/Work.library", name: "Work", current: false, shared: true }],
+    items: [{ path: "/Users/me/Work.library", name: "Work", current: false, shared: false }],
   });
 });
