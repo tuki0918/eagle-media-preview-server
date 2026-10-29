@@ -61,11 +61,17 @@ export interface PreviewPinch {
 
 export interface ConnectResponse {
   library?: {
+    /** Opaque per-server id; changes when Eagle opens a different library. */
+    id?: string;
     name?: string;
   };
   app?: {
     version?: string;
   };
+}
+
+export interface HealthResponse extends ConnectResponse {
+  libraryStatus?: "not_shared" | "shared" | null;
 }
 
 export interface ViewerPermissions {

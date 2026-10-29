@@ -1,6 +1,6 @@
 (() => {
   const fail = () => {
-    if (document.body.dataset.appState === "ready") return;
+    if (document.body.dataset.appState === "ready" || document.body.dataset.offlineReason) return;
     document.body.dataset.appState = "failed";
     document.getElementById("startupFallback").setAttribute("aria-busy", "false");
     document.getElementById("startupTitle").textContent = "Media Library is offline";

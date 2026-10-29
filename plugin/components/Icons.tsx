@@ -11,6 +11,7 @@ import {
   Plus,
   Power,
   QrCode,
+  RefreshCw,
   Server,
   Settings,
   ShieldCheck,
@@ -37,6 +38,7 @@ export const KeyIcon = iconComponent(KeyRound);
 export const LockIcon = iconComponent(Lock);
 export const PlusIcon = iconComponent(Plus);
 export const PowerIcon = iconComponent(Power);
+export const RefreshIcon = iconComponent(RefreshCw);
 export const ServerIcon = iconComponent(Server);
 export const SettingsIcon = iconComponent(Settings);
 export const ShieldIcon = iconComponent(ShieldCheck);

@@ -2,7 +2,7 @@ import { JSDOM } from "jsdom";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 function installDom() {
-  const dom = new JSDOM('<!doctype html><form id="connectForm"><input name="username"><input name="password"></form>', {
+  const dom = new JSDOM('<!doctype html><main id="startupFallback"><h1 id="startupTitle"></h1><p id="startupMessage"></p></main><form id="connectForm"><input name="username"><input name="password"></form>', {
     url: "http://127.0.0.1:5173/viewer",
   });
   Object.defineProperty(globalThis, "document", { configurable: true, value: dom.window.document });
@@ -381,12 +381,233 @@ describe("viewer app data refresh", () => {
     await vi.waitFor(() => expect(getShellView()).toBe("login"));
     expect(new URLSearchParams(window.location.search).has("q")).toBe(false);
   });
+
+  test("shows the offline page on startup when the open library is not shared", async () => {
+    const requests: string[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      requests.push(url);
+      if (url === "/api/auth/status") return jsonResponse({ authenticated: false, required: true });
+      if (url === "/api/library-status") return jsonResponse({ libraryStatus: "not_shared" });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: fetchMock });
+
+    const { initViewer } = await import("./viewerApp");
+    await initViewer();
+
+    expect(document.body.dataset.appState).toBe("failed");
+    expect(document.querySelector("#startupMessage")?.textContent).toBe("This library isn't shared right now. Please try again later.");
+    expect(requests).toEqual(["/api/auth/status", "/api/library-status"]);
+  });
+
+  test("stays on the sign-in screen at startup when the library is shared or the check is unavailable", async () => {
+    for (const response of [jsonResponse({ libraryStatus: "shared" }), errorResponse(404, { error: "Not found" })]) {
+      vi.resetModules();
+      delete document.body.dataset.appState;
+      Object.defineProperty(globalThis, "fetch", { configurable: true, value: vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/auth/status") return jsonResponse({ authenticated: false, required: true });
+        if (url === "/api/library-status") return response;
+        throw new Error(`Unexpected request: ${url}`);
+      }) });
+      const { initViewer } = await import("./viewerApp");
+      const { getShellView } = await import("./viewer/shellVisibility");
+      await initViewer();
+      expect(document.body.dataset.appState).toBeUndefined();
+      expect(getShellView()).toBe("login");
+    }
+  });
+
+  test("shows the offline page when the server stops sharing the open library", async () => {
+    let health: unknown = { app: { version: "1.0" }, library: { id: "lib-a", name: "A" }, libraryStatus: "shared" };
+    let connectResponse: Response = jsonResponse({ app: { version: "1.0" }, library: { id: "lib-a", name: "A" } });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/auth/status") return jsonResponse({ authenticated: true, required: false });
+      if (url === "/api/connect" && options?.method === "POST") return connectResponse;
+      if (url === "/api/health") return jsonResponse(health);
+      if (url === "/api/folders" || url === "/api/smart-folders") return jsonResponse({ items: [] });
+      if (url.startsWith("/api/items?")) return jsonResponse({ items: [], total: 0 });
+      if (url.startsWith("/api/item-types")) return jsonResponse({ items: [] });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: fetchMock });
+
+    const { initViewer } = await import("./viewerApp");
+    const { submitConnection } = await import("./viewer/shellActions");
+    const { getLoginConnectState } = await import("./viewer/loginConnectState");
+    const { getShellView } = await import("./viewer/shellVisibility");
+    initViewer();
+    await vi.waitFor(() => expect(getLoginConnectState().authenticated).toBe(true));
+    submitConnection({ currentTarget: document.querySelector<HTMLFormElement>("#connectForm")!, preventDefault: () => {} });
+    await vi.waitFor(() => expect(getShellView()).toBe("viewer"));
+
+    health = { app: { version: "1.0" }, library: null, libraryStatus: "not_shared" };
+    window.dispatchEvent(new window.Event("online"));
+    await vi.waitFor(() => expect(document.body.dataset.appState).toBe("failed"));
+    expect(getShellView()).toBe("login");
+    expect(document.querySelector("#startupTitle")?.textContent).toBe("Media Library is offline");
+    expect(document.querySelector("#startupMessage")?.textContent).toBe("This library isn't shared right now. Please try again later.");
+
+    document.body.dataset.appState = "ready";
+
+    connectResponse = errorResponse(503, { error: "The library open in Eagle is not shared", code: "LIBRARY_NOT_SHARED" });
+    submitConnection({ currentTarget: document.querySelector<HTMLFormElement>("#connectForm")!, preventDefault: () => {} });
+    await vi.waitFor(() => expect(document.body.dataset.appState).toBe("failed"));
+    expect(getShellView()).toBe("login");
+  });
+
+  test("returns to the connect screen when health polling sees a different shared library", async () => {
+    let health: unknown = { app: { version: "1.0" }, library: { id: "lib-a", name: "A" }, libraryStatus: "shared" };
+    const requests: string[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      const url = String(input);
+      requests.push(url);
+      if (url === "/api/auth/status") return jsonResponse({ authenticated: true, required: false });
+      if (url === "/api/connect" && options?.method === "POST") return jsonResponse({ app: { version: "1.0" }, library: { id: "lib-a", name: "A" } });
+      if (url === "/api/health") return jsonResponse(health);
+      if (url === "/api/folders" || url === "/api/smart-folders") return jsonResponse({ items: [] });
+      if (url.startsWith("/api/items?")) return jsonResponse({ items: [], total: 0 });
+      if (url.startsWith("/api/item-types")) return jsonResponse({ items: [] });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: fetchMock });
+
+    const { initViewer } = await import("./viewerApp");
+    const { submitConnection } = await import("./viewer/shellActions");
+    const { getLoginConnectState } = await import("./viewer/loginConnectState");
+    const { getShellView } = await import("./viewer/shellVisibility");
+    const { getLibraryName } = await import("./viewer/libraryNameState");
+    initViewer();
+    await vi.waitFor(() => expect(getLoginConnectState().authenticated).toBe(true));
+    submitConnection({ currentTarget: document.querySelector<HTMLFormElement>("#connectForm")!, preventDefault: () => {} });
+    await vi.waitFor(() => expect(getLibraryName()).toBe("A"));
+
+    health = { app: { version: "1.0" }, library: { id: "lib-b", name: "B" }, libraryStatus: "shared" };
+    window.dispatchEvent(new window.Event("online"));
+    await vi.waitFor(() => expect(getShellView()).toBe("login"));
+    expect(getLoginConnectState()).toMatchObject({ isError: false, message: "The media server switched to a different library." });
+    expect(getLibraryName()).toBe("");
+    expect(requests.filter((url) => url === "/api/connect")).toHaveLength(1);
+  });
+
+  test("returns to the connect screen as soon as a response comes from a different library", async () => {
+    let responseLibraryId = "lib-a";
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      const url = String(input);
+      const tagged = (body: unknown) => ({ ...jsonResponse(body), headers: new Headers({ "X-Library-Id": responseLibraryId }) }) as Response;
+      if (url === "/api/auth/status") return jsonResponse({ authenticated: true, required: false });
+      if (url === "/api/connect" && options?.method === "POST") return tagged({ app: { version: "1.0" }, library: { id: "lib-a", name: "A" } });
+      if (url === "/api/folders" || url === "/api/smart-folders") return tagged({ items: [] });
+      if (url.startsWith("/api/items?")) return tagged({ items: [], total: 0 });
+      if (url.startsWith("/api/item-types")) return tagged({ items: [] });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: fetchMock });
+
+    const { initViewer } = await import("./viewerApp");
+    const { openAllItems, submitConnection } = await import("./viewer/shellActions");
+    const { getLoginConnectState } = await import("./viewer/loginConnectState");
+    const { getShellView } = await import("./viewer/shellVisibility");
+    initViewer();
+    await vi.waitFor(() => expect(getLoginConnectState().authenticated).toBe(true));
+    submitConnection({ currentTarget: document.querySelector<HTMLFormElement>("#connectForm")!, preventDefault: () => {} });
+    await vi.waitFor(() => expect(getShellView()).toBe("viewer"));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(getShellView()).toBe("viewer");
+
+    responseLibraryId = "lib-b";
+    vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+    openAllItems();
+    await vi.waitFor(() => expect(getShellView()).toBe("login"));
+    expect(getLoginConnectState().message).toBe("The media server switched to a different library.");
+  });
+
+  test("re-checks the library when the server refuses an answer with 409", async () => {
+    let health: unknown = { app: { version: "1.0" }, library: { id: "lib-a", name: "A" }, libraryStatus: "shared" };
+    let refuseItems = false;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/auth/status") return jsonResponse({ authenticated: true, required: false });
+      if (url === "/api/connect" && options?.method === "POST") return jsonResponse({ app: { version: "1.0" }, library: { id: "lib-a", name: "A" } });
+      if (url === "/api/health") return jsonResponse(health);
+      if (url === "/api/folders" || url === "/api/smart-folders") return jsonResponse({ items: [] });
+      if (url.startsWith("/api/items?")) return refuseItems ? errorResponse(409, { error: "The library open in Eagle has changed", code: "LIBRARY_CHANGED" }) : jsonResponse({ items: [], total: 0 });
+      if (url.startsWith("/api/item-types")) return jsonResponse({ items: [] });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: fetchMock });
+
+    const { initViewer } = await import("./viewerApp");
+    const { openAllItems, submitConnection } = await import("./viewer/shellActions");
+    const { getLoginConnectState } = await import("./viewer/loginConnectState");
+    const { getShellView } = await import("./viewer/shellVisibility");
+    initViewer();
+    await vi.waitFor(() => expect(getLoginConnectState().authenticated).toBe(true));
+    submitConnection({ currentTarget: document.querySelector<HTMLFormElement>("#connectForm")!, preventDefault: () => {} });
+    await vi.waitFor(() => expect(getShellView()).toBe("viewer"));
+
+    refuseItems = true;
+    health = { app: { version: "1.0" }, library: { id: "lib-b", name: "B" }, libraryStatus: "shared" };
+    vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+    openAllItems();
+    await vi.waitFor(() => expect(getShellView()).toBe("login"));
+    expect(getLoginConnectState().message).toBe("The media server switched to a different library.");
+  });
+
+  test("sends the connected library id and returns to the connect screen when a pinned media load fails", async () => {
+    let health: unknown = { app: { version: "1.0" }, library: { id: "lib-a", name: "A" }, libraryStatus: "shared" };
+    const libraryHeaders: Array<string | undefined> = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      const url = String(input);
+      if (url.startsWith("/api/items?") || url === "/api/folders") libraryHeaders.push((options?.headers as Record<string, string> | undefined)?.["X-Library-Id"]);
+      if (url === "/api/auth/status") return jsonResponse({ authenticated: true, required: false });
+      if (url === "/api/connect" && options?.method === "POST") return jsonResponse({ app: { version: "1.0" }, library: { id: "lib-a", name: "A" } });
+      if (url === "/api/health") return jsonResponse(health);
+      if (url === "/api/folders" || url === "/api/smart-folders") return jsonResponse({ items: [] });
+      if (url.startsWith("/api/items?")) return jsonResponse({ items: [], total: 0 });
+      if (url.startsWith("/api/item-types")) return jsonResponse({ items: [] });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: fetchMock });
+
+    const { initViewer } = await import("./viewerApp");
+    const { submitConnection } = await import("./viewer/shellActions");
+    const { getLoginConnectState } = await import("./viewer/loginConnectState");
+    const { getShellView } = await import("./viewer/shellVisibility");
+    const { mediaUrl } = await import("./viewer/api");
+    initViewer();
+    await vi.waitFor(() => expect(getLoginConnectState().authenticated).toBe(true));
+    submitConnection({ currentTarget: document.querySelector<HTMLFormElement>("#connectForm")!, preventDefault: () => {} });
+    await vi.waitFor(() => expect(getShellView()).toBe("viewer"));
+    await vi.waitFor(() => expect(libraryHeaders.length).toBeGreaterThan(0));
+    expect(libraryHeaders.every((value) => value === "lib-a")).toBe(true);
+    expect(mediaUrl("ITEM1", "thumb")).toBe("/api/items/ITEM1/thumb?library=lib-a");
+
+    health = { app: { version: "1.0" }, library: { id: "lib-b", name: "B" }, libraryStatus: "shared" };
+    const image = document.createElement("img");
+    image.setAttribute("src", mediaUrl("ITEM1", "thumb"));
+    document.body.append(image);
+    image.dispatchEvent(new window.Event("error"));
+    await vi.waitFor(() => expect(getShellView()).toBe("login"));
+    expect(getLoginConnectState().message).toBe("The media server switched to a different library.");
+    expect(mediaUrl("ITEM1", "thumb")).toBe("/api/items/ITEM1/thumb");
+  });
 });
 
 function jsonResponse(body: unknown) {
   return {
     ok: true,
     status: 200,
+    json: async () => body,
+  } as Response;
+}
+
+function errorResponse(status: number, body: unknown) {
+  return {
+    ok: false,
+    status,
     json: async () => body,
   } as Response;
 }

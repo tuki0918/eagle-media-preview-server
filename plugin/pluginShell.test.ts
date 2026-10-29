@@ -102,7 +102,7 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(uiSource, /<option value="viewer">Viewer<\/option>/);
   assert.match(uiSource, /<option value="editor">Editor<\/option>/);
   assert.match(uiSource, /<option value="admin">Admin<\/option>/);
-  assert.match(uiSource, /type SettingsTab = "access" \| "general" \| "security";/);
+  assert.match(uiSource, /type SettingsTab = "access" \| "general" \| "libraries" \| "security";/);
   assert.match(app, /const \[settingsTab, setSettingsTab\] = useState<SettingsTab>\("general"\);/);
   assert.match(uiSource, /role="tablist" aria-label="Settings sections"/);
   assert.match(uiSource, /<SettingsTabButton active=\{settingsTab === "general"\} controls="generalSettingsPanel" id="generalSettingsTab" onClick=\{\(\) => onSettingsTabChange\("general"\)\}>General<\/SettingsTabButton>/);
@@ -1084,6 +1084,7 @@ test("plugin CommonJS runtime avoids node protocol requires for older Eagle runt
     "media.cjs",
     "static.cjs",
     "customDomain.cjs",
+    "libraryAccess.cjs",
   ];
 
   for (const file of files) {
@@ -1321,3 +1322,114 @@ function createPluginRequirePath(pathname: string): PluginRequirePath {
     return path.win32.join(pluginDir, relativePath);
   };
 }
+
+test("plugin saves shared libraries with the settings and reacts to Eagle library switches", async () => {
+  const bundle = await esbuild({
+    bundle: true,
+    define: { "process.env.NODE_ENV": JSON.stringify("test") },
+    entryPoints: [new URL("./app.tsx", import.meta.url).pathname],
+    format: "iife", platform: "browser", write: false,
+  });
+  const dom = new JSDOM('<!doctype html><div id="root"></div>', {
+    runScripts: "outside-only", url: "file:///tmp/eagle-plugin/plugin/index.html",
+  } as unknown as ConstructorParameters<typeof JSDOM>[1]);
+  const pluginWindow = dom.window as unknown as Window & {
+    eval: (source: string) => unknown;
+    require: (id: string) => unknown;
+    eagle: unknown;
+  };
+  const saves: Record<string, unknown>[] = [];
+  let libraryChangedCalls = 0;
+  let libraryListCalls = 0;
+  const libraryListInputs: unknown[] = [];
+  let onLibraryChanged: ((libraryPath: string) => void) | null = null;
+  let status: { settings: Record<string, unknown>; state: string; url: string } = {
+    settings: { host: "127.0.0.1", port: 41532, libraryProtectionEnabled: false, sharedLibraries: [] },
+    state: "stopped", url: "http://localhost:41532",
+  };
+  const eagleLibrary = { name: "Work", path: "/Users/me/Work.library" };
+  pluginWindow.eagle = {
+    app: { async getPath(name: string) { return name === "userData" ? "/Users/me/Library/Application Support/Eagle" : ""; } },
+    library: eagleLibrary,
+    onLibraryChanged(callback: (libraryPath: string) => void) {
+      onLibraryChanged = callback;
+    },
+  };
+  pluginWindow.require = (id: string) => id === "path" ? path : {
+    createServerManager: () => ({
+      async init() { return status; },
+      async status() { return status; },
+      async saveSettings(payload: Record<string, unknown>) {
+        saves.push(payload);
+        status = { ...status, settings: { ...status.settings, ...payload } };
+        return status;
+      },
+      async start() { status = { ...status, state: "running" }; return status; },
+      async stop() { status = { ...status, state: "stopped" }; return status; },
+      libraryChanged() { libraryChangedCalls += 1; },
+      async libraries(input: { current: { path: string } | null }) {
+        libraryListCalls += 1;
+        libraryListInputs.push(JSON.parse(JSON.stringify(input)));
+        const openPath = input.current?.path || "";
+        return {
+          current: { path: openPath, name: openPath.includes("Work") ? "Work" : "Private" },
+          items: ["/Users/me/Work.library", "/Users/me/Private.library"].map((libraryPath) => ({
+            path: libraryPath,
+            name: libraryPath.includes("Work") ? "Work" : "Private",
+            current: libraryPath === openPath,
+            shared: Boolean(status.settings.libraryProtectionEnabled)
+              && ((status.settings.sharedLibraries as Array<{ path: string }> | undefined) || []).some((library) => library.path === libraryPath),
+          })),
+        };
+      },
+    }),
+  };
+  try {
+    pluginWindow.eval(bundle.outputFiles[0].text);
+    const doc = dom.window.document;
+    await waitFor(() => Boolean(doc.querySelector('[aria-label="Share Work"]')) && doc.querySelector<HTMLInputElement>('[aria-label="Share only selected libraries"]')?.disabled === false);
+    doc.querySelector<HTMLButtonElement>("#librariesSettingsTab")?.click();
+    assert.equal(doc.body.textContent?.includes("Add library"), false);
+    assert.equal(doc.body.textContent?.includes("Eagle API is unavailable"), false);
+    assert.deepEqual(libraryListInputs[0], {
+      current: { name: "Work", path: "/Users/me/Work.library" },
+      userDataPath: "/Users/me/Library/Application Support/Eagle",
+    });
+
+    const protection = doc.querySelector<HTMLInputElement>('[aria-label="Share only selected libraries"]');
+    assert.ok(protection);
+    protection.click();
+    await waitFor(() => doc.querySelector<HTMLInputElement>('[aria-label="Share Work"]')?.disabled === false);
+    assert.match(doc.body.textContent || "", /The library open in Eagle is not shared/);
+    doc.querySelector<HTMLInputElement>('[aria-label="Share Work"]')?.click();
+    await waitFor(() => doc.querySelector<HTMLInputElement>('[aria-label="Share Work"]')?.checked === true);
+    assert.doesNotMatch(doc.body.textContent || "", /The library open in Eagle is not shared/);
+    assert.equal(saves.length, 0, "library changes are drafts until settings are saved");
+    assert.doesNotMatch(doc.body.textContent || "", /Shared/, "the Shared badge waits for the saved settings");
+
+    doc.querySelector("form")?.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }));
+    await waitFor(() => saves.length === 1 && /Saved/.test(doc.querySelector("[aria-live]")?.textContent || "") && doc.querySelector<HTMLInputElement>('label[aria-label="Start or stop server"] input')?.disabled === false);
+    assert.equal(saves[0].libraryProtectionEnabled, true);
+    assert.equal(JSON.stringify(saves[0].sharedLibraries), JSON.stringify([{ name: "Work", path: "/Users/me/Work.library" }]));
+    await waitFor(() => /Shared/.test(doc.body.textContent || ""));
+
+    doc.querySelector<HTMLInputElement>('label[aria-label="Start or stop server"] input')?.click();
+    await waitFor(() => /Stop the server before changing shared libraries/.test(doc.body.textContent || ""));
+    assert.equal(doc.querySelector<HTMLInputElement>('[aria-label="Share only selected libraries"]')?.disabled, true);
+    assert.equal(doc.querySelector<HTMLInputElement>('[aria-label="Share Work"]')?.disabled, true);
+
+    const listCallsBeforeReload = libraryListCalls;
+    const reload = [...doc.querySelectorAll("button")].find((button) => button.textContent?.includes("Reload libraries"));
+    assert.ok(reload);
+    reload.click();
+    await waitFor(() => libraryListCalls === listCallsBeforeReload + 1);
+
+    Object.assign(eagleLibrary, { name: "Private", path: "/Users/me/Private.library" });
+    assert.ok(onLibraryChanged);
+    (onLibraryChanged as (libraryPath: string) => void)(eagleLibrary.path);
+    await waitFor(() => /The library open in Eagle is not shared/.test(doc.body.textContent || ""));
+    assert.equal(libraryChangedCalls, 1);
+  } finally {
+    dom.window.close();
+  }
+});

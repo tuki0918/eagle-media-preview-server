@@ -1,14 +1,19 @@
 export class ApiError extends Error {
+  /** Machine-readable reason from the server body, such as "LIBRARY_NOT_SHARED". */
+  code: string;
   status: number;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code = "") {
     super(message);
     this.name = "ApiError";
+    this.code = code;
     this.status = status;
   }
 }
 
 export interface RequestOutcome {
+  /** Opaque id of the library that answered (X-Library-Id); empty when the server sent none. */
+  libraryId: string;
   ok: boolean;
   /** 0 when the request never got a response (network failure). */
   status: number;
@@ -34,6 +39,18 @@ export function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
+// The library the viewer connected to. Every request after Connect carries it so the server can
+// refuse to answer from a different library; it is never put in the address bar.
+let connectedLibraryId = "";
+
+export function setConnectedLibraryId(libraryId: string) {
+  connectedLibraryId = libraryId;
+}
+
+export function connectedLibraryHeaders(): Record<string, string> {
+  return connectedLibraryId ? { "X-Library-Id": connectedLibraryId } : {};
+}
+
 export async function getJson<T = unknown>(url: string): Promise<T> {
   return requestJson<T>(url);
 }
@@ -47,20 +64,22 @@ export async function postJson<T = unknown>(url: string, body: unknown): Promise
 }
 
 async function requestJson<T>(url: string, options?: RequestInit): Promise<T> {
+  const libraryHeaders = connectedLibraryHeaders();
   const requestOptions: RequestInit = {
     ...options,
+    ...(Object.keys(libraryHeaders).length ? { headers: { ...(options?.headers as Record<string, string> | undefined), ...libraryHeaders } } : {}),
     credentials: options?.credentials ?? "same-origin",
   };
   let response: Response;
   try {
     response = await fetch(url, requestOptions);
   } catch (error) {
-    notifyRequestOutcome({ ok: false, status: 0, url });
+    notifyRequestOutcome({ libraryId: "", ok: false, status: 0, url });
     throw error;
   }
-  notifyRequestOutcome({ ok: response.ok, status: response.status, url });
+  notifyRequestOutcome({ libraryId: response.headers?.get?.("X-Library-Id") || "", ok: response.ok, status: response.status, url });
   const data = await safeJson(response);
-  if (!response.ok) throw new ApiError(response.status, responseErrorMessage(data, response.status));
+  if (!response.ok) throw new ApiError(response.status, responseErrorMessage(data, response.status), responseErrorCode(data));
   return data as T;
 }
 
@@ -80,11 +99,20 @@ function responseErrorMessage(data: unknown, status: number) {
   return `HTTP ${status}`;
 }
 
-export function mediaUrl(id: string, kind: string) {
-  if (kind === "file") {
-    return `/file/${encodeURIComponent(id)}`;
+function responseErrorCode(data: unknown) {
+  if (data && typeof data === "object" && "code" in data) {
+    const code = (data as { code?: unknown }).code;
+    if (typeof code === "string") return code;
   }
-  return `/api/items/${encodeURIComponent(id)}/${kind}`;
+  return "";
+}
+
+export function mediaUrl(id: string, kind: string) {
+  const path = kind === "file"
+    ? `/file/${encodeURIComponent(id)}`
+    : `/api/items/${encodeURIComponent(id)}/${kind}`;
+  // Media elements cannot send headers, so the connected library travels in the query string.
+  return connectedLibraryId ? `${path}?library=${encodeURIComponent(connectedLibraryId)}` : path;
 }
 
 export type DebouncedFunction<TArgs extends unknown[]> = ((...args: TArgs) => void) & {

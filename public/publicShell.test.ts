@@ -238,7 +238,7 @@ test("public viewer exposes sign out when authenticated", async () => {
   assert.match(app, /function handleAuthError\(error: unknown\) \{/);
   assert.match(app, /error instanceof ApiError/);
   assert.match(app, /error\.status !== 401/);
-  assert.match(app, /import \{ ApiError, debounce, errorMessage, getJson, postJson, subscribeRequestOutcome, type RequestOutcome \} from "\.\/viewer\/api";/);
+  assert.match(app, /import \{ ApiError, debounce, errorMessage, getJson, postJson, setConnectedLibraryId, subscribeRequestOutcome, type RequestOutcome \} from "\.\/viewer\/api";/);
   assert.doesNotMatch(app, /setConnectMessage\(error\.message, true\)/);
   assert.doesNotMatch(app, /alert\(error\.message\)/);
   assert.match(app, /async function loadFolders\(\) \{[\s\S]*if \(handleAuthError\(error\)\) return;/);
@@ -565,7 +565,7 @@ test("public UI exposes direct original file URLs for each media item", async ()
   assert.doesNotMatch(html, /class="direct-file-link"/);
   assert.match(app, /function directFileUrl\(item[^)]*\)/);
   assert.match(app, /function previewFileName\(item[^)]*\)/);
-  assert.match(directFileUrlSource, /return new URL\(`\/file\/\$\{encodeURIComponent\(String\(item\.id \|\| ""\)\)\}`,\s*baseUrl\)\.href;/);
+  assert.match(directFileUrlSource, /return new URL\(mediaUrl\(String\(item\.id \|\| ""\), "file"\),\s*baseUrl\)\.href;/);
   assert.match(actions, /class="[^"]*\bdirect-file-link\b[^"]*\bpreview-info-cta\b/);
   assert.match(actions, /preview-admin-actions/);
   assert.match(actions, /href="http:\/\/localhost\/file\/item%201"/);

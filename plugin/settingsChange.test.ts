@@ -26,6 +26,17 @@ describe("settingsChange", () => {
     expect(serverRestartSettingsChanged(configured, { customDomain: "dummy.local" })).toBe(false);
   });
 
+  test("persists and restarts for shared library changes", () => {
+    const library = { name: "Work", path: "/Users/me/Work.library" };
+    expect(settingsPayloadChanged(baseSettings, { libraryProtectionEnabled: false, sharedLibraries: [] })).toBe(false);
+    expect(settingsPayloadChanged(baseSettings, { libraryProtectionEnabled: true })).toBe(true);
+    expect(serverRestartSettingsChanged(baseSettings, { libraryProtectionEnabled: true })).toBe(true);
+    expect(serverRestartSettingsChanged(baseSettings, { sharedLibraries: [library] })).toBe(true);
+    const configured = { ...baseSettings, libraryProtectionEnabled: true, sharedLibraries: [library] };
+    expect(serverRestartSettingsChanged(configured, { sharedLibraries: [library] })).toBe(false);
+    expect(serverRestartSettingsChanged(configured, { sharedLibraries: [] })).toBe(true);
+  });
+
   test("treats auto start as a persisted setting that does not restart the server", () => {
     expect(settingsPayloadChanged(baseSettings, { autoStart: true })).toBe(true);
     expect(serverRestartSettingsChanged(baseSettings, { autoStart: true })).toBe(false);

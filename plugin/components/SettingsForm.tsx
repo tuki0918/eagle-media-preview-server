@@ -1,12 +1,13 @@
 import type { ReactNode } from "react";
-import type { AuthUser, PluginSettings, SettingsTab, UserRole } from "../types";
-import { ChevronIcon, CloseIcon, EyeIcon, EyeOffIcon, FolderOpenIcon, PlusIcon, SettingsIcon } from "./Icons";
+import type { AuthUser, LibraryCandidate, LibraryList, PluginSettings, SettingsTab, UserRole } from "../types";
+import { CheckIcon, ChevronIcon, CloseIcon, EyeIcon, EyeOffIcon, FolderOpenIcon, PlusIcon, RefreshIcon, SettingsIcon } from "./Icons";
 
 interface SettingsFormProps {
   authEnabled: boolean;
   authUsers: AuthUser[];
   busy: boolean;
   httpsEnabled: boolean;
+  libraries: LibraryList | null;
   message: string;
   messageIsError: boolean;
   passwordDraftRevision: number;
@@ -23,7 +24,10 @@ interface SettingsFormProps {
   onCustomDomainChange: (value: string) => void;
   onHttpsCertPathChange: (value: string) => void;
   onHttpsKeyPathChange: (value: string) => void;
+  onLibraryProtectionChange: (checked: boolean) => void;
+  onLibrarySharedChange: (library: LibraryCandidate, shared: boolean) => void;
   onPortChange: (value: string) => void;
+  onReloadLibraries: () => void;
   onRemoveAuthUser: (index: number) => void;
   onSaveSettings: () => void;
   onSessionDurationDaysChange: (value: string) => void;
@@ -48,6 +52,7 @@ export function SettingsForm({
   authUsers,
   busy,
   httpsEnabled,
+  libraries,
   message,
   messageIsError,
   passwordDraftRevision,
@@ -63,7 +68,10 @@ export function SettingsForm({
   onCustomDomainChange,
   onHttpsCertPathChange,
   onHttpsKeyPathChange,
+  onLibraryProtectionChange,
+  onLibrarySharedChange,
   onPortChange,
+  onReloadLibraries,
   onRemoveAuthUser,
   onSaveSettings,
   onSessionDurationDaysChange,
@@ -73,6 +81,10 @@ export function SettingsForm({
   onUpdateAuthUser,
   onUserPasswordDraftChange,
 }: SettingsFormProps) {
+  const libraryProtectionEnabled = Boolean(settings.libraryProtectionEnabled);
+  // Checkboxes reflect the unsaved draft; the running server keeps the list it started with.
+  const sharedLibraryPaths = new Set((settings.sharedLibraries || []).map((library) => library.path));
+  const currentLibraryUnshared = libraryProtectionEnabled && Boolean(libraries?.items.some((library) => library.current && !sharedLibraryPaths.has(library.path)));
   return (
     <form
       className="rounded-2xl border border-[#e6e6e9] bg-white px-4 pb-3 pt-3.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)]"
@@ -97,9 +109,10 @@ export function SettingsForm({
         <ChevronIcon className={`h-[14px] w-[14px] text-[#555c66] transition-transform ${settingsExpanded ? "rotate-180" : ""}`} />
       </button>
       <div id="settingsPanel" className="mt-2.5 grid gap-2.5" hidden={!settingsExpanded}>
-        <div className="grid grid-cols-3 rounded-full bg-[#f1f1f3] p-1" role="tablist" aria-label="Settings sections">
+        <div className="grid grid-cols-4 rounded-full bg-[#f1f1f3] p-1" role="tablist" aria-label="Settings sections">
           <SettingsTabButton active={settingsTab === "general"} controls="generalSettingsPanel" id="generalSettingsTab" onClick={() => onSettingsTabChange("general")}>General</SettingsTabButton>
           <SettingsTabButton active={settingsTab === "access"} controls="accessSettingsPanel" id="accessSettingsTab" onClick={() => onSettingsTabChange("access")}>Access</SettingsTabButton>
+          <SettingsTabButton active={settingsTab === "libraries"} controls="librariesSettingsPanel" id="librariesSettingsTab" onClick={() => onSettingsTabChange("libraries")}>Libraries</SettingsTabButton>
           <SettingsTabButton active={settingsTab === "security"} controls="securitySettingsPanel" id="securitySettingsTab" onClick={() => onSettingsTabChange("security")}>Security</SettingsTabButton>
         </div>
 
@@ -219,6 +232,75 @@ export function SettingsForm({
           </SettingRow>
         </div>
 
+        <div id="librariesSettingsPanel" role="tabpanel" aria-labelledby="librariesSettingsTab" hidden={settingsTab !== "libraries"}>
+          <SettingRow label="Protection" help={serverRunning ? "Stop the server before changing shared libraries." : "When on, the viewer serves only the libraries checked below. While another library is open in Eagle, viewers see it as offline."}>
+            <label className="inline-flex items-center gap-2 text-[12px] text-[#171717] has-[:disabled]:opacity-60">
+              <input
+                type="checkbox"
+                aria-label="Share only selected libraries"
+                disabled={settingsInputDisabled}
+                checked={libraryProtectionEnabled}
+                onChange={(event) => onLibraryProtectionChange(event.currentTarget.checked)}
+              />
+              <span>Share only selected libraries</span>
+            </label>
+          </SettingRow>
+          <SettingRow label="Libraries">
+            <div className="grid gap-2">
+              {currentLibraryUnshared ? (
+                <p className="m-0 rounded-lg border border-[#f5dfa8] bg-[#fffaeb] px-2.5 py-1.5 text-[11px] leading-snug text-[#8a5a00]" role="note">
+                  The library open in Eagle is not shared. Viewers see the server as offline.
+                </p>
+              ) : null}
+              <ul className="m-0 grid list-none gap-0 overflow-hidden rounded-xl border border-[#e6e6e9] p-0" aria-label="Libraries">
+                {libraries?.items.length ? libraries.items.map((library) => {
+                  const checked = sharedLibraryPaths.has(library.path);
+                  // Locked inputs only dim the checkbox, so shared rows (white) and unshared rows (gray, muted text)
+                  // stay distinct while the server runs.
+                  const shared = libraryProtectionEnabled && checked;
+                  return (
+                    <li key={library.path} className={`border-b border-[#efeff1] last:border-b-0 ${shared ? "bg-white" : "bg-[#f7f7f8]"}`}>
+                      <label className="grid grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-2.5 px-3 py-2">
+                        <input
+                          className="disabled:opacity-50"
+                          type="checkbox"
+                          aria-label={`Share ${library.name}`}
+                          disabled={settingsInputDisabled || !libraryProtectionEnabled}
+                          checked={checked}
+                          onChange={(event) => onLibrarySharedChange(library, event.currentTarget.checked)}
+                        />
+                        <span className="min-w-0">
+                          <strong className={`block truncate text-[12.5px] font-semibold ${shared ? "text-[#171717]" : "text-[#8a8f99]"}`}>{library.name}</strong>
+                          <small className={`block truncate text-[10.5px] ${shared ? "text-[#5f6670]" : "text-[#a3a7ae]"}`} title={library.path}>{library.path}</small>
+                        </span>
+                        <span className="inline-flex items-center gap-1.5">
+                          {library.current ? (
+                            <span className="rounded-full bg-[#eef4ff] px-2 py-0.5 text-[10px] font-semibold text-[#1d4ed8]">Open in Eagle</span>
+                          ) : null}
+                          {library.shared ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-[#e3f6e8] px-2 py-0.5 text-[10px] font-semibold text-[#16803a]">
+                              <CheckIcon className="h-[10px] w-[10px]" />
+                              Shared
+                            </span>
+                          ) : null}
+                        </span>
+                      </label>
+                    </li>
+                  );
+                }) : (
+                  <li className="px-3 py-2 text-[11.5px] text-[#7a808a]">No libraries found.</li>
+                )}
+              </ul>
+              <div className="flex items-center justify-start gap-2">
+                <button className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] font-medium text-[#171717] ${authActionButtonClassName}`} type="button" disabled={busy} onClick={onReloadLibraries}>
+                  <RefreshIcon className="h-[12px] w-[12px]" />
+                  <span>Reload libraries</span>
+                </button>
+              </div>
+            </div>
+          </SettingRow>
+        </div>
+
         <div id="securitySettingsPanel" role="tabpanel" aria-labelledby="securitySettingsTab" hidden={settingsTab !== "security"}>
           <SettingRow label="TLS Cert" help="PEM certificate file used when HTTPS is enabled.">
             <FilePathInput
@@ -317,13 +399,13 @@ function FilePathInput({
   );
 }
 
-function SettingRow({ children, help, label }: { children: ReactNode; help: string; label: string }) {
+function SettingRow({ children, help, label }: { children: ReactNode; help?: string; label: string }) {
   return (
     <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-3 border-t border-[#efeff1] py-3 first:border-t-0 max-[520px]:grid-cols-1">
       <span className="pt-[7px] text-[12px] font-medium text-[#171717]">{label}</span>
       <span className="grid gap-1.5">
         {children}
-        <small className="text-[10.5px] leading-snug text-[#7a808a]">{help}</small>
+        {help ? <small className="text-[10.5px] leading-snug text-[#7a808a]">{help}</small> : null}
       </span>
     </div>
   );

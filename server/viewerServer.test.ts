@@ -68,6 +68,37 @@ j9au/Rn/iKVsbCyRku14oFc=
 -----END PRIVATE KEY-----
 `;
 
+// Library routes require the id a viewer gets from /api/health or /api/connect. Tests about other
+// behavior use this `fetch`, which attaches the id the way the viewer does; tests about the id
+// requirement itself call globalThis.fetch directly.
+const UNPINNED_PATHS = new Set(["/api/auth/status", "/api/auth/login", "/api/auth/logout", "/api/health", "/api/connect", "/api/library-status"]);
+
+async function fetch(input: string | URL, init: RequestInit = {}) {
+  const url = new URL(String(input));
+  const headers = new Headers(init.headers);
+  const libraryRoute = (url.pathname.startsWith("/api/") && !UNPINNED_PATHS.has(url.pathname)) || url.pathname.startsWith("/file/");
+  if (libraryRoute && !headers.has("X-Library-Id") && !url.searchParams.has("library")) {
+    const cookie = headers.get("Cookie");
+    const health = await globalThis.fetch(`${url.origin}/api/health`, cookie ? { headers: { Cookie: cookie } } : {});
+    const libraryId = health.ok ? (await health.json())?.library?.id : "";
+    if (libraryId) headers.set("X-Library-Id", libraryId);
+  }
+  return globalThis.fetch(url, { ...init, headers });
+}
+
+// The id the server derives for a library path, for tests that set a fixed session secret.
+function libraryIdFor(secret: string, libraryPath: string) {
+  const { createHmac } = require("node:crypto");
+  const { libraryPathKey } = require("../dist/.generated/plugin-service/libraryAccess.cjs");
+  return createHmac("sha256", secret).update(libraryPathKey(libraryPath)).digest("base64url").slice(0, 16);
+}
+
+// Media routes require the library id a viewer gets from /api/health or /api/connect.
+async function libraryQuery(origin: string) {
+  const health = await (await fetch(`${origin}/api/health`)).json();
+  return `?library=${encodeURIComponent(health.library.id)}`;
+}
+
 async function loginCookie(origin: string, username: string, password: string) {
   const response = await fetch(`${origin}/api/auth/login`, {
     method: "POST",
@@ -166,6 +197,15 @@ test("createViewerServer starts and stops without the CLI entrypoint", async () 
     host: "127.0.0.1",
     port: 0,
     viewerPassword: "",
+    // Library routes check the open library first, so the test must not depend on a running Eagle.
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/tmp/A.library", name: "A" };
+      },
+    },
   });
 
   assert.equal(viewer.status().state, "stopped");
@@ -304,6 +344,12 @@ test("createViewerServer preserves Eagle upstream error status codes", async () 
     host: "127.0.0.1",
     port: 0,
     eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/tmp/A.library", name: "A" };
+      },
       async folders() {
         throw new EagleRequestError(upstreamStatus, upstreamStatus === 504
           ? "Eagle request timed out"
@@ -749,6 +795,12 @@ for (const httpsEnabled of [false, true]) {
       httpsKeyPath: tls?.keyPath,
       authUsers: [{ username: "editor", role: "editor", passwordHash: sha256("secret") }],
       eagleClient: {
+        async appInfo() {
+          return { version: "1.0.0" };
+        },
+        async libraryInfo() {
+          return { path: "/tmp/A.library", name: "A" };
+        },
         async updateItemStar(id: string, star: number) {
           calls.push({ id, star });
           return { id, star };
@@ -769,8 +821,10 @@ for (const httpsEnabled of [false, true]) {
       const cookies = login.headers["set-cookie"];
       assert.ok(Array.isArray(cookies));
       const Cookie = cookies.map((cookie) => cookie.split(";")[0]).join("; ");
+      const health = await request(`${endpoint}/api/health`, { headers: { ...headers, Cookie } });
+      const libraryHeader = { "X-Library-Id": (health.body as { library: { id: string } }).library.id };
       const allowed = await request(`${endpoint}/api/items/ITEM123/star`, {
-        method: "POST", headers: { ...headers, Cookie }, body: { star: 4 },
+        method: "POST", headers: { ...headers, Cookie, ...libraryHeader }, body: { star: 4 },
       });
       assert.equal(allowed.status, 200);
       assert.deepEqual(calls, [{ id: "ITEM123", star: 4 }]);
@@ -1839,24 +1893,25 @@ test("createViewerServer serves the login shell publicly and protects APIs with 
   await viewer.stop();
 });
 
-test("createViewerServer restricts library switching to admins", async () => {
-  const calls: unknown[] = [];
+test("createViewerServer does not expose library switching or library history", async () => {
+  const calls: string[] = [];
   const viewer = createViewerServer({
     host: "127.0.0.1",
     port: 0,
-    authUsers: [
-      { username: "reader", passwordHash: sha256("read"), role: "viewer" },
-      { username: "owner", passwordHash: sha256("own"), role: "admin" },
-    ],
+    authUsers: [{ username: "owner", passwordHash: sha256("own"), role: "admin" }],
     eagleClient: {
       async appInfo() {
         return { version: "1.0.0" };
       },
       async libraryInfo() {
-        return { path: calls.length ? "/tmp/B.library" : "/tmp/A.library", name: "Test Library" };
+        return { path: "/Users/me/A.library", name: "A" };
+      },
+      async libraryHistory() {
+        calls.push("libraryHistory");
+        return ["/Users/me/A.library", "/Users/me/B.library"];
       },
       async switchLibrary(libraryPath: string) {
-        calls.push(libraryPath);
+        calls.push(`switchLibrary:${libraryPath}`);
         return {};
       },
     },
@@ -1866,77 +1921,608 @@ test("createViewerServer restricts library switching to admins", async () => {
   try {
     const status = viewer.status();
     const origin = `http://127.0.0.1:${status.port}`;
-    const readerCookie = await loginCookie(origin, "reader", "read");
     const adminCookie = await loginCookie(origin, "owner", "own");
 
-    const denied = await fetch(`${origin}/api/library/switch`, {
-      method: "POST",
-      headers: {
-        Cookie: readerCookie,
-        "Content-Type": "application/json",
-        Origin: origin,
-      },
-      body: JSON.stringify({ libraryPath: "/tmp/B.library" }),
-    });
-    assert.equal(denied.status, 403);
-    assert.deepEqual(await denied.json(), { error: "Admin permission is required" });
+    const libraries = await fetch(`${origin}/api/libraries`, { headers: { Cookie: adminCookie } });
+    assert.equal(libraries.status, 404);
 
-    const allowed = await fetch(`${origin}/api/library/switch`, {
+    const switched = await fetch(`${origin}/api/library/switch`, {
       method: "POST",
       headers: {
         Cookie: adminCookie,
         "Content-Type": "application/json",
         Origin: origin,
       },
-      body: JSON.stringify({ libraryPath: "/tmp/B.library" }),
+      body: JSON.stringify({ libraryPath: "/Users/me/B.library" }),
     });
-    assert.equal(allowed.status, 200);
-    assert.deepEqual(calls, ["/tmp/B.library"]);
+    assert.equal(switched.status, 404);
+    assert.deepEqual(calls, []);
   } finally {
     await viewer.stop();
   }
 });
 
-test("createViewerServer restricts Eagle API connection changes to admins", async () => {
+test("createViewerServer keeps the Eagle API connection fixed and hides library paths", async () => {
   const viewer = createViewerServer({
     host: "127.0.0.1",
     port: 0,
-    authUsers: [
-      { username: "reader", passwordHash: sha256("read"), role: "viewer" },
-      { username: "owner", passwordHash: sha256("own"), role: "admin" },
-    ],
+    authUsers: [{ username: "owner", passwordHash: sha256("own"), role: "admin" }],
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/Users/me/A.library", name: "A" };
+      },
+    },
   });
 
   await viewer.start();
   try {
     const status = viewer.status();
     const origin = `http://127.0.0.1:${status.port}`;
-    const readerCookie = await loginCookie(origin, "reader", "read");
+    const adminCookie = await loginCookie(origin, "owner", "own");
 
-    const deniedRemoteHost = await fetch(`${origin}/api/connect`, {
+    const connected = await fetch(`${origin}/api/connect`, {
       method: "POST",
       headers: {
-        Cookie: readerCookie,
+        Cookie: adminCookie,
         "Content-Type": "application/json",
         Origin: origin,
       },
-      body: JSON.stringify({ host: "192.168.1.20", port: "41595", token: "secret" }),
+      body: JSON.stringify({ host: "192.168.1.20", port: "41596", token: "secret" }),
     });
-    assert.equal(deniedRemoteHost.status, 403);
-    assert.deepEqual(await deniedRemoteHost.json(), {
-      error: "Admin permission is required to change the Eagle API connection",
+    assert.equal(connected.status, 200);
+    const connectedBody = await connected.json();
+    assert.deepEqual(connectedBody.app, { version: "1.0.0" });
+    assert.equal(connectedBody.library.name, "A");
+    assert.match(connectedBody.library.id, /^[A-Za-z0-9_-]{16}$/);
+
+    const health = await fetch(`${origin}/api/health`, { headers: { Cookie: adminCookie } });
+    assert.equal(health.status, 200);
+    const healthBody = await health.json();
+    assert.equal(healthBody.library.name, "A");
+    assert.equal(healthBody.library.id, connectedBody.library.id);
+    assert.equal(JSON.stringify(healthBody).includes("/Users/me"), false);
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer only serves the library when Eagle has a shared library open", async () => {
+  let openLibrary = "/Users/me/Shared.library";
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    sharedLibraries: ["/Users/me/Shared.library"],
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: openLibrary, name: openLibrary.includes("Shared") ? "Shared" : "Private" };
+      },
+      async folders() {
+        return { items: [{ id: "F1", name: "Folder" }], total: 1, offset: 0, limit: 1 };
+      },
+      async itemById() {
+        throw new Error("item lookup must not run for unshared libraries");
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const origin = `http://127.0.0.1:${status.port}`;
+
+    const shared = await fetch(`${origin}/api/folders`);
+    assert.equal(shared.status, 200);
+    const sharedHealth = await (await fetch(`${origin}/api/health`)).json();
+    assert.equal(sharedHealth.libraryStatus, "shared");
+    assert.equal(sharedHealth.library.name, "Shared");
+
+    openLibrary = "/Users/me/Private.library";
+    viewer.notifyLibraryChanged();
+
+    const folders = await fetch(`${origin}/api/folders`);
+    assert.equal(folders.status, 503);
+    assert.deepEqual(await folders.json(), { error: "The library open in Eagle is not shared", code: "LIBRARY_NOT_SHARED" });
+
+    const connect = await fetch(`${origin}/api/connect`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: origin },
+      body: "{}",
+    });
+    assert.equal(connect.status, 503);
+
+    const file = await fetch(`${origin}/file/ITEM1`);
+    assert.equal(file.status, 503);
+
+    const health = await fetch(`${origin}/api/health`);
+    assert.equal(health.status, 200);
+    const healthBody = await health.json();
+    assert.equal(healthBody.libraryStatus, "not_shared");
+    assert.equal(healthBody.library, null);
+    assert.deepEqual(healthBody.app, { version: "1.0.0" });
+
+    openLibrary = "/Users/me/Shared.library";
+    viewer.notifyLibraryChanged();
+    assert.equal((await fetch(`${origin}/api/folders`)).status, 200);
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer reports library sharing publicly without naming the library", async () => {
+  let openLibrary = "/Users/me/Shared.library";
+  let libraryInfoCalls = 0;
+  const eagleClient = {
+    async appInfo() {
+      return { version: "1.0.0" };
+    },
+    async libraryInfo() {
+      libraryInfoCalls += 1;
+      if (!openLibrary) throw new Error("offline");
+      return { path: openLibrary, name: "Secret Name" };
+    },
+  };
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    authUsers: [{ username: "owner", passwordHash: sha256("own"), role: "admin" }],
+    sharedLibraries: ["/Users/me/Shared.library"],
+    eagleClient,
+  });
+  const unrestricted = createViewerServer({ host: "127.0.0.1", port: 0, eagleClient });
+
+  await viewer.start();
+  await unrestricted.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const shared = await fetch(`${origin}/api/library-status`);
+    assert.equal(shared.status, 200);
+    assert.deepEqual(await shared.json(), { libraryStatus: "shared" });
+
+    openLibrary = "/Users/me/Private.library";
+    viewer.notifyLibraryChanged();
+    const notShared = await fetch(`${origin}/api/library-status`);
+    const notSharedText = await notShared.text();
+    assert.deepEqual(JSON.parse(notSharedText), { libraryStatus: "not_shared" });
+    assert.equal(notSharedText.includes("Secret Name"), false);
+
+    openLibrary = "";
+    viewer.notifyLibraryChanged();
+    assert.deepEqual(await (await fetch(`${origin}/api/library-status`)).json(), { libraryStatus: null });
+
+    const callsBefore = libraryInfoCalls;
+    const unrestrictedStatus = await fetch(`http://127.0.0.1:${unrestricted.status().port}/api/library-status`);
+    assert.deepEqual(await unrestrictedStatus.json(), { libraryStatus: "shared" });
+    assert.equal(libraryInfoCalls, callsBefore);
+  } finally {
+    await viewer.stop();
+    await unrestricted.stop();
+  }
+});
+
+test("createViewerServer drops an answer when Eagle switches libraries while the request is in progress", async () => {
+  let open = { path: "/Users/me/Shared.library", name: "Shared" };
+  let release: () => void = () => {};
+  let started: () => void = () => {};
+  const folderRequestStarted = new Promise<void>((resolve) => { started = resolve; });
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    sharedLibraries: ["/Users/me/Shared.library"],
+    sessionSecret: "fixed-test-secret",
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return open;
+      },
+      async folders() {
+        started();
+        await new Promise<void>((resolve) => { release = resolve; });
+        return { items: [{ id: "F1", name: `folder of ${open.name}` }], total: 1, offset: 0, limit: 1 };
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const sharedId = (await (await globalThis.fetch(`${origin}/api/health`)).json()).library.id;
+    const pending = globalThis.fetch(`${origin}/api/folders`, { headers: { "X-Library-Id": sharedId } });
+    await folderRequestStarted;
+    open = { path: "/Users/me/Private.library", name: "Private" };
+    viewer.notifyLibraryChanged();
+    release();
+
+    const response = await pending;
+    const text = await response.text();
+    assert.equal(response.status, 409);
+    assert.deepEqual(JSON.parse(text), { error: "The library open in Eagle has changed", code: "LIBRARY_CHANGED" });
+    assert.equal(text.includes("Private"), false);
+    assert.notEqual(response.headers.get("x-library-id"), libraryIdFor("fixed-test-secret", "/Users/me/Private.library"), "the refusal never names the unshared library");
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer never sends the id of an unshared library", async () => {
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    sharedLibraries: ["/Users/me/Shared.library"],
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/Users/me/Private.library", name: "Private" };
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const responses = [
+      await globalThis.fetch(`${origin}/api/health`),
+      await globalThis.fetch(`${origin}/api/folders`, { headers: { "X-Library-Id": "guess" } }),
+      await globalThis.fetch(`${origin}/api/connect`, { method: "POST", headers: { "Content-Type": "application/json", Origin: origin }, body: "{}" }),
+      await globalThis.fetch(`${origin}/file/ITEM1?library=guess`),
+    ];
+    assert.deepEqual(responses.map((response) => response.status), [200, 503, 503, 503]);
+    assert.deepEqual(responses.map((response) => response.headers.get("x-library-id")), [null, null, null, null]);
+    const health = await responses[0].json();
+    assert.equal(health.libraryStatus, "not_shared");
+    assert.equal(health.library, null);
+  } finally {
+    await viewer.stop();
+  }
+});
+
+for (const route of ["/api/folders", "/file/ITEM1"]) {
+  test(`createViewerServer refuses ${route} when Eagle switches while the request is being admitted`, async () => {
+    const root = join(tmpdir(), `eagle-media-preview-server-admit-${Date.now()}`);
+    await mkdir(root, { recursive: true });
+    const filePath = join(root, "private.jpg");
+    await writeFile(filePath, "private-file");
+    const shared = { path: "/Users/me/Shared.library", name: "Shared" };
+    const unshared = { path: "/Users/me/Private.library", name: "Private" };
+    let open = unshared;
+    let switchAfterNextRead = false;
+    let viewer: ReturnType<typeof createViewerServer>;
+    viewer = createViewerServer({
+      host: "127.0.0.1",
+      port: 0,
+      sharedLibraries: [shared.path],
+      sessionSecret: "fixed-test-secret",
+      eagleClient: {
+        async appInfo() {
+          return { version: "1.0.0" };
+        },
+        async libraryInfo() {
+          const current = open;
+          if (switchAfterNextRead) {
+            switchAfterNextRead = false;
+            // Eagle reports the shared library, then switches to the unshared one right away.
+            queueMicrotask(() => {
+              open = unshared;
+              viewer.notifyLibraryChanged();
+            });
+          }
+          return current;
+        },
+        async folders() {
+          return { items: [{ id: "F1", name: `folder of ${open.name}` }], total: 1, offset: 0, limit: 1 };
+        },
+        async itemById(id: string) {
+          return { data: [{ id, filePath }] };
+        },
+      },
     });
 
-    const deniedLocalPort = await fetch(`${origin}/api/connect`, {
-      method: "POST",
-      headers: {
-        Cookie: readerCookie,
-        "Content-Type": "application/json",
-        Origin: origin,
+    await viewer.start();
+    try {
+      const origin = `http://127.0.0.1:${viewer.status().port}`;
+      // The real id of the unshared library, as a client could have learned it earlier.
+      const { createHmac } = await import("node:crypto");
+      const { libraryPathKey } = require("../dist/.generated/plugin-service/libraryAccess.cjs");
+      const guessedId = createHmac("sha256", "fixed-test-secret").update(libraryPathKey(unshared.path)).digest("base64url").slice(0, 16);
+      open = shared;
+      viewer.notifyLibraryChanged();
+      switchAfterNextRead = true;
+      const separator = route.includes("?") ? "&" : "?";
+      const response = await globalThis.fetch(`${origin}${route}${route.startsWith("/file/") ? `${separator}library=${guessedId}` : ""}`, {
+        headers: route.startsWith("/api/") ? { "X-Library-Id": guessedId } : {},
+      });
+      const text = await response.text();
+      assert.notEqual(response.status, 200);
+      assert.equal(text.includes("Private"), false);
+      assert.equal(text.includes("private-file"), false);
+    } finally {
+      await viewer.stop();
+    }
+  });
+}
+
+test("createViewerServer does not reveal an unshared library through a held-back /api/connect body", async () => {
+  let open = { path: "/Users/me/Shared.library", name: "Shared" };
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    sharedLibraries: ["/Users/me/Shared.library"],
+    sessionSecret: "fixed-test-secret",
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
       },
-      body: JSON.stringify({ host: "127.0.0.1", port: "41596" }),
+      async libraryInfo() {
+        return open;
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const { port } = viewer.status();
+    const origin = `http://127.0.0.1:${port}`;
+    const unsharedId = libraryIdFor("fixed-test-secret", "/Users/me/Private.library");
+    for (const notify of [true, false]) {
+      open = { path: "/Users/me/Shared.library", name: "Shared" };
+      viewer.notifyLibraryChanged();
+      // Headers first; the body follows only after Eagle has switched to the unshared library.
+      const response = await new Promise<{ status: number; body: string; libraryId: string }>((resolve, reject) => {
+        const request = httpRequest({ host: "127.0.0.1", port, path: "/api/connect", method: "POST", headers: { "Content-Type": "application/json", Origin: origin } }, (res) => {
+          const chunks: Buffer[] = [];
+          res.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+          res.on("end", () => resolve({ status: res.statusCode || 0, body: Buffer.concat(chunks).toString("utf8"), libraryId: String(res.headers["x-library-id"] || "") }));
+        });
+        request.on("error", reject);
+        request.flushHeaders();
+        setTimeout(() => {
+          open = { path: "/Users/me/Private.library", name: "PRIVATE_LIBRARY_NAME" };
+          if (notify) viewer.notifyLibraryChanged();
+          request.end("{}");
+        }, 100);
+      });
+      // Without the notification the server still sees the shared library (cached for up to 3s)
+      // and may answer with it; either way the unshared library is never named.
+      if (notify) assert.notEqual(response.status, 200);
+      assert.equal(response.body.includes("PRIVATE_LIBRARY_NAME"), false, `notify=${notify}`);
+      assert.equal(response.body.includes(unsharedId), false, `notify=${notify}`);
+      assert.notEqual(response.libraryId, unsharedId, `notify=${notify}`);
+    }
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer re-checks the open library right before a write", async () => {
+  let open = { path: "/Users/me/Shared.library", name: "Shared" };
+  const writes: string[] = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    sharedLibraries: ["/Users/me/Shared.library"],
+    sessionSecret: "fixed-test-secret",
+    authUsers: [{ username: "editor", passwordHash: sha256("secret"), role: "editor" }],
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return open;
+      },
+      async updateItemStar(id: string, star: number) {
+        writes.push(`${open.name}:${id}:${star}`);
+        return { id, star };
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const { port } = viewer.status();
+    const origin = `http://127.0.0.1:${port}`;
+    const cookie = await loginCookie(origin, "editor", "secret");
+    const sharedId = (await (await globalThis.fetch(`${origin}/api/health`, { headers: { Cookie: cookie } })).json()).library.id;
+    // The client sends the headers, holds the body until Eagle has switched, then sends it.
+    const response = await new Promise<{ status: number; body: string; libraryId: string }>((resolve, reject) => {
+      const request = httpRequest({
+        host: "127.0.0.1",
+        port,
+        path: "/api/items/ITEM1/star",
+        method: "POST",
+        headers: { "Content-Type": "application/json", Origin: origin, Cookie: cookie, "X-Library-Id": sharedId },
+      }, (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+        res.on("end", () => resolve({ status: res.statusCode || 0, body: Buffer.concat(chunks).toString("utf8"), libraryId: String(res.headers["x-library-id"] || "") }));
+      });
+      request.on("error", reject);
+      request.flushHeaders();
+      setTimeout(() => {
+        open = { path: "/Users/me/Private.library", name: "Private" };
+        viewer.notifyLibraryChanged();
+        request.end(JSON.stringify({ star: 5 }));
+      }, 100);
     });
-    assert.equal(deniedLocalPort.status, 403);
+
+    assert.equal(response.status, 409);
+    assert.deepEqual(JSON.parse(response.body), { error: "The library open in Eagle has changed", code: "LIBRARY_CHANGED" });
+    assert.notEqual(response.libraryId, libraryIdFor("fixed-test-secret", "/Users/me/Private.library"), "the refusal never names the unshared library");
+    assert.deepEqual(writes, []);
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer does not stream media after Eagle switches libraries mid-request", async () => {
+  const root = join(tmpdir(), `eagle-media-preview-server-switch-${Date.now()}`);
+  await mkdir(root, { recursive: true });
+  const filePath = join(root, "asset.jpg");
+  await writeFile(filePath, "shared-file");
+  let open = { path: "/Users/me/Shared.library", name: "Shared" };
+  let viewer: ReturnType<typeof createViewerServer>;
+  viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return open;
+      },
+      async itemById(id: string) {
+        // Eagle switches while the item is being resolved.
+        open = { path: "/Users/me/Other.library", name: "Other" };
+        viewer.notifyLibraryChanged();
+        return { data: [{ id, filePath }] };
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const response = await globalThis.fetch(`${origin}/file/ITEM1${await libraryQuery(origin)}`);
+    assert.equal(response.status, 409);
+    assert.equal((await response.text()).includes("shared-file"), false);
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer refuses pinned media requests while the open library cannot be confirmed", async () => {
+  let eagleUp = true;
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        if (!eagleUp) throw new Error("offline");
+        return { path: "/Users/me/A.library", name: "A" };
+      },
+      async itemById() {
+        throw new Error("item lookup must not run");
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const query = await libraryQuery(origin);
+    eagleUp = false;
+    viewer.notifyLibraryChanged();
+    const response = await fetch(`${origin}/file/ITEM1${query}`);
+    assert.equal(response.status, 502);
+    assert.deepEqual(await response.json(), { error: "Unable to reach Eagle API" });
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer tags API responses with the open library id", async () => {
+  let openLibrary = "/Users/me/A.library";
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: openLibrary, name: "Library" };
+      },
+      async folders() {
+        return { items: [], total: 0, offset: 0, limit: 0 };
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const first = await fetch(`${origin}/api/folders`);
+    const firstId = first.headers.get("x-library-id");
+    assert.match(firstId || "", /^[A-Za-z0-9_-]{16}$/);
+    const health = await (await fetch(`${origin}/api/health`)).json();
+    assert.equal(health.library.id, firstId);
+
+    openLibrary = "/Users/me/B.library";
+    viewer.notifyLibraryChanged();
+    const second = await fetch(`${origin}/api/folders`);
+    assert.notEqual(second.headers.get("x-library-id"), firstId);
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer requires library requests to name the open library", async () => {
+  let openLibrary = "/Users/me/A.library";
+  const itemLookups: string[] = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: openLibrary, name: "Library" };
+      },
+      async folders() {
+        return { items: [], total: 0, offset: 0, limit: 0 };
+      },
+      async itemById(id: string) {
+        itemLookups.push(id);
+        return { data: [{ id, filePath: "/nonexistent" }] };
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const connect = await fetch(`${origin}/api/connect`, { method: "POST", headers: { "Content-Type": "application/json", Origin: origin }, body: "{}" });
+    const connectedId = (await connect.json()).library.id;
+
+    assert.equal((await fetch(`${origin}/api/folders`, { headers: { "X-Library-Id": connectedId } })).status, 200);
+
+    openLibrary = "/Users/me/B.library";
+    viewer.notifyLibraryChanged();
+
+    const pinnedFetch = await fetch(`${origin}/api/folders`, { headers: { "X-Library-Id": connectedId } });
+    assert.equal(pinnedFetch.status, 409);
+    assert.deepEqual(await pinnedFetch.json(), { error: "The library open in Eagle has changed", code: "LIBRARY_CHANGED" });
+    assert.notEqual(pinnedFetch.headers.get("x-library-id"), connectedId);
+
+    const pinnedThumb = await fetch(`${origin}/api/items/ITEM1/thumb?library=${connectedId}`);
+    assert.equal(pinnedThumb.status, 409);
+    const pinnedFile = await fetch(`${origin}/file/ITEM1?library=${connectedId}`);
+    assert.equal(pinnedFile.status, 409);
+    assert.deepEqual(itemLookups, []);
+
+    const unpinnedFile = await globalThis.fetch(`${origin}/file/ITEM1`);
+    assert.equal(unpinnedFile.status, 400);
+    assert.deepEqual(await unpinnedFile.json(), { error: "A library id is required for library requests", code: "LIBRARY_REQUIRED" });
+    for (const path of ["/file/ITEM1/name.png", "/api/items/ITEM1/thumb", "/api/items/ITEM1/file", "/api/folders", "/api/items"]) {
+      assert.equal((await globalThis.fetch(`${origin}${path}`)).status, 400, path);
+    }
+    assert.deepEqual(itemLookups, [], "library requests check the library before looking up the item");
+    assert.equal((await fetch(`${origin}/api/health`, { headers: { "X-Library-Id": connectedId } })).status, 200);
+    const reconnect = await fetch(`${origin}/api/connect`, { method: "POST", headers: { "Content-Type": "application/json", Origin: origin, "X-Library-Id": connectedId }, body: "{}" });
+    assert.equal(reconnect.status, 200);
   } finally {
     await viewer.stop();
   }
@@ -1968,7 +2554,7 @@ test("createViewerServer serves direct file routes from /file/:id", async () => 
 
   await viewer.start();
   const status = viewer.status();
-  const response = await fetch(`http://127.0.0.1:${status.port}/file/ITEM123`);
+  const response = await fetch(`http://127.0.0.1:${status.port}/file/ITEM123${await libraryQuery(`http://127.0.0.1:${status.port}`)}`);
 
   assert.equal(response.status, 200);
   assert.equal(await response.text(), "demo-file");
@@ -2014,7 +2600,7 @@ test("createViewerServer falls back to the library original when Eagle reports n
   await viewer.start();
   try {
     const status = viewer.status();
-    const response = await fetch(`http://127.0.0.1:${status.port}/file/${itemId}`);
+    const response = await fetch(`http://127.0.0.1:${status.port}/file/${itemId}${await libraryQuery(`http://127.0.0.1:${status.port}`)}`);
 
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("content-type"), "image/png");
@@ -2049,7 +2635,7 @@ test("createViewerServer rejects direct file routes that resolve to a directory"
   await viewer.start();
   try {
     const status = viewer.status();
-    const response = await fetch(`http://127.0.0.1:${status.port}/file/DIR123`);
+    const response = await fetch(`http://127.0.0.1:${status.port}/file/DIR123${await libraryQuery(`http://127.0.0.1:${status.port}`)}`);
 
     assert.equal(response.status, 404);
     assertSecurityHeaders(response.headers);
@@ -2085,7 +2671,7 @@ test("createViewerServer rejects direct file routes that resolve to a missing fi
   await viewer.start();
   try {
     const status = viewer.status();
-    const response = await fetch(`http://127.0.0.1:${status.port}/file/MISSING123`);
+    const response = await fetch(`http://127.0.0.1:${status.port}/file/MISSING123${await libraryQuery(`http://127.0.0.1:${status.port}`)}`);
 
     assert.equal(response.status, 404);
     assert.deepEqual(await response.json(), { error: "Media file is unavailable" });
@@ -2120,7 +2706,7 @@ test("createViewerServer serves text and markdown direct file routes inline as r
 
   await viewer.start();
   const status = viewer.status();
-  const response = await fetch(`http://127.0.0.1:${status.port}/file/TEXT123`);
+  const response = await fetch(`http://127.0.0.1:${status.port}/file/TEXT123${await libraryQuery(`http://127.0.0.1:${status.port}`)}`);
 
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("content-type"), "text/plain; charset=utf-8");
@@ -2163,10 +2749,11 @@ test("createViewerServer prevents active library files from executing in the vie
   await viewer.start();
   try {
     const { port } = viewer.status();
+    const query = await libraryQuery(`http://127.0.0.1:${port}`);
     const [htmlResponse, jsResponse, svgResponse] = await Promise.all([
-      fetch(`http://127.0.0.1:${port}/file/html`),
-      fetch(`http://127.0.0.1:${port}/file/js`),
-      fetch(`http://127.0.0.1:${port}/file/svg`),
+      fetch(`http://127.0.0.1:${port}/file/html${query}`),
+      fetch(`http://127.0.0.1:${port}/file/js${query}`),
+      fetch(`http://127.0.0.1:${port}/file/svg${query}`),
     ]);
 
     assert.equal(htmlResponse.headers.get("content-type"), "text/plain; charset=utf-8");
@@ -2208,7 +2795,7 @@ test("createViewerServer uses Eagle item extension as a PDF MIME fallback", asyn
   await viewer.start();
   try {
     const status = viewer.status();
-    const response = await fetch(`http://127.0.0.1:${status.port}/file/PDF123/sample.pdf`);
+    const response = await fetch(`http://127.0.0.1:${status.port}/file/PDF123/sample.pdf${await libraryQuery(`http://127.0.0.1:${status.port}`)}`);
 
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("content-type"), "application/pdf");

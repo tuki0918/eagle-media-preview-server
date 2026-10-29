@@ -688,37 +688,11 @@ test("smartFolderItems uses the requested nested smart folder when the detail en
   ]);
 });
 
-test("libraryHistory uses the legacy library history endpoint", async () => {
-  const calls: RequestCall[] = [];
-  const client = createEagleClient({
-    baseUrl: "http://localhost:41595",
-    fetchImpl: async (url: string, init: { method?: string; body: string }) => {
-      calls.push({ url, init });
-      return jsonResponse({ status: "success", data: ["/Users/me/A.library"] });
-    },
-  });
+test("createEagleClient does not expose library switching or history", () => {
+  const client = createEagleClient({ baseUrl: "http://localhost:41595" });
 
-  const result = await client.libraryHistory();
-
-  assert.deepEqual(result, ["/Users/me/A.library"]);
-  assert.equal(calls[0].url, "http://localhost:41595/api/library/history");
-});
-
-test("switchLibrary uses the legacy library switch endpoint", async () => {
-  const calls: RequestCall[] = [];
-  const client = createEagleClient({
-    baseUrl: "http://localhost:41595",
-    fetchImpl: async (url: string, init: { method?: string; body: string }) => {
-      calls.push({ url, init });
-      return jsonResponse({ status: "success", data: {} });
-    },
-  });
-
-  await client.switchLibrary("/Users/me/B.library");
-
-  assert.equal(calls[0].url, "http://localhost:41595/api/library/switch");
-  assert.equal(calls[0].init.method, "POST");
-  assert.deepEqual(JSON.parse(calls[0].init.body), { libraryPath: "/Users/me/B.library" });
+  assert.equal("switchLibrary" in client, false);
+  assert.equal("libraryHistory" in client, false);
 });
 
 test("updateItemStar uses V2 item/update with a 0-5 star value", async () => {

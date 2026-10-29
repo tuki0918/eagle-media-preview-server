@@ -1,6 +1,6 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -896,4 +896,142 @@ test("generated server manager discards a failed viewer after its settings chang
     ["create", 6123],
     ["start", 6123],
   ]);
+});
+
+test("generated settings normalize shared libraries and keep protection off by default", () => {
+  assert.equal(normalizeSettings({}).libraryProtectionEnabled, false);
+  assert.deepEqual(normalizeSettings({}).sharedLibraries, []);
+  assert.deepEqual(normalizeSettings({
+    libraryProtectionEnabled: true,
+    sharedLibraries: [
+      { path: "/Users/me/Work.library/" },
+      { path: "/Users/me/Work.library", name: "Duplicate" },
+      "/Users/me/Photos.library",
+      { path: "  " },
+      null,
+    ],
+  }).sharedLibraries, [
+    { path: "/Users/me/Work.library", name: "Work" },
+    { path: "/Users/me/Photos.library", name: "Photos" },
+  ]);
+});
+
+test("generated server manager passes shared libraries to the viewer when it starts", async () => {
+  const calls: unknown[] = [];
+  let settings = {
+    ...DEFAULT_SETTINGS,
+    host: "127.0.0.1",
+    port: 41532,
+    sessionSecret: "persisted-secret",
+  };
+  const manager = createServerManager({
+    settingsStore: {
+      async load() {
+        return settings;
+      },
+      async save(input: Record<string, unknown>) {
+        settings = normalizeSettings({ ...settings, ...input });
+        return settings;
+      },
+    },
+    viewerServerFactory(options: { sharedLibraries: string[] | null }) {
+      calls.push(["create", options.sharedLibraries]);
+      return {
+        async start() {
+          calls.push(["start"]);
+        },
+        async stop() {
+          calls.push(["stop"]);
+        },
+        notifyLibraryChanged() {
+          calls.push(["libraryChanged"]);
+        },
+        status() {
+          return { state: "running", host: "127.0.0.1", port: 41532 };
+        },
+      };
+    },
+    lanAddressProvider() {
+      return [{ label: "lo0", address: "127.0.0.1" }];
+    },
+  });
+
+  await manager.saveSettings({ libraryProtectionEnabled: true, sharedLibraries: [{ path: "/Users/me/Work.library" }] });
+  await manager.start();
+  manager.libraryChanged();
+  await manager.saveSettings({ sharedLibraries: [] });
+
+  assert.deepEqual(calls, [
+    ["create", ["/Users/me/Work.library"]],
+    ["start"],
+    ["libraryChanged"],
+    ["stop"],
+    ["create", []],
+    ["start"],
+  ]);
+});
+
+test("generated server manager lists libraries from Eagle's own settings and the open library", async () => {
+  const root = await mkdtemp(join(tmpdir(), "eagle-libraries-"));
+  const userData = join(root, "Eagle");
+  const work = join(root, "Work.library");
+  const open = join(root, "Private.library");
+  const archived = join(root, "Archive", "Old.library");
+  await Promise.all([mkdir(userData, { recursive: true }), mkdir(work), mkdir(open)]);
+  await writeFile(join(userData, "Settings"), JSON.stringify({
+    libraryHistory: [open, `${work}/`, join(root, "Deleted.library"), 42],
+    pinterestAccessToken: "must-not-leak",
+  }));
+  const settings = normalizeSettings({
+    libraryProtectionEnabled: true,
+    sharedLibraries: [{ path: work }, { path: archived }],
+  });
+  const manager = createServerManager({
+    settingsStore: {
+      async load() {
+        return settings;
+      },
+      async save() {
+        return settings;
+      },
+    },
+    lanAddressProvider() {
+      return [];
+    },
+  });
+
+  const libraries = await manager.libraries({ current: { path: open, name: "Private" }, userDataPath: userData });
+
+  assert.deepEqual(libraries, {
+    current: { path: open, name: "Private" },
+    items: [
+      { path: work, name: "Work", current: false, shared: true },
+      { path: archived, name: "Old", current: false, shared: true },
+      { path: open, name: "Private", current: true, shared: false },
+    ],
+  });
+  assert.equal(JSON.stringify(libraries).includes("must-not-leak"), false);
+});
+
+test("generated server manager still lists saved libraries without Eagle settings, unshared while protection is off", async () => {
+  const settings = normalizeSettings({ sharedLibraries: [{ path: "/Users/me/Work.library" }] });
+  const manager = createServerManager({
+    settingsStore: {
+      async load() {
+        return settings;
+      },
+      async save() {
+        return settings;
+      },
+    },
+    defaultEagleUserDataPath: () => join(tmpdir(), "missing-eagle-user-data"),
+    lanAddressProvider() {
+      return [];
+    },
+  });
+
+  assert.deepEqual(await manager.libraries(), {
+    current: null,
+    items: [{ path: "/Users/me/Work.library", name: "Work", current: false, shared: false }],
+  });
 });

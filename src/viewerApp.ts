@@ -3,7 +3,6 @@ import { clearFolderCovers } from "./viewer/folderCovers";
 import { setTagListState } from "./viewer/tagListState";
 import type { TagOverviewResponse } from "./viewer/tagOverview";
 import {
-  DEFAULT_EAGLE_CONNECTION,
   LIBRARY_EMPTY_LABEL,
   RECENT_FOLDERS_STORAGE_KEY,
   RECENT_TAGS_STORAGE_KEY,
@@ -16,7 +15,7 @@ import {
   UNTAGGED_FOLDER_ID,
   urlPreviewExts,
 } from "./viewer/constants";
-import { ApiError, debounce, errorMessage, getJson, postJson, subscribeRequestOutcome, type RequestOutcome } from "./viewer/api";
+import { ApiError, debounce, errorMessage, getJson, postJson, setConnectedLibraryId, subscribeRequestOutcome, type RequestOutcome } from "./viewer/api";
 import {
   displayFileName,
   applyFolderCountChanges,
@@ -44,6 +43,7 @@ import {
 import { setLibraryFooterName } from "./viewer/libraryFooterState";
 import { getEagleStatus, setEagleStatus } from "./viewer/eagleStatusState";
 import { setLibraryName } from "./viewer/libraryNameState";
+import { showOfflinePage } from "./viewer/offlinePage";
 import {
   currentFetchLimit as getCurrentFetchLimit,
   pageButtonList,
@@ -88,6 +88,7 @@ import {
 } from "./viewer/tileLoading";
 import type {
   ConnectResponse,
+  HealthResponse,
   AuthStatusResponse,
   EagleItem,
   ItemPatch,
@@ -114,6 +115,7 @@ let authAuthenticated = false;
 let authRequired = false;
 let authUser: NonNullable<AuthStatusResponse["user"]> | null = null;
 let serverReachable = true;
+let currentLibraryId = "";
 let sessionMaxAgeSeconds = 7 * 24 * 60 * 60;
 let allFoldersTotal = 0;
 let availableExts: string[] = [];
@@ -129,6 +131,9 @@ let unsubscribeEagleStatusRequests: (() => void) | null = null;
 const EAGLE_STATUS_POLL_INTERVAL_MS = 30_000;
 const pendingRatingItemIds = new Set<string>();
 const DEFAULT_DOCUMENT_TITLE = "Media Library";
+const OFFLINE_PAGE_TITLE = "Media Library is offline";
+const LIBRARY_NOT_SHARED_MESSAGE = "This library isn't shared right now. Please try again later.";
+const LIBRARY_CHANGED_MESSAGE = "The media server switched to a different library.";
 const changeSearch = debounce((query: string) => {
   applyFilterChange({ query: query.trim() });
   loadTagSuggestions();
@@ -228,6 +233,17 @@ async function init() {
     },
   });
   showLogin();
+  if (serverReachable) await showOfflinePageIfLibraryNotShared();
+}
+
+// Checked at startup so visitors land on the offline page instead of discovering it after Connect.
+async function showOfflinePageIfLibraryNotShared() {
+  try {
+    const data = await getJson<{ libraryStatus?: string | null }>("/api/library-status");
+    if (data.libraryStatus === "not_shared") handleLibraryNotShared();
+  } catch {
+    // Older servers lack this route; Connect still reports an unshared library.
+  }
 }
 
 async function connect(credentials?: { password: string; username: string }) {
@@ -253,8 +269,7 @@ async function connect(credentials?: { password: string; username: string }) {
       renderLoginConnect();
       setConnectMessage("Connecting", false);
     }
-    const connection = { ...DEFAULT_EAGLE_CONNECTION };
-    const data = await postJson<ConnectResponse>("/api/connect", connection);
+    const data = await postJson<ConnectResponse>("/api/connect", {});
     serverReachable = true;
     showViewer(data);
     await Promise.all([loadFolders(), loadSmartFolders(), loadItems(), loadAllFoldersTotal(), loadShortcutCounts(), loadItemTypes()]);
@@ -266,6 +281,10 @@ async function connect(credentials?: { password: string; username: string }) {
       return;
     }
     if (handleAuthError(error)) return;
+    if (isLibraryNotSharedError(error)) {
+      handleLibraryNotShared();
+      return;
+    }
     if (isEagleConnectionError(error)) serverReachable = false;
     showLogin();
     setConnectMessage(connectErrorMessage(error), true);
@@ -365,7 +384,31 @@ function isLoginAuthFailure(error: unknown) {
   return error instanceof ApiError && error.status === 401;
 }
 
+function isLibraryNotSharedError(error: unknown) {
+  return error instanceof ApiError && error.code === "LIBRARY_NOT_SHARED";
+}
+
+// The host opened a library that is not shared: drop what was loaded and show the offline page.
+function handleLibraryNotShared() {
+  clearViewerSessionState();
+  showLogin();
+  showOfflinePage({ reason: "library-not-shared", title: OFFLINE_PAGE_TITLE, message: LIBRARY_NOT_SHARED_MESSAGE });
+}
+
+// Eagle switched to another shared library; folders and items from the old one are invalid,
+// so drop them and let the visitor reconnect on purpose.
+function handleLibraryChanged() {
+  clearViewerSessionState();
+  showLogin();
+  setConnectMessage(LIBRARY_CHANGED_MESSAGE, false);
+}
+
+function libraryChangedSinceConnect(libraryId: string) {
+  return Boolean(currentLibraryId && libraryId && libraryId !== currentLibraryId);
+}
+
 function connectErrorMessage(error: unknown) {
+  if (isLibraryNotSharedError(error)) return LIBRARY_NOT_SHARED_MESSAGE;
   const message = errorMessage(error);
   if (isEagleConnectionError(error, message)) {
     return "Can't reach the media server right now. Please try again in a bit.";
@@ -377,6 +420,13 @@ function connectErrorMessage(error: unknown) {
 }
 
 function loadErrorMessage(error: unknown) {
+  if (isLibraryNotSharedError(error)) {
+    return {
+      title: "Library not shared",
+      text: "The library open on the media server isn't shared.",
+      detail: "Please try again later.",
+    };
+  }
   const message = errorMessage(error);
   if (isEagleConnectionError(error, message)) {
     return {
@@ -414,6 +464,8 @@ function showViewer(data: ConnectResponse) {
   setShellView("viewer");
   setLibraryFooterName(libraryLabel(data));
   setLibraryName(data.library?.name || "");
+  currentLibraryId = data.library?.id || "";
+  setConnectedLibraryId(currentLibraryId);
   setEagleStatus(data.app ? "online" : "offline");
   startEagleStatusPolling();
   document.title = libraryTitle(data);
@@ -443,6 +495,8 @@ function clearViewerSessionState() {
   syncUrlState({ replace: true });
   setLibraryFooterName("");
   setLibraryName("");
+  currentLibraryId = "";
+  setConnectedLibraryId("");
   stopEagleStatusPolling();
   renderTagChips();
   renderSearchControlButtons();
@@ -489,6 +543,7 @@ function startEagleStatusPolling() {
   if (eagleStatusTimer) return;
   eagleStatusTimer = setInterval(checkEagleStatus, EAGLE_STATUS_POLL_INTERVAL_MS);
   unsubscribeEagleStatusRequests = subscribeRequestOutcome(recheckEagleStatusAfterRequest);
+  document.addEventListener("error", recheckEagleStatusAfterMediaError, true);
   document.addEventListener("visibilitychange", checkEagleStatusWhenVisible);
   window.addEventListener("online", checkEagleStatus);
 }
@@ -500,6 +555,7 @@ function stopEagleStatusPolling() {
   eagleStatusTimer = null;
   unsubscribeEagleStatusRequests?.();
   unsubscribeEagleStatusRequests = null;
+  document.removeEventListener("error", recheckEagleStatusAfterMediaError, true);
   document.removeEventListener("visibilitychange", checkEagleStatusWhenVisible);
   window.removeEventListener("online", checkEagleStatus);
   setEagleStatus("checking");
@@ -510,8 +566,17 @@ function checkEagleStatusWhenVisible() {
 }
 
 // Reacts to regular API traffic so the dot changes without waiting for the next poll.
-function recheckEagleStatusAfterRequest({ ok, status, url }: RequestOutcome) {
+function recheckEagleStatusAfterRequest({ libraryId, ok, status, url }: RequestOutcome) {
+  if (libraryChangedSinceConnect(libraryId)) {
+    handleLibraryChanged();
+    return;
+  }
   if (url.startsWith("/api/health")) return;
+  // 409 means the server refused an answer because Eagle switched libraries mid-request.
+  if (status === 409) {
+    void checkEagleStatus();
+    return;
+  }
   const failedLikeOffline = !ok && (status === 0 || status >= 500);
   const current = getEagleStatus();
   if ((failedLikeOffline && current !== "offline") || (ok && current === "offline")) {
@@ -519,13 +584,29 @@ function recheckEagleStatusAfterRequest({ ok, status, url }: RequestOutcome) {
   }
 }
 
+// Media elements hide the server's 409 for a switched library, so a failed load of a pinned media
+// URL triggers a status check; health then reports the new library id.
+function recheckEagleStatusAfterMediaError(event: Event) {
+  const target = event.target as { currentSrc?: string; src?: string } | null;
+  const src = target?.currentSrc || target?.src || "";
+  if (typeof src === "string" && /[?&]library=/.test(src)) void checkEagleStatus();
+}
+
 async function checkEagleStatus() {
   if (document.visibilityState === "hidden" || eagleStatusCheckInFlight) return;
   const requestId = ++eagleStatusRequestId;
   eagleStatusCheckInFlight = true;
   try {
-    const data = await getJson<{ app?: unknown }>("/api/health");
+    const data = await getJson<HealthResponse>("/api/health");
     if (requestId !== eagleStatusRequestId) return;
+    if (data.libraryStatus === "not_shared") {
+      handleLibraryNotShared();
+      return;
+    }
+    if (libraryChangedSinceConnect(data.library?.id || "")) {
+      handleLibraryChanged();
+      return;
+    }
     setEagleStatus(data.app ? "online" : "offline");
   } catch (error) {
     if (requestId !== eagleStatusRequestId) return;

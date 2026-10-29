@@ -5,6 +5,7 @@ import { App } from "./App";
 import { initializeItemActionsVisible } from "./viewer/itemActionsVisibilityState";
 import { initializeSubfoldersVisible } from "./viewer/subfolderVisibilityState";
 import { getLoginConnectState } from "./viewer/loginConnectState";
+import { isOfflinePageShown } from "./viewer/offlinePage";
 import "./styles.css";
 
 const root = document.querySelector("#root");
@@ -30,6 +31,8 @@ void import("./viewerApp")
   .catch(() => reportStartup(false));
 
 function reportStartup(ready: boolean) {
+  // The viewer already showed a specific offline page; the generic startup outcome must not replace it.
+  if (isOfflinePageShown()) return;
   document.body.dataset.appState = ready ? "ready" : "failed";
   window.dispatchEvent(new window.Event(ready ? "media-library-ready" : "media-library-startup-error"));
 }

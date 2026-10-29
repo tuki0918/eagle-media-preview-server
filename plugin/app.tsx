@@ -5,10 +5,12 @@ import { CloseIcon } from "./components/Icons";
 import { ServerStatusPanel } from "./components/ServerStatusPanel";
 import { SettingsForm, type HttpsFileField } from "./components/SettingsForm";
 import { serverRestartSettingsChanged, settingsPayloadChanged } from "./settingsChange";
-import type { AuthUser, PluginSettings, PluginStatus, ServerState, SettingsTab, UserRole } from "./types";
+import type { AuthUser, LibraryCandidate, LibraryList, PluginSettings, PluginStatus, ServerState, SettingsTab, SharedLibrary, UserRole } from "./types";
 
 interface ServerManager {
   init(): Promise<PluginStatus>;
+  libraries?(input: { current: SharedLibrary | null; userDataPath: string }): Promise<LibraryList>;
+  libraryChanged?(): void;
   saveSettings(payload: Record<string, unknown>): Promise<PluginStatus>;
   start(): Promise<PluginStatus>;
   status(): Promise<PluginStatus>;
@@ -16,7 +18,9 @@ interface ServerManager {
 }
 
 interface EagleRuntime {
+  app?: { getPath?: (name: string) => Promise<string> };
   clipboard?: { writeText?: (value: string) => Promise<void> };
+  library?: { name?: string; path?: string };
   dialog?: {
     showOpenDialog?: (options: {
       defaultPath?: string;
@@ -25,6 +29,7 @@ interface EagleRuntime {
       title?: string;
     }) => Promise<{ canceled: boolean; filePaths: string[] }>;
   };
+  onLibraryChanged?: (callback: (libraryPath: string) => void) => void;
   onPluginCreate?: (callback: () => void) => void;
   onPluginShow?: (callback: () => void) => void;
   shell?: { openExternal?: (value: string) => Promise<void> };
@@ -58,6 +63,7 @@ function App() {
   const [settingsExpanded, setSettingsExpanded] = useState(true);
   const [passwordDraftRevision, setPasswordDraftRevision] = useState(0);
   const userPasswordsRef = useRef<Record<string, string>>({});
+  const [libraries, setLibraries] = useState<LibraryList | null>(null);
   const [status, setStatus] = useState<PluginStatus>(() => ({
     settings: {
       customDomain: "",
@@ -100,10 +106,19 @@ function App() {
       const runtimePath = pluginRequirePath("service/runtime.cjs");
       const runtime = window.require(runtimePath) as { createServerManager: () => ServerManager };
       managerRef.current = runtime.createServerManager();
-      const init = () => runCommand(() => managerRef.current?.init(), { quiet: true });
+      const init = () => {
+        void runCommand(() => managerRef.current?.init(), { quiet: true }).then(() => refreshLibraries());
+      };
+      // The viewer server must stop answering from the previous library the moment Eagle switches.
+      globalThis.eagle?.onLibraryChanged?.(() => {
+        managerRef.current?.libraryChanged?.();
+        void refreshLibraries();
+      });
       if (globalThis.eagle?.onPluginCreate) {
         globalThis.eagle.onPluginCreate(init);
-        globalThis.eagle.onPluginShow?.(() => runCommand(() => managerRef.current?.status(), { quiet: true }));
+        globalThis.eagle.onPluginShow?.(() => {
+          void runCommand(() => managerRef.current?.status(), { quiet: true }).then(() => refreshLibraries());
+        });
       } else {
         init();
       }
@@ -180,6 +195,8 @@ function App() {
       httpsKeyPath: settings.httpsKeyPath || "",
       port: settings.port || 41532,
       sessionDurationDays: settings.sessionDurationDays || 7,
+      libraryProtectionEnabled: Boolean(settings.libraryProtectionEnabled),
+      sharedLibraries: Array.isArray(settings.sharedLibraries) ? settings.sharedLibraries : [],
       ...patch,
       authEnabled: nextAuthEnabled,
       authUsers: effectiveAuthUsers,
@@ -203,6 +220,8 @@ function App() {
       if (!saved) setStatus(previousStatus);
       if (saved && hasUserPasswords) clearUserPasswordDrafts();
       if (saved) setMessage(successMessage);
+      // The Shared badges follow the saved settings, so refresh them after every save.
+      if (saved) void refreshLibraries();
       return saved;
     }
     try {
@@ -210,11 +229,32 @@ function App() {
       if (nextStatus) setStatus(nextStatus);
       if (hasUserPasswords) clearUserPasswordDrafts();
       setMessage(successMessage);
+      void refreshLibraries();
       return true;
     } catch (error) {
       setErrorMessage(error);
       return false;
     }
+  }
+
+  async function refreshLibraries({ reportErrors = false } = {}) {
+    try {
+      // This panel runs on the admin's machine, so it reads Eagle's own state directly.
+      const eagleLibrary = globalThis.eagle?.library;
+      const current = eagleLibrary?.path ? { name: eagleLibrary.name || "", path: eagleLibrary.path } : null;
+      const userDataPath = await globalThis.eagle?.app?.getPath?.("userData").catch(() => "") || "";
+      const next = await managerRef.current?.libraries?.({ current, userDataPath });
+      if (next) setLibraries(next);
+    } catch (error) {
+      // The picker keeps the last list; sharing itself is enforced by the server.
+      if (reportErrors) setErrorMessage(error);
+    }
+  }
+
+  function changeLibraryShared(library: LibraryCandidate, shared: boolean) {
+    const current: SharedLibrary[] = Array.isArray(settings.sharedLibraries) ? settings.sharedLibraries : [];
+    const others = current.filter((entry) => entry.path !== library.path);
+    updateSettings({ sharedLibraries: shared ? [...others, { name: library.name, path: library.path }] : others });
   }
 
   function setMessage(value: string, isError = false) {
@@ -469,6 +509,7 @@ function App() {
           authUsers={authUsers}
           busy={busy}
           httpsEnabled={httpsEnabled}
+          libraries={libraries}
           message={message}
           messageIsError={messageIsError}
           passwordDraftRevision={passwordDraftRevision}
@@ -484,6 +525,9 @@ function App() {
           onCustomDomainChange={(value) => updateSettings({ customDomain: value })}
           onHttpsCertPathChange={(value) => updateSettings({ httpsCertPath: value })}
           onHttpsKeyPathChange={(value) => updateSettings({ httpsKeyPath: value })}
+          onLibraryProtectionChange={(checked) => updateSettings({ libraryProtectionEnabled: checked })}
+          onLibrarySharedChange={changeLibraryShared}
+          onReloadLibraries={() => void refreshLibraries({ reportErrors: true })}
           onPortChange={(value) => updateSettings({ port: value })}
           onRemoveAuthUser={removeAuthUser}
           onSaveSettings={() => saveSettings({ forceSave: true, successMessage: "Saved" })}

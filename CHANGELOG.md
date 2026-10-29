@@ -7,6 +7,21 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Added
+
+- Added library protection: choose which Eagle libraries the viewer may serve from the new **Libraries** settings tab. If Eagle has a different library open, viewers see the "Media Library is offline" page. Changes take effect when the server starts.
+
+### Changed
+
+- The viewer server now notices library switches in Eagle right away. Viewer requests are tied to the library they connected to, and the check is repeated before each answer and each write, so a switch, even in the middle of a request, never returns or changes data in the new library. Viewers then return to the connect screen.
+- Viewers no longer receive library file paths; `/api/connect` and `/api/health` return only the library name and an opaque id, and never the id of an unshared library.
+
+### Removed
+
+- **Breaking:** Removed `GET /api/libraries` and `POST /api/library/switch`. Libraries can only be switched in the Eagle app.
+- **Breaking:** `POST /api/connect` no longer changes the Eagle API host, port, or token; the server always uses its own local Eagle connection.
+- **Breaking:** Viewer API and media requests now require the connected library id, so bookmarks of old `/file/:id` links stop working. The "Open file" link in the viewer includes it.
+
 ## [0.5.3] - 2026-10-29
 
 ### Added

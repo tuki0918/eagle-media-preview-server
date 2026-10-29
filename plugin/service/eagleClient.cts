@@ -329,19 +329,6 @@ function createEagleClient({
       return unwrapData(await request("/api/v2/library/info"));
     },
 
-    async libraryHistory() {
-      return unwrapData(await request("/api/library/history"));
-    },
-
-    async switchLibrary(libraryPath: string) {
-      return unwrapData(
-        await request("/api/library/switch", {
-          method: "POST",
-          body: { libraryPath },
-        }),
-      );
-    },
-
     async folders({ offset = 0, limit = 1000 }: PageOptions = {}) {
       return normalizePaginatedResponse(
         await request("/api/v2/folder/get", {

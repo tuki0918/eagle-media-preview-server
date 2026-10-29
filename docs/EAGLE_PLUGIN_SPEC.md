@@ -104,6 +104,7 @@ Build output is created under `dist`:
 - Configure the port
 - Configure Password protection
 - Configure multiple users with Viewer, Editor, and Admin roles
+- Choose which Eagle libraries the viewer may serve
 - Display and copy the Endpoint URL
 - Display the Endpoint URL as a QR code
 - Keep settings usable in the fixed-size Eagle window through a collapsible panel and resizable window
@@ -134,6 +135,8 @@ Build output is created under `dist`:
   - Users
   - Per-user role and password
   - Session duration
+  - Libraries: protection toggle, shared-library checklist, and a Reload libraries button; like other settings, they are locked while the server runs and take effect when it starts
+  - The checklist is built on the admin's machine, without the Eagle HTTP API: saved entries, the open library from `eagle.library`, and `libraryHistory` from Eagle's `Settings` file in `eagle.app.getPath("userData")` (only that key is read; libraries that no longer exist are skipped)
 
 ### Persisted Settings
 
@@ -155,9 +158,13 @@ type Settings = {
   authEnabled: boolean;
   sessionSecret: string;
   lastServerStatus: "running" | "stopped" | "error";
+  libraryProtectionEnabled: boolean;
   sessionDurationDays: number;
+  sharedLibraries: Array<{ name: string; path: string }>;
 };
 ```
+
+`libraryProtectionEnabled` defaults to `false`, so the library open in Eagle is shared as before. When it is `true`, the viewer serves only libraries listed in `sharedLibraries`; an empty list shares nothing. Paths are compared after removing trailing separators, case-insensitively on macOS and Windows.
 
 Legacy settings with `basicAuthUser`, `passwordHash`, and `allowMetadataEditing` are read for migration, converted into `authUsers`, and rewritten with `settingsVersion: 2`.
 
@@ -183,6 +190,9 @@ Settings path:
 - Open the original file in a new tab
 - Sync search filters, page, view mode, and preview state into the URL
 - Clear viewer state and return to the login screen when an authenticated viewer API request returns `401`
+- Show the "Media Library is offline" page on load, before sign-in, when `/api/library-status` reports that the open library is not shared
+- Clear viewer state and show the same page when health polling or Connect reports that the open library is not shared
+- Clear viewer state and return to the connect screen when Eagle switches to a different library: on a `409 LIBRARY_CHANGED` or a different `X-Library-Id` on a fetch, or, after a pinned media element fails to load, on the id reported by `/api/health`
 
 ### Supported Browsing Features
 
@@ -246,15 +256,19 @@ Settings path:
 - `POST /api/auth/logout`
   - Clears viewer session cookies and removes the server-side session token
 - `POST /api/connect`
-  - Connects to Eagle API and returns app/library information
+  - Checks the server-configured Eagle API connection and returns app info and the library display name
+  - The request body is ignored; viewer clients cannot change the Eagle API host, port, or token
+  - The library is read again after the body arrives: if it is not shared it returns `503`, and if Eagle switched libraries during the request it returns `409 LIBRARY_CHANGED`, so an unshared library is never named
 - `GET /api/health`
-  - Checks Eagle app/library health
+  - Checks Eagle app/library health; library paths are never returned to clients
+  - Returns `libraryStatus` (`shared`, `not_shared`, or `null` when Eagle is unreachable) and, for a shared library, `library: { id, name }`, where `id` is an opaque per-install HMAC of the library path
+  - Always answered, even when the open library is not shared
+- `GET /api/library-status`
+  - Public (no sign-in required) so the viewer can show the offline page on load
+  - Returns only `{ libraryStatus: "shared" | "not_shared" | null }`; never the library name, path, or id
+  - Answers `shared` without calling Eagle when library protection is off
 - `GET /api/folders`
   - Returns folder list
-- `GET /api/libraries`
-  - Returns current library and history
-- `POST /api/library/switch`
-  - Switches the Eagle library
 - `GET /api/items`
   - Returns item list or search results
 - `POST /api/items/:id/star`
@@ -266,7 +280,24 @@ Settings path:
 - `GET|HEAD /api/items/:id/file`
   - Serves original file
 - `GET|HEAD /file/:id`
-  - Direct original file access
+  - Direct original file access; requires `?library=<id>`
+
+### Shared Library Protection
+
+- Eagle can only have one library open, and the viewer server serves whichever library that is
+- When library protection is on, every `/api/*` route except auth routes and `/api/health`, and every `/file/*` route, first checks the open library against `sharedLibraries`
+- A library that is not shared returns `503 { "error": "The library open in Eagle is not shared", "code": "LIBRARY_NOT_SHARED" }` before any library data is read
+- If Eagle cannot report the open library, the request fails instead of being served
+- Library info is cached for at most 3 seconds; the plugin also clears it on `eagle.onLibraryChanged`
+- Authorized `/api/*` and `/file/*` responses carry `X-Library-Id`, the same opaque id as `/api/health`, but only while the open library is shared; the id of an unshared library is never sent, including on a `409` that refuses an answer after a switch
+- The sharing check, the id check, and `X-Library-Id` all use one snapshot of the open library. The switch counter is read before that snapshot is taken, so a switch while a request is being admitted returns `409 LIBRARY_CHANGED`
+- After Connect, the viewer pins every request to the library it connected to: fetches send the id as the `X-Library-Id` request header, and media URLs (`/file/:id`, `/api/items/:id/thumb|file`) carry it as a `library` query parameter, since media elements cannot send headers. The address bar never contains it
+- Every route that reads or changes library data (`/api/*` except auth routes, `/api/library-status`, `/api/connect`, and `/api/health`, plus `/file/:id`) requires the id; without it they return `400 { "error": "A library id is required for library requests", "code": "LIBRARY_REQUIRED" }`. The library is checked before an item id is looked up, so an item id alone never returns a file. The "Open file" link that opens the original in a new tab carries the id too; older bookmarks without it no longer work
+- A request whose id differs from the open library returns `409 { "error": "The library open in Eagle has changed", "code": "LIBRARY_CHANGED" }`, and one made while Eagle cannot report the open library returns `502`, in both cases before any library data is read
+- The check is repeated within the request, without extra Eagle calls for reads: each request remembers the library it was admitted for and a switch counter bumped by `eagle.onLibraryChanged`. Right before a JSON answer or a media stream is sent, the cached library info and the counter must still match; otherwise the answer is replaced with `409 LIBRARY_CHANGED` and `X-Library-Id` reports the new library
+- Writes (rating, tags, categories, trash) re-read the open library from Eagle right after the request body arrives and right before calling Eagle, so holding back the body cannot redirect a write to another library
+- A media stream that has already started is sent to the end
+- The viewer server never calls Eagle's library switch API
 
 ### Media Streaming
 
@@ -283,6 +314,7 @@ When password protection is enabled, viewer API routes and media routes require 
 
 - `/api/auth/status`
 - `/api/auth/login`
+- `/api/library-status`
 
 Static viewer routes stay available so unauthenticated browsers can load the login screen.
 
@@ -309,7 +341,7 @@ Authorization:
 
 - Browsing is read-only by default
 - `POST /api/items/:id/star` and `POST /api/items/:id/metadata` require an Editor or Admin user
-- `POST /api/library/switch` requires an Admin user
+- The viewer server never calls Eagle's library switch API; switching libraries is only possible from the Eagle app
 - Unsafe methods reject mismatched `Origin` or `Referer` headers before API handlers run
 - JSON request bodies are capped at 1 MiB; malformed bodies return `400` and oversized bodies return `413`
 

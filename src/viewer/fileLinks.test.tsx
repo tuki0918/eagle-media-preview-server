@@ -1,7 +1,8 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, test, vi } from "vitest";
 import { PreviewActions } from "./components/PreviewInfo";
-import { isStandaloneApp } from "./fileLinks";
+import { setConnectedLibraryId } from "./api";
+import { directFileUrl, isStandaloneApp } from "./fileLinks";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -19,6 +20,15 @@ test("regular browsers keep direct file viewing", () => {
   expect(html).toContain('href="https://library.local/file/item%201"');
   expect(html).toContain("Open file");
   expect(html).not.toContain("download=");
+});
+
+test("direct file links carry the connected library id", () => {
+  setConnectedLibraryId("lib-a");
+  try {
+    expect(directFileUrl({ id: "item 1" }, "https://library.local/")).toBe("https://library.local/file/item%201?library=lib-a");
+  } finally {
+    setConnectedLibraryId("");
+  }
 });
 
 test.each([[true, false], [false, true]])("standalone apps disable direct file viewing (%s, %s)", (displayMode, iosStandalone) => {
