@@ -289,7 +289,14 @@ export function ImagePreview({ item, srcKind: requestedSrcKind }: { item: EagleI
       <ImageToolbar
         visible={imageOverlayControlsVisible}
         onActualSize={() => setImageZoom(imageState.naturalScale, { x: 0, y: 0 })}
-        onFit={() => setImageZoom(imageState.fitScale, { x: 0, y: 0 })}
+        onFit={() => {
+          const image = imageRef.current;
+          const viewport = viewportRef.current;
+          if (!image?.naturalWidth || !image.naturalHeight || !viewport) return;
+          // Initial layout keeps its margin; Fit fills the viewport along the limiting axis.
+          const scale = Math.min(viewport.clientWidth / image.naturalWidth, viewport.clientHeight / image.naturalHeight);
+          setImageZoom(scale, { x: 0, y: 0 });
+        }}
         onZoomIn={() => zoomImage(1.18)}
         onZoomOut={() => zoomImage(0.85)}
         zoomLabel={formatImageZoomLabel(imageState.transform.scale)}
