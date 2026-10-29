@@ -258,6 +258,7 @@ Settings path:
 - `POST /api/connect`
   - Checks the server-configured Eagle API connection and returns app info and the library display name
   - The request body is ignored; viewer clients cannot change the Eagle API host, port, or token
+  - The library is read again after the body arrives: if it is not shared it returns `503`, and if Eagle switched libraries during the request it returns `409 LIBRARY_CHANGED`, so an unshared library is never named
 - `GET /api/health`
   - Checks Eagle app/library health; library paths are never returned to clients
   - Returns `libraryStatus` (`shared`, `not_shared`, or `null` when Eagle is unreachable) and, for a shared library, `library: { id, name }`, where `id` is an opaque per-install HMAC of the library path
@@ -288,7 +289,7 @@ Settings path:
 - A library that is not shared returns `503 { "error": "The library open in Eagle is not shared", "code": "LIBRARY_NOT_SHARED" }` before any library data is read
 - If Eagle cannot report the open library, the request fails instead of being served
 - Library info is cached for at most 3 seconds; the plugin also clears it on `eagle.onLibraryChanged`
-- Authorized `/api/*` and `/file/*` responses carry `X-Library-Id`, the same opaque id as `/api/health`, but only while the open library is shared; the id of an unshared library is never sent
+- Authorized `/api/*` and `/file/*` responses carry `X-Library-Id`, the same opaque id as `/api/health`, but only while the open library is shared; the id of an unshared library is never sent, including on a `409` that refuses an answer after a switch
 - The sharing check, the id check, and `X-Library-Id` all use one snapshot of the open library. The switch counter is read before that snapshot is taken, so a switch while a request is being admitted returns `409 LIBRARY_CHANGED`
 - After Connect, the viewer pins every request to the library it connected to: fetches send the id as the `X-Library-Id` request header, and media URLs (`/file/:id`, `/api/items/:id/thumb|file`) carry it as a `library` query parameter, since media elements cannot send headers. The address bar never contains it
 - Every route that reads or changes library data (`/api/*` except auth routes, `/api/library-status`, `/api/connect`, and `/api/health`, plus `/file/:id`) requires the id; without it they return `400 { "error": "A library id is required for library requests", "code": "LIBRARY_REQUIRED" }`. The library is checked before an item id is looked up, so an item id alone never returns a file. The "Open file" link that opens the original in a new tab carries the id too; older bookmarks without it no longer work

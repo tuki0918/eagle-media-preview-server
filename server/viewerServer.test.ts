@@ -86,6 +86,13 @@ async function fetch(input: string | URL, init: RequestInit = {}) {
   return globalThis.fetch(url, { ...init, headers });
 }
 
+// The id the server derives for a library path, for tests that set a fixed session secret.
+function libraryIdFor(secret: string, libraryPath: string) {
+  const { createHmac } = require("node:crypto");
+  const { libraryPathKey } = require("../dist/.generated/plugin-service/libraryAccess.cjs");
+  return createHmac("sha256", secret).update(libraryPathKey(libraryPath)).digest("base64url").slice(0, 16);
+}
+
 // Media routes require the library id a viewer gets from /api/health or /api/connect.
 async function libraryQuery(origin: string) {
   const health = await (await fetch(`${origin}/api/health`)).json();
@@ -2107,6 +2114,7 @@ test("createViewerServer drops an answer when Eagle switches libraries while the
     host: "127.0.0.1",
     port: 0,
     sharedLibraries: ["/Users/me/Shared.library"],
+    sessionSecret: "fixed-test-secret",
     eagleClient: {
       async appInfo() {
         return { version: "1.0.0" };
@@ -2137,6 +2145,7 @@ test("createViewerServer drops an answer when Eagle switches libraries while the
     assert.equal(response.status, 409);
     assert.deepEqual(JSON.parse(text), { error: "The library open in Eagle has changed", code: "LIBRARY_CHANGED" });
     assert.equal(text.includes("Private"), false);
+    assert.notEqual(response.headers.get("x-library-id"), libraryIdFor("fixed-test-secret", "/Users/me/Private.library"), "the refusal never names the unshared library");
   } finally {
     await viewer.stop();
   }
@@ -2241,6 +2250,58 @@ for (const route of ["/api/folders", "/file/ITEM1"]) {
   });
 }
 
+test("createViewerServer does not reveal an unshared library through a held-back /api/connect body", async () => {
+  let open = { path: "/Users/me/Shared.library", name: "Shared" };
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    sharedLibraries: ["/Users/me/Shared.library"],
+    sessionSecret: "fixed-test-secret",
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return open;
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const { port } = viewer.status();
+    const origin = `http://127.0.0.1:${port}`;
+    const unsharedId = libraryIdFor("fixed-test-secret", "/Users/me/Private.library");
+    for (const notify of [true, false]) {
+      open = { path: "/Users/me/Shared.library", name: "Shared" };
+      viewer.notifyLibraryChanged();
+      // Headers first; the body follows only after Eagle has switched to the unshared library.
+      const response = await new Promise<{ status: number; body: string; libraryId: string }>((resolve, reject) => {
+        const request = httpRequest({ host: "127.0.0.1", port, path: "/api/connect", method: "POST", headers: { "Content-Type": "application/json", Origin: origin } }, (res) => {
+          const chunks: Buffer[] = [];
+          res.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+          res.on("end", () => resolve({ status: res.statusCode || 0, body: Buffer.concat(chunks).toString("utf8"), libraryId: String(res.headers["x-library-id"] || "") }));
+        });
+        request.on("error", reject);
+        request.flushHeaders();
+        setTimeout(() => {
+          open = { path: "/Users/me/Private.library", name: "PRIVATE_LIBRARY_NAME" };
+          if (notify) viewer.notifyLibraryChanged();
+          request.end("{}");
+        }, 100);
+      });
+      // Without the notification the server still sees the shared library (cached for up to 3s)
+      // and may answer with it; either way the unshared library is never named.
+      if (notify) assert.notEqual(response.status, 200);
+      assert.equal(response.body.includes("PRIVATE_LIBRARY_NAME"), false, `notify=${notify}`);
+      assert.equal(response.body.includes(unsharedId), false, `notify=${notify}`);
+      assert.notEqual(response.libraryId, unsharedId, `notify=${notify}`);
+    }
+  } finally {
+    await viewer.stop();
+  }
+});
+
 test("createViewerServer re-checks the open library right before a write", async () => {
   let open = { path: "/Users/me/Shared.library", name: "Shared" };
   const writes: string[] = [];
@@ -2248,6 +2309,7 @@ test("createViewerServer re-checks the open library right before a write", async
     host: "127.0.0.1",
     port: 0,
     sharedLibraries: ["/Users/me/Shared.library"],
+    sessionSecret: "fixed-test-secret",
     authUsers: [{ username: "editor", passwordHash: sha256("secret"), role: "editor" }],
     eagleClient: {
       async appInfo() {
@@ -2293,7 +2355,7 @@ test("createViewerServer re-checks the open library right before a write", async
 
     assert.equal(response.status, 409);
     assert.deepEqual(JSON.parse(response.body), { error: "The library open in Eagle has changed", code: "LIBRARY_CHANGED" });
-    assert.notEqual(response.libraryId, sharedId);
+    assert.notEqual(response.libraryId, libraryIdFor("fixed-test-secret", "/Users/me/Private.library"), "the refusal never names the unshared library");
     assert.deepEqual(writes, []);
   } finally {
     await viewer.stop();

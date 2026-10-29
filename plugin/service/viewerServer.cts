@@ -225,9 +225,10 @@ function createViewerServer({
   // Bumped whenever the plugin reports a library switch.
   let libraryGeneration = 0;
   const trackLibrary = (res: ServerResponse, admittedLibraryId: string, admittedGeneration: number) => {
+    // Only a shared library's id is ever reported, even when a request is refused mid-way.
     const currentLibraryId = () => {
       const library = currentSession.lastLibraryInfo?.() as EagleLibraryInfo | null | undefined;
-      return library ? libraryId(library.path) : "";
+      return library && libraryAccess.status(library.path) !== "not_shared" ? libraryId(library.path) : "";
     };
     libraryGuards.set(res, {
       currentLibraryId,
@@ -263,7 +264,11 @@ function createViewerServer({
       sendLibraryNotShared(res);
       return false;
     }
-    if (pin === "none") return true;
+    if (pin === "none") {
+      // /api/connect waits for its body and then reads the library again, so its answer is guarded too.
+      if (openLibraryId) trackLibrary(res, openLibraryId, admittedGeneration);
+      return true;
+    }
     const expectedLibraryId = String(req.headers["x-library-id"] || url.searchParams.get("library") || "").trim();
     if (!expectedLibraryId) {
       sendJson(res, 400, { error: LIBRARY_REQUIRED_MESSAGE, code: "LIBRARY_REQUIRED" });
@@ -478,7 +483,7 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       sendMethodNotAllowed(res, ["POST"]);
       return;
     }
-    await handleConnect(req, res, session, libraryId);
+    await handleConnect(req, res, session, libraryId, libraryAccess);
     return;
   }
 
@@ -857,13 +862,18 @@ function sendLoginRateLimited(res: ServerResponse, retryAfterSeconds: number) {
 }
 
 // The Eagle API connection is fixed server-side; viewer clients can only check it, never repoint it.
-async function handleConnect(req: IncomingMessage, res: ServerResponse, session: EagleSession, libraryId: ApiContext["libraryId"]) {
+async function handleConnect(req: IncomingMessage, res: ServerResponse, session: EagleSession, libraryId: ApiContext["libraryId"], libraryAccess: LibraryAccessPolicy) {
   await readJson(req);
   try {
     const [app, library] = await Promise.all([
       session.client.appInfo(),
       session.libraryInfo(),
     ]);
+    // The library is read again after the body arrives; it may no longer be the shared one.
+    if (library && libraryAccess.status(library.path) === "not_shared") {
+      sendLibraryNotShared(res);
+      return;
+    }
     sendJson(res, 200, { app, library: publicLibraryInfo(library, libraryId) });
   } catch (error) {
     sendJson(res, 502, { error: `Unable to connect to Eagle API: ${errorMessage(error)}` });
