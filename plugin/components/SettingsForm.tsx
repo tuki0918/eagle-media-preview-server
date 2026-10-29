@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { AuthUser, LibraryCandidate, LibraryList, PluginSettings, SettingsTab, UserRole } from "../types";
-import { ChevronIcon, CloseIcon, EyeIcon, EyeOffIcon, FolderOpenIcon, PlusIcon, RefreshIcon, SettingsIcon } from "./Icons";
+import { CheckIcon, ChevronIcon, CloseIcon, EyeIcon, EyeOffIcon, FolderOpenIcon, PlusIcon, RefreshIcon, SettingsIcon } from "./Icons";
 
 interface SettingsFormProps {
   authEnabled: boolean;
@@ -253,26 +253,40 @@ export function SettingsForm({
                 </p>
               ) : null}
               <ul className="m-0 grid list-none gap-0 overflow-hidden rounded-xl border border-[#e6e6e9] p-0" aria-label="Libraries">
-                {libraries?.items.length ? libraries.items.map((library) => (
-                  <li key={library.path} className="border-b border-[#efeff1] last:border-b-0">
-                    <label className="grid grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-2.5 px-3 py-2 has-[:disabled]:opacity-60">
-                      <input
-                        type="checkbox"
-                        aria-label={`Share ${library.name}`}
-                        disabled={settingsInputDisabled || !libraryProtectionEnabled}
-                        checked={sharedLibraryPaths.has(library.path)}
-                        onChange={(event) => onLibrarySharedChange(library, event.currentTarget.checked)}
-                      />
-                      <span className="min-w-0">
-                        <strong className="block truncate text-[12.5px] font-semibold text-[#171717]">{library.name}</strong>
-                        <small className="block truncate text-[10.5px] text-[#7a808a]" title={library.path}>{library.path}</small>
-                      </span>
-                      {library.current ? (
-                        <span className="rounded-full bg-[#eef4ff] px-2 py-0.5 text-[10px] font-semibold text-[#1d4ed8]">Open in Eagle</span>
-                      ) : <span aria-hidden="true" />}
-                    </label>
-                  </li>
-                )) : (
+                {libraries?.items.length ? libraries.items.map((library) => {
+                  const checked = sharedLibraryPaths.has(library.path);
+                  // Locked inputs only dim the checkbox, so shared and unshared rows stay distinct while the server runs.
+                  const shared = libraryProtectionEnabled && checked;
+                  return (
+                    <li key={library.path} className={`border-b border-[#efeff1] last:border-b-0 ${shared ? "bg-[#f3fbf5]" : ""}`}>
+                      <label className="grid grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-2.5 px-3 py-2">
+                        <input
+                          className="accent-[#16803a] disabled:opacity-50"
+                          type="checkbox"
+                          aria-label={`Share ${library.name}`}
+                          disabled={settingsInputDisabled || !libraryProtectionEnabled}
+                          checked={checked}
+                          onChange={(event) => onLibrarySharedChange(library, event.currentTarget.checked)}
+                        />
+                        <span className="min-w-0">
+                          <strong className={`block truncate text-[12.5px] font-semibold ${shared ? "text-[#171717]" : "text-[#8a8f99]"}`}>{library.name}</strong>
+                          <small className={`block truncate text-[10.5px] ${shared ? "text-[#5f6670]" : "text-[#a3a7ae]"}`} title={library.path}>{library.path}</small>
+                        </span>
+                        <span className="inline-flex items-center gap-1.5">
+                          {library.current ? (
+                            <span className="rounded-full bg-[#eef4ff] px-2 py-0.5 text-[10px] font-semibold text-[#1d4ed8]">Open in Eagle</span>
+                          ) : null}
+                          {shared ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-[#e3f6e8] px-2 py-0.5 text-[10px] font-semibold text-[#16803a]">
+                              <CheckIcon className="h-[10px] w-[10px]" />
+                              Shared
+                            </span>
+                          ) : null}
+                        </span>
+                      </label>
+                    </li>
+                  );
+                }) : (
                   <li className="px-3 py-2 text-[11.5px] text-[#7a808a]">No libraries found.</li>
                 )}
               </ul>
