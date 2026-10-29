@@ -13,7 +13,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Changed
 
-- The viewer server now notices library switches in Eagle right away. If Eagle switches to a different shared library, viewers return to the connect screen instead of mixing data from both libraries.
+- The viewer server now notices library switches in Eagle right away. Viewer requests are tied to the library they connected to, so after a switch the server returns nothing from the new library and viewers return to the connect screen.
 - Viewers no longer receive library file paths; `/api/connect` and `/api/health` return only the library name and an opaque id.
 
 ### Removed

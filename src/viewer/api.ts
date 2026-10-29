@@ -39,6 +39,18 @@ export function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
+// The library the viewer connected to. Every request after Connect carries it so the server can
+// refuse to answer from a different library; it is never put in the address bar.
+let connectedLibraryId = "";
+
+export function setConnectedLibraryId(libraryId: string) {
+  connectedLibraryId = libraryId;
+}
+
+export function connectedLibraryHeaders(): Record<string, string> {
+  return connectedLibraryId ? { "X-Library-Id": connectedLibraryId } : {};
+}
+
 export async function getJson<T = unknown>(url: string): Promise<T> {
   return requestJson<T>(url);
 }
@@ -52,8 +64,10 @@ export async function postJson<T = unknown>(url: string, body: unknown): Promise
 }
 
 async function requestJson<T>(url: string, options?: RequestInit): Promise<T> {
+  const libraryHeaders = connectedLibraryHeaders();
   const requestOptions: RequestInit = {
     ...options,
+    ...(Object.keys(libraryHeaders).length ? { headers: { ...(options?.headers as Record<string, string> | undefined), ...libraryHeaders } } : {}),
     credentials: options?.credentials ?? "same-origin",
   };
   let response: Response;
@@ -94,10 +108,11 @@ function responseErrorCode(data: unknown) {
 }
 
 export function mediaUrl(id: string, kind: string) {
-  if (kind === "file") {
-    return `/file/${encodeURIComponent(id)}`;
-  }
-  return `/api/items/${encodeURIComponent(id)}/${kind}`;
+  const path = kind === "file"
+    ? `/file/${encodeURIComponent(id)}`
+    : `/api/items/${encodeURIComponent(id)}/${kind}`;
+  // Media elements cannot send headers, so the connected library travels in the query string.
+  return connectedLibraryId ? `${path}?library=${encodeURIComponent(connectedLibraryId)}` : path;
 }
 
 export type DebouncedFunction<TArgs extends unknown[]> = ((...args: TArgs) => void) & {

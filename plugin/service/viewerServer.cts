@@ -81,6 +81,7 @@ const RATING_WRITE_FORBIDDEN_MESSAGE = "Rating editing is not allowed for this v
 const METADATA_WRITE_FORBIDDEN_MESSAGE = "Metadata editing is not allowed for this viewer";
 const ADMIN_WRITE_FORBIDDEN_MESSAGE = "Admin actions are not allowed for this viewer";
 const LIBRARY_NOT_SHARED_MESSAGE = "The library open in Eagle is not shared";
+const LIBRARY_CHANGED_MESSAGE = "The library open in Eagle has changed";
 const UNTAGGED_FOLDER_ID = "__untagged__";
 
 interface EagleLibraryInfo {
@@ -245,10 +246,9 @@ function createViewerServer({
           sendLibraryNotShared(res);
           return;
         }
-        // Lets viewers notice, on any response, that Eagle switched to a different library.
-        const openLibrary = await currentSession.libraryInfo().catch(() => null);
-        const openLibraryId = openLibrary ? libraryId(openLibrary.path) : "";
-        if (openLibraryId) res.setHeader("X-Library-Id", openLibraryId);
+        // /api/connect and /api/health are how a viewer learns the id, so they are never pinned.
+        const pinned = url.pathname !== "/api/connect" && url.pathname !== "/api/health";
+        if (!(await matchesConnectedLibrary(req, url, res, currentSession, libraryId, pinned))) return;
         await handleApi(req, url, res, {
           auth,
           getSession: () => currentSession,
@@ -271,6 +271,7 @@ function createViewerServer({
           sendLibraryNotShared(res);
           return;
         }
+        if (!(await matchesConnectedLibrary(req, url, res, session, libraryId, true))) return;
         await streamItemMedia(decodeURIComponent(fileMatch[1]), "file", req, res, session);
         return;
       }
@@ -365,6 +366,19 @@ async function handleLibraryStatus(req: IncomingMessage, res: ServerResponse, se
     libraryStatus = library ? (libraryAccess.status(library.path) === "shared" ? "shared" : "not_shared") : null;
   }
   sendJson(res, 200, { libraryStatus });
+}
+
+// Viewers send the library id they connected to, as the X-Library-Id header on fetches or a
+// `library` query parameter on media URLs. A mismatch means Eagle switched libraries, so nothing
+// from the new library is returned. Requests without an id (old links, opened files) are not pinned.
+async function matchesConnectedLibrary(req: IncomingMessage, url: URL, res: ServerResponse, session: EagleSession, libraryId: ApiContext["libraryId"], pinned: boolean) {
+  const openLibrary = await session.libraryInfo().catch(() => null);
+  const openLibraryId = openLibrary ? libraryId(openLibrary.path) : "";
+  if (openLibraryId) res.setHeader("X-Library-Id", openLibraryId);
+  const expectedLibraryId = String(req.headers["x-library-id"] || url.searchParams.get("library") || "").trim();
+  if (!pinned || !expectedLibraryId || !openLibraryId || expectedLibraryId === openLibraryId) return true;
+  sendJson(res, 409, { error: LIBRARY_CHANGED_MESSAGE, code: "LIBRARY_CHANGED" });
+  return false;
 }
 
 async function isOpenLibraryShared(session: EagleSession, libraryAccess: LibraryAccessPolicy) {

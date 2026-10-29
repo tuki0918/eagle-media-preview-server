@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { ApiError, debounce, errorMessage, getJson, postJson, subscribeRequestOutcome, type RequestOutcome } from "./api";
+import { ApiError, debounce, errorMessage, getJson, mediaUrl, postJson, setConnectedLibraryId, subscribeRequestOutcome, type RequestOutcome } from "./api";
 
 describe("viewer API helpers", () => {
   afterEach(() => {
@@ -41,6 +41,29 @@ describe("viewer API helpers", () => {
       { libraryId: "", ok: false, status: 502, url: "/api/folders" },
       { libraryId: "", ok: false, status: 0, url: "/api/tags" },
     ]);
+  });
+
+  test("pins requests and media URLs to the connected library", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({ ok: true, status: 200, json: async () => ({}) } as Response);
+    expect(mediaUrl("ITEM 1", "file")).toBe("/file/ITEM%201");
+
+    setConnectedLibraryId("lib-a");
+    try {
+      await getJson("/api/folders");
+      await postJson("/api/items/ITEM1/star", { star: 3 });
+      expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/folders", { headers: { "X-Library-Id": "lib-a" }, credentials: "same-origin" });
+      expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/items/ITEM1/star", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Library-Id": "lib-a" },
+        body: JSON.stringify({ star: 3 }),
+        credentials: "same-origin",
+      });
+      expect(mediaUrl("ITEM 1", "file")).toBe("/file/ITEM%201?library=lib-a");
+      expect(mediaUrl("ITEM1", "thumb")).toBe("/api/items/ITEM1/thumb?library=lib-a");
+    } finally {
+      setConnectedLibraryId("");
+    }
+    expect(mediaUrl("ITEM1", "thumb")).toBe("/api/items/ITEM1/thumb");
   });
 
   test("sends same-origin credentials with JSON requests", async () => {

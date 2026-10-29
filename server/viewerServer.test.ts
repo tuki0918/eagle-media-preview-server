@@ -2087,6 +2087,60 @@ test("createViewerServer tags API responses with the open library id", async () 
   }
 });
 
+test("createViewerServer rejects requests pinned to a library that is no longer open", async () => {
+  let openLibrary = "/Users/me/A.library";
+  const itemLookups: string[] = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: openLibrary, name: "Library" };
+      },
+      async folders() {
+        return { items: [], total: 0, offset: 0, limit: 0 };
+      },
+      async itemById(id: string) {
+        itemLookups.push(id);
+        return { data: [{ id, filePath: "/nonexistent" }] };
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const connect = await fetch(`${origin}/api/connect`, { method: "POST", headers: { "Content-Type": "application/json", Origin: origin }, body: "{}" });
+    const connectedId = (await connect.json()).library.id;
+
+    assert.equal((await fetch(`${origin}/api/folders`, { headers: { "X-Library-Id": connectedId } })).status, 200);
+
+    openLibrary = "/Users/me/B.library";
+    viewer.notifyLibraryChanged();
+
+    const pinnedFetch = await fetch(`${origin}/api/folders`, { headers: { "X-Library-Id": connectedId } });
+    assert.equal(pinnedFetch.status, 409);
+    assert.deepEqual(await pinnedFetch.json(), { error: "The library open in Eagle has changed", code: "LIBRARY_CHANGED" });
+    assert.notEqual(pinnedFetch.headers.get("x-library-id"), connectedId);
+
+    const pinnedThumb = await fetch(`${origin}/api/items/ITEM1/thumb?library=${connectedId}`);
+    assert.equal(pinnedThumb.status, 409);
+    const pinnedFile = await fetch(`${origin}/file/ITEM1?library=${connectedId}`);
+    assert.equal(pinnedFile.status, 409);
+    assert.deepEqual(itemLookups, []);
+
+    assert.equal((await fetch(`${origin}/api/folders`)).status, 200, "requests without an id are not pinned");
+    assert.equal((await fetch(`${origin}/api/health`, { headers: { "X-Library-Id": connectedId } })).status, 200);
+    const reconnect = await fetch(`${origin}/api/connect`, { method: "POST", headers: { "Content-Type": "application/json", Origin: origin, "X-Library-Id": connectedId }, body: "{}" });
+    assert.equal(reconnect.status, 200);
+  } finally {
+    await viewer.stop();
+  }
+});
+
 test("createViewerServer serves direct file routes from /file/:id", async () => {
   const root = join(tmpdir(), `eagle-media-preview-server-${Date.now()}`);
   await mkdir(root, { recursive: true });

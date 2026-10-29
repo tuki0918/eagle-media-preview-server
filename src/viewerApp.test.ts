@@ -523,6 +523,45 @@ describe("viewer app data refresh", () => {
     await vi.waitFor(() => expect(getShellView()).toBe("login"));
     expect(getLoginConnectState().message).toBe("The media server switched to a different library. Connect to browse it.");
   });
+
+  test("sends the connected library id and returns to the connect screen when a pinned media load fails", async () => {
+    let health: unknown = { app: { version: "1.0" }, library: { id: "lib-a", name: "A" }, libraryStatus: "shared" };
+    const libraryHeaders: Array<string | undefined> = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      const url = String(input);
+      if (url.startsWith("/api/items?") || url === "/api/folders") libraryHeaders.push((options?.headers as Record<string, string> | undefined)?.["X-Library-Id"]);
+      if (url === "/api/auth/status") return jsonResponse({ authenticated: true, required: false });
+      if (url === "/api/connect" && options?.method === "POST") return jsonResponse({ app: { version: "1.0" }, library: { id: "lib-a", name: "A" } });
+      if (url === "/api/health") return jsonResponse(health);
+      if (url === "/api/folders" || url === "/api/smart-folders") return jsonResponse({ items: [] });
+      if (url.startsWith("/api/items?")) return jsonResponse({ items: [], total: 0 });
+      if (url.startsWith("/api/item-types")) return jsonResponse({ items: [] });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: fetchMock });
+
+    const { initViewer } = await import("./viewerApp");
+    const { submitConnection } = await import("./viewer/shellActions");
+    const { getLoginConnectState } = await import("./viewer/loginConnectState");
+    const { getShellView } = await import("./viewer/shellVisibility");
+    const { mediaUrl } = await import("./viewer/api");
+    initViewer();
+    await vi.waitFor(() => expect(getLoginConnectState().authenticated).toBe(true));
+    submitConnection({ currentTarget: document.querySelector<HTMLFormElement>("#connectForm")!, preventDefault: () => {} });
+    await vi.waitFor(() => expect(getShellView()).toBe("viewer"));
+    await vi.waitFor(() => expect(libraryHeaders.length).toBeGreaterThan(0));
+    expect(libraryHeaders.every((value) => value === "lib-a")).toBe(true);
+    expect(mediaUrl("ITEM1", "thumb")).toBe("/api/items/ITEM1/thumb?library=lib-a");
+
+    health = { app: { version: "1.0" }, library: { id: "lib-b", name: "B" }, libraryStatus: "shared" };
+    const image = document.createElement("img");
+    image.setAttribute("src", mediaUrl("ITEM1", "thumb"));
+    document.body.append(image);
+    image.dispatchEvent(new window.Event("error"));
+    await vi.waitFor(() => expect(getShellView()).toBe("login"));
+    expect(getLoginConnectState().message).toBe("The media server switched to a different library. Connect to browse it.");
+    expect(mediaUrl("ITEM1", "thumb")).toBe("/api/items/ITEM1/thumb");
+  });
 });
 
 function jsonResponse(body: unknown) {

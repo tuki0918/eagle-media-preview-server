@@ -16,7 +16,7 @@ import {
   UNTAGGED_FOLDER_ID,
   urlPreviewExts,
 } from "./viewer/constants";
-import { ApiError, debounce, errorMessage, getJson, postJson, subscribeRequestOutcome, type RequestOutcome } from "./viewer/api";
+import { ApiError, debounce, errorMessage, getJson, postJson, setConnectedLibraryId, subscribeRequestOutcome, type RequestOutcome } from "./viewer/api";
 import {
   displayFileName,
   applyFolderCountChanges,
@@ -467,6 +467,7 @@ function showViewer(data: ConnectResponse) {
   setLibraryFooterName(libraryLabel(data));
   setLibraryName(data.library?.name || "");
   currentLibraryId = data.library?.id || "";
+  setConnectedLibraryId(currentLibraryId);
   setEagleStatus(data.app ? "online" : "offline");
   startEagleStatusPolling();
   document.title = libraryTitle(data);
@@ -497,6 +498,7 @@ function clearViewerSessionState() {
   setLibraryFooterName("");
   setLibraryName("");
   currentLibraryId = "";
+  setConnectedLibraryId("");
   stopEagleStatusPolling();
   renderTagChips();
   renderSearchControlButtons();
@@ -543,6 +545,7 @@ function startEagleStatusPolling() {
   if (eagleStatusTimer) return;
   eagleStatusTimer = setInterval(checkEagleStatus, EAGLE_STATUS_POLL_INTERVAL_MS);
   unsubscribeEagleStatusRequests = subscribeRequestOutcome(recheckEagleStatusAfterRequest);
+  document.addEventListener("error", recheckEagleStatusAfterMediaError, true);
   document.addEventListener("visibilitychange", checkEagleStatusWhenVisible);
   window.addEventListener("online", checkEagleStatus);
 }
@@ -554,6 +557,7 @@ function stopEagleStatusPolling() {
   eagleStatusTimer = null;
   unsubscribeEagleStatusRequests?.();
   unsubscribeEagleStatusRequests = null;
+  document.removeEventListener("error", recheckEagleStatusAfterMediaError, true);
   document.removeEventListener("visibilitychange", checkEagleStatusWhenVisible);
   window.removeEventListener("online", checkEagleStatus);
   setEagleStatus("checking");
@@ -575,6 +579,14 @@ function recheckEagleStatusAfterRequest({ libraryId, ok, status, url }: RequestO
   if ((failedLikeOffline && current !== "offline") || (ok && current === "offline")) {
     void checkEagleStatus();
   }
+}
+
+// Media elements hide the server's 409 for a switched library, so a failed load of a pinned media
+// URL triggers a status check; health then reports the new library id.
+function recheckEagleStatusAfterMediaError(event: Event) {
+  const target = event.target as { currentSrc?: string; src?: string } | null;
+  const src = target?.currentSrc || target?.src || "";
+  if (typeof src === "string" && /[?&]library=/.test(src)) void checkEagleStatus();
 }
 
 async function checkEagleStatus() {

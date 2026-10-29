@@ -1,4 +1,4 @@
-import { ApiError } from "./api";
+import { ApiError, connectedLibraryHeaders } from "./api";
 import { browserImageExts, playableAudioExts, playableVideoExts } from "./constants";
 import { itemQueryParams, type ItemQueryState } from "./itemQuery";
 import type { EagleItem, LoadItemsResponse } from "./types";
@@ -35,7 +35,7 @@ export function slideshowMediaKind(item: EagleItem) {
 
 type PageLoader = (params: URLSearchParams, signal: AbortSignal) => Promise<LoadItemsResponse>;
 async function fetchPage(params: URLSearchParams, signal: AbortSignal): Promise<LoadItemsResponse> {
-  const response = await fetch(`/api/items?${params}`, { credentials: "same-origin", signal });
+  const response = await fetch(`/api/items?${params}`, { credentials: "same-origin", headers: connectedLibraryHeaders(), signal });
   const data = await response.json();
   if (!response.ok) throw new ApiError(response.status, data?.error || `HTTP ${response.status}`);
   return data;
