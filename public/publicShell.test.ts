@@ -518,7 +518,7 @@ test("public image preview fit mode scales to the viewport and refreshes on resi
   assert.match(imagePreview, /class="image-viewport[^"]*\bplace-items-center\b/);
   assert.match(imagePreview, /class="preview-image absolute left-1\/2 top-1\/2/);
   const imageToolbarClass = html.match(/const imageToolbarClassName =\s*"([^"]*)"/)?.[1] || "";
-  assert.match(imageToolbarClass, /right-\[calc\(14px\+env\(safe-area-inset-right\)\)\]/);
+  assert.match(imageToolbarClass, /right-\[calc\(16px\+env\(safe-area-inset-right\)\)\]/);
   assert.doesNotMatch(imageToolbarClass, /left-1\/2/);
   assert.doesNotMatch(imageToolbarClass, /-translate-x-1\/2/);
   assert.match(html, /backdrop:bg-foreground\/30/);
@@ -616,7 +616,7 @@ test("public preview renders text-like files and PDFs inline", async () => {
   assert.match(html, /<iframe/);
   assert.match(html, /className=\{pdfPreviewClassName\}/);
   assert.match(html, /src=\{mediaUrl\(String\(item\.id \|\| ""\), "file"\)\}/);
-  assert.match(html, /function ImagePreview\(\{ item, srcKind: requestedSrcKind \}/);
+  assert.match(html, /function ImagePreview\(\{ item, srcKind: requestedSrcKind, fullscreen \}/);
   assert.match(html, /src=\{mediaUrl\(String\(item\.id \|\| ""\), srcKind\)\}/);
   assert.doesNotMatch(app, /function renderPdfPreview\(item\) \{/);
   assert.doesNotMatch(app, /viewer\.src = directFileUrl\(item\);/);

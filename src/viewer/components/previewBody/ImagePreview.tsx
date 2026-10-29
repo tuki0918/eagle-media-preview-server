@@ -1,4 +1,10 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent, type ReactNode, type TouchEvent } from "react";
+import { ChevronDown, Expand, Minimize, Scan } from "lucide-react";
+import { IMAGE_FIT_MARGIN } from "../../constants";
+import { getPreviewDialogState, subscribePreviewDialogState } from "../../previewDialogState";
+import type { ImageFullscreenControls } from "../../useImageFullscreen";
+import { ChevronLeftIcon, ChevronRightIcon } from "../Icons";
+import { dockSurfaceClassName } from "../viewerDockStyles";
 import { mediaUrl } from "../../api";
 import { hasNoThumbnail } from "../../media";
 import { closePreview, stepPreview } from "../../shellActions";
@@ -26,22 +32,29 @@ interface ImageState {
   transform: PreviewTransform;
 }
 
-const imageViewportClassName = "image-viewport relative grid h-full min-h-0 w-full min-w-0 cursor-grab touch-none place-items-center overflow-hidden active:cursor-grabbing";
+const imageViewportClassName = "image-viewport relative grid h-full min-h-0 w-full min-w-0 touch-none place-items-center overflow-hidden";
 const previewImageClassName =
-  "preview-image absolute left-1/2 top-1/2 block max-h-none max-w-none select-none object-contain [transform-origin:center] [will-change:transform] [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:bg-[#05070a] [&:fullscreen]:object-contain";
+  "preview-image absolute left-1/2 top-1/2 block max-h-none max-w-none select-none object-contain [transform-origin:center] [will-change:transform]";
+const imageControlSurfaceClassName = dockSurfaceClassName;
 const imageToolbarClassName =
-  "image-toolbar absolute bottom-[calc(14px+env(safe-area-inset-bottom))] right-[calc(14px+env(safe-area-inset-right))] z-[2] inline-flex items-center gap-1 rounded-full border border-border bg-[color-mix(in_srgb,var(--card)_86%,transparent)] p-1.5 shadow-[0_10px_30px_-12px_rgba(15,23,42,0.28)] backdrop-blur-xl";
+  "image-toolbar absolute bottom-[calc(16px+env(safe-area-inset-bottom))] right-[calc(16px+env(safe-area-inset-right))] z-[2] flex max-w-[calc(100%_-_32px_-_env(safe-area-inset-left)_-_env(safe-area-inset-right))] items-center gap-1 min-[720px]:bottom-6 min-[720px]:right-[max(24px,env(safe-area-inset-right))]";
 const toolbarButtonClassName =
-  "inline-grid min-h-9 w-9 touch-manipulation select-none place-items-center rounded-full border-0 bg-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground [&_svg]:h-[18px] [&_svg]:w-[18px] [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-linecap:round] [&_svg]:[stroke-linejoin:round] [&_svg]:[stroke-width:2]";
-const imageZoomLabelClassName =
-  "min-w-[44px] rounded-md px-1.5 text-center text-[11px] font-[680] tabular-nums text-muted-foreground";
+  "inline-grid size-9 shrink-0 touch-manipulation select-none place-items-center rounded-full border-0 bg-transparent p-0 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring [&_svg]:h-[18px] [&_svg]:w-[18px] [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-linecap:round] [&_svg]:[stroke-linejoin:round] [&_svg]:[stroke-width:2]";
+const imageZoomSelectClassName =
+  "h-9 w-[76px] touch-manipulation appearance-none rounded-full border-0 bg-transparent py-0 pl-2 pr-6 text-center text-xs font-medium tabular-nums text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring";
+const imageZoomPresets = [0.25, 0.5, 1, 2, 4, 8];
 
-export function ImagePreview({ item, srcKind: requestedSrcKind }: { item: EagleItem; srcKind: "file" | "thumb" }) {
+export function ImagePreview({ item, srcKind: requestedSrcKind, fullscreen }: { item: EagleItem; srcKind: "file" | "thumb"; fullscreen?: ImageFullscreenControls }) {
   // Fall back to the Eagle thumbnail when the browser cannot decode the original file.
   const [srcKind, setSrcKind] = useState(requestedSrcKind);
   const [loadFailed, setLoadFailed] = useState(false);
   const thumbnailUnavailable = srcKind === "thumb" && hasNoThumbnail(item);
   const viewportRef = useRef<HTMLDivElement | null>(null);
+  const layoutModeRef = useRef<"initial" | "fit" | "manual">("initial");
+  const previousFullscreen = useRef(false);
+  const fullscreenActive = useRef(false);
+  fullscreenActive.current = Boolean(fullscreen?.active);
+  const previewDialogState = useSyncExternalStore(subscribePreviewDialogState, getPreviewDialogState, getPreviewDialogState);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const dragRef = useRef<PreviewDrag | null>(null);
   const tapRef = useRef<{ pointerId: number; startX: number; startY: number; moved: boolean } | null>(null);
@@ -58,11 +71,19 @@ export function ImagePreview({ item, srcKind: requestedSrcKind }: { item: EagleI
   }));
 
   useEffect(() => {
+    if (previousFullscreen.current !== Boolean(fullscreen?.active)) {
+      layoutModeRef.current = "manual";
+      previousFullscreen.current = Boolean(fullscreen?.active);
+    }
+  }, [fullscreen?.active]);
+
+  useEffect(() => {
     setSrcKind(requestedSrcKind);
     setLoadFailed(false);
   }, [item.id, requestedSrcKind]);
 
   useEffect(() => {
+    layoutModeRef.current = "initial";
     dragRef.current = null;
     tapRef.current = null;
     pointersRef.current = new Map();
@@ -79,20 +100,32 @@ export function ImagePreview({ item, srcKind: requestedSrcKind }: { item: EagleI
       const image = imageRef.current;
       const viewport = viewportRef.current;
       if (!image || !viewport || !image.naturalWidth || !image.naturalHeight) return;
-      setImageState((current) => ({
-        ...current,
-        ...nextPreviewScales({
+      setImageState((current) => {
+        const scales = nextPreviewScales({
           imageWidth: image.naturalWidth,
           imageHeight: image.naturalHeight,
           viewportWidth: viewport.clientWidth,
           viewportHeight: viewport.clientHeight,
           previousFitScale: current.fitScale,
           previousTransform: current.transform,
-        }),
-      }));
+        });
+        const preserve = fullscreenActive.current || document.fullscreenElement || layoutModeRef.current === "manual";
+        return {
+          ...current,
+          ...scales,
+          transform: preserve ? current.transform : layoutModeRef.current === "fit"
+            ? setPreviewZoom(scales.fitScale / IMAGE_FIT_MARGIN, { x: 0, y: 0 })
+            : scales.transform,
+        };
+      });
     };
     window.addEventListener("resize", refreshLayout);
-    return () => window.removeEventListener("resize", refreshLayout);
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(refreshLayout);
+    if (viewportRef.current) observer?.observe(viewportRef.current);
+    return () => {
+      window.removeEventListener("resize", refreshLayout);
+      observer?.disconnect();
+    };
   }, []);
 
   const imageStyle = imageState.naturalSize
@@ -104,18 +137,22 @@ export function ImagePreview({ item, srcKind: requestedSrcKind }: { item: EagleI
     : undefined;
 
   const setImageZoom = (scale: number, position: Pick<PreviewTransform, "x" | "y"> = imageState.transform) => {
+    layoutModeRef.current = "manual";
     setImageState((current) => ({
       ...current,
-      transform: setPreviewZoom(scale, position),
+      transform: imageZoomTransform(scale, position, current.naturalSize, viewportRef.current),
     }));
   };
 
   const zoomImage = useCallback((multiplier: number) => {
+    layoutModeRef.current = "manual";
     setImageState((current) => ({
       ...current,
-      transform: setPreviewZoom(
+      transform: imageZoomTransform(
         nextZoomScale(current.transform.scale, multiplier, current.fitScale, current.naturalScale),
         current.transform,
+        current.naturalSize,
+        viewportRef.current,
       ),
     }));
   }, []);
@@ -133,12 +170,20 @@ export function ImagePreview({ item, srcKind: requestedSrcKind }: { item: EagleI
     };
   }, [zoomImage]);
 
+  const canPanImage = () => {
+    const viewport = viewportRef.current;
+    const size = imageState.naturalSize;
+    if (!viewport || !size) return false;
+    const edgeScale = Math.min(viewport.clientWidth / size.width, viewport.clientHeight / size.height);
+    return imageState.transform.scale > edgeScale * 1.001;
+  };
+
   const pointerDistanceFromState = () => pointerDistance(pointersRef.current.values());
 
   const startImageDrag = (event: PointerEvent<HTMLDivElement>) => {
     const viewport = viewportRef.current;
     const image = imageRef.current;
-    if (!viewport || !image) return;
+    if (!viewport || !image || event.button !== 0) return;
     if (event.pointerType === "touch") {
       pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
       if (pointersRef.current.size === 2) {
@@ -159,13 +204,13 @@ export function ImagePreview({ item, srcKind: requestedSrcKind }: { item: EagleI
       moved: false,
     };
     viewport.setPointerCapture(event.pointerId);
-    dragRef.current = {
+    dragRef.current = canPanImage() ? {
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
       originX: imageState.transform.x,
       originY: imageState.transform.y,
-    };
+    } : null;
   };
 
   const moveImageDrag = (event: PointerEvent<HTMLDivElement>) => {
@@ -196,6 +241,7 @@ export function ImagePreview({ item, srcKind: requestedSrcKind }: { item: EagleI
 
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
+    layoutModeRef.current = "manual";
     setImageState((current) => ({
       ...current,
       transform: dragPreviewTransform(current.transform, drag, { x: event.clientX, y: event.clientY }),
@@ -214,7 +260,7 @@ export function ImagePreview({ item, srcKind: requestedSrcKind }: { item: EagleI
       const deltaY = event.clientY - tap.startY;
       const canSwipe = event.pointerType === "touch"
         && pointersRef.current.size <= 1
-        && imageState.transform.scale <= imageState.fitScale * 1.05;
+        && !canPanImage();
       const canCloseFromSwipe = canSwipe && deltaY > 80 && deltaY > deltaX * 1.6;
       const canStepFromSwipe = canSwipe && deltaX > 64 && deltaX > Math.abs(deltaY) * 1.6;
       if (canCloseFromSwipe) {
@@ -239,11 +285,14 @@ export function ImagePreview({ item, srcKind: requestedSrcKind }: { item: EagleI
     <>
       <div
         ref={viewportRef}
-        className={imageViewportClassName}
+        className={`${imageViewportClassName} ${canPanImage() ? "cursor-grab active:cursor-grabbing" : "cursor-default"}`}
         onPointerDown={startImageDrag}
         onPointerMove={moveImageDrag}
         onPointerUp={endImageDrag}
-        onPointerCancel={endImageDrag}
+        onPointerCancel={(event) => {
+          tapRef.current = null;
+          endImageDrag(event);
+        }}
         onTouchMove={(event: TouchEvent<HTMLDivElement>) => {
           if (event.touches.length > 1) event.preventDefault();
         }}
@@ -288,7 +337,14 @@ export function ImagePreview({ item, srcKind: requestedSrcKind }: { item: EagleI
       {loadFailed ? <PreviewNotice message="Preview is unavailable" /> : null}
       <ImageToolbar
         visible={imageOverlayControlsVisible}
-        onActualSize={() => setImageZoom(imageState.naturalScale, { x: 0, y: 0 })}
+        fullscreen={fullscreen}
+        onFullscreen={() => {
+          layoutModeRef.current = "manual";
+          fullscreen?.toggle();
+        }}
+        hasPrevious={Boolean(previewDialogState.hasPrevious)}
+        hasNext={Boolean(previewDialogState.hasNext)}
+        onZoomChange={(scale) => setImageZoom(scale, { x: 0, y: 0 })}
         onFit={() => {
           const image = imageRef.current;
           const viewport = viewportRef.current;
@@ -296,47 +352,116 @@ export function ImagePreview({ item, srcKind: requestedSrcKind }: { item: EagleI
           // Initial layout keeps its margin; Fit fills the viewport along the limiting axis.
           const scale = Math.min(viewport.clientWidth / image.naturalWidth, viewport.clientHeight / image.naturalHeight);
           setImageZoom(scale, { x: 0, y: 0 });
+          layoutModeRef.current = "fit";
         }}
         onZoomIn={() => zoomImage(1.18)}
         onZoomOut={() => zoomImage(0.85)}
-        zoomLabel={formatImageZoomLabel(imageState.transform.scale)}
+        zoomScale={imageState.transform.scale}
       />
     </>
   );
 }
 
 function ImageToolbar({
-  onActualSize,
+  fullscreen,
+  onFullscreen,
+  hasPrevious,
+  hasNext,
+  onZoomChange,
   onFit,
   onZoomIn,
   onZoomOut,
   visible,
-  zoomLabel,
+  zoomScale,
 }: {
-  onActualSize: () => void;
+  fullscreen?: ImageFullscreenControls;
+  onFullscreen: () => void;
+  hasPrevious: boolean;
+  hasNext: boolean;
+  onZoomChange: (scale: number) => void;
   onFit: () => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
   visible: boolean;
-  zoomLabel: string;
+  zoomScale: number;
 }) {
+  const visibility = `${visible ? "visible opacity-100" : "invisible pointer-events-none opacity-0"} transition-opacity duration-150`;
   return (
-    <div className={`${imageToolbarClassName} ${visible ? "opacity-100" : "pointer-events-none opacity-0"} transition-opacity duration-150`}>
-      <ToolbarButton label="Zoom out" icon={<MinusIcon />} onClick={onZoomOut} />
-      <span className={imageZoomLabelClassName} aria-live="polite">{zoomLabel}</span>
-      <ToolbarButton label="Zoom in" icon={<PlusIcon />} onClick={onZoomIn} />
-      <ToolbarButton label="Fit" icon={<MaximizeIcon />} onClick={onFit} />
-      <ToolbarButton label="Actual size" icon={<Maximize2Icon />} onClick={onActualSize} />
-    </div>
+    <>
+      <div className={`${imageToolbarClassName} ${imageControlSurfaceClassName} ${visibility}`}>
+        <div role="group" aria-label="Image zoom" className="flex items-center">
+          <span className="inline-flex touch:hidden">
+            <ToolbarButton label="Zoom out" icon={<MinusIcon />} onClick={onZoomOut} />
+          </span>
+          <span className="relative inline-flex items-center">
+            <select
+              className={imageZoomSelectClassName}
+              aria-label="Image zoom percentage"
+              title="Image zoom percentage (100% = actual size)"
+              value={String(zoomScale)}
+              onChange={(event) => onZoomChange(Number(event.currentTarget.value))}
+            >
+              {!imageZoomPresets.includes(zoomScale) ? <option value={String(zoomScale)} hidden>{formatImageZoomLabel(zoomScale)}</option> : null}
+              {imageZoomPresets.map((scale) => <option key={scale} value={String(scale)} className="bg-popover text-popover-foreground">{formatImageZoomLabel(scale)}</option>)}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-1.5 size-3.5 text-muted-foreground" aria-hidden="true" />
+          </span>
+          <span className="inline-flex touch:hidden">
+            <ToolbarButton label="Zoom in" icon={<PlusIcon />} onClick={onZoomIn} />
+          </span>
+        </div>
+        <span className="mx-1 h-5 w-px shrink-0 bg-border" aria-hidden="true" />
+        <div role="group" aria-label="Image size" className="flex items-center gap-1">
+          <ToolbarButton label="Fit" icon={<Scan aria-hidden="true" />} onClick={onFit} />
+        </div>
+      </div>
+      {fullscreen ? (
+        <div className={`image-fullscreen-control absolute right-[calc(14px+env(safe-area-inset-right))] top-[calc(14px+env(safe-area-inset-top))] z-[2] ${fullscreen.active ? "" : "touch:hidden"} ${imageControlSurfaceClassName} ${visibility}`}>
+          <ToolbarButton
+            label={fullscreen.active ? "Exit full screen" : "Full screen"}
+            icon={fullscreen.active ? <Minimize aria-hidden="true" /> : <Expand aria-hidden="true" />}
+            onClick={onFullscreen}
+          />
+        </div>
+      ) : null}
+      {fullscreen?.active ? (
+        <div role="group" aria-label="Image navigation" className={`image-navigation pointer-events-none absolute inset-x-0 top-1/2 z-[2] flex -translate-y-1/2 justify-between pl-[calc(14px+env(safe-area-inset-left))] pr-[calc(14px+env(safe-area-inset-right))] ${visibility}`}>
+          <div className={`pointer-events-auto ${imageControlSurfaceClassName}`}>
+            <ToolbarButton label="Previous item" icon={<ChevronLeftIcon />} onClick={() => stepPreview(-1)} disabled={!hasPrevious} />
+          </div>
+          <div className={`pointer-events-auto ${imageControlSurfaceClassName}`}>
+            <ToolbarButton label="Next item" icon={<ChevronRightIcon />} onClick={() => stepPreview(1)} disabled={!hasNext} />
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }
 
-function ToolbarButton({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
+function ToolbarButton({ icon, label, title = label, onClick, disabled }: {
+  icon: ReactNode;
+  label: string;
+  title?: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
   return (
-    <button type="button" className={toolbarButtonClassName} title={label} aria-label={label} onClick={onClick}>
+    <button type="button" className={`${toolbarButtonClassName} disabled:pointer-events-none disabled:opacity-35`} disabled={disabled} title={title} aria-label={label} onClick={onClick}>
       {icon}
     </button>
   );
+}
+
+function imageZoomTransform(
+  scale: number,
+  position: Pick<PreviewTransform, "x" | "y">,
+  size: ImageState["naturalSize"],
+  viewport: HTMLDivElement | null,
+) {
+  const fits = size && viewport
+    && size.width * scale <= viewport.clientWidth + 0.5
+    && size.height * scale <= viewport.clientHeight + 0.5;
+  return setPreviewZoom(scale, fits ? { x: 0, y: 0 } : position);
 }
 
 function formatImageZoomLabel(scale: number) {
@@ -357,28 +482,6 @@ function PlusIcon() {
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M5 12h14" />
       <path d="M12 5v14" />
-    </svg>
-  );
-}
-
-function MaximizeIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M8 3H5a2 2 0 0 0-2 2v3" />
-      <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
-      <path d="M3 16v3a2 2 0 0 0 2 2h3" />
-      <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
-    </svg>
-  );
-}
-
-function Maximize2Icon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <polyline points="15 3 21 3 21 9" />
-      <polyline points="9 21 3 21 3 15" />
-      <line x1="21" x2="14" y1="3" y2="10" />
-      <line x1="3" x2="10" y1="21" y2="14" />
     </svg>
   );
 }

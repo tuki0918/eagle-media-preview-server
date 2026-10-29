@@ -1,4 +1,5 @@
-import { forwardRef, useSyncExternalStore } from "react";
+import { forwardRef, useCallback, useRef, useSyncExternalStore } from "react";
+import { useImageFullscreen, type ImageFullscreenControls } from "../useImageFullscreen";
 import type { EagleItem } from "../types";
 import { getPreviewBodyState, subscribePreviewBodyState } from "../previewBodyState";
 import { AudioPreview, VideoPreview } from "./previewBody/MediaPreviews";
@@ -15,25 +16,32 @@ export interface PreviewBodyProps {
   srcKind?: "file" | "thumb";
 }
 
-export function PreviewBody({ item, kind, srcKind = "file" }: PreviewBodyProps) {
+export function PreviewBody({ item, kind, srcKind = "file", imageFullscreen }: PreviewBodyProps & { imageFullscreen?: ImageFullscreenControls }) {
   if (kind === "video") return <VideoPreview item={item} />;
   if (kind === "audio") return <AudioPreview item={item} />;
   if (kind === "text") return <TextPreview item={item} />;
   if (kind === "pdf") return <PdfPreview item={item} />;
   if (kind === "url") return <UrlPreview item={item} />;
   if (kind === "unsupported") return <UnsupportedPreview item={item} />;
-  return <ImagePreview item={item} srcKind={srcKind} />;
+  return <ImagePreview item={item} srcKind={srcKind} fullscreen={imageFullscreen} />;
 }
 
 export const PreviewBodyHost = forwardRef<HTMLDivElement>(function PreviewBodyHost(_, ref) {
   const previewBodyState = useSyncExternalStore(subscribePreviewBodyState, getPreviewBodyState, getPreviewBodyState);
+  const surfaceRef = useRef<HTMLDivElement | null>(null);
+  const setSurfaceRef = useCallback((node: HTMLDivElement | null) => {
+    surfaceRef.current = node;
+    if (typeof ref === "function") ref(node);
+    else if (ref) ref.current = node;
+  }, [ref]);
+  const imageFullscreen = useImageFullscreen(surfaceRef, previewBodyState?.kind === "image");
   return (
     <div
-      ref={ref}
+      ref={setSurfaceRef}
       id="previewBody"
-      className={previewBodyClassName(previewBodyState?.kind)}
+      className={`${previewBodyClassName(previewBodyState?.kind)}${imageFullscreen.active ? " !fixed inset-0 z-[10] !h-dvh w-screen bg-muted" : ""}`}
     >
-      {previewBodyState ? <PreviewBody key={String(previewBodyState.item.id || "")} {...previewBodyState} /> : null}
+      {previewBodyState ? <PreviewBody key={String(previewBodyState.item.id || "")} {...previewBodyState} imageFullscreen={imageFullscreen} /> : null}
     </div>
   );
 });

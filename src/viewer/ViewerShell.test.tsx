@@ -265,7 +265,7 @@ describe("ViewerAppShell", () => {
     expect(html).not.toContain("fixed left-2.5 top-[calc(10px+env(safe-area-inset-top))]");
   });
 
-  test("renders image preview actions with media-style controls", () => {
+  test("renders image preview controls in labelled zoom and size groups", () => {
     setPreviewDialogState({ infoOpen: false, mode: "image", open: true });
     const dialog = renderToStaticMarkup(<PreviewDialog />);
     resetPreviewDialogState();
@@ -275,11 +275,17 @@ describe("ViewerAppShell", () => {
     expect(dialog).toContain("rounded-full");
     expect(dialog).not.toContain("bg-[rgba(15,23,42,0.48)]");
     expect(body).toContain("image-toolbar");
-    expect(body).toMatch(/image-toolbar[^"]*right-\[calc\(14px\+env\(safe-area-inset-right\)\)\]/);
     expect(body).toContain("100%");
+    expect(body).toMatch(/image-toolbar[^"]*right-\[calc\(16px\+env\(safe-area-inset-right\)\)\]/);
     expect(body).not.toMatch(/image-toolbar[^"]*left-1\/2/);
     expect(body).not.toMatch(/image-toolbar[^"]*-translate-x-1\/2/);
-    expect(body).toContain("var(--card)_86%");
+    expect(body).toContain('role="group" aria-label="Image zoom"');
+    expect(body).toContain('role="group" aria-label="Image size"');
+    expect(body).toContain('aria-label="Fit"');
+    expect(body).toContain('aria-label="Image zoom percentage"');
+    expect(body).not.toContain('aria-label="Actual size"');
+    expect(body).not.toContain('>Fit</span>');
+    expect(body).not.toContain('>Actual size</span>');
     expect(body).toContain("text-muted-foreground");
   });
 
