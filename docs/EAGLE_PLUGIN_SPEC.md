@@ -189,7 +189,7 @@ Settings path:
 - Open the original file in a new tab
 - Sync search filters, page, view mode, and preview state into the URL
 - Clear viewer state and return to the login screen when an authenticated viewer API request returns `401`
-- Clear viewer state and return to the connect screen when the server reports that the open library is not shared
+- Clear viewer state and show the "Media Library is offline" page when the server reports that the open library is not shared
 - Reload from scratch when the library id reported by `/api/health` changes
 
 ### Supported Browsing Features

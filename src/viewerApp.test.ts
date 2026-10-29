@@ -2,7 +2,7 @@ import { JSDOM } from "jsdom";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 function installDom() {
-  const dom = new JSDOM('<!doctype html><form id="connectForm"><input name="username"><input name="password"></form>', {
+  const dom = new JSDOM('<!doctype html><main id="startupFallback"><h1 id="startupTitle"></h1><p id="startupMessage"></p></main><form id="connectForm"><input name="username"><input name="password"></form>', {
     url: "http://127.0.0.1:5173/viewer",
   });
   Object.defineProperty(globalThis, "document", { configurable: true, value: dom.window.document });
@@ -382,7 +382,7 @@ describe("viewer app data refresh", () => {
     expect(new URLSearchParams(window.location.search).has("q")).toBe(false);
   });
 
-  test("returns to the connect screen when the server stops sharing the open library", async () => {
+  test("shows the offline page when the server stops sharing the open library", async () => {
     let health: unknown = { app: { version: "1.0" }, library: { id: "lib-a", name: "A" }, libraryStatus: "shared" };
     let connectResponse: Response = jsonResponse({ app: { version: "1.0" }, library: { id: "lib-a", name: "A" } });
     const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
@@ -408,14 +408,17 @@ describe("viewer app data refresh", () => {
 
     health = { app: { version: "1.0" }, library: null, libraryStatus: "not_shared" };
     window.dispatchEvent(new window.Event("online"));
-    await vi.waitFor(() => expect(getShellView()).toBe("login"));
-    expect(getLoginConnectState()).toMatchObject({ isError: true, message: "This library isn't shared right now. Please try again later." });
+    await vi.waitFor(() => expect(document.body.dataset.appState).toBe("failed"));
+    expect(getShellView()).toBe("login");
+    expect(document.querySelector("#startupTitle")?.textContent).toBe("Media Library is offline");
+    expect(document.querySelector("#startupMessage")?.textContent).toBe("This library isn't shared right now. Please try again later.");
+
+    document.body.dataset.appState = "ready";
 
     connectResponse = errorResponse(503, { error: "The library open in Eagle is not shared", code: "LIBRARY_NOT_SHARED" });
     submitConnection({ currentTarget: document.querySelector<HTMLFormElement>("#connectForm")!, preventDefault: () => {} });
-    await vi.waitFor(() => expect(getLoginConnectState().disabled).toBe(false));
+    await vi.waitFor(() => expect(document.body.dataset.appState).toBe("failed"));
     expect(getShellView()).toBe("login");
-    expect(getLoginConnectState().message).toBe("This library isn't shared right now. Please try again later.");
   });
 
   test("reconnects when Eagle switches to a different shared library", async () => {

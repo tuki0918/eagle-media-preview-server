@@ -44,6 +44,7 @@ import {
 import { setLibraryFooterName } from "./viewer/libraryFooterState";
 import { getEagleStatus, setEagleStatus } from "./viewer/eagleStatusState";
 import { setLibraryName } from "./viewer/libraryNameState";
+import { showOfflinePage } from "./viewer/offlinePage";
 import {
   currentFetchLimit as getCurrentFetchLimit,
   pageButtonList,
@@ -131,6 +132,7 @@ let unsubscribeEagleStatusRequests: (() => void) | null = null;
 const EAGLE_STATUS_POLL_INTERVAL_MS = 30_000;
 const pendingRatingItemIds = new Set<string>();
 const DEFAULT_DOCUMENT_TITLE = "Media Library";
+const OFFLINE_PAGE_TITLE = "Media Library is offline";
 const LIBRARY_NOT_SHARED_MESSAGE = "This library isn't shared right now. Please try again later.";
 const changeSearch = debounce((query: string) => {
   applyFilterChange({ query: query.trim() });
@@ -269,6 +271,10 @@ async function connect(credentials?: { password: string; username: string }) {
       return;
     }
     if (handleAuthError(error)) return;
+    if (isLibraryNotSharedError(error)) {
+      handleLibraryNotShared();
+      return;
+    }
     if (isEagleConnectionError(error)) serverReachable = false;
     showLogin();
     setConnectMessage(connectErrorMessage(error), true);
@@ -372,11 +378,11 @@ function isLibraryNotSharedError(error: unknown) {
   return error instanceof ApiError && error.code === "LIBRARY_NOT_SHARED";
 }
 
-// The host opened a library that is not shared: drop what was loaded and wait at the connect screen.
+// The host opened a library that is not shared: drop what was loaded and show the offline page.
 function handleLibraryNotShared() {
   clearViewerSessionState();
   showLogin();
-  setConnectMessage(LIBRARY_NOT_SHARED_MESSAGE, true);
+  showOfflinePage({ title: OFFLINE_PAGE_TITLE, message: LIBRARY_NOT_SHARED_MESSAGE });
 }
 
 function connectErrorMessage(error: unknown) {
