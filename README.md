@@ -50,6 +50,10 @@ The browser viewer can be installed from a supported desktop or mobile browser. 
 
 The PWA caches only the application shell. Eagle API responses and library media are intentionally excluded from the service-worker cache, so browsing library content still requires a connection to the running plugin server.
 
+## Slideshow
+
+Slideshows start muted on all devices. To hear video or audio, use the speaker button in the bottom playback bar to turn sound on during playback.
+
 ## Video Picture-in-Picture
 
 Open a video preview and use the **Picture-in-Picture** button beside the full-screen button. It appears when the browser and device expose PiP support and becomes available after the video metadata loads. Standard PiP and Safari's native video presentation API are supported. Closing the preview or changing items also closes its PiP window.

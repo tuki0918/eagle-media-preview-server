@@ -119,6 +119,7 @@ export function SlideshowDialog({ query, onClose }: { query: SlideshowQuery; onC
               <SlideshowToggle label="Loop" checked={settings.loop} onChange={(loop) => setSettings({ ...settings, loop })} />
             </div>
             <footer className="shrink-0 border-t border-border bg-card px-5 py-4">
+              <p className="mb-3 text-center text-xs leading-relaxed text-muted-foreground">Slideshows start muted. To hear video or audio, turn on sound using the speaker button during playback.</p>
               <Button type="button" className="primary-action-button h-11 w-full touch-manipulation rounded-full transition-colors active:not-aria-[haspopup]:translate-y-0" onClick={start}><Play className="size-4" />START</Button>
             </footer>
           </>
