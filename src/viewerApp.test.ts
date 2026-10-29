@@ -492,6 +492,37 @@ describe("viewer app data refresh", () => {
     expect(requests.filter((url) => url === "/api/connect")).toHaveLength(1);
   });
 
+  test("checks the library when a preview opens, since the browser may answer it from its cache", async () => {
+    let health: unknown = { app: { version: "1.0" }, library: { id: "lib-a", name: "A" }, libraryStatus: "shared" };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/auth/status") return jsonResponse({ authenticated: true, required: false });
+      if (url === "/api/connect" && options?.method === "POST") return jsonResponse({ app: { version: "1.0" }, library: { id: "lib-a", name: "A" } });
+      if (url === "/api/health") return jsonResponse(health);
+      if (url === "/api/folders" || url === "/api/smart-folders") return jsonResponse({ items: [] });
+      if (url.startsWith("/api/items?")) return jsonResponse({ items: [{ id: "item1", name: "Photo", ext: "jpg" }], total: 1 });
+      if (url.startsWith("/api/item-types")) return jsonResponse({ items: [] });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: fetchMock });
+
+    const { initViewer } = await import("./viewerApp");
+    const { handleUrlPop, submitConnection } = await import("./viewer/shellActions");
+    const { getLoginConnectState } = await import("./viewer/loginConnectState");
+    const { getShellView } = await import("./viewer/shellVisibility");
+    initViewer();
+    await vi.waitFor(() => expect(getLoginConnectState().authenticated).toBe(true));
+    submitConnection({ currentTarget: document.querySelector<HTMLFormElement>("#connectForm")!, preventDefault: () => {} });
+    await vi.waitFor(() => expect(getShellView()).toBe("viewer"));
+
+    health = { app: { version: "1.0" }, library: { id: "lib-b", name: "B" }, libraryStatus: "shared" };
+    vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+    window.history.pushState(null, "", "/?item=item1");
+    handleUrlPop();
+    await vi.waitFor(() => expect(getShellView()).toBe("login"));
+    expect(getLoginConnectState().message).toBe("The media server switched to a different library.");
+  });
+
   test("returns to the connect screen as soon as a response comes from a different library", async () => {
     let responseLibraryId = "lib-a";
     const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {

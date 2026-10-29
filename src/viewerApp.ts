@@ -129,6 +129,8 @@ let eagleStatusRequestId = 0;
 let eagleStatusCheckInFlight = false;
 let unsubscribeEagleStatusRequests: (() => void) | null = null;
 const EAGLE_STATUS_POLL_INTERVAL_MS = 30_000;
+// Long enough for Eagle's local API, short enough that a stopped server shows as offline quickly.
+const EAGLE_STATUS_TIMEOUT_MS = 5_000;
 const pendingRatingItemIds = new Set<string>();
 const DEFAULT_DOCUMENT_TITLE = "Media Library";
 const OFFLINE_PAGE_TITLE = "Media Library is offline";
@@ -597,7 +599,7 @@ async function checkEagleStatus() {
   const requestId = ++eagleStatusRequestId;
   eagleStatusCheckInFlight = true;
   try {
-    const data = await getJson<HealthResponse>("/api/health");
+    const data = await getJson<HealthResponse>("/api/health", { timeoutMs: EAGLE_STATUS_TIMEOUT_MS });
     if (requestId !== eagleStatusRequestId) return;
     if (data.libraryStatus === "not_shared") {
       handleLibraryNotShared();
@@ -812,6 +814,9 @@ function openPreview(item: EagleItem, { replaceHistory = false, skipHistory = fa
     open: true,
   });
   setPreviewBodyState({ item, kind, srcKind });
+  // The browser may answer the preview from its cache, so ask the server whether it is still up
+  // and still on the connected library.
+  if (eagleStatusTimer) void checkEagleStatus();
 
   if (!skipHistory) syncUrlState({ replace: replaceHistory });
 }

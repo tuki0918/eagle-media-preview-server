@@ -51,8 +51,8 @@ export function connectedLibraryHeaders(): Record<string, string> {
   return connectedLibraryId ? { "X-Library-Id": connectedLibraryId } : {};
 }
 
-export async function getJson<T = unknown>(url: string): Promise<T> {
-  return requestJson<T>(url);
+export async function getJson<T = unknown>(url: string, { timeoutMs }: { timeoutMs?: number } = {}): Promise<T> {
+  return requestJson<T>(url, undefined, timeoutMs);
 }
 
 export async function postJson<T = unknown>(url: string, body: unknown): Promise<T> {
@@ -63,19 +63,26 @@ export async function postJson<T = unknown>(url: string, body: unknown): Promise
   });
 }
 
-async function requestJson<T>(url: string, options?: RequestInit): Promise<T> {
+// `timeoutMs` aborts a request the network never answers, such as one to a stopped server whose
+// port silently drops packets; without it the caller waits for the browser's TCP timeout.
+async function requestJson<T>(url: string, options?: RequestInit, timeoutMs?: number): Promise<T> {
   const libraryHeaders = connectedLibraryHeaders();
   const requestOptions: RequestInit = {
     ...options,
     ...(Object.keys(libraryHeaders).length ? { headers: { ...(options?.headers as Record<string, string> | undefined), ...libraryHeaders } } : {}),
     credentials: options?.credentials ?? "same-origin",
   };
+  const controller = timeoutMs ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  if (controller) requestOptions.signal = controller.signal;
   let response: Response;
   try {
     response = await fetch(url, requestOptions);
   } catch (error) {
     notifyRequestOutcome({ libraryId: "", ok: false, status: 0, url });
     throw error;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
   notifyRequestOutcome({ libraryId: response.headers?.get?.("X-Library-Id") || "", ok: response.ok, status: response.status, url });
   const data = await safeJson(response);

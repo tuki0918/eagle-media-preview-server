@@ -103,6 +103,25 @@ describe("viewer API helpers", () => {
     } satisfies Partial<ApiError>);
   });
 
+  test("aborts a request the server never answers once the timeout passes", async () => {
+    vi.useFakeTimers();
+    const outcomes: RequestOutcome[] = [];
+    const unsubscribe = subscribeRequestOutcome((outcome) => outcomes.push(outcome));
+    vi.spyOn(globalThis, "fetch").mockImplementation((_url, init) => new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(new DOMException("The operation was aborted.", "AbortError")));
+    }));
+
+    const request = getJson("/api/health", { timeoutMs: 5000 });
+    const settled = expect(request).rejects.toMatchObject({ name: "AbortError" });
+    await vi.advanceTimersByTimeAsync(4999);
+    expect(outcomes).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+    await settled;
+    unsubscribe();
+
+    expect(outcomes).toEqual([{ libraryId: "", ok: false, status: 0, url: "/api/health" }]);
+  });
+
   test("normalizes unknown thrown values to display messages", () => {
     expect(errorMessage(new Error("Boom"))).toBe("Boom");
     expect(errorMessage("plain failure")).toBe("plain failure");

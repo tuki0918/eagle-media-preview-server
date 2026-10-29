@@ -11,7 +11,7 @@ import {
   subscribeVideoOverlayControls,
 } from "../../videoOverlayState";
 import type { EagleItem } from "../../types";
-import { PreviewNotice } from "./shared";
+import { MEDIA_SERVER_OFFLINE_MESSAGE, PreviewNotice, PreviewOverlayNotice, useMediaServerOffline } from "./shared";
 
 const previewVideoClassName =
   "preview-video h-full w-full max-h-full cursor-pointer bg-[#05070a] object-contain [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:max-h-none [&:fullscreen]:max-w-none [&:fullscreen]:bg-[#05070a] [&:fullscreen]:object-contain";
@@ -47,6 +47,20 @@ export function VideoPreview({ item }: { item: EagleItem }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [notice, setNotice] = useState("");
   const [buffering, setBuffering] = useState(true);
+  const offline = useMediaServerOffline();
+  const wasOffline = useRef(offline);
+
+  // Reload once the server is back, resuming where playback stopped.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (wasOffline.current && !offline && video && (buffering || notice)) {
+      const resumeAt = video.currentTime;
+      setNotice("");
+      video.load();
+      if (resumeAt) video.addEventListener("loadedmetadata", () => { video.currentTime = resumeAt; }, { once: true });
+    }
+    wasOffline.current = offline;
+  }, [offline]);
 
   useEffect(() => {
     setVideoOverlayControlsVisible(true);
@@ -84,13 +98,13 @@ export function VideoPreview({ item }: { item: EagleItem }) {
           setNotice(videoErrorMessage(event.currentTarget.error));
         }}
       />
-      {buffering ? (
+      {buffering && !offline ? (
         <span className="pointer-events-none absolute inset-0 z-[1] grid place-items-center" aria-hidden="true">
           <span className="loading-spinner block size-10 animate-spin rounded-full border-[3px] border-[rgba(255,255,255,0.22)] border-t-white" />
         </span>
       ) : null}
       <MediaControls mediaRef={videoRef} item={item} variant="video" />
-      {notice ? <PreviewNotice message={notice} /> : null}
+      {offline && (buffering || notice) ? <PreviewOverlayNotice message={MEDIA_SERVER_OFFLINE_MESSAGE} className="[&_.preview-notice]:text-white/80" /> : notice ? <PreviewNotice message={notice} /> : null}
     </>
   );
 }

@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ExternalLinkIcon } from "lucide-react";
 import { errorMessage, getJson, mediaUrl } from "../../api";
 import { hasNoThumbnail } from "../../media";
 import type { EagleItem } from "../../types";
-import { PreviewNotice } from "./shared";
+import { MEDIA_SERVER_OFFLINE_MESSAGE, PreviewNotice, useMediaServerOffline } from "./shared";
 
 const textPreviewClassName =
   "text-preview m-0 min-w-0 overflow-auto rounded-md border border-border bg-card p-[18px] font-mono text-[13px] leading-[1.55] text-card-foreground shadow-sm [overflow-wrap:anywhere] [white-space:pre-wrap]";
@@ -15,18 +15,34 @@ const urlThumbPreviewPlaceholderClassName = "url-thumb-preview-placeholder grid 
 const urlThumbPreviewLinkClassName = "inline-flex min-h-11 w-fit max-w-full items-center justify-center gap-2 justify-self-center rounded-md bg-primary px-4 text-sm font-[720] text-primary-foreground no-underline hover:bg-primary/90 [&_svg]:size-4";
 const unsupportedThumbClassName = "unsupported-thumb max-h-[min(62dvh,640px)] w-[min(640px,calc(100vw_-_48px))] max-w-full object-contain";
 const previewNoticeClassName = "preview-notice m-0 max-w-[560px] text-center text-[13px] leading-normal text-muted-foreground";
+const TEXT_LOADING = "Loading...";
+
 export function TextPreview({ item }: { item: EagleItem }) {
-  const [text, setText] = useState("Loading...");
+  const [text, setText] = useState(TEXT_LOADING);
+  const [loaded, setLoaded] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const offline = useMediaServerOffline();
+  const wasOffline = useRef(offline);
+
+  // Fetch again once the server is back, since the failed or stalled request won't recover.
+  useEffect(() => {
+    if (wasOffline.current && !offline && !loaded) setLoadAttempt((attempt) => attempt + 1);
+    wasOffline.current = offline;
+  }, [offline]);
 
   useEffect(() => {
     let cancelled = false;
-    setText("Loading...");
+    setText(TEXT_LOADING);
+    setLoaded(false);
     (async () => {
       try {
         const response = await fetch(mediaUrl(String(item.id || ""), "file"));
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const nextText = await response.text();
-        if (!cancelled) setText(nextText);
+        if (!cancelled) {
+          setText(nextText);
+          setLoaded(true);
+        }
       } catch (error) {
         if (!cancelled) setText(`Unable to load preview: ${errorMessage(error)}`);
       }
@@ -34,11 +50,11 @@ export function TextPreview({ item }: { item: EagleItem }) {
     return () => {
       cancelled = true;
     };
-  }, [item.id]);
+  }, [item.id, loadAttempt]);
 
   return (
     <pre className={textPreviewClassName}>
-      <code>{text}</code>
+      <code>{offline && !loaded ? MEDIA_SERVER_OFFLINE_MESSAGE : text}</code>
     </pre>
   );
 }

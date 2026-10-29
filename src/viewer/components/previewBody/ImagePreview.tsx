@@ -23,7 +23,7 @@ import {
   setPreviewZoom,
 } from "../../previewTransform";
 import type { EagleItem, PreviewDrag, PreviewPinch, PreviewPoint, PreviewTransform } from "../../types";
-import { PreviewNotice } from "./shared";
+import { MEDIA_SERVER_OFFLINE_MESSAGE, PreviewNotice, PreviewOverlayNotice, useMediaServerOffline } from "./shared";
 
 interface ImageState {
   fitScale: number;
@@ -48,6 +48,9 @@ export function ImagePreview({ item, srcKind: requestedSrcKind, fullscreen }: { 
   // Fall back to the Eagle thumbnail when the browser cannot decode the original file.
   const [srcKind, setSrcKind] = useState(requestedSrcKind);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const offline = useMediaServerOffline();
+  const wasOffline = useRef(offline);
   const thumbnailUnavailable = srcKind === "thumb" && hasNoThumbnail(item);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const layoutModeRef = useRef<"initial" | "fit" | "manual">("initial");
@@ -81,6 +84,16 @@ export function ImagePreview({ item, srcKind: requestedSrcKind, fullscreen }: { 
     setSrcKind(requestedSrcKind);
     setLoadFailed(false);
   }, [item.id, requestedSrcKind]);
+
+  // Load the image again once the server is back, since the failed or stalled request won't recover.
+  useEffect(() => {
+    if (wasOffline.current && !offline && !imageState.naturalSize) {
+      setSrcKind(requestedSrcKind);
+      setLoadFailed(false);
+      setLoadAttempt((attempt) => attempt + 1);
+    }
+    wasOffline.current = offline;
+  }, [offline]);
 
   useEffect(() => {
     layoutModeRef.current = "initial";
@@ -298,6 +311,7 @@ export function ImagePreview({ item, srcKind: requestedSrcKind, fullscreen }: { 
         }}
       >
         <img
+          key={loadAttempt}
           ref={imageRef}
           className={`${previewImageClassName}${imageState.naturalSize ? "" : " opacity-0"}`}
           src={mediaUrl(String(item.id || ""), srcKind)}
@@ -329,12 +343,13 @@ export function ImagePreview({ item, srcKind: requestedSrcKind, fullscreen }: { 
           }}
         />
       </div>
-      {!imageState.naturalSize && !loadFailed ? (
+      {!imageState.naturalSize && !loadFailed && !offline ? (
         <span className="pointer-events-none absolute inset-0 z-[1] grid place-items-center" aria-hidden="true">
           <span className="loading-spinner block size-8 animate-spin rounded-full border-[3px] border-[color-mix(in_srgb,var(--muted-foreground)_25%,transparent)] border-t-muted-foreground" />
         </span>
       ) : null}
-      {loadFailed ? <PreviewNotice message="Preview is unavailable" /> : null}
+      {offline && !imageState.naturalSize ? <PreviewOverlayNotice message={MEDIA_SERVER_OFFLINE_MESSAGE} /> : null}
+      {loadFailed && !offline ? <PreviewOverlayNotice message="Preview is unavailable" /> : null}
       <ImageToolbar
         visible={imageOverlayControlsVisible}
         fullscreen={fullscreen}

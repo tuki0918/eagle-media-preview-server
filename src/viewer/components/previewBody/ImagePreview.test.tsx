@@ -7,6 +7,42 @@ import { clearPreviewBodyState, setPreviewBodyState } from "../../previewBodySta
 import * as actions from "../../shellActions";
 import { ImagePreview } from "./ImagePreview";
 import { setImageOverlayControlsVisible } from "../../imageOverlayState";
+import { setEagleStatus } from "../../eagleStatusState";
+
+test("shows the offline notice instead of a spinner and reloads once the server is back", async () => {
+  const dom = new JSDOM('<!doctype html><div id="root"></div>', { url: "http://localhost" });
+  let root: Root | undefined;
+  try {
+    for (const name of ["window", "document", "navigator", "Node", "Element", "HTMLElement"] as const) {
+      vi.stubGlobal(name, name === "window" ? dom.window : dom.window[name]);
+    }
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const { createRoot } = await import("react-dom/client");
+    const container = dom.window.document.querySelector("#root")!;
+    root = createRoot(container);
+    setEagleStatus("online");
+    await act(async () => { root?.render(<ImagePreview item={{ id: "photo", name: "Photo", ext: "jpg" }} srcKind="file" />); });
+    const pendingImage = container.querySelector("img")!;
+    expect(container.querySelector(".loading-spinner")).not.toBeNull();
+
+    await act(async () => { setEagleStatus("offline"); });
+    expect(container.querySelector(".loading-spinner")).toBeNull();
+    expect(container.querySelector(".preview-notice")?.textContent).toBe("Can't reach the media server right now.");
+
+    await act(async () => { setEagleStatus("online"); });
+    expect(container.querySelector(".preview-notice")).toBeNull();
+    expect(container.querySelector(".loading-spinner")).not.toBeNull();
+    expect(container.querySelector("img")).not.toBe(pendingImage);
+  } finally {
+    try { await act(async () => root?.unmount()); }
+    finally {
+      setEagleStatus("checking");
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+      dom.window.close();
+    }
+  }
+});
 
 test.each([
   { imageWidth: 1200, imageHeight: 600, viewportWidth: 400, viewportHeight: 700 },
