@@ -17,10 +17,10 @@ Anyone on the same network can then browse it from phones, tablets, and other co
 
 - One-click local preview server for your Eagle library
 - Browse the Media Library from phones, tablets, and other computers on the same LAN
-- Endpoint URL and QR code for quick access, with an optional custom hostname
+- Endpoint URL and QR code for quick access, with a customizable hostname and port
 - Installable PWA (**Media Library**) with a cached application shell
-- Background audio and video playback shows the file name and thumbnail in the OS media controls
-- Picture-in-Picture controls for video previews on supported desktop and mobile browsers, with automatic PiP in supported desktop Chrome versions
+- Background audio and video playback with OS media controls
+- Picture-in-Picture for video previews on supported browsers
 
 Optional:
 
@@ -145,6 +145,8 @@ See [DEVELOPMENT.md](docs/DEVELOPMENT.md) for requirements, development, build, 
 
 #### Limitations
 
+The displayed content depends on the Eagle library opened by the Eagle app running on the server side.
+
 These are planned, but on hold until the Eagle API supports them:
 
 - Sort results by date, rating, name, or size
@@ -157,7 +159,5 @@ These are planned, but on hold until the Eagle API supports them:
 ## Disclaimer
 
 This plugin is intended for use on a local or trusted LAN, not for public internet access.
-
-The displayed content depends on the Eagle library opened by the Eagle app running on the server side.
 
 The author is not responsible for unintended access, data exposure, or any damage caused by misconfiguration, insecure network settings, weak passwords, disabled authentication, or public exposure of the server.
