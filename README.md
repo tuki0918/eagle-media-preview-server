@@ -31,6 +31,14 @@ Optional:
 - Multiple users with Viewer, Editor, and Admin roles.
 - Library protection: share only the Eagle libraries you select.
 
+## Architecture
+
+![Media Preview Server overview](docs/architecture_overview.png)
+
+The preview server, plugin window, and settings file come from this plugin, not from Eagle itself; the plugin runs the server inside Eagle. Browsers on other devices talk only to that preview server. They never get direct access to Eagle's own API or the library folder.
+
+For the detailed architecture, access control, and file protection, see [Runtime Model in EAGLE_PLUGIN_SPEC.md](docs/EAGLE_PLUGIN_SPEC.md#runtime-model).
+
 ## Future Plans
 
 - Expand support for additional file extensions

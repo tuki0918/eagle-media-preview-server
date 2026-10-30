@@ -34,29 +34,33 @@ External devices connect to the plugin server, not directly to Eagle's Web API.
 
 ## Runtime Model
 
-```text
-iPhone / Tablet / Other PC Browser
-        |
-        v
-http://<Eagle PC LAN IP>:41532
-        |
-        v
-Eagle | Media Preview Server
-        |
-        v
-Eagle local Web API on 127.0.0.1:41595
-```
+![Media Preview Server overview](architecture_overview.png)
 
-Defaults:
+The preview server, plugin window, and settings file are provided by this plugin, not by Eagle itself. Browsers on other devices talk only to the preview server. The preview server reads library media files from disk and sends edits to Eagle's local Web API, which saves them to the library. The plugin window controls the server and saves its settings to `~/.eagle-media-preview-server/settings.json`.
 
-- Viewer server host: `127.0.0.1`
-- Viewer server port: `41532`
-- Eagle API host: `127.0.0.1`
-- Eagle API port: `41595`
-- Password protection: disabled
-- HTTPS: disabled
-- Public Network: disabled (`127.0.0.1`)
-- Auto start: disabled
+![Media Preview Server architecture](architecture.png)
+
+- Plugin window, background service, and preview server are parts of this plugin; they run inside Eagle on the computer running Eagle. The Eagle app, its local Web API, and the library are Eagle's own
+- The background service starts, stops, and restarts the preview server, loads and saves `~/.eagle-media-preview-server/settings.json`, and relays Eagle's library-switch events
+- The preview server calls Eagle's Web API (`/api/v2/*`) for metadata and file paths, and reads originals and thumbnails from `<name>.library/images/<item id>.info/` directly
+- The library folder may be on an internal disk, an external HDD / SSD, or a NAS / network drive mounted on the computer running Eagle; the plugin never shares the folder itself
+- Media files are read-only to the preview server; rating, tags, folders, and trash changes go through Eagle's API
+
+`npm run diagram` prints these diagrams in the terminal (`overview` or `architecture` prints one). The images above are its colored output on a dark background, captured by `npm run diagram:images`. The routes are listed under HTTP/HTTPS Server.
+
+Defaults and how to change them:
+
+| Setting | Default | Changed by |
+| --- | --- | --- |
+| Viewer server host | `127.0.0.1` | **Public Network** toggle: on listens on `0.0.0.0`, off on `127.0.0.1` |
+| Viewer server port | `41532` | **Settings → General → Port** (1–65535) |
+| Eagle API URL | `http://localhost:41595` | Not a user setting; the `EAGLE_BASE_URL` environment variable of the Eagle process overrides it for development |
+| Password protection | disabled | **Password** toggle, with users under **Settings → Access** |
+| HTTPS | disabled | **HTTPS** toggle, with TLS paths under **Settings → Security** |
+| Public Network | disabled | **Public Network** toggle |
+| Auto start | disabled | **Auto start** toggle |
+
+All values are saved to `~/.eagle-media-preview-server/settings.json`. Fields under **Settings** are locked while the server runs and take effect at the next start. The toggles in Server Status stay available while it runs, and a change to Password, Public Network, or HTTPS restarts the running server.
 
 ## Codebase Model
 
@@ -75,6 +79,10 @@ The source is managed as a TypeScript / React / Vite / Tailwind CSS / Vitest pro
   - Compiled by `tsconfig.plugin-service.json` to `dist/.generated/plugin-service/*.cjs` files for Eagle's `require` runtime
 - `server/viewerServer.ts`
   - ESM wrapper that reuses the generated plugin service runtime for tests and local imports
+- `scripts/diagram.mjs`
+  - Prints the overview and architecture diagrams for `npm run diagram`
+- `scripts/diagram-images.mjs`
+  - Captures those diagrams as dark-mode PNGs in `docs/` for `npm run diagram:images`
 
 Build output is created under `dist`:
 
@@ -237,16 +245,28 @@ Settings path:
 
 ## HTTP/HTTPS Server
 
-### Static Routes
+### Static Routes — no sign-in
 
 - `GET /`
   - Browser viewer shell
 - `GET /assets/*`
   - Viewer assets
+- `GET /manifest.webmanifest`, `GET /service-worker.js`, `GET /favicon.ico`
+  - PWA manifest, service worker, and icon
 
 ### API Routes
 
-- Routes with a fixed method return `405` with an `Allow` header for unsupported methods
+Routes are grouped by what a caller needs. Each group lists its requirements:
+
+- `no sign-in`: anyone who can reach the server may call it
+- `sign-in`: a valid session cookie, required only when Password protection is on (otherwise `401`)
+- `library id`: the id from `/api/connect` or `/api/health`, sent as the `X-Library-Id` header or the `library` query parameter (see Shared Library Protection)
+- `role`: the signed-in user's role must allow the change (otherwise `403`)
+
+Routes with a fixed method return `405` with an `Allow` header for unsupported methods.
+
+#### Sign-in — no sign-in
+
 - `GET /api/auth/status`
   - Returns whether authentication is required, whether the current request is authenticated, the current user, viewer permissions, and the configured session max age in seconds
 - `POST /api/auth/login`
@@ -255,32 +275,72 @@ Settings path:
   - When authentication is disabled, returns an authenticated response with anonymous read permissions and does not issue a cookie
 - `POST /api/auth/logout`
   - Clears viewer session cookies and removes the server-side session token
+
+#### Library status — no sign-in
+
+- `GET /api/library-status`
+  - Lets the viewer show the offline page on load, before sign-in
+  - Returns only `{ libraryStatus: "shared" | "not_shared" | null }`; never the library name, path, or id
+  - Answers `shared` without calling Eagle when library protection is off
+
+#### Connection — sign-in
+
+These routes hand out the library id, so they do not require one.
+
 - `POST /api/connect`
-  - Checks the server-configured Eagle API connection and returns app info and the library display name
+  - Checks the server-configured Eagle API connection and returns app info and the library display name and id
   - The request body is ignored; viewer clients cannot change the Eagle API host, port, or token
   - The library is read again after the body arrives: if it is not shared it returns `503`, and if Eagle switched libraries during the request it returns `409 LIBRARY_CHANGED`, so an unshared library is never named
 - `GET /api/health`
-  - Checks Eagle app/library health; library paths are never returned to clients
+  - Checks Eagle app/library health; polled by the viewer; library paths are never returned to clients
   - Returns `libraryStatus` (`shared`, `not_shared`, or `null` when Eagle is unreachable) and, for a shared library, `library: { id, name }`, where `id` is an opaque per-install HMAC of the library path
   - Always answered, even when the open library is not shared
-- `GET /api/library-status`
-  - Public (no sign-in required) so the viewer can show the offline page on load
-  - Returns only `{ libraryStatus: "shared" | "not_shared" | null }`; never the library name, path, or id
-  - Answers `shared` without calling Eagle when library protection is off
+
+#### Browse — sign-in, library id
+
 - `GET /api/folders`
   - Returns folder list
+- `GET /api/smart-folders`
+  - Returns smart folder list
 - `GET /api/items`
-  - Returns item list or search results
-- `POST /api/items/:id/star`
-  - Updates rating
-- `POST /api/items/:id/metadata`
-  - Updates tags and folders/categories from the preview panel
+  - Returns item list or search results; `smartFolderId` lists a smart folder's items
+- `GET /api/item-types`
+  - Returns the file extensions found in the library
+- `GET /api/tags`, `GET /api/tag-overview`
+  - Return tags, and tags with tag groups and starred tags
+- `GET /api/tag-cover`
+  - Returns a cover item for a tag; requires `tag`
+
+#### Media — sign-in, library id
+
+Media URLs carry the library id as the `library` query parameter, since media elements cannot send headers. File routes support HTTP Range requests (see Media Streaming).
+
 - `GET|HEAD /api/items/:id/thumb`
   - Serves item thumbnail
 - `GET|HEAD /api/items/:id/file`
   - Serves original file
 - `GET|HEAD /file/:id`
-  - Direct original file access; requires `?library=<id>`
+  - Direct original file access, used by the "Open file" link
+- `GET /api/items/:id/url-preview`
+  - Returns the URL stored in a web-link (internet shortcut) item
+
+#### Edit — sign-in, library id, role
+
+- `POST /api/items/:id/star` — Editor or Admin
+  - Updates rating
+- `POST /api/items/:id/metadata` — Editor or Admin
+  - Updates tags and folders/categories from the preview panel
+- `POST /api/items/:id/trash` — Admin
+  - Moves an item to Eagle's trash or restores it; requires `isDeleted` as a boolean
+
+#### Eagle Web API — called by the viewer server only
+
+The viewer server calls Eagle's local Web API at `http://localhost:41595/api/v2/`. Viewer clients never call it.
+
+- `app/info`, `library/info`: Eagle version and the open library
+- `item/get`, `item/query`, `item/update`: items, search, and rating, tag, and folder changes
+- `folder/get`, `smartFolder/get`: folders and smart folders
+- `tag/get`, `tagGroup/get`: tags and tag groups
 
 ### Shared Library Protection
 
@@ -341,6 +401,7 @@ Authorization:
 
 - Browsing is read-only by default
 - `POST /api/items/:id/star` and `POST /api/items/:id/metadata` require an Editor or Admin user
+- `POST /api/items/:id/trash` requires an Admin user
 - The viewer server never calls Eagle's library switch API; switching libraries is only possible from the Eagle app
 - Unsafe methods reject mismatched `Origin` or `Referer` headers before API handlers run
 - JSON request bodies are capped at 1 MiB; malformed bodies return `400` and oversized bodies return `413`
@@ -420,6 +481,19 @@ npm run verify
 Generated `dist/.generated/plugin-service/*.cjs` files and `dist` output are build artifacts.
 
 `npm run verify` runs TypeScript checks, the production build, and Vitest.
+
+Diagram commands:
+
+```sh
+npm run diagram
+npm run diagram -- overview
+NO_COLOR=1 npm run -s diagram
+npm run diagram:images
+```
+
+`npm run diagram` prints the overview and architecture diagrams; pass `overview` or `architecture` to print one. Set `NO_COLOR=1` for plain text. It does not need a build.
+
+`npm run diagram:images` captures the colored output as dark-mode PNGs into `docs/architecture_overview.png` and `docs/architecture.png` with headless Chrome. Run it after changing `scripts/diagram.mjs`. Set `CHROME_PATH` when Chrome or Chromium is not in a standard location.
 
 ## Implementation Notes
 
