@@ -36,7 +36,7 @@ External devices connect to the plugin server, not directly to Eagle's Web API.
 
 ![Media Preview Server overview](architecture_overview.png)
 
-Browsers on other devices talk only to the preview server. The preview server reads library media files from disk and sends edits to Eagle's local Web API, which saves them to the library. The plugin window controls the server.
+Browsers on other devices talk only to the preview server. The preview server reads library media files from disk and sends edits to Eagle's local Web API, which saves them to the library. The plugin window controls the server and saves its settings to `~/.eagle-media-preview-server/settings.json`.
 
 ![Media Preview Server architecture](architecture.png)
 

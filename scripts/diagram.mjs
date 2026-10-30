@@ -129,12 +129,12 @@ function centerTitle(text) {
 // ---------------------------------------------------------------- 1. overview (for users)
 
 function drawOverview() {
-  newCanvas(131, 24);
+  newCanvas(131, 32);
   centerTitle("MEDIA PREVIEW SERVER  ·  overview");
 
   put(1, 2, "OTHER DEVICES", "cyan", true);
   put(37, 2, "THE COMPUTER RUNNING EAGLE", "purple", true);
-  for (let y = 2; y <= 20; y += 1) put(34, y, "┊", "dim");
+  for (let y = 2; y <= 28; y += 1) put(34, y, "┊", "dim");
 
   box(1, 4, 30, 7, {
     title: "BROWSER",
@@ -161,6 +161,16 @@ function drawOverview() {
     color: "purple",
     lines: ["start / stop the server", "Password, Public Network,", "HTTPS, users, libraries"],
   });
+  box(37, 23, 34, 6, {
+    title: "SETTINGS FILE",
+    color: "yellow",
+    lines: [
+      "~/.eagle-media-preview-server/",
+      "  settings.json",
+      [g("port, users, password hashes,")],
+      [g("shared libraries, HTTPS paths")],
+    ],
+  });
 
   connector([[31, 7], [49, 7]], "cyan", { start: true });
   put(33, 6, " HTTP(S) :41532 ", "gray");
@@ -172,9 +182,11 @@ function drawOverview() {
   put(118, 11, "saves edits", "gray");
   connector([[60, 13], [60, 11]], "purple");
   put(62, 12, "controls", "gray");
+  connector([[60, 20], [60, 22]], "yellow", { start: true });
+  put(62, 21, "saves / loads", "gray");
 
-  putLine(1, 22, [g("Connect by opening the URL or scanning the QR code shown in the plugin window.")]);
-  putLine(1, 23, [g("Browsers talk only to the preview server; they never get direct access to Eagle's API or the library folder.")]);
+  putLine(1, 30, [g("Connect by opening the URL or scanning the QR code shown in the plugin window.")]);
+  putLine(1, 31, [g("Browsers talk only to the preview server; they never get direct access to Eagle's API or the library folder.")]);
   return render();
 }
 
