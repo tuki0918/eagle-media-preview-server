@@ -364,7 +364,13 @@ The viewer server calls Eagle's local Web API at `http://localhost:41595/api/v2/
 - Allows only `GET` and `HEAD`
 - Supports HTTP Range requests
 - Sends `Content-Disposition: inline`
-- Sends `Cache-Control: private, max-age=3600`
+- Sends `Cache-Control: private, max-age=3600`, so a browser may reuse a media response for up to an hour without asking the server, including after sign-out or a library switch
+- Sends `Last-Modified` (the file's modification time) and a weak `ETag` built from the file size and its millisecond modification time
+- Answers conditional requests with `304 Not Modified` and no body:
+  - `If-None-Match` matches when any listed tag equals the ETag (weak comparison) or is `*`; when present, `If-Modified-Since` is ignored
+  - Otherwise `If-Modified-Since` matches when the file has not changed since that date at second precision; an invalid date or one later than the server clock is ignored
+  - Conditions are evaluated before `Range`, so a matching conditional range request also gets `304`
+  - Sign-in, the library id, and the shared-library checks run before any conditional check, so a `304` is never returned where the full response would be refused
 - Sends `X-Content-Type-Options: nosniff`
 - Returns MIME types for common images, videos, audio, PDF, and text files
 

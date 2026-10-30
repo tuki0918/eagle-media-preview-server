@@ -644,7 +644,9 @@ function recheckEagleStatusAfterMediaError(event: Event) {
 function checkEagleStatus(): Promise<void> {
   if (document.visibilityState === "hidden") return Promise.resolve();
   if (eagleStatusCheckInFlight) return eagleStatusCheckInFlight;
-  const check = performEagleStatusCheck();
+  // Timers, event listeners and media fallbacks share this promise and some ignore it,
+  // so it must never reject; performEagleStatusCheck already reports failures as status.
+  const check = performEagleStatusCheck().catch(() => {});
   eagleStatusCheckInFlight = check;
   void check.finally(() => {
     if (eagleStatusCheckInFlight === check) eagleStatusCheckInFlight = null;

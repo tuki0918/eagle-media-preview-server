@@ -8,6 +8,7 @@ import * as actions from "../../shellActions";
 import { ImagePreview } from "./ImagePreview";
 import { setImageOverlayControlsVisible } from "../../imageOverlayState";
 import { setEagleStatus } from "../../eagleStatusState";
+import { setMediaFallbackCheck } from "../../api";
 
 test("shows the offline notice instead of a spinner and reloads once the server is back", async () => {
   const dom = new JSDOM('<!doctype html><div id="root"></div>', { url: "http://localhost" });
@@ -36,6 +37,47 @@ test("shows the offline notice instead of a spinner and reloads once the server 
   } finally {
     try { await act(async () => root?.unmount()); }
     finally {
+      setEagleStatus("checking");
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+      dom.window.close();
+    }
+  }
+});
+
+test("ignores a fallback decision that arrives after the back-online reload", async () => {
+  const dom = new JSDOM('<!doctype html><div id="root"></div>', { url: "http://localhost" });
+  let root: Root | undefined;
+  try {
+    for (const name of ["window", "document", "navigator", "Node", "Element", "HTMLElement"] as const) {
+      vi.stubGlobal(name, name === "window" ? dom.window : dom.window[name]);
+    }
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const { createRoot } = await import("react-dom/client");
+    const container = dom.window.document.querySelector("#root")!;
+    root = createRoot(container);
+    let decide!: (allowed: boolean) => void;
+    setMediaFallbackCheck(() => new Promise((resolve) => { decide = resolve; }));
+    setEagleStatus("online");
+    await act(async () => { root?.render(<ImagePreview item={{ id: "photo", name: "Photo", ext: "jpg" }} srcKind="file" />); });
+    const failedImage = container.querySelector("img")!;
+
+    // The original fails while the server blips; the fallback check is still pending.
+    await act(async () => { failedImage.dispatchEvent(new dom.window.Event("error")); });
+    await act(async () => { setEagleStatus("offline"); });
+    await act(async () => { setEagleStatus("online"); });
+    const reloadedImage = container.querySelector("img")!;
+    expect(reloadedImage).not.toBe(failedImage);
+
+    // The stale answer must not mark the reloaded image as failed.
+    await act(async () => { decide(false); });
+    expect(container.querySelector(".preview-notice")).toBeNull();
+    expect(container.querySelector("img")).toBe(reloadedImage);
+    expect(reloadedImage.getAttribute("src")).toContain("/file");
+  } finally {
+    try { await act(async () => root?.unmount()); }
+    finally {
+      setMediaFallbackCheck(null);
       setEagleStatus("checking");
       vi.restoreAllMocks();
       vi.unstubAllGlobals();

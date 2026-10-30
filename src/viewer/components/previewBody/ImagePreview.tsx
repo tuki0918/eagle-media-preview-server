@@ -318,8 +318,14 @@ export function ImagePreview({ item, srcKind: requestedSrcKind, fullscreen }: { 
           alt={item.name || item.id || ""}
           draggable={false}
           style={imageStyle}
-          onError={async () => {
-            if (srcKind === "file" && await canFallbackMedia()) setSrcKind("thumb");
+          onError={async (event) => {
+            const image = event.currentTarget;
+            const failedSrc = image.src;
+            const fallback = srcKind === "file" && await canFallbackMedia();
+            // The fallback check waits on the network; ignore its answer if the image was
+            // reloaded or switched source meanwhile, such as by the back-online retry.
+            if (imageRef.current !== image || image.src !== failedSrc) return;
+            if (fallback) setSrcKind("thumb");
             else setLoadFailed(true);
           }}
           onLoad={(event) => {
