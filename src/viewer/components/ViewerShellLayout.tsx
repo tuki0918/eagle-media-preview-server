@@ -4,7 +4,6 @@ import { SIDEBAR_OPEN_STORAGE_KEY, UNCATEGORIZED_FOLDER_ID, UNTAGGED_FOLDER_ID }
 import { activeFilterLabels } from "../filters";
 import { DEFAULT_SIDEBAR_WIDTH, readSavedSidebarWidth, writeSavedSidebarWidth, subscribeDisplaySettingsReset } from "../displayPreferences";
 import { findFolderById } from "../folderTree";
-import { getLibraryName, subscribeLibraryName } from "../libraryNameState";
 import { getResultsStatusState, subscribeResultsStatusState } from "../resultsStatusState";
 import { getSearchControlsState, subscribeSearchControlsState } from "../searchControlsState";
 import { getTagChipsState, subscribeTagChipsState } from "../tagChipsState";
@@ -55,7 +54,6 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
     "--grid-col-w": `${gridColumnWidth(zoomLevel)}px`,
     "--tile-h": `${tileRowHeight(zoomLevel)}px`,
   } as CSSProperties;
-  const libraryName = useSyncExternalStore(subscribeLibraryName, getLibraryName, getLibraryName);
   const headerHidden = useHeaderHiddenOnScroll();
   const tagListState = useSyncExternalStore(subscribeTagListState, getTagListState, getTagListState);
   const tagChips = useSyncExternalStore(subscribeTagChipsState, getTagChipsState, getTagChipsState);
@@ -78,7 +76,6 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
     searchState.folders,
     searchState.selectedSmartFolderId,
     searchState.smartFolders,
-    libraryName,
   );
   const setSidebarOpen = useCallback((open: boolean) => {
     setSidebarOpenState(open);
@@ -168,10 +165,9 @@ function selectedFolderName(
   folders: readonly EagleFolder[],
   selectedSmartFolderId: string,
   smartFolders: readonly EagleSmartFolder[],
-  libraryName = "",
 ) {
   if (selectedSmartFolderId) return findFolderById(smartFolders, selectedSmartFolderId)?.name || "Smart Folder";
-  if (!selectedFolderId) return libraryName || "All";
+  if (!selectedFolderId) return "All";
   if (selectedFolderId === UNCATEGORIZED_FOLDER_ID) return "Uncategorized";
   if (selectedFolderId === UNTAGGED_FOLDER_ID) return "Untagged";
   return findFolderById(folders, selectedFolderId)?.name || "All";
