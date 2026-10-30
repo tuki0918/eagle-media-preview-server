@@ -371,6 +371,7 @@ The viewer server calls Eagle's local Web API at `http://localhost:41595/api/v2/
   - Otherwise `If-Modified-Since` matches when the file has not changed since that date at second precision; an invalid date or one later than the server clock is ignored
   - Conditions are evaluated before `Range`, so a matching conditional range request also gets `304`
   - Sign-in, the library id, and the shared-library checks run before any conditional check, so a `304` is never returned where the full response would be refused
+- A range request that carries `If-Range` and does not get `304` from the conditional checks above always gets the whole file with `200`, and its `Range` is ignored even if unsatisfiable. RFC 9110 lets `If-Range` match only a strong validator, and the server has none: the ETag is weak, and `Last-Modified` has second precision, so a file replaced within the same second would still match its date and mix old and new bytes. Range requests without `If-Range`, such as ordinary video seeking, are served as `206`
 - Sends `X-Content-Type-Options: nosniff`
 - Returns MIME types for common images, videos, audio, PDF, and text files
 

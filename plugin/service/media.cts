@@ -95,9 +95,13 @@ async function streamItemMedia(id: string, kind: MediaKind, req: IncomingMessage
     res.end();
     return;
   }
-  const range = parseRange(req.headers.range, info.size);
+  // If-Range may resume a partial copy only when a strong validator proves it unchanged (RFC 9110).
+  // The ETag is weak, and Last-Modified cannot be trusted as strong: it has second precision, so a
+  // same-second replacement would still match. Any If-Range therefore gets the whole file.
+  const rangeHeader = req.headers["if-range"] === undefined ? req.headers.range : undefined;
+  const range = parseRange(rangeHeader, info.size);
 
-  if (req.headers.range && !range) {
+  if (rangeHeader && !range) {
     res.writeHead(416, {
       ...securityHeaders,
       "Content-Range": `bytes */${info.size}`,

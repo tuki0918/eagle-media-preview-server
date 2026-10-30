@@ -105,6 +105,9 @@ Use this tab to choose which users can sign in to the viewer. To let other devic
 
 Authentication is optional. When password protection is enabled, browser access uses the built-in login screen and cookie-based sessions. Sessions expire after the configured session duration, 7 days by default.
 
+> [!IMPORTANT]
+> Media is stored in the browser's normal cache and may be reused for up to one hour after it is fetched, without asking the server. Signing out or switching libraries does not immediately remove media that is already cached. On a shared device, use a private window.
+
 ### Libraries
 
 Choose which Eagle libraries the viewer may serve.

@@ -2656,6 +2656,21 @@ test("media revalidation uses an ETag so a replacement with an older timestamp i
     assert.equal(range.status, 304);
     await range.text();
 
+    // If-Range needs a strong validator, which this server cannot offer, so every If-Range
+    // (even the exact Last-Modified) drops the Range, including an unsatisfiable one.
+    const lastModified = modified.toUTCString();
+    for (const ifRange of [lastModified, "Wed, 31 Dec 2025 00:00:00 GMT", "invalid", etag, etag.replace(/^W\//, "")]) {
+      for (const rangeHeader of ["bytes=0-3", "bytes=500-600"]) {
+        const full = await fetch(url, { headers: { Range: rangeHeader, "If-Range": ifRange } });
+        assert.equal(full.status, 200, `${ifRange} ${rangeHeader}`);
+        assert.equal(full.headers.get("content-range"), null);
+        assert.equal(await full.text(), "demo-file");
+      }
+    }
+    const plainRange = await fetch(url, { headers: { Range: "bytes=0-3" } });
+    assert.equal(plainRange.status, 206);
+    assert.equal(await plainRange.text(), "demo");
+
     // A date later than the server clock is invalid, so the file is sent in full.
     const future = await fetch(url, { headers: { "If-Modified-Since": "Thu, 01 Jan 2099 00:00:00 GMT" } });
     assert.equal(future.status, 200);
@@ -2669,6 +2684,14 @@ test("media revalidation uses an ETag so a replacement with an older timestamp i
     assert.equal(replaced.status, 200);
     assert.notEqual(replaced.headers.get("etag"), etag);
     assert.equal(await replaced.text(), "replaced-file");
+
+    // Resuming the old copy with its date must not mix old and new bytes, even though the
+    // replacement's Last-Modified is the same second.
+    assert.equal(replaced.headers.get("last-modified"), modified.toUTCString());
+    const resumed = await fetch(url, { headers: { Range: "bytes=4-", "If-Range": modified.toUTCString() } });
+    assert.equal(resumed.status, 200);
+    assert.equal(resumed.headers.get("content-range"), null);
+    assert.equal(await resumed.text(), "replaced-file");
   } finally {
     await viewer.stop();
     await rm(root, { recursive: true, force: true });
