@@ -471,6 +471,105 @@ describe("viewer app data refresh", () => {
     expect(getShellView()).toBe("login");
   });
 
+  test("decides a media fallback requested while the tab is hidden once it is shown again", async () => {
+    const health = { app: { version: "1.0" }, library: { id: "lib-a", name: "A" }, libraryStatus: "shared" };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/auth/status") return jsonResponse({ authenticated: true, required: false });
+      if (url === "/api/connect" && options?.method === "POST") return jsonResponse({ app: { version: "1.0" }, library: { id: "lib-a", name: "A" } });
+      if (url === "/api/health") return jsonResponse(health);
+      if (url === "/api/folders" || url === "/api/smart-folders") return jsonResponse({ items: [] });
+      if (url.startsWith("/api/items?")) return jsonResponse({ items: [], total: 0 });
+      if (url.startsWith("/api/item-types")) return jsonResponse({ items: [] });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: fetchMock });
+    let visibility: DocumentVisibilityState = "visible";
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => visibility });
+
+    try {
+      const { initViewer } = await import("./viewerApp");
+      const { submitConnection } = await import("./viewer/shellActions");
+      const { getLoginConnectState } = await import("./viewer/loginConnectState");
+      const { getShellView } = await import("./viewer/shellVisibility");
+      const { canFallbackMedia } = await import("./viewer/api");
+      initViewer();
+      await vi.waitFor(() => expect(getLoginConnectState().authenticated).toBe(true));
+      submitConnection({ currentTarget: document.querySelector<HTMLFormElement>("#connectForm")!, preventDefault: () => {} });
+      await vi.waitFor(() => expect(getShellView()).toBe("viewer"));
+
+      visibility = "hidden";
+      let decided: boolean | undefined;
+      const fallbacks = Promise.all([canFallbackMedia(), canFallbackMedia()]).then((results) => {
+        decided = results.every(Boolean);
+      });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(decided).toBeUndefined();
+
+      const healthCallsBefore = fetchMock.mock.calls.filter(([url]) => url === "/api/health").length;
+      visibility = "visible";
+      document.dispatchEvent(new window.Event("visibilitychange"));
+      await fallbacks;
+      expect(decided).toBe(true);
+      expect(fetchMock.mock.calls.filter(([url]) => url === "/api/health")).toHaveLength(healthCallsBefore + 1);
+    } finally {
+      delete (document as { visibilityState?: DocumentVisibilityState }).visibilityState;
+    }
+  });
+
+  test("drops a hidden-tab media fallback when the user signs out before the tab is shown", async () => {
+    let signedIn = true;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/auth/status") return jsonResponse({ authenticated: signedIn, required: true, user: { username: "eagle", role: "viewer" } });
+      if (url === "/api/auth/logout" && options?.method === "POST") {
+        signedIn = false;
+        return jsonResponse({ authenticated: false, required: true });
+      }
+      if (url === "/api/connect" && options?.method === "POST") return jsonResponse({ app: { version: "1.0" }, library: { id: "lib-a", name: "A" } });
+      if (url === "/api/health") {
+        return signedIn
+          ? jsonResponse({ app: { version: "1.0" }, library: { id: "lib-a", name: "A" }, libraryStatus: "shared" })
+          : errorResponse(401, { error: "Authentication required" });
+      }
+      if (url === "/api/folders" || url === "/api/smart-folders") return jsonResponse({ items: [] });
+      if (url.startsWith("/api/items?")) return jsonResponse({ items: [], total: 0 });
+      if (url.startsWith("/api/item-types")) return jsonResponse({ items: [] });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: fetchMock });
+    let visibility: DocumentVisibilityState = "visible";
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => visibility });
+
+    try {
+      const { initViewer } = await import("./viewerApp");
+      const { submitConnection, submitLogout } = await import("./viewer/shellActions");
+      const { getLoginConnectState } = await import("./viewer/loginConnectState");
+      const { getShellView } = await import("./viewer/shellVisibility");
+      const { canFallbackMedia } = await import("./viewer/api");
+      initViewer();
+      await vi.waitFor(() => expect(getLoginConnectState().authenticated).toBe(true));
+      submitConnection({ currentTarget: document.querySelector<HTMLFormElement>("#connectForm")!, preventDefault: () => {} });
+      await vi.waitFor(() => expect(getShellView()).toBe("viewer"));
+
+      visibility = "hidden";
+      const fallback = canFallbackMedia();
+      submitLogout();
+      await vi.waitFor(() => expect(getShellView()).toBe("login"));
+      // Signing out releases the waiter without waiting for the tab to be shown.
+      expect(await fallback).toBe(false);
+
+      const callsAfterLogout = fetchMock.mock.calls.length;
+      visibility = "visible";
+      document.dispatchEvent(new window.Event("visibilitychange"));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(fetchMock.mock.calls.slice(callsAfterLogout).map(([url]) => String(url))).not.toContain("/api/health");
+      expect(getLoginConnectState().message).not.toMatch(/expired/i);
+    } finally {
+      delete (document as { visibilityState?: DocumentVisibilityState }).visibilityState;
+    }
+  });
+
   test("returns to the connect screen when health polling sees a different shared library", async () => {
     let health: unknown = { app: { version: "1.0" }, library: { id: "lib-a", name: "A" }, libraryStatus: "shared" };
     const requests: string[] = [];

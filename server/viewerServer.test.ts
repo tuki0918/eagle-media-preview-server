@@ -2621,6 +2621,60 @@ test("media revalidation preserves the one-hour cache and checks access before r
   }
 });
 
+test("media revalidation uses an ETag so a replacement with an older timestamp is still sent", async () => {
+  const root = join(tmpdir(), `eagle-media-preview-server-etag-${Date.now()}`);
+  await mkdir(root, { recursive: true });
+  const filePath = join(root, "asset.jpg");
+  const modified = new Date("2026-01-01T00:00:00.789Z");
+  await writeFile(filePath, "demo-file");
+  await utimes(filePath, modified, modified);
+  const viewer = createViewerServer({
+    host: "127.0.0.1", port: 0,
+    eagleClient: {
+      async appInfo() { return { version: "1.0.0" }; },
+      async libraryInfo() { return { path: root, name: "Test Library" }; },
+      async itemById(id: string) { return { data: [{ id, filePath }] }; },
+    },
+  });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const health = await (await fetch(`${origin}/api/health`)).json();
+    const url = `${origin}/api/items/ITEM1/file?library=${health.library.id}`;
+    const initial = await fetch(url);
+    const etag = initial.headers.get("etag") || "";
+    assert.match(etag, /^W\/"[0-9a-f]+-[0-9a-f]+"$/);
+    await initial.text();
+
+    for (const noneMatch of [etag, etag.replace(/^W\//, ""), `"other", ${etag}`, "*"]) {
+      const response = await fetch(url, { headers: { "If-None-Match": noneMatch } });
+      assert.equal(response.status, 304, noneMatch);
+      assert.equal(response.headers.get("etag"), etag);
+      assert.equal(await response.text(), "");
+    }
+    const range = await fetch(url, { headers: { "If-None-Match": etag, Range: "bytes=0-3" } });
+    assert.equal(range.status, 304);
+    await range.text();
+
+    // A date later than the server clock is invalid, so the file is sent in full.
+    const future = await fetch(url, { headers: { "If-Modified-Since": "Thu, 01 Jan 2099 00:00:00 GMT" } });
+    assert.equal(future.status, 200);
+    assert.equal(await future.text(), "demo-file");
+
+    // Same second-precision Last-Modified, older mtime, different content and size.
+    await writeFile(filePath, "replaced-file");
+    const older = new Date(modified.getTime() - 500);
+    await utimes(filePath, older, older);
+    const replaced = await fetch(url, { headers: { "If-None-Match": etag, "If-Modified-Since": modified.toUTCString() } });
+    assert.equal(replaced.status, 200);
+    assert.notEqual(replaced.headers.get("etag"), etag);
+    assert.equal(await replaced.text(), "replaced-file");
+  } finally {
+    await viewer.stop();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("createViewerServer serves direct file routes from /file/:id", async () => {
   const root = join(tmpdir(), `eagle-media-preview-server-${Date.now()}`);
   await mkdir(root, { recursive: true });

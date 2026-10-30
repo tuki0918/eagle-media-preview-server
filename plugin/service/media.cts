@@ -84,14 +84,12 @@ async function streamItemMedia(id: string, kind: MediaKind, req: IncomingMessage
   const detectedContentType = mediaContentType(filePath, itemData);
   const contentType = safeMediaContentType(detectedContentType);
   const lastModified = info.mtime.toUTCString();
-  const modifiedSince = req.headers["if-modified-since"];
-  // HTTP dates have second precision. If-None-Match takes precedence even though
-  // this endpoint does not currently emit ETags. Check before processing Range.
-  if (req.headers["if-none-match"] === undefined && modifiedSince &&
-      Math.floor(info.mtimeMs / 1000) * 1000 <= Date.parse(modifiedSince)) {
+  const etag = mediaEtag(info);
+  if (notModified(req, info, etag)) {
     res.writeHead(304, {
       ...mediaSecurityHeaders(detectedContentType),
       "Cache-Control": "private, max-age=3600",
+      ETag: etag,
       "Last-Modified": lastModified,
     });
     res.end();
@@ -116,6 +114,7 @@ async function streamItemMedia(id: string, kind: MediaKind, req: IncomingMessage
     "Accept-Ranges": "bytes",
     "Content-Disposition": contentDisposition(contentType, itemData, filePath),
     "Cache-Control": "private, max-age=3600",
+    ETag: etag,
     "Last-Modified": lastModified,
     "X-Content-Type-Options": "nosniff",
   };
@@ -311,6 +310,27 @@ function pipeMediaStream(
     res.destroy(error);
   });
   return stream;
+}
+
+type MediaFileInfo = { mtimeMs: number; size: number };
+
+// Size joins the millisecond mtime so a replacement that keeps an older timestamp
+// still changes the validator.
+function mediaEtag({ mtimeMs, size }: MediaFileInfo) {
+  return `W/"${size.toString(16)}-${Math.floor(mtimeMs).toString(16)}"`;
+}
+
+// If-None-Match takes precedence over If-Modified-Since, and both are checked before Range.
+function notModified(req: IncomingMessage, info: MediaFileInfo, etag: string) {
+  const noneMatch = req.headers["if-none-match"];
+  if (noneMatch !== undefined) {
+    const opaque = (tag: string) => tag.trim().replace(/^W\//, "");
+    return noneMatch.split(",").some((tag) => tag.trim() === "*" || opaque(tag) === opaque(etag));
+  }
+  const modifiedSince = Date.parse(req.headers["if-modified-since"] || "");
+  // HTTP dates have second precision; a date in the future is ignored as invalid.
+  return !Number.isNaN(modifiedSince) && modifiedSince <= Date.now() &&
+    Math.floor(info.mtimeMs / 1000) * 1000 <= modifiedSince;
 }
 
 async function safeStat(filePath: string) {

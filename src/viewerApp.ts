@@ -127,6 +127,8 @@ let shortcutCountsRequestId = 0;
 let eagleStatusTimer: ReturnType<typeof setInterval> | null = null;
 let eagleStatusRequestId = 0;
 let eagleStatusCheckInFlight: Promise<void> | null = null;
+// Bumped whenever status polling stops, so work started for an earlier viewer session can tell it ended.
+let eagleStatusSession = 0;
 let unsubscribeEagleStatusRequests: (() => void) | null = null;
 const EAGLE_STATUS_POLL_INTERVAL_MS = 30_000;
 // Long enough for Eagle's local API, short enough that a stopped server shows as offline quickly.
@@ -547,7 +549,14 @@ function startEagleStatusPolling() {
   if (eagleStatusTimer) return;
   setMediaFallbackCheck(async () => {
     const libraryId = currentLibraryId;
-    if (getShellView() !== "viewer" || document.visibilityState === "hidden") return false;
+    const session = eagleStatusSession;
+    if (getShellView() !== "viewer") return false;
+    // Health checks pause while the tab is hidden, so decide once it is shown again
+    // rather than leaving an image that failed in the background broken for good.
+    await whenDocumentVisible();
+    // Sign-out or a library switch while waiting ends this viewer session; never
+    // send a health request on its behalf.
+    if (session !== eagleStatusSession || getShellView() !== "viewer") return false;
     await checkEagleStatus();
     return getShellView() === "viewer" && getEagleStatus() === "online" && currentLibraryId === libraryId;
   });
@@ -560,7 +569,9 @@ function startEagleStatusPolling() {
 
 function stopEagleStatusPolling() {
   eagleStatusRequestId += 1;
+  eagleStatusSession += 1;
   eagleStatusCheckInFlight = null;
+  releaseDocumentVisibleWaiters();
   setMediaFallbackCheck(async () => false);
   if (eagleStatusTimer) clearInterval(eagleStatusTimer);
   eagleStatusTimer = null;
@@ -570,6 +581,33 @@ function stopEagleStatusPolling() {
   document.removeEventListener("visibilitychange", checkEagleStatusWhenVisible);
   window.removeEventListener("online", checkEagleStatus);
   setEagleStatus("checking");
+}
+
+let documentVisible: { promise: Promise<void>; release: () => void } | null = null;
+
+// One shared listener serves every media error that waits for the tab to be shown.
+function whenDocumentVisible(): Promise<void> {
+  if (document.visibilityState !== "hidden") return Promise.resolve();
+  if (!documentVisible) {
+    let resolve!: () => void;
+    const promise = new Promise<void>((done) => { resolve = done; });
+    const onChange = () => {
+      if (document.visibilityState !== "hidden") release();
+    };
+    const release = () => {
+      document.removeEventListener("visibilitychange", onChange);
+      documentVisible = null;
+      resolve();
+    };
+    document.addEventListener("visibilitychange", onChange);
+    documentVisible = { promise, release };
+  }
+  return documentVisible.promise;
+}
+
+// Lets waiters finish (they then see the ended session) and drops the listener.
+function releaseDocumentVisibleWaiters() {
+  documentVisible?.release();
 }
 
 function checkEagleStatusWhenVisible() {
