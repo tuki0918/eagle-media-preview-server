@@ -709,10 +709,16 @@ async function loadItemTypes() {
   if (itemTypesState !== "idle") return;
   const requestId = ++itemTypesRequestId;
   itemTypesState = "loading";
+  renderSearchControlButtons();
   try {
-    const data = await getJson<{ items?: Array<{ ext?: string }> }>("/api/item-types");
-    if (requestId !== itemTypesRequestId) return;
-    availableExts = (data.items || []).map((entry) => String(entry.ext || "").toLowerCase()).filter(Boolean);
+    // The server answers with the extensions found so far until its scan is complete.
+    for (;;) {
+      const data = await getJson<{ complete?: boolean; items?: Array<{ ext?: string }> }>("/api/item-types");
+      if (requestId !== itemTypesRequestId) return;
+      availableExts = (data.items || []).map((entry) => String(entry.ext || "").toLowerCase()).filter(Boolean);
+      if (data.complete !== false) break;
+      renderSearchControlButtons();
+    }
     itemTypesState = "loaded";
   } catch (error) {
     if (requestId !== itemTypesRequestId) return;
@@ -1068,6 +1074,7 @@ function renderSearchControlButtons() {
   setSearchControlsState({
     allFoldersTotal,
     availableExts,
+    availableExtsLoading: itemTypesState === "loading",
     tagsTotal,
     uncategorizedTotal,
     untaggedTotal,

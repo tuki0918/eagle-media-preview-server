@@ -497,8 +497,14 @@ function createEagleClient({
       return page.items[0] ?? null;
     },
 
-    async itemExtensions({ maxItems = MAX_EXTENSION_SCAN_ITEMS }: { maxItems?: number } = {}) {
+    async itemExtensions({ maxItems = MAX_EXTENSION_SCAN_ITEMS, onProgress }: {
+      maxItems?: number;
+      onProgress?: (extensions: Array<{ count: number; ext: string }>) => void;
+    } = {}) {
       const counts = new Map<string, number>();
+      const sortedCounts = () => [...counts.entries()]
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([ext, count]) => ({ ext, count }));
       for (let offset = 0; offset < maxItems; offset += EXTENSION_SCAN_PAGE_SIZE) {
         const page = normalizePaginatedResponse(
           await request("/api/v2/item/get", {
@@ -511,10 +517,9 @@ function createEagleClient({
           if (ext) counts.set(ext, (counts.get(ext) || 0) + 1);
         }
         if (page.items.length < EXTENSION_SCAN_PAGE_SIZE || offset + page.items.length >= page.total) break;
+        onProgress?.(sortedCounts());
       }
-      return [...counts.entries()]
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([ext, count]) => ({ ext, count }));
+      return sortedCounts();
     },
 
     async itemById(id: string) {

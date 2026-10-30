@@ -37,6 +37,7 @@ import { TagSuggestions } from "./TagSuggestions";
 
 interface SearchControlsProps {
   availableExts?: readonly string[];
+  availableExtsLoading?: boolean;
   filtersOpen?: boolean;
   hasActiveFilters?: boolean;
   hasResettableFilters?: boolean;
@@ -91,6 +92,7 @@ export function SearchControls({
 
       <AdvancedFilters
         availableExts={state.availableExts}
+        availableExtsLoading={state.availableExtsLoading}
         filtersOpen={displayFiltersOpen}
         hasActiveFilters={displayHasActiveFilters}
         hasResettableFilters={displayHasResettableFilters}
@@ -167,17 +169,18 @@ function focusInputById(id: string) {
 
 export function AdvancedFilters({
   availableExts = [],
+  availableExtsLoading = false,
   filtersOpen = false,
   hasActiveFilters = false,
   hasResettableFilters = hasActiveFilters,
   selectedExt = "",
   selectedRating = "",
-}: Pick<SearchControlsProps, "availableExts" | "filtersOpen" | "hasActiveFilters" | "hasResettableFilters" | "selectedExt" | "selectedRating">) {
-  const extOptions = mediaTypeOptions(availableExts, selectedExt);
+}: Pick<SearchControlsProps, "availableExts" | "availableExtsLoading" | "filtersOpen" | "hasActiveFilters" | "hasResettableFilters" | "selectedExt" | "selectedRating">) {
+  const extOptions = mediaTypeOptions(availableExts, selectedExt, availableExtsLoading);
   return (
     <div id="advancedFilters" className="filter-row grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-4 max-[540px]:grid-cols-[minmax(0,1fr)_auto] max-[540px]:gap-3" hidden={!filtersOpen}>
       <div className="min-w-0 max-[540px]:col-span-2">
-        <TypeFilter options={extOptions} selectedExt={selectedExt} />
+        <TypeFilter loading={availableExtsLoading} options={extOptions} selectedExt={selectedExt} />
       </div>
       <RatingFilter selectedRating={selectedRating} />
       <div className="flex justify-end">
@@ -234,7 +237,7 @@ function FilterMenu({
 }
 
 // Eagle filters by a single extension, so the type menu picks one value (radio) and closes.
-function TypeFilter({ options, selectedExt }: { options: readonly string[]; selectedExt: string }) {
+function TypeFilter({ loading = false, options, selectedExt }: { loading?: boolean; options: readonly string[]; selectedExt: string }) {
   const summaryText = selectedExt ? selectedExt.toUpperCase() : "All types";
   return (
     <FilterMenu
@@ -246,6 +249,12 @@ function TypeFilter({ options, selectedExt }: { options: readonly string[]; sele
         if (open) openMediaTypes();
       }}
     >
+      {loading ? (
+        <div className="type-filter-loading flex items-center gap-2.5 px-2 py-2 text-sm text-muted-foreground" role="status">
+          <span className="loading-spinner block size-4 shrink-0 animate-spin rounded-full border-2 border-[color-mix(in_srgb,var(--muted-foreground)_25%,transparent)] border-t-muted-foreground" aria-hidden="true" />
+          Loading types...
+        </div>
+      ) : null}
       <DropdownMenuPrimitive.RadioGroup value={selectedExt} onValueChange={changeMediaType}>
         {["", ...options].map((ext) => (
           <DropdownMenuPrimitive.RadioItem key={ext || "all"} data-slot="dropdown-menu-radio-item" className={filterOptionClassName} value={ext}>
@@ -321,10 +330,10 @@ function RatingFilterLabel({ rating }: { rating: number }) {
   );
 }
 
-// Only offer extensions that exist in the library; fall back to the defaults until they load
-// (they are fetched the first time the menu opens).
-function mediaTypeOptions(availableExts: readonly string[], selectedExt: string): readonly string[] {
-  const options = availableExts.length ? [...availableExts] : [...MEDIA_TYPE_OPTIONS];
+// Only offer extensions that exist in the library (fetched the first time the menu opens). While
+// they load the menu grows as they are found; if they fail it falls back to the defaults.
+function mediaTypeOptions(availableExts: readonly string[], selectedExt: string, loading = false): readonly string[] {
+  const options = availableExts.length ? [...availableExts] : loading ? [] : [...MEDIA_TYPE_OPTIONS];
   if (selectedExt && !options.includes(selectedExt)) options.push(selectedExt);
   return options;
 }

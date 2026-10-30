@@ -106,11 +106,24 @@ interface EagleItem {
   title?: string;
 }
 
+interface ItemExtension {
+  count: number;
+  ext: string;
+}
+
+interface ItemTypesScan {
+  complete: boolean;
+  expiresAt: number;
+  items: ItemExtension[];
+  libraryPath: string;
+  value: Promise<ItemExtension[]>;
+}
+
 interface EagleClient {
   appInfo(): Promise<unknown>;
   folders(): Promise<unknown>;
   itemById(id: string): Promise<EagleItem>;
-  itemExtensions(): Promise<Array<{ count: number; ext: string }>>;
+  itemExtensions(options?: { onProgress?: (extensions: ItemExtension[]) => void }): Promise<ItemExtension[]>;
   legacyThumbnailPath(id: string): Promise<unknown>;
   listItems(options: {
     ext?: string | null;
@@ -160,7 +173,9 @@ const MAX_ITEMS_LIMIT = 1000;
 const MAX_ITEMS_OFFSET = 1000000;
 // The scan reads every item, which is slow for large libraries; new extensions show up after this.
 const ITEM_TYPES_CACHE_MS = 10 * 60 * 1000;
-const itemTypesCache = new WeakMap<object, { expiresAt: number; libraryPath: string; value: Promise<Array<{ count: number; ext: string }>> }>();
+// How long a request waits for the scan before answering with the extensions found so far.
+const ITEM_TYPES_PROGRESS_WAIT_MS = 1000;
+const itemTypesCache = new WeakMap<object, ItemTypesScan>();
 const LOGIN_FAILURE_LIMIT = 5;
 const LOGIN_FAILURE_MAX_ENTRIES = 500;
 const LOGIN_FAILURE_WINDOW_MS = 10 * 60 * 1000;
@@ -468,12 +483,37 @@ function createProtocolServer({ httpsCertPath = "", httpsEnabled = false, httpsK
 async function cachedItemTypes(session: { client: EagleClient; libraryInfo(): Promise<unknown> }) {
   const library = await session.libraryInfo().catch(() => null);
   const libraryPath = String((library as { path?: unknown } | null)?.path || "");
-  const cached = itemTypesCache.get(session.client);
-  if (cached && cached.libraryPath === libraryPath && cached.expiresAt > Date.now()) return cached.value;
-  const value = session.client.itemExtensions();
-  itemTypesCache.set(session.client, { expiresAt: Date.now() + ITEM_TYPES_CACHE_MS, libraryPath, value });
-  value.catch(() => itemTypesCache.delete(session.client));
-  return value;
+  let scan = itemTypesCache.get(session.client);
+  if (!scan || scan.libraryPath !== libraryPath || (scan.complete && scan.expiresAt <= Date.now())) {
+    const nextScan: ItemTypesScan = { complete: false, expiresAt: Infinity, items: [], libraryPath, value: Promise.resolve([]) };
+    nextScan.value = session.client.itemExtensions({
+      onProgress: (items) => {
+        if (!nextScan.complete) nextScan.items = items;
+      },
+    });
+    nextScan.value.then(
+      (items) => Object.assign(nextScan, { complete: true, expiresAt: Date.now() + ITEM_TYPES_CACHE_MS, items }),
+      () => {
+        if (itemTypesCache.get(session.client) === nextScan) itemTypesCache.delete(session.client);
+      },
+    );
+    itemTypesCache.set(session.client, nextScan);
+    scan = nextScan;
+  }
+  // Large libraries take many pages to scan, so answer with what has been found so far and let
+  // the viewer ask again until the scan is complete.
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      scan.value,
+      new Promise((resolve) => {
+        timer = setTimeout(resolve, ITEM_TYPES_PROGRESS_WAIT_MS);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+  return { complete: scan.complete, items: scan.items };
 }
 
 async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { auth, confirmLibraryBeforeWrite, getSession, libraryAccess, libraryId }: ApiContext & { auth: AuthContext }) {
@@ -566,7 +606,7 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       sendMethodNotAllowed(res, ["GET"]);
       return;
     }
-    sendJson(res, 200, { items: await cachedItemTypes(session) });
+    sendJson(res, 200, await cachedItemTypes(session));
     return;
   }
 

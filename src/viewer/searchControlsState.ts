@@ -4,6 +4,8 @@ export interface SearchControlsState {
   allFoldersTotal: number;
   /** File extensions present in the current library; empty until loaded. */
   availableExts?: readonly string[];
+  /** True while the library's extensions are being fetched. */
+  availableExtsLoading?: boolean;
   filtersOpen: boolean;
   folders: readonly EagleFolder[];
   hasActiveFilters: boolean;

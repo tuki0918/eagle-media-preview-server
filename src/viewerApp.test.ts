@@ -382,14 +382,24 @@ describe("viewer app data refresh", () => {
     expect(new URLSearchParams(window.location.search).has("q")).toBe(false);
   });
 
-  test("loads the library extensions only once the type menu is first opened", async () => {
+  test("loads the library extensions once the type menu is first opened, showing them as they are found", async () => {
+    let itemTypeAnswers = 0;
+    let finishScan: () => void = () => {};
+    const scanFinished = new Promise<void>((resolve) => {
+      finishScan = resolve;
+    });
     const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
       const url = String(input);
       if (url === "/api/auth/status") return jsonResponse({ authenticated: true, required: false });
       if (url === "/api/connect" && options?.method === "POST") return jsonResponse({ app: { version: "1.0" }, library: { id: "lib-a", name: "A" } });
       if (url === "/api/folders" || url === "/api/smart-folders") return jsonResponse({ items: [] });
       if (url.startsWith("/api/items?")) return jsonResponse({ items: [], total: 0 });
-      if (url.startsWith("/api/item-types")) return jsonResponse({ items: [{ ext: "PDF", count: 1 }] });
+      if (url.startsWith("/api/item-types")) {
+        itemTypeAnswers += 1;
+        if (itemTypeAnswers === 1) return jsonResponse({ complete: false, items: [{ ext: "JPG", count: 1000 }] });
+        await scanFinished;
+        return jsonResponse({ complete: true, items: [{ ext: "JPG", count: 1000 }, { ext: "PDF", count: 1 }] });
+      }
       throw new Error(`Unexpected request: ${url}`);
     });
     Object.defineProperty(globalThis, "fetch", { configurable: true, value: fetchMock });
@@ -407,11 +417,18 @@ describe("viewer app data refresh", () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(itemTypeCalls()).toHaveLength(0);
 
+    expect(getSearchControlsState().availableExtsLoading).toBe(false);
     openMediaTypes();
+    expect(getSearchControlsState().availableExtsLoading).toBe(true);
     openMediaTypes();
-    await vi.waitFor(() => expect(getSearchControlsState().availableExts).toEqual(["pdf"]));
+    await vi.waitFor(() => expect(getSearchControlsState().availableExts).toEqual(["jpg"]));
+    expect(getSearchControlsState().availableExtsLoading).toBe(true);
+    finishScan();
+    await vi.waitFor(() => expect(getSearchControlsState().availableExts).toEqual(["jpg", "pdf"]));
+    expect(getSearchControlsState().availableExtsLoading).toBe(false);
     openMediaTypes();
-    expect(itemTypeCalls()).toHaveLength(1);
+    // One request for the partial answer, one more until the scan completed.
+    expect(itemTypeCalls()).toHaveLength(2);
   });
 
   test("shows the offline page on startup when the open library is not shared", async () => {

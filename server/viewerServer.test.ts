@@ -3233,8 +3233,47 @@ test("createViewerServer serves cached item types for the current library", asyn
     const second = await fetch(`http://127.0.0.1:${status.port}/api/item-types`);
 
     assert.equal(first.status, 200);
-    assert.deepEqual(await first.json(), { items: [{ ext: "jpg", count: 3 }, { ext: "mp4", count: 1 }] });
+    assert.deepEqual(await first.json(), { complete: true, items: [{ ext: "jpg", count: 3 }, { ext: "mp4", count: 1 }] });
     assert.equal(second.status, 200);
+    assert.equal(scans, 1);
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer answers a slow item type scan with the extensions found so far", async () => {
+  let scans = 0;
+  let finishScan: (items: Array<{ count: number; ext: string }>) => void = () => {};
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    viewerPassword: "",
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/tmp/Test.library", name: "Test Library" };
+      },
+      itemExtensions({ onProgress }: { onProgress?: (items: Array<{ count: number; ext: string }>) => void } = {}) {
+        scans += 1;
+        onProgress?.([{ ext: "jpg", count: 1000 }]);
+        return new Promise((resolve) => {
+          finishScan = resolve;
+        });
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const status = viewer.status();
+    const partial = await fetch(`http://127.0.0.1:${status.port}/api/item-types`);
+    assert.deepEqual(await partial.json(), { complete: false, items: [{ ext: "jpg", count: 1000 }] });
+
+    const pending = fetch(`http://127.0.0.1:${status.port}/api/item-types`);
+    finishScan([{ ext: "jpg", count: 1000 }, { ext: "pdf", count: 2 }]);
+    assert.deepEqual(await (await pending).json(), { complete: true, items: [{ ext: "jpg", count: 1000 }, { ext: "pdf", count: 2 }] });
     assert.equal(scans, 1);
   } finally {
     await viewer.stop();
