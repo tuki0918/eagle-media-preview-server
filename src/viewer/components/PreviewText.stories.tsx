@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { PreviewMeta, PreviewOriginalName } from "./PreviewText";
+import { PreviewOriginalName } from "./PreviewText";
 import { storyPanelClassName } from "./storyFixtures";
 
 const meta = {
@@ -15,8 +15,4 @@ export const OriginalName: Story = {
   args: {
     value: "campaign/launch/final/landing-page-reference.jpg",
   },
-};
-
-export const MetaLine: Story = {
-  render: () => <PreviewMeta value="JPG · 1600 x 1067 · 842 KB" />,
 };

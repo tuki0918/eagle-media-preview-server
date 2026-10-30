@@ -22,7 +22,7 @@ export const DetailsOpen: Story = {
   decorators: [(Story) => {
     useEffect(() => {
       setPreviewDialogState({ infoOpen: true, mode: "image", open: true });
-      setPreviewTextState({ displayName: "Design reference", originalName: "Design reference.jpg", meta: "JPG · 1600 × 1067" });
+      setPreviewTextState({ displayName: "Design reference", originalName: "Design reference.jpg" });
       setPreviewInfoState({
         canEditMetadata: true,
         item: { id: "sample", name: "Design reference", ext: "jpg", tags: ["reference", "design", "inspiration"], folders: ["design"] },
@@ -35,7 +35,7 @@ export const DetailsOpen: Story = {
       return () => {
         resetPreviewDialogState();
         clearPreviewInfoState();
-        setPreviewTextState({ displayName: "", originalName: "", meta: "" });
+        setPreviewTextState({ displayName: "", originalName: "" });
       };
     }, []);
     return <Story />;

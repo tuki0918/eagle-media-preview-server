@@ -1,14 +1,6 @@
 import { audioExts, dateFormatter, dateTimeFormatter, videoExts } from "./constants";
 import type { EagleFolder, EagleItem } from "./types";
 
-export function itemMeta(item: EagleItem) {
-  const ext = (item.ext || "").toUpperCase() || "FILE";
-  const dimensions = item.width && item.height ? `${item.width}x${item.height}` : "";
-  const duration = isTimedMedia(item) ? formatDuration(item.duration) : "";
-  const size = formatBytes(item.size);
-  return [ext, dimensions, duration, size].filter(Boolean).join(" · ");
-}
-
 export function formatDimensions(item: EagleItem) {
   return item.width && item.height ? `${item.width} x ${item.height}` : "";
 }

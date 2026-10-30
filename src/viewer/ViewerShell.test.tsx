@@ -22,7 +22,6 @@ import {
   PreviewDetailsPanel,
   PreviewInfoActions,
   PreviewInfoDetails,
-  PreviewMeta,
   PreviewOriginalName,
   PreviewRating,
   RatingStars,
@@ -1389,11 +1388,8 @@ describe("ViewerAppShell", () => {
   });
 
   test("renders preview text as reusable components", () => {
-    const meta = renderToStaticMarkup(<PreviewMeta value="JPG - 120 x 80" />);
     const originalName = renderToStaticMarkup(<PreviewOriginalName value="Sample.jpg" />);
 
-    expect(meta).toContain('id="previewMeta"');
-    expect(meta).toContain("JPG - 120 x 80");
     expect(originalName).toContain('id="previewOriginalName"');
     expect(originalName).toContain('title="Sample.jpg"');
   });

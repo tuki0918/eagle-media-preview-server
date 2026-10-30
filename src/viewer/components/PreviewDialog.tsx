@@ -23,7 +23,7 @@ import {
 } from "./Icons";
 import { PreviewInfoActions, PreviewInfoDetails } from "./PreviewInfo";
 import { PreviewRating } from "./RatingStars";
-import { PreviewMeta, PreviewOriginalName } from "./PreviewText";
+import { PreviewOriginalName } from "./PreviewText";
 
 export function PreviewDialog() {
   const dialogRef = useRef<HTMLDialogElement | null>(null);
@@ -314,9 +314,6 @@ export function PreviewDialog() {
           <div className="text-base font-semibold leading-snug [&_.preview-original-name-value]:text-base [&_.preview-original-name-value]:font-semibold [&_.preview-original-name-value]:leading-snug">
             <PreviewOriginalName id="previewInfoName" source="display" />
           </div>
-          <p className="m-0 text-xs font-medium uppercase tracking-[0.06em] text-muted-foreground [font-variant-numeric:tabular-nums]">
-            <PreviewMeta />
-          </p>
         </section>
         <section className="preview-rating-section flex min-h-12 items-center justify-between gap-4 rounded-xl border border-border px-3.5 py-2">
           <span className="info-label text-[13px] font-normal text-muted-foreground">Rating</span>

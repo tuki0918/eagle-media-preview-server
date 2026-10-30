@@ -23,7 +23,6 @@ import {
   folderCountBaselines,
   folderIds,
   isTimedMedia,
-  itemMeta,
   normalizeRating,
   normalizeTag,
   originalFileName,
@@ -853,7 +852,6 @@ function openPreview(item: EagleItem, { replaceHistory = false, skipHistory = fa
   state.previewItemId = String(item.id || "");
   setPreviewTextState({
     displayName: displayFileName(item),
-    meta: itemMeta(item),
     originalName: originalFileName(item),
   });
   clearPreviewBodyState();
@@ -1099,7 +1097,6 @@ function clearPreviewContents() {
   clearPreviewRatingState();
   setPreviewTextState({
     displayName: "",
-    meta: "",
     originalName: "",
   });
 }

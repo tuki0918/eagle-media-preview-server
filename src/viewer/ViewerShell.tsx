@@ -34,7 +34,7 @@ export { Pager } from "./components/Pager";
 export { PreviewBody, PreviewBodyHost } from "./components/PreviewBody";
 export { PreviewDialog } from "./components/PreviewDialog";
 export { PreviewActions, PreviewDetailsPanel, PreviewInfoActions, PreviewInfoDetails } from "./components/PreviewInfo";
-export { PreviewMeta, PreviewOriginalName } from "./components/PreviewText";
+export { PreviewOriginalName } from "./components/PreviewText";
 export { PreviewRating, RatingStars } from "./components/RatingStars";
 export { ResultList } from "./components/ResultList";
 export { ResultSurface } from "./components/ResultSurface";
