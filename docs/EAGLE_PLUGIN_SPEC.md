@@ -83,6 +83,8 @@ The source is managed as a TypeScript / React / Vite / Tailwind CSS / Vitest pro
   - Prints the overview and architecture diagrams for `npm run diagram`
 - `scripts/diagram-images.mjs`
   - Captures those diagrams as dark-mode PNGs in `docs/` for `npm run diagram:images`
+- `scripts/frame-ipad.swift`
+  - Frames an iPad screenshot with Xcode's iPad Pro 13" bezel for the README screenshots, for `npm run screenshot:frame`
 
 Build output is created under `dist`:
 
@@ -501,6 +503,14 @@ npm run diagram:images
 `npm run diagram` prints the overview and architecture diagrams; pass `overview` or `architecture` to print one. Set `NO_COLOR=1` for plain text. It does not need a build.
 
 `npm run diagram:images` captures the colored output as dark-mode PNGs into `docs/architecture_overview.png` and `docs/architecture.png` with headless Chrome. Run it after changing `scripts/diagram.mjs`. Set `CHROME_PATH` when Chrome or Chromium is not in a standard location.
+
+Screenshot command:
+
+```sh
+npm run screenshot:frame -- <screenshot> docs/screenshot.png
+```
+
+`npm run screenshot:frame` places a landscape iPad Pro 13" screenshot (4:3, such as 2752x2064 from the device or the simulator) inside the iPad bezel and writes a transparent PNG. It needs macOS with Xcode, because the bezel comes from `/Library/Developer/DeviceKit/Chrome/tablet5.devicechrome`. Screenshots with another aspect ratio are refused.
 
 ## Implementation Notes
 
