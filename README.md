@@ -112,6 +112,8 @@ Authentication is optional. When password protection is enabled, browser access 
 
 Choose which Eagle libraries the viewer may serve.
 
+![](docs/server_panel_libraries.png)
+
 Eagle can only have one library open, and the viewer serves whichever library that is. Turn on **Share only selected libraries**, check the libraries to share, and save. If you open a different library in Eagle, viewers see the "Media Library is offline" page as soon as the viewer opens, before signing in, until a shared library is open again. The list shows the library open in Eagle and Eagle's recent libraries; use **Reload libraries** to refresh it. Checked libraries are saved by path.
 
 Like other settings, these are locked while the server is running and take effect when the server starts. Viewers can never switch the library open in Eagle.
