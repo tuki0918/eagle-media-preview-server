@@ -17,10 +17,12 @@ export type ResultSurfaceState =
     viewMode: ViewerMode;
   }
   | {
+    filterLabels?: readonly string[];
     hasActiveFilters: boolean;
     hasClearableFilters?: boolean;
     kind: "empty";
     onClearFilters: () => void;
+    onShowAllItems?: () => void;
     viewMode: ViewerMode;
   };
 

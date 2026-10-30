@@ -1411,7 +1411,12 @@ describe("ViewerAppShell", () => {
 
   test("renders result state as a reusable component", () => {
     const message = renderToStaticMarkup(<ResultStateView kind="message" text="Loading" />);
-    const empty = renderToStaticMarkup(<ResultStateView kind="empty" hasActiveFilters={true} onClearFilters={() => {}} viewMode="grid" />);
+    const empty = renderToStaticMarkup(
+      <ResultStateView kind="empty" filterLabels={['"cat"', "#pet"]} hasActiveFilters={true} onClearFilters={() => {}} viewMode="grid" />,
+    );
+    const folderEmpty = renderToStaticMarkup(
+      <ResultStateView kind="empty" hasActiveFilters={true} hasClearableFilters={false} onClearFilters={() => {}} onShowAllItems={() => {}} />,
+    );
     const libraryEmpty = renderToStaticMarkup(<ResultStateView kind="empty" hasActiveFilters={false} onClearFilters={() => {}} viewMode="tiles" />);
     const error = renderToStaticMarkup(
       <ResultStateView
@@ -1424,7 +1429,14 @@ describe("ViewerAppShell", () => {
     );
 
     expect(message).toContain("Loading");
+    expect(empty).toContain("No matching items");
     expect(empty).toContain("Clear filters");
+    expect(empty).toContain("#pet");
+    expect(empty).toContain('aria-label="Active filters"');
+    expect(folderEmpty).toContain("This folder is empty");
+    expect(folderEmpty).toContain("Show all items");
+    expect(folderEmpty).toContain("lucide-folder-open");
+    expect(folderEmpty).not.toContain("Clear filters");
     expect(empty).toContain("lucide-search-x");
     expect(empty).toContain("text-muted-foreground");
     expect(empty).toContain('stroke-width="1.5"');

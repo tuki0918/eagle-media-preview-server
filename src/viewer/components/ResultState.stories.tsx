@@ -19,5 +19,22 @@ export const ErrorMessage: Story = {
 };
 
 export const EmptyWithFilters: Story = {
-  render: () => <ResultStateView hasActiveFilters kind="empty" onClearFilters={noop} />,
+  render: () => (
+    <ResultStateView
+      filterLabels={['"sunset"', "#travel", "#2024", "JPG", "★5,4"]}
+      hasActiveFilters
+      kind="empty"
+      onClearFilters={noop}
+    />
+  ),
+};
+
+export const EmptyFolder: Story = {
+  render: () => (
+    <ResultStateView hasActiveFilters hasClearableFilters={false} kind="empty" onClearFilters={noop} onShowAllItems={noop} />
+  ),
+};
+
+export const EmptyLibrary: Story = {
+  render: () => <ResultStateView hasActiveFilters={false} kind="empty" onClearFilters={noop} />,
 };

@@ -28,7 +28,7 @@ import {
   originalFileName,
   previewFileName,
 } from "./viewer/format";
-import { hasActiveFilters, hasResettableFilters, resetFilterState } from "./viewer/filters";
+import { activeFilterLabels, hasActiveFilters, hasResettableFilters, resetFilterState } from "./viewer/filters";
 import { itemMatchesFolderFilter, itemQueryParams } from "./viewer/itemQuery";
 import { setLoginConnectState } from "./viewer/loginConnectState";
 import {
@@ -1410,9 +1410,11 @@ function renderMessage(text: string, className = "empty") {
 function renderEmptyState() {
   setResultSurfaceState({
     kind: "empty",
+    filterLabels: activeFilterLabels(state),
     hasActiveFilters: hasActiveFilters(state),
     hasClearableFilters: hasResettableFilters(state),
     onClearFilters: resetFilters,
+    onShowAllItems: openAllItems,
     viewMode: state.viewMode,
   });
 }
