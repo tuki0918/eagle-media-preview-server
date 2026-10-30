@@ -34,9 +34,9 @@ const previewLabelClassName = "preview-detail-label text-[13px] font-normal text
 const previewSectionHeadingClassName = "preview-section-heading m-0 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground";
 const previewSectionCountClassName = "rounded-full bg-muted px-1.5 py-px text-[10px] font-medium tabular-nums tracking-normal text-muted-foreground";
 const directFileLinkClassName =
-  "primary-action-button direct-file-link preview-info-cta min-h-11 w-full cursor-pointer gap-2 whitespace-nowrap rounded-full bg-primary px-4 text-sm font-semibold leading-none text-primary-foreground no-underline shadow-none [&_svg]:size-4 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-width:2]";
+  "primary-action-button direct-file-link preview-info-cta min-h-11 w-full desktop:min-h-12 cursor-pointer gap-2 whitespace-nowrap rounded-full bg-primary px-4 text-sm font-semibold leading-none text-primary-foreground no-underline shadow-none [&_svg]:size-4 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-width:2]";
 const adminMenuTriggerClassName =
-  "preview-admin-menu-trigger size-11 rounded-full border-border bg-background text-foreground hover:bg-muted hover:text-foreground [&_svg]:size-5";
+  "preview-admin-menu-trigger size-11 rounded-full desktop:size-12 border-border bg-background text-foreground hover:bg-muted hover:text-foreground [&_svg]:size-5";
 const previewDetailsSectionClassName = "preview-details-section grid gap-6";
 const previewDetailTableClassName = "preview-detail-table grid rounded-xl border border-border px-3.5";
 const previewDetailRowClassName =
@@ -138,7 +138,7 @@ export function PreviewInfoActions() {
   const previewInfoState = useSyncExternalStore(subscribePreviewInfoState, getPreviewInfoState, getPreviewInfoState);
   if (!actionsVisible) return null;
   return (
-    <div id="previewActions" className="preview-info-actions sticky bottom-0 z-[1] -mx-5 mt-auto border-t border-border bg-card px-5 pb-[calc(16px+env(safe-area-inset-bottom))] pt-4 max-[540px]:static">
+    <div id="previewActions" className="preview-info-actions sticky bottom-0 z-[1] -mx-5 mt-auto border-t border-border bg-card px-5 pb-[calc(16px+env(safe-area-inset-bottom))] pt-4 max-[540px]:static desktop:pb-[calc(24px+env(safe-area-inset-bottom))]">
       {previewInfoState ? <PreviewActions key={String(previewInfoState.item.id || "")} canEditMetadata={previewInfoState.canEditMetadata} canManageLibrary={previewInfoState.canManageLibrary} item={previewInfoState.item} onToggleTrash={previewInfoState.onToggleTrash} /> : null}
     </div>
   );
