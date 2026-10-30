@@ -1,7 +1,6 @@
 import { FolderOpenIcon, InboxIcon, SearchXIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import type { ViewerMode } from "../types";
 
 export type ResultStateViewProps =
@@ -25,7 +24,7 @@ const messageTitleClassName = "block text-[17px] font-[760] text-foreground";
 const errorTitleClassName = `${messageTitleClassName} text-destructive`;
 const messageDetailClassName = "mx-auto mt-2 max-w-[460px] text-sm leading-[1.55] text-muted-foreground";
 const emptyStateClassName =
-  "col-span-full grid content-center justify-items-center gap-3 rounded-2xl border border-dashed border-border bg-card px-5 py-12 text-center shadow-none ring-0";
+  "col-span-full grid content-center justify-items-center gap-3 px-5 py-12 text-center";
 const emptyStateHeightClassName = "min-h-[clamp(280px,calc(100dvh-220px),460px)]";
 const emptyStateIconWrapClassName = "mb-1 grid size-16 place-items-center rounded-full bg-muted shadow-[0_0_0_8px_color-mix(in_srgb,var(--muted)_45%,transparent)]";
 const emptyStateIconClassName = "size-7 text-muted-foreground";
@@ -60,7 +59,7 @@ export function ResultStateView(props: ResultStateViewProps) {
   const filterLabels = content.showFilters ? props.filterLabels ?? [] : [];
 
   return (
-    <Card className={`${emptyStateClassName} ${emptyStateHeightClassName}`} role="status">
+    <div className={`${emptyStateClassName} ${emptyStateHeightClassName}`} role="status">
       <span className={emptyStateIconWrapClassName} aria-hidden="true">
         <EmptyIcon className={emptyStateIconClassName} strokeWidth={1.5} />
       </span>
@@ -86,7 +85,7 @@ export function ResultStateView(props: ResultStateViewProps) {
           Show all items
         </Button>
       ) : null}
-    </Card>
+    </div>
   );
 }
 
