@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ChevronDownIcon, StarIcon, TagIcon, TagsIcon } from "lucide-react";
-import { mediaUrl } from "../api";
+import { canFallbackMedia, mediaUrl } from "../api";
 import { subscribeDisplaySettingsReset } from "../displayPreferences";
 import { TAG_SECTIONS_COLLAPSED_STORAGE_KEY } from "../constants";
 import { thumbnailMediaType } from "../media";
@@ -238,8 +238,8 @@ function TagCover({ empty, tag }: { empty: boolean; tag: string }) {
           decoding="async"
           loading="lazy"
           src={mediaUrl(String(item.id), sourceKind)}
-          onError={() => {
-            if (sourceKind === "thumb" && thumbnailMediaType(item) === "image") {
+          onError={async () => {
+            if (sourceKind === "thumb" && thumbnailMediaType(item) === "image" && await canFallbackMedia()) {
               setSourceKind("file");
               return;
             }

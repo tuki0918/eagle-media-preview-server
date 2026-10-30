@@ -444,11 +444,24 @@ describe("viewer app data refresh", () => {
     await vi.waitFor(() => expect(getShellView()).toBe("viewer"));
 
     health = { app: { version: "1.0" }, library: null, libraryStatus: "not_shared" };
-    window.dispatchEvent(new window.Event("online"));
+    const { canFallbackMedia } = await import("./viewer/api");
+    const healthCallsBefore = fetchMock.mock.calls.filter(([url]) => url === "/api/health").length;
+    // A grid can report many failed thumbnails at once. Share one health request
+    // and refuse every original-file fallback after discovering the unshared library.
+    expect(await Promise.all(Array.from({ length: 20 }, () => canFallbackMedia()))).toEqual(Array(20).fill(false));
+    expect(fetchMock.mock.calls.filter(([url]) => url === "/api/health")).toHaveLength(healthCallsBefore + 1);
     await vi.waitFor(() => expect(document.body.dataset.appState).toBe("failed"));
     expect(getShellView()).toBe("login");
     expect(document.querySelector("#startupTitle")?.textContent).toBe("Media Library is offline");
     expect(document.querySelector("#startupMessage")?.textContent).toBe("This library isn't shared right now. Please try again later.");
+    const { getResultSurfaceState } = await import("./viewer/resultSurfaceState");
+    const { getTagListState } = await import("./viewer/tagListState");
+    expect(getResultSurfaceState()).toMatchObject({ kind: "message", text: "" });
+    expect(getTagListState().overview).toBeNull();
+    const callsAfterOffline = fetchMock.mock.calls.length;
+    expect(await canFallbackMedia()).toBe(false);
+    window.dispatchEvent(new window.Event("online"));
+    expect(fetchMock.mock.calls).toHaveLength(callsAfterOffline);
 
     document.body.dataset.appState = "ready";
 

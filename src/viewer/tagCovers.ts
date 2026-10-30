@@ -15,7 +15,8 @@ export function loadTagCover(tag: string) {
   const cached = covers.get(tag);
   if (cached) return cached;
   const cache = covers;
-  const cover = schedule(() => fetchCover(tag)).catch(() => {
+  const fetcher = fetchCover;
+  const cover = schedule(() => cache === covers ? fetcher(tag) : Promise.resolve(null)).catch(() => {
     // Forget failures so the tag retries the next time it scrolls into view.
     if (cache.get(tag) === cover) cache.delete(tag);
     return null;

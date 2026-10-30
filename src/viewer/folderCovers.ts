@@ -17,7 +17,7 @@ export function loadFolderCover(folderId: string, smart = false) {
   if (cached) return cached;
   const cache = covers;
   const fetcher = fetchCover;
-  const cover = schedule(() => fetcher(folderId, smart)).catch(() => {
+  const cover = schedule(() => cache === covers ? fetcher(folderId, smart) : Promise.resolve(null)).catch(() => {
     // A transient failure can retry when the folder is shown again.
     if (cache.get(key) === cover) cache.delete(key);
     return null;

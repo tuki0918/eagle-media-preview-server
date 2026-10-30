@@ -22,6 +22,17 @@ export interface RequestOutcome {
 
 const requestOutcomeListeners = new Set<(outcome: RequestOutcome) => void>();
 
+let mediaFallbackCheck: (() => Promise<boolean>) | null = null;
+
+export function setMediaFallbackCheck(check: (() => Promise<boolean>) | null) {
+  mediaFallbackCheck = check;
+}
+
+// An image error can mean a library switch, not just a missing thumbnail.
+export async function canFallbackMedia() {
+  return mediaFallbackCheck ? mediaFallbackCheck() : true;
+}
+
 export function subscribeRequestOutcome(listener: (outcome: RequestOutcome) => void) {
   requestOutcomeListeners.add(listener);
   return () => {

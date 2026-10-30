@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { FolderIcon } from "lucide-react";
-import { mediaUrl } from "../api";
+import { canFallbackMedia, mediaUrl } from "../api";
 import { loadFolderCover } from "../folderCovers";
 import { thumbnailMediaType } from "../media";
 import type { EagleItem } from "../types";
@@ -60,8 +60,8 @@ function FolderCoverImage({ folderId, smart, empty }: Required<FolderCoverProps>
           decoding="async"
           loading="lazy"
           src={mediaUrl(String(item.id), sourceKind)}
-          onError={() => {
-            if (sourceKind === "thumb" && thumbnailMediaType(item) === "image") {
+          onError={async () => {
+            if (sourceKind === "thumb" && thumbnailMediaType(item) === "image" && await canFallbackMedia()) {
               setSourceKind("file");
               return;
             }

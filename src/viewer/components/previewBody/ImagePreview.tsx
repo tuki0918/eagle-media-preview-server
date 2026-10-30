@@ -5,7 +5,7 @@ import { getPreviewDialogState, subscribePreviewDialogState } from "../../previe
 import type { ImageFullscreenControls } from "../../useImageFullscreen";
 import { ChevronLeftIcon, ChevronRightIcon } from "../Icons";
 import { dockSurfaceClassName } from "../viewerDockStyles";
-import { mediaUrl } from "../../api";
+import { canFallbackMedia, mediaUrl } from "../../api";
 import { hasNoThumbnail } from "../../media";
 import { closePreview, stepPreview } from "../../shellActions";
 import {
@@ -318,8 +318,8 @@ export function ImagePreview({ item, srcKind: requestedSrcKind, fullscreen }: { 
           alt={item.name || item.id || ""}
           draggable={false}
           style={imageStyle}
-          onError={() => {
-            if (srcKind === "file") setSrcKind("thumb");
+          onError={async () => {
+            if (srcKind === "file" && await canFallbackMedia()) setSrcKind("thumb");
             else setLoadFailed(true);
           }}
           onLoad={(event) => {

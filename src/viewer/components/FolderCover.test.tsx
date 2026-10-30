@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { setFolderCoverFetcher } from "../folderCovers";
 import type { EagleItem } from "../types";
 import { FolderCover } from "./FolderCover";
+import { setMediaFallbackCheck } from "../api";
 
 let dom: JSDOM;
 let root: Root | undefined;
@@ -30,6 +31,7 @@ afterEach(async () => {
   } finally {
     root = undefined;
     setFolderCoverFetcher(null);
+    setMediaFallbackCheck(null);
     vi.unstubAllGlobals();
     dom?.window.close();
   }
@@ -65,4 +67,14 @@ test("ignores a previous folder's late result and skips requests for empty folde
   await act(async () => root?.render(<FolderCover folderId="empty" empty />));
   expect(container.querySelector("img")).toBeNull();
   expect(fetcher).toHaveBeenCalledTimes(2);
+});
+
+test("does not request an original when the media availability check refuses fallback", async () => {
+  setFolderCoverFetcher(async () => ({ id: "image", ext: "jpg" }));
+  setMediaFallbackCheck(async () => false);
+  await act(async () => root?.render(<FolderCover folderId="folder-one" />));
+  await act(async () => {
+    container.querySelector("img")?.dispatchEvent(new dom.window.Event("error"));
+  });
+  expect(container.querySelector("img")).toBeNull();
 });

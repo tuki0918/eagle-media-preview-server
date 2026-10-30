@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type 
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { mediaUrl } from "../api";
+import { canFallbackMedia, mediaUrl } from "../api";
 import {
   formatBytes,
   normalizeRating,
@@ -327,8 +327,8 @@ function ThumbnailButton({ children, item, onOpenPreview, style, variant, withBa
           hidden={missing}
           loading="lazy"
           src={mediaUrl(String(item.id || ""), sourceKind)}
-          onError={() => {
-            if (sourceKind === "thumb" && canUseOriginalImage) {
+          onError={async () => {
+            if (sourceKind === "thumb" && canUseOriginalImage && await canFallbackMedia()) {
               setSourceKind("file");
               setLoading(true);
               setMissing(false);
