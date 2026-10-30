@@ -31,39 +31,24 @@ Optional:
 - Multiple users with Viewer, Editor, and Admin roles.
 - Library protection: share only the Eagle libraries you select.
 
-## Architecture
-
-![Media Preview Server overview](docs/architecture_overview.png)
-
-The preview server, plugin window, and settings file come from this plugin, not from Eagle itself; the plugin runs the server inside Eagle. Browsers on other devices talk only to that preview server. They never get direct access to Eagle's own API or the library folder.
-
-For the detailed architecture, access control, and file protection, see [Runtime Model in EAGLE_PLUGIN_SPEC.md](docs/EAGLE_PLUGIN_SPEC.md#runtime-model).
-
-## Future Plans
-
-- Expand support for additional file extensions
-- Add AI-related capabilities
-
-### Limitations
-
-These are planned, but on hold until the Eagle API supports them:
-
-- Sort results by date, rating, name, or size
-- Add or remove favorite tags
-- Filter by multiple file extensions at once
-- Use search filters inside smart folders
-
-## PWA Installation
+<details>
+<summary><strong>PWA Installation</strong></summary>
 
 The browser viewer can be installed from a supported desktop or mobile browser. Service workers require a secure context, so use HTTPS when opening the viewer from another device on your LAN. Loopback addresses such as `localhost` are also treated as secure by browsers.
 
 The PWA caches only the application shell. Eagle API responses and library media are intentionally excluded from the service-worker cache, so browsing library content still requires a connection to the running plugin server.
 
-## Slideshow
+</details>
+
+<details>
+<summary><strong>Slideshow</strong></summary>
 
 Slideshows start muted on all devices. To hear video or audio, use the speaker button in the bottom playback bar to turn sound on during playback.
 
-## Video Picture-in-Picture
+</details>
+
+<details>
+<summary><strong>Video Picture-in-Picture</strong></summary>
 
 Use the **Picture-in-Picture** button in video controls. It appears when the browser supports the loaded video. Closing the preview or switching items closes PiP.
 
@@ -71,9 +56,12 @@ Use the **Picture-in-Picture** button in video controls. It appears when the bro
 - **macOS Safari:** Enable **Video Viewer** from Safari's Page Menu for automatic PiP when switching tabs. [Details](https://webkit.org/blog/15865/webkit-features-in-safari-18-0/#viewer).
 - **Mobile:** Support varies by browser and OS. If an installed web app lacks PiP, try opening the URL in Safari.
 
-## Settings
+</details>
 
-### Server Status
+<details>
+<summary><strong>Settings</strong></summary>
+
+#### Server Status
 
 Start or stop the server, copy the endpoint URL, or scan the QR code to open the viewer on your phone. The quick toggles below the URL control **Auto start**, **Password protection**, **Public Network**, and **HTTPS**.
 
@@ -81,7 +69,7 @@ Start or stop the server, copy the endpoint URL, or scan the QR code to open the
 
 Settings are locked while the server is running. Stop the server to edit them.
 
-### General
+#### General
 
 Hostname and port.
 
@@ -91,7 +79,7 @@ The saved hostname is explicitly allowed for sign-in and writes; the request Ori
 
 ![](docs/server_panel_general.png)
 
-### Access
+#### Access
 
 Users and sign-in session settings.
 
@@ -108,7 +96,7 @@ Authentication is optional. When password protection is enabled, browser access 
 > [!IMPORTANT]
 > Media is stored in the browser's normal cache and may be reused for up to one hour after it is fetched, without asking the server. Signing out or switching libraries does not immediately remove media that is already cached. On a shared device, use a private window.
 
-### Libraries
+#### Libraries
 
 Choose which Eagle libraries the viewer may serve.
 
@@ -118,7 +106,7 @@ Eagle can only have one library open, and the viewer serves whichever library th
 
 Like other settings, these are locked while the server is running and take effect when the server starts. Viewers can never switch the library open in Eagle.
 
-### Security
+#### Security
 
 HTTPS/TLS settings.
 
@@ -131,41 +119,40 @@ See [HTTPS and mkcert CA Operations](docs/https-mkcert.md) for setup, plugin HTT
 - `TLS Cert`: the certificate file
 - `TLS Key`: the matching private key file
 
-## Requirements
+</details>
 
-- Eagle 4.0 Build 23 or later
-- Node.js 20 or later
+## Architecture
 
-## Development
+![Media Preview Server overview](docs/architecture_overview.png)
 
-```sh
-npm install
-npm run dev
-```
+The preview server, plugin window, and settings file come from this plugin, not from Eagle itself; the plugin runs the server inside Eagle. Browsers on other devices talk only to that preview server. They never get direct access to Eagle's own API or the library folder.
 
-`npm run dev` starts the Vite development server for the React UI.
-
-## Build
-
-```sh
-npm run build
-```
-
-Build output is written to `dist`.
-
-## Verification
-
-```sh
-npm run typecheck
-npm run build
-npm test
-```
-
-Run `npm run verify` before committing when you need the full TypeScript, Vite build, and Vitest check in one command.
+For the detailed architecture, access control, and file protection, see [Runtime Model in EAGLE_PLUGIN_SPEC.md](docs/EAGLE_PLUGIN_SPEC.md#runtime-model).
 
 ## Details
 
 See [EAGLE_PLUGIN_SPEC.md](docs/EAGLE_PLUGIN_SPEC.md) for plugin behavior, settings, server routes, authentication, and runtime details.
+
+See [DEVELOPMENT.md](docs/DEVELOPMENT.md) for requirements, development, build, and verification.
+
+## Future Plans
+
+<details>
+<summary>Planned features and limitations</summary>
+
+- Expand support for additional file extensions
+- Add AI-related capabilities
+
+#### Limitations
+
+These are planned, but on hold until the Eagle API supports them:
+
+- Sort results by date, rating, name, or size
+- Add or remove favorite tags
+- Filter by multiple file extensions at once
+- Use search filters inside smart folders
+
+</details>
 
 ## Disclaimer
 
