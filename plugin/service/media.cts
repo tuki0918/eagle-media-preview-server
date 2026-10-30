@@ -83,6 +83,20 @@ async function streamItemMedia(id: string, kind: MediaKind, req: IncomingMessage
   }
   const detectedContentType = mediaContentType(filePath, itemData);
   const contentType = safeMediaContentType(detectedContentType);
+  const lastModified = info.mtime.toUTCString();
+  const modifiedSince = req.headers["if-modified-since"];
+  // HTTP dates have second precision. If-None-Match takes precedence even though
+  // this endpoint does not currently emit ETags. Check before processing Range.
+  if (req.headers["if-none-match"] === undefined && modifiedSince &&
+      Math.floor(info.mtimeMs / 1000) * 1000 <= Date.parse(modifiedSince)) {
+    res.writeHead(304, {
+      ...mediaSecurityHeaders(detectedContentType),
+      "Cache-Control": "private, max-age=3600",
+      "Last-Modified": lastModified,
+    });
+    res.end();
+    return;
+  }
   const range = parseRange(req.headers.range, info.size);
 
   if (req.headers.range && !range) {
@@ -102,7 +116,7 @@ async function streamItemMedia(id: string, kind: MediaKind, req: IncomingMessage
     "Accept-Ranges": "bytes",
     "Content-Disposition": contentDisposition(contentType, itemData, filePath),
     "Cache-Control": "private, max-age=3600",
-    "Last-Modified": info.mtime.toUTCString(),
+    "Last-Modified": lastModified,
     "X-Content-Type-Options": "nosniff",
   };
 

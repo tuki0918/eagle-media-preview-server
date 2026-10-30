@@ -2,7 +2,7 @@ import { test } from "vitest";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { createReadStream } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, utimes, rm } from "node:fs/promises";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { createRequire } from "node:module";
@@ -2391,7 +2391,9 @@ test("createViewerServer does not stream media after Eagle switches libraries mi
   await viewer.start();
   try {
     const origin = `http://127.0.0.1:${viewer.status().port}`;
-    const response = await globalThis.fetch(`${origin}/file/ITEM1${await libraryQuery(origin)}`);
+    const response = await globalThis.fetch(`${origin}/file/ITEM1${await libraryQuery(origin)}`, {
+      headers: { "If-Modified-Since": "Thu, 01 Jan 2099 00:00:00 GMT" },
+    });
     assert.equal(response.status, 409);
     assert.equal((await response.text()).includes("shared-file"), false);
   } finally {
@@ -2525,6 +2527,97 @@ test("createViewerServer requires library requests to name the open library", as
     assert.equal(reconnect.status, 200);
   } finally {
     await viewer.stop();
+  }
+});
+
+test("media revalidation preserves the one-hour cache and checks access before returning 304", async () => {
+  const root = join(tmpdir(), `eagle-media-preview-server-cache-${Date.now()}`);
+  await mkdir(root, { recursive: true });
+  const filePath = join(root, "asset.jpg");
+  const modified = new Date("2026-01-01T00:00:00.789Z");
+  await writeFile(filePath, "demo-file");
+  await utimes(filePath, modified, modified);
+  let openLibrary = root;
+  const viewer = createViewerServer({
+    host: "127.0.0.1", port: 0,
+    authUsers: [{ username: "owner", passwordHash: sha256("own"), role: "admin" }],
+    sharedLibraries: [root],
+    eagleClient: {
+      async appInfo() { return { version: "1.0.0" }; },
+      async libraryInfo() { return { path: openLibrary, name: "Test Library" }; },
+      async itemById(id: string) { return { data: [{ id, filePath, thumbnailPath: filePath }] }; },
+    },
+  });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const cookie = await loginCookie(origin, "owner", "own");
+    const health = await (await fetch(`${origin}/api/health`, { headers: { Cookie: cookie } })).json();
+    const paths = ["/file/ITEM1", "/api/items/ITEM1/file", "/api/items/ITEM1/thumb"];
+    const headers = { Cookie: cookie, "X-Library-Id": health.library.id };
+    const lastModified = modified.toUTCString();
+    for (const path of paths) {
+      const url = `${origin}${path}`;
+      const initial = await fetch(url, { headers });
+      assert.equal(initial.status, 200);
+      assert.equal(initial.headers.get("cache-control"), "private, max-age=3600");
+      assert.equal(initial.headers.get("last-modified"), lastModified);
+      assert.equal(await initial.text(), "demo-file");
+      for (const method of ["GET", "HEAD"]) {
+        const response = await fetch(url, { method, headers: { ...headers, "If-Modified-Since": lastModified } });
+        assert.equal(response.status, 304, `${method} ${path}`);
+        assert.equal(response.headers.get("cache-control"), "private, max-age=3600");
+        assert.equal(response.headers.get("last-modified"), lastModified);
+        assert.equal(response.headers.get("content-length"), null);
+        assert.equal(await response.text(), "");
+      }
+      const conditionalHeaders: Record<string, string>[] = [
+        { "If-Modified-Since": "invalid" },
+        { "If-Modified-Since": "Wed, 31 Dec 2025 00:00:00 GMT" },
+        { "If-Modified-Since": lastModified, "If-None-Match": '"unknown"' },
+      ];
+      for (const conditional of conditionalHeaders) {
+        const response = await fetch(url, { headers: { ...headers, ...conditional } });
+        assert.equal(response.status, 200);
+        assert.equal(await response.text(), "demo-file");
+      }
+      const range = await fetch(url, { headers: { ...headers, Range: "bytes=0-3" } });
+      assert.equal(range.status, 206);
+      assert.equal(range.headers.get("content-range"), "bytes 0-3/9");
+      assert.equal(await range.text(), "demo");
+      const conditionalRange = await fetch(url, { headers: { ...headers, Range: "bytes=0-3", "If-Modified-Since": lastModified } });
+      assert.equal(conditionalRange.status, 304);
+      assert.equal(conditionalRange.headers.get("content-range"), null);
+      assert.equal(await conditionalRange.text(), "");
+      const unauthorized = await fetch(url, { headers: { "X-Library-Id": health.library.id, "If-Modified-Since": lastModified } });
+      assert.equal(unauthorized.status, 401);
+      await unauthorized.text();
+    }
+    await writeFile(filePath, "updated-file");
+    const updated = new Date(modified.getTime() + 2000);
+    await utimes(filePath, updated, updated);
+    const changed = await fetch(`${origin}${paths[0]}`, { headers: { ...headers, "If-Modified-Since": lastModified } });
+    assert.equal(changed.status, 200);
+    assert.equal(changed.headers.get("last-modified"), updated.toUTCString());
+    assert.equal(await changed.text(), "updated-file");
+    openLibrary = join(root, "Private.library");
+    viewer.notifyLibraryChanged();
+    for (const path of paths) {
+      const denied = await fetch(`${origin}${path}`, { headers: { ...headers, "If-Modified-Since": updated.toUTCString() } });
+      assert.equal(denied.status, 503);
+      assert.equal((await denied.json()).code, "LIBRARY_NOT_SHARED");
+    }
+    const logout = await fetch(`${origin}/api/auth/logout`, { method: "POST", headers: { Cookie: cookie, Origin: origin } });
+    assert.equal(logout.status, 200);
+    await logout.text();
+    for (const path of paths) {
+      const expired = await fetch(`${origin}${path}`, { headers: { ...headers, "If-Modified-Since": updated.toUTCString() } });
+      assert.equal(expired.status, 401);
+      await expired.text();
+    }
+  } finally {
+    await viewer.stop();
+    await rm(root, { recursive: true, force: true });
   }
 });
 
