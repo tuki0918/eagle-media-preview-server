@@ -22,6 +22,7 @@ import {
 } from "../searchControlsState";
 import {
   changeMediaType,
+  openMediaTypes,
   changeRating,
   changeSearchQuery,
   focusSearch,
@@ -198,15 +199,17 @@ function FilterMenu({
   summary,
   summaryText,
   children,
+  onOpenChange,
 }: {
   id: string;
   label: string;
   summary: ReactNode;
   summaryText: string;
   children: ReactNode;
+  onOpenChange?: (open: boolean) => void;
 }) {
   return (
-    <DropdownMenu modal={false}>
+    <DropdownMenu modal={false} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger asChild>
         <button
           id={id}
@@ -234,7 +237,15 @@ function FilterMenu({
 function TypeFilter({ options, selectedExt }: { options: readonly string[]; selectedExt: string }) {
   const summaryText = selectedExt ? selectedExt.toUpperCase() : "All types";
   return (
-    <FilterMenu id="extSelect" label="Type" summary={<span className="truncate">{summaryText}</span>} summaryText={summaryText}>
+    <FilterMenu
+      id="extSelect"
+      label="Type"
+      summary={<span className="truncate">{summaryText}</span>}
+      summaryText={summaryText}
+      onOpenChange={(open) => {
+        if (open) openMediaTypes();
+      }}
+    >
       <DropdownMenuPrimitive.RadioGroup value={selectedExt} onValueChange={changeMediaType}>
         {["", ...options].map((ext) => (
           <DropdownMenuPrimitive.RadioItem key={ext || "all"} data-slot="dropdown-menu-radio-item" className={filterOptionClassName} value={ext}>
@@ -310,7 +321,8 @@ function RatingFilterLabel({ rating }: { rating: number }) {
   );
 }
 
-// Only offer extensions that exist in the library; fall back to the defaults until they load.
+// Only offer extensions that exist in the library; fall back to the defaults until they load
+// (they are fetched the first time the menu opens).
 function mediaTypeOptions(availableExts: readonly string[], selectedExt: string): readonly string[] {
   const options = availableExts.length ? [...availableExts] : [...MEDIA_TYPE_OPTIONS];
   if (selectedExt && !options.includes(selectedExt)) options.push(selectedExt);

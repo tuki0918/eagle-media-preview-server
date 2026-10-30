@@ -118,6 +118,10 @@ let currentLibraryId = "";
 let sessionMaxAgeSeconds = 7 * 24 * 60 * 60;
 let allFoldersTotal = 0;
 let availableExts: string[] = [];
+// Scanning a large library for its extensions takes many Eagle requests, so it waits until the
+// type menu is first opened instead of competing with the initial item load.
+let itemTypesRequestId = 0;
+let itemTypesState: "idle" | "loading" | "loaded" = "idle";
 let allFoldersTotalRequestId = 0;
 let uncategorizedTotal = 0;
 let untaggedTotal = 0;
@@ -191,6 +195,9 @@ async function init() {
     allItemsOpened: openAllItems,
     mediaTypeChanged: (ext: string) => {
       applyFilterChange({ ext });
+    },
+    mediaTypesOpened: () => {
+      void loadItemTypes();
     },
     ratingChanged: (rating: string) => {
       applyFilterChange({ rating });
@@ -275,7 +282,7 @@ async function connect(credentials?: { password: string; username: string }) {
     const data = await postJson<ConnectResponse>("/api/connect", {});
     serverReachable = true;
     showViewer(data);
-    await Promise.all([loadFolders(), loadSmartFolders(), loadItems(), loadAllFoldersTotal(), loadShortcutCounts(), loadItemTypes()]);
+    await Promise.all([loadFolders(), loadSmartFolders(), loadItems(), loadAllFoldersTotal(), loadShortcutCounts()]);
   } catch (error) {
     if (signedInThisAttempt && handlePostLoginAuthError(error)) return;
     if (loginAttempted && !signedInThisAttempt && isLoginAuthFailure(error)) {
@@ -490,6 +497,8 @@ function clearViewerSessionState() {
   untaggedTotal = 0;
   tagsTotal = 0;
   availableExts = [];
+  itemTypesRequestId += 1;
+  itemTypesState = "idle";
   resetViewerResults({ resetOffset: true });
   renderMessage("");
   resetTagList();
@@ -697,10 +706,18 @@ async function loadFolders() {
 }
 
 async function loadItemTypes() {
+  if (itemTypesState !== "idle") return;
+  const requestId = ++itemTypesRequestId;
+  itemTypesState = "loading";
   try {
     const data = await getJson<{ items?: Array<{ ext?: string }> }>("/api/item-types");
+    if (requestId !== itemTypesRequestId) return;
     availableExts = (data.items || []).map((entry) => String(entry.ext || "").toLowerCase()).filter(Boolean);
+    itemTypesState = "loaded";
   } catch (error) {
+    if (requestId !== itemTypesRequestId) return;
+    // Let the next menu open retry.
+    itemTypesState = "idle";
     if (handleAuthError(error)) return;
     availableExts = [];
   }

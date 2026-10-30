@@ -382,6 +382,38 @@ describe("viewer app data refresh", () => {
     expect(new URLSearchParams(window.location.search).has("q")).toBe(false);
   });
 
+  test("loads the library extensions only once the type menu is first opened", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/auth/status") return jsonResponse({ authenticated: true, required: false });
+      if (url === "/api/connect" && options?.method === "POST") return jsonResponse({ app: { version: "1.0" }, library: { id: "lib-a", name: "A" } });
+      if (url === "/api/folders" || url === "/api/smart-folders") return jsonResponse({ items: [] });
+      if (url.startsWith("/api/items?")) return jsonResponse({ items: [], total: 0 });
+      if (url.startsWith("/api/item-types")) return jsonResponse({ items: [{ ext: "PDF", count: 1 }] });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: fetchMock });
+
+    const { initViewer } = await import("./viewerApp");
+    const { openMediaTypes, submitConnection } = await import("./viewer/shellActions");
+    const { getLoginConnectState } = await import("./viewer/loginConnectState");
+    const { getShellView } = await import("./viewer/shellVisibility");
+    const { getSearchControlsState } = await import("./viewer/searchControlsState");
+    const itemTypeCalls = () => fetchMock.mock.calls.filter(([url]) => String(url).startsWith("/api/item-types"));
+    initViewer();
+    await vi.waitFor(() => expect(getLoginConnectState().authenticated).toBe(true));
+    submitConnection({ currentTarget: document.querySelector<HTMLFormElement>("#connectForm")!, preventDefault: () => {} });
+    await vi.waitFor(() => expect(getShellView()).toBe("viewer"));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(itemTypeCalls()).toHaveLength(0);
+
+    openMediaTypes();
+    openMediaTypes();
+    await vi.waitFor(() => expect(getSearchControlsState().availableExts).toEqual(["pdf"]));
+    openMediaTypes();
+    expect(itemTypeCalls()).toHaveLength(1);
+  });
+
   test("shows the offline page on startup when the open library is not shared", async () => {
     const requests: string[] = [];
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {

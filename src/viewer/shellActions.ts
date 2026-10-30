@@ -13,6 +13,7 @@ export interface ViewerShellActions {
   tagsOpened: () => void;
   allItemsOpened: () => void;
   mediaTypeChanged: (mediaType: string) => void;
+  mediaTypesOpened: () => void;
   ratingChanged: (rating: string) => void;
   pageSizeChanged: (pageSize: number) => void;
   toggleFilters: () => void;
@@ -43,6 +44,7 @@ let actions: ViewerShellActions = {
   tagsOpened: noop,
   allItemsOpened: noop,
   mediaTypeChanged: noop,
+  mediaTypesOpened: noop,
   ratingChanged: noop,
   pageSizeChanged: noop,
   toggleFilters: noop,
@@ -115,6 +117,10 @@ export function openAllItems() {
 
 export function changeMediaType(mediaType: string) {
   actions.mediaTypeChanged(mediaType);
+}
+
+export function openMediaTypes() {
+  actions.mediaTypesOpened();
 }
 
 export function changeRating(rating: string) {

@@ -158,7 +158,8 @@ const MAX_JSON_BODY_BYTES = 1024 * 1024;
 const DEFAULT_ITEMS_LIMIT = 30;
 const MAX_ITEMS_LIMIT = 1000;
 const MAX_ITEMS_OFFSET = 1000000;
-const ITEM_TYPES_CACHE_MS = 60 * 1000;
+// The scan reads every item, which is slow for large libraries; new extensions show up after this.
+const ITEM_TYPES_CACHE_MS = 10 * 60 * 1000;
 const itemTypesCache = new WeakMap<object, { expiresAt: number; libraryPath: string; value: Promise<Array<{ count: number; ext: string }>> }>();
 const LOGIN_FAILURE_LIMIT = 5;
 const LOGIN_FAILURE_MAX_ENTRIES = 500;
