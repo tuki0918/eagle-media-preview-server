@@ -46,7 +46,7 @@ export function toggleRatingFilter(value: string, rating: number) {
   return formatRatingFilter(ratings);
 }
 
-export function ratingFilterLabel(rating: number) {
+function ratingFilterLabel(rating: number) {
   return rating === 0 ? "None" : `${"★".repeat(rating)}${"☆".repeat(5 - rating)}`;
 }
 

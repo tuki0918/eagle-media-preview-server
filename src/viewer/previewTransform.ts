@@ -2,7 +2,7 @@ import { IMAGE_FIT_MARGIN } from "./constants";
 import { clamp } from "./format";
 import type { PreviewPoint, PreviewTransform } from "./types";
 
-export const MAX_PREVIEW_SCALE = 8;
+const MAX_PREVIEW_SCALE = 8;
 
 export interface PreviewScales {
   fitScale: number;

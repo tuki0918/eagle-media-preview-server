@@ -30,8 +30,6 @@ interface NormalizedGroup {
   tagNames: string[];
 }
 
-export const EMPTY_TAG_SECTIONS: TagSections = { groups: [], starred: [], total: 0, ungrouped: [] };
-
 /**
  * Splits the library's tags into starred tags, one list per tag group, and the remaining ungrouped
  * tags. Starred tags only appear in the starred section, matching how they are pinned above the rest.

@@ -25,7 +25,7 @@ export function ResultsStatus({ total, viewMode }: ResultsStatusProps) {
   );
 }
 
-export function ViewModeTabs({ viewMode }: { viewMode?: ViewerMode }) {
+function ViewModeTabs({ viewMode }: { viewMode?: ViewerMode }) {
   const storedStatus = useSyncExternalStore(subscribeResultsStatusState, getResultsStatusState, getResultsStatusState);
   const displayViewMode = viewMode ?? storedStatus.viewMode;
 

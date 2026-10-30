@@ -48,7 +48,7 @@ export function RatingStars({ className, disabled = false, disabledLabel, id, in
   );
 }
 
-export function nextStarValue(current: number, selected: number) {
+function nextStarValue(current: number, selected: number) {
   return selected === current ? 0 : selected;
 }
 

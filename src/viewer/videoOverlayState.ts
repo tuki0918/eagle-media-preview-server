@@ -13,10 +13,6 @@ export function setVideoOverlayControlsVisible(visible: boolean) {
   }
 }
 
-export function toggleVideoOverlayControls() {
-  setVideoOverlayControlsVisible(!controlsVisible);
-}
-
 export function subscribeVideoOverlayControls(listener: () => void) {
   listeners.add(listener);
   return () => {

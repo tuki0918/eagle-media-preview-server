@@ -21,7 +21,7 @@ export const DEFAULT_DISPLAY_PREFERENCES: DisplayPreferences = {
 };
 
 export const DEFAULT_SIDEBAR_WIDTH = 256;
-export const SIDEBAR_WIDTH_STORAGE_KEY = "eagleSidebarWidth";
+const SIDEBAR_WIDTH_STORAGE_KEY = "eagleSidebarWidth";
 const resetListeners = new Set<() => void>();
 
 export function readSavedSidebarWidth() {

@@ -9,7 +9,6 @@ interface ThemeState {
 const THEME_STORAGE_KEY = "eagle-media-preview-theme";
 const THEME_CLASS = "dark";
 const SYSTEM_DARK_QUERY = "(prefers-color-scheme: dark)";
-const listeners = new Set<() => void>();
 let systemThemeQuery: MediaQueryList | null = null;
 
 let currentThemeState: ThemeState = {
@@ -85,17 +84,10 @@ function applyThemeToDocument(resolved: ThemeState["resolved"]) {
   document.documentElement.classList.toggle(THEME_CLASS, resolved === "dark");
 }
 
-function emitThemeChange() {
-  for (const listener of listeners) {
-    listener();
-  }
-}
-
 function setCurrentThemeState(nextState: ThemeState) {
   if (currentThemeState.preference === nextState.preference && currentThemeState.resolved === nextState.resolved) return;
   currentThemeState = nextState;
   applyThemeToDocument(nextState.resolved);
-  emitThemeChange();
 }
 
 export function initializeThemeState() {
@@ -119,13 +111,6 @@ export function setThemePreference(preference: ThemePreference) {
     preference,
     resolved: resolveTheme(preference),
   });
-}
-
-export function subscribeThemeState(listener: () => void) {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
 }
 
 initializeThemeState();

@@ -6,8 +6,8 @@ import type { EagleItem, LoadItemsResponse } from "./types";
 export type SlideshowEffect = "none" | "fade" | "slide";
 export interface SlideshowSettings { seconds: number; effect: SlideshowEffect; loop: boolean; showTitle: boolean }
 export const DEFAULT_SLIDESHOW_SETTINGS: SlideshowSettings = { seconds: 5, effect: "fade", loop: false, showTitle: true };
-export const SLIDESHOW_SETTINGS_KEY = "eagleSlideshowSettings";
-export const SLIDESHOW_PAGE_SIZE = 30;
+const SLIDESHOW_SETTINGS_KEY = "eagleSlideshowSettings";
+const SLIDESHOW_PAGE_SIZE = 30;
 export type SlideshowQuery = Omit<ItemQueryState, "offset" | "limit">;
 
 export function readSlideshowSettings(): SlideshowSettings {
