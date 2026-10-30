@@ -238,7 +238,7 @@ test("public viewer exposes sign out when authenticated", async () => {
   assert.match(app, /function handleAuthError\(error: unknown\) \{/);
   assert.match(app, /error instanceof ApiError/);
   assert.match(app, /error\.status !== 401/);
-  assert.match(app, /import \{ ApiError, debounce, errorMessage, getJson, postJson, setConnectedLibraryId, subscribeRequestOutcome, type RequestOutcome \} from "\.\/viewer\/api";/);
+  assert.match(app, /import \{ ApiError, debounce, errorMessage, getJson, postJson, setConnectedLibraryId, setMediaFallbackCheck, subscribeRequestOutcome, type RequestOutcome \} from "\.\/viewer\/api";/);
   assert.doesNotMatch(app, /setConnectMessage\(error\.message, true\)/);
   assert.doesNotMatch(app, /alert\(error\.message\)/);
   assert.match(app, /async function loadFolders\(\) \{[\s\S]*if \(handleAuthError\(error\)\) return;/);
@@ -490,7 +490,7 @@ test("public thumbnails lazy-load with visible loading states", async () => {
   assert.match(html, /loading \? " thumb-loading" : ""/);
   assert.match(html, /missing \? ` thumb-missing \$\{missingThumbClassName\}` : ""/);
   assert.match(html, /onLoad=\{\(\) => \{\s*setLoading\(false\);\s*setMissing\(false\);\s*\}\}/);
-  assert.match(html, /if \(sourceKind === "thumb" && canUseOriginalImage\) \{[\s\S]*setSourceKind\("file"\);/);
+  assert.match(html, /if \(sourceKind === "thumb" && canUseOriginalImage && await canFallbackMedia\(\)\) \{[\s\S]*setSourceKind\("file"\);/);
   assert.match(html, /setSourceKind\("file"\);[\s\S]*return;[\s\S]*setLoading\(false\);\s*setMissing\(true\);/);
   assert.match(html, /const gridThumbButtonClassName =[\s\S]*aspect-square/);
   assert.match(html, /function LoadingIndicator\(\{ variant \}/);
