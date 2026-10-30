@@ -10,7 +10,7 @@ Anyone on the same network can then browse it from phones, tablets, and other co
 ![](docs/screenshot.png)
 ![](docs/screenshot_detail.png)
 ![](docs/screenshot_all_tags.png)
-![](docs/screenshot_grid.png)
+![](docs/screenshot_tiles.png)
 ![](docs/screenshot_list.png)
 
 ## Features
