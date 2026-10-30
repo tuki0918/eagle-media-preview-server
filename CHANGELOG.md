@@ -11,7 +11,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Changed
 
-- The Type filter now loads the file types in the library when it is first opened, so large libraries open faster; types appear as they are found.
+- The Type filter now scans the library for file types the first time it is opened, instead of right after connecting, and shows types as they are found.
 - Improved the preview and slideshow UI.
 
 ## [0.6.1] - 2026-10-30
