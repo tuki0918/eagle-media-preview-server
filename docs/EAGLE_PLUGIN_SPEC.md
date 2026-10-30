@@ -34,18 +34,19 @@ External devices connect to the plugin server, not directly to Eagle's Web API.
 
 ## Runtime Model
 
-```text
-iPhone / Tablet / Other PC Browser
-        |
-        v
-http://<Eagle PC LAN IP>:41532
-        |
-        v
-Eagle | Media Preview Server
-        |
-        v
-Eagle local Web API on 127.0.0.1:41595
-```
+![Media Preview Server overview](architecture_overview.png)
+
+Browsers on other devices talk only to the preview server. The preview server reads library media files from disk and sends edits to Eagle's local Web API, which saves them to the library. The plugin window controls the server.
+
+![Media Preview Server architecture](architecture.png)
+
+- Plugin window, background service, and preview server run inside Eagle on the computer running Eagle
+- The background service starts, stops, and restarts the preview server, loads and saves `~/.eagle-media-preview-server/settings.json`, and relays Eagle's library-switch events
+- The preview server calls Eagle's Web API (`/api/v2/*`) for metadata and file paths, and reads originals and thumbnails from `<name>.library/images/<item id>.info/` directly
+- The library folder may be on an internal disk, an external HDD / SSD, or a NAS / network drive mounted on the computer running Eagle; the plugin never shares the folder itself
+- Media files are read-only to the preview server; rating, tags, folders, and trash changes go through Eagle's API
+
+`npm run diagram` prints these diagrams in the terminal (`overview`, `architecture`, or `api` prints one). The images above are its colored output on a dark background.
 
 Defaults:
 
@@ -75,6 +76,8 @@ The source is managed as a TypeScript / React / Vite / Tailwind CSS / Vitest pro
   - Compiled by `tsconfig.plugin-service.json` to `dist/.generated/plugin-service/*.cjs` files for Eagle's `require` runtime
 - `server/viewerServer.ts`
   - ESM wrapper that reuses the generated plugin service runtime for tests and local imports
+- `scripts/diagram.mjs`
+  - Prints the overview, architecture, and endpoint diagrams for `npm run diagram`
 
 Build output is created under `dist`:
 
@@ -269,12 +272,24 @@ Settings path:
   - Answers `shared` without calling Eagle when library protection is off
 - `GET /api/folders`
   - Returns folder list
+- `GET /api/smart-folders`
+  - Returns smart folder list
 - `GET /api/items`
-  - Returns item list or search results
+  - Returns item list or search results; `smartFolderId` lists a smart folder's items
+- `GET /api/item-types`
+  - Returns the file extensions found in the library
+- `GET /api/tags`, `GET /api/tag-overview`
+  - Return tags, and tags with tag groups and starred tags
+- `GET /api/tag-cover`
+  - Returns a cover item for a tag; requires `tag`
 - `POST /api/items/:id/star`
   - Updates rating
 - `POST /api/items/:id/metadata`
   - Updates tags and folders/categories from the preview panel
+- `POST /api/items/:id/trash`
+  - Moves an item to Eagle's trash or restores it; requires `isDeleted` as a boolean
+- `GET /api/items/:id/url-preview`
+  - Returns the URL stored in a web-link (internet shortcut) item
 - `GET|HEAD /api/items/:id/thumb`
   - Serves item thumbnail
 - `GET|HEAD /api/items/:id/file`
@@ -341,6 +356,7 @@ Authorization:
 
 - Browsing is read-only by default
 - `POST /api/items/:id/star` and `POST /api/items/:id/metadata` require an Editor or Admin user
+- `POST /api/items/:id/trash` requires an Admin user
 - The viewer server never calls Eagle's library switch API; switching libraries is only possible from the Eagle app
 - Unsafe methods reject mismatched `Origin` or `Referer` headers before API handlers run
 - JSON request bodies are capped at 1 MiB; malformed bodies return `400` and oversized bodies return `413`
@@ -420,6 +436,16 @@ npm run verify
 Generated `dist/.generated/plugin-service/*.cjs` files and `dist` output are build artifacts.
 
 `npm run verify` runs TypeScript checks, the production build, and Vitest.
+
+Diagram command:
+
+```sh
+npm run diagram
+npm run diagram -- overview
+NO_COLOR=1 npm run -s diagram
+```
+
+`npm run diagram` prints the overview, architecture, and endpoint diagrams; pass `overview`, `architecture`, or `api` to print one. Set `NO_COLOR=1` for plain text. It does not need a build. `docs/architecture_overview.png` and `docs/architecture.png` are captures of its colored output and should be updated when the diagrams change.
 
 ## Implementation Notes
 
