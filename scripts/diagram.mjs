@@ -149,7 +149,7 @@ function drawOverview() {
   box(101, 4, 30, 6, {
     title: "EAGLE APP",
     color: "green",
-    lines: ["manages the library", "applies the edits", [g("API: 127.0.0.1:41595")]],
+    lines: ["manages the library", "applies the edits", [g("API: localhost:41595")]],
   });
   box(101, 13, 30, 7, {
     title: "EAGLE LIBRARY",
@@ -288,7 +288,7 @@ function drawArchitecture() {
       [g("owns the library")],
       "",
       head("LOCAL WEB API", "green"),
-      [w("http://127.0.0.1:41595")],
+      [w("http://localhost:41595")],
       [g("this computer only")],
       "",
       head("WRITES", "green"),

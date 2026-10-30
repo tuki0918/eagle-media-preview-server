@@ -48,16 +48,19 @@ Browsers on other devices talk only to the preview server. The preview server re
 
 `npm run diagram` prints these diagrams in the terminal (`overview` or `architecture` prints one). The images above are its colored output on a dark background, captured by `npm run diagram:images`. The routes are listed under HTTP/HTTPS Server.
 
-Defaults:
+Defaults and how to change them:
 
-- Viewer server host: `127.0.0.1`
-- Viewer server port: `41532`
-- Eagle API host: `127.0.0.1`
-- Eagle API port: `41595`
-- Password protection: disabled
-- HTTPS: disabled
-- Public Network: disabled (`127.0.0.1`)
-- Auto start: disabled
+| Setting | Default | Changed by |
+| --- | --- | --- |
+| Viewer server host | `127.0.0.1` | **Public Network** toggle: on listens on `0.0.0.0`, off on `127.0.0.1` |
+| Viewer server port | `41532` | **Settings → General → Port** (1–65535) |
+| Eagle API URL | `http://localhost:41595` | Not a user setting; the `EAGLE_BASE_URL` environment variable of the Eagle process overrides it for development |
+| Password protection | disabled | **Password** toggle, with users under **Settings → Access** |
+| HTTPS | disabled | **HTTPS** toggle, with TLS paths under **Settings → Security** |
+| Public Network | disabled | **Public Network** toggle |
+| Auto start | disabled | **Auto start** toggle |
+
+All values are saved to `~/.eagle-media-preview-server/settings.json`. Fields under **Settings** are locked while the server runs and take effect at the next start. The toggles in Server Status stay available while it runs, and a change to Password, Public Network, or HTTPS restarts the running server.
 
 ## Codebase Model
 
@@ -332,7 +335,7 @@ Media URLs carry the library id as the `library` query parameter, since media el
 
 #### Eagle Web API — called by the viewer server only
 
-The viewer server calls Eagle's local Web API at `http://127.0.0.1:41595/api/v2/`. Viewer clients never call it.
+The viewer server calls Eagle's local Web API at `http://localhost:41595/api/v2/`. Viewer clients never call it.
 
 - `app/info`, `library/info`: Eagle version and the open library
 - `item/get`, `item/query`, `item/update`: items, search, and rating, tag, and folder changes
