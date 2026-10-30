@@ -7,6 +7,20 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-10-30
+
+### Changed
+
+- After the one-hour browser cache expires, unchanged media is revalidated with the server instead of downloaded again.
+
+### Fixed
+
+- When the server stops, previews show "Can't reach the media server right now." instead of loading forever, and videos and text previews reload automatically when it is back.
+- Show the server as offline sooner when it stops responding.
+- Prevent previews and covers from falling back to images from another library after Eagle switches libraries.
+- Fit the Reset to default button in the Preferences dialog on narrow screens.
+- Prevent resumed media downloads from mixing old and new content when a file is replaced.
+
 ## [0.6.0] - 2026-10-29
 
 ### Added
@@ -320,7 +334,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 - Initial release of Eagle Media Preview Server.
 
-[Unreleased]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.5.3...v0.6.0
 [0.5.3]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.5.1...v0.5.2
