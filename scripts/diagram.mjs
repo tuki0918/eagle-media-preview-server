@@ -57,6 +57,17 @@ function box(x, y, w, h, { title, color, lines = [], dashed = false }) {
   lines.forEach((line, i) => putLine(x + 2, y + 1 + i, line));
 }
 
+// A dashed frame that groups boxes; unlike box() it leaves its interior untouched.
+function group(x, y, w, h, title, color, titleX = x + 2) {
+  put(x, y, `┌${"╌".repeat(w - 2)}┐`, "dim");
+  for (let row = 1; row < h - 1; row += 1) {
+    put(x, y + row, "╎", "dim");
+    put(x + w - 1, y + row, "╎", "dim");
+  }
+  put(x, y + h - 1, `└${"╌".repeat(w - 2)}┘`, "dim");
+  put(titleX, y, ` ${title} `, color, true);
+}
+
 const OPPOSITE = { r: "l", l: "r", u: "d", d: "u" };
 const CORNER = { ur: "╰", ul: "╯", dr: "╭", dl: "╮" };
 const HEAD = { r: "▶", l: "◀", u: "▲", d: "▼" };
@@ -129,39 +140,38 @@ function centerTitle(text) {
 // ---------------------------------------------------------------- 1. overview (for users)
 
 function drawOverview() {
-  newCanvas(131, 32);
+  newCanvas(142, 38);
   centerTitle("MEDIA PREVIEW SERVER  ·  overview");
 
   put(1, 2, "OTHER DEVICES", "cyan", true);
   put(37, 2, "THE COMPUTER RUNNING EAGLE", "purple", true);
-  for (let y = 2; y <= 28; y += 1) put(34, y, "┊", "dim");
+  for (let y = 2; y <= 34; y += 1) put(34, y, "┊", "dim");
+  group(36, 4, 54, 19, "MEDIA PREVIEW SERVER  (this plugin)", "purple");
+  group(106, 4, 36, 10, "EAGLE", "green");
+  // The storage title sits between the connectors that cross its top edge.
+  group(36, 24, 106, 10, "STORAGE  (drives on this computer)", "yellow", 84);
 
-  box(1, 4, 30, 7, {
+  box(1, 6, 30, 7, {
     title: "BROWSER",
     color: "cyan",
     lines: ["browse, search, filter", "view, play, slideshow", "edit rating and tags", [g("(Editor or Admin only)")]],
   });
-  box(50, 4, 34, 7, {
+  box(50, 6, 34, 7, {
     title: "PREVIEW SERVER",
     color: "blue",
     lines: ["checks sign-in and roles", "serves shared libraries only", "streams media files", [g("port 41532")]],
   });
-  box(101, 4, 30, 6, {
-    title: "EAGLE APP",
-    color: "green",
-    lines: ["manages the library", "applies the edits", [g("API: localhost:41595")]],
-  });
-  box(101, 13, 30, 7, {
-    title: "EAGLE LIBRARY",
-    color: "yellow",
-    lines: ["originals, thumbnails,", "metadata", [g("internal disk, external")], [g("HDD / SSD, or NAS")]],
-  });
-  box(37, 14, 34, 6, {
+  box(38, 16, 34, 6, {
     title: "PLUGIN WINDOW",
     color: "purple",
     lines: ["start / stop the server", "Password, Public Network,", "HTTPS, users, libraries"],
   });
-  box(37, 23, 34, 6, {
+  box(109, 6, 30, 6, {
+    title: "EAGLE APP",
+    color: "green",
+    lines: ["manages the library", "applies the edits", [g("API: localhost:41595")]],
+  });
+  box(38, 26, 34, 6, {
     title: "SETTINGS FILE",
     color: "yellow",
     lines: [
@@ -171,22 +181,28 @@ function drawOverview() {
       [g("shared libraries, HTTPS paths")],
     ],
   });
+  box(109, 26, 30, 6, {
+    title: "EAGLE LIBRARY",
+    color: "yellow",
+    lines: ["<name>.library folder", "originals, thumbnails,", "metadata", [g("internal, external or NAS")]],
+  });
 
-  connector([[31, 7], [49, 7]], "cyan", { start: true });
-  put(33, 6, " HTTP(S) :41532 ", "gray");
-  put(32, 8, " pages, API, media", "gray");
-  connector([[84, 6], [100, 6]], "green");
-  put(86, 5, "edit requests", "gray");
-  connector([[78, 11], [78, 16], [100, 16]], "blue", { label: "reads files", labelAt: 1 });
-  connector([[116, 10], [116, 12]], "green");
-  put(118, 11, "saves edits", "gray");
-  connector([[60, 13], [60, 11]], "purple");
-  put(62, 12, "controls", "gray");
-  connector([[60, 20], [60, 22]], "yellow", { start: true });
-  put(62, 21, "saves / loads", "gray");
+  connector([[31, 9], [49, 9]], "cyan", { start: true });
+  put(33, 8, " HTTP(S) :41532 ", "gray");
+  put(32, 10, " pages, API, media", "gray");
+  connector([[84, 8], [108, 8]], "green");
+  put(92, 7, "edit requests", "gray");
+  connector([[60, 15], [60, 13]], "purple");
+  put(62, 14, "controls", "gray");
+  connector([[60, 22], [60, 25]], "yellow", { start: true });
+  put(62, 23, "saves / loads", "gray");
+  connector([[78, 13], [78, 28], [108, 28]], "blue");
+  put(87, 28, " reads files ", "gray");
+  connector([[124, 12], [124, 25]], "green");
+  put(126, 18, "saves edits", "gray");
 
-  putLine(1, 30, [g("Connect by opening the URL or scanning the QR code shown in the plugin window.")]);
-  putLine(1, 31, [g("Browsers talk only to the preview server; they never get direct access to Eagle's API or the library folder.")]);
+  putLine(1, 36, [g("Connect by opening the URL or scanning the QR code shown in the plugin window.")]);
+  putLine(1, 37, [g("Browsers talk only to the preview server; they never get direct access to Eagle's API or the library folder.")]);
   return render();
 }
 
@@ -234,7 +250,7 @@ function drawArchitecture() {
     title: "PLUGIN WINDOW",
     color: "purple",
     lines: [
-      [g("settings UI inside Eagle")],
+      [g("this plugin's settings UI")],
       "",
       "· on / off, URL, QR code",
       "· Password, Public Network",
@@ -246,7 +262,7 @@ function drawArchitecture() {
     title: "BACKGROUND SERVICE",
     color: "purple",
     lines: [
-      [g("no UI, runs inside Eagle")],
+      [g("this plugin, no UI, in Eagle")],
       "",
       "· runs the preview server",
       "· start, stop, restart",
@@ -272,7 +288,7 @@ function drawArchitecture() {
     title: "PREVIEW SERVER",
     color: "blue",
     lines: [
-      [g("HTTP / HTTPS server run by the background service")],
+      [g("this plugin's HTTP / HTTPS server, run by the background service")],
       "",
       head("LISTENS ON", "blue"),
       [w("127.0.0.1:41532"), g("   this computer only (default)")],
@@ -297,7 +313,7 @@ function drawArchitecture() {
     title: "EAGLE APP",
     color: "green",
     lines: [
-      [g("owns the library")],
+      [g("Eagle itself; owns the library")],
       "",
       head("LOCAL WEB API", "green"),
       [w("http://localhost:41595")],

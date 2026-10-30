@@ -36,11 +36,11 @@ External devices connect to the plugin server, not directly to Eagle's Web API.
 
 ![Media Preview Server overview](architecture_overview.png)
 
-Browsers on other devices talk only to the preview server. The preview server reads library media files from disk and sends edits to Eagle's local Web API, which saves them to the library. The plugin window controls the server and saves its settings to `~/.eagle-media-preview-server/settings.json`.
+The preview server, plugin window, and settings file are provided by this plugin, not by Eagle itself. Browsers on other devices talk only to the preview server. The preview server reads library media files from disk and sends edits to Eagle's local Web API, which saves them to the library. The plugin window controls the server and saves its settings to `~/.eagle-media-preview-server/settings.json`.
 
 ![Media Preview Server architecture](architecture.png)
 
-- Plugin window, background service, and preview server run inside Eagle on the computer running Eagle
+- Plugin window, background service, and preview server are parts of this plugin; they run inside Eagle on the computer running Eagle. The Eagle app, its local Web API, and the library are Eagle's own
 - The background service starts, stops, and restarts the preview server, loads and saves `~/.eagle-media-preview-server/settings.json`, and relays Eagle's library-switch events
 - The preview server calls Eagle's Web API (`/api/v2/*`) for metadata and file paths, and reads originals and thumbnails from `<name>.library/images/<item id>.info/` directly
 - The library folder may be on an internal disk, an external HDD / SSD, or a NAS / network drive mounted on the computer running Eagle; the plugin never shares the folder itself
