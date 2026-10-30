@@ -7,6 +7,13 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-10-31
+
+### Changed
+
+- The Type filter now loads the file types in the library when it is first opened, so large libraries open faster; types appear as they are found.
+- Improved the preview and slideshow UI.
+
 ## [0.6.1] - 2026-10-30
 
 ### Changed
@@ -334,7 +341,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 - Initial release of Eagle Media Preview Server.
 
-[Unreleased]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.5.3...v0.6.0
 [0.5.3]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.5.2...v0.5.3
