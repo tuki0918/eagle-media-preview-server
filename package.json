@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit && npm run typecheck:plugin-service",
     "typecheck:plugin-service": "tsc -p tsconfig.plugin-service.json --noEmit",
     "verify": "npm run build && tsc --noEmit && npm run test:run && npm run build-storybook",
-    "diagram": "node scripts/diagram.mjs"
+    "diagram": "node scripts/diagram.mjs",
+    "diagram:images": "node scripts/diagram-images.mjs"
   },
   "engines": {
     "node": ">=20"

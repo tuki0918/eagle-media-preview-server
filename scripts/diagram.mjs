@@ -1,5 +1,5 @@
-// Prints the README diagrams: a short user overview, the full architecture, and the endpoint list.
-// Usage: node scripts/diagram.mjs [overview|architecture|api]   (no argument prints all three)
+// Prints the architecture diagrams: a short user overview and the full architecture.
+// Usage: node scripts/diagram.mjs [overview|architecture]   (no argument prints both)
 // Plain-text output (NO_COLOR=1) is what the README copies.
 const useColor = process.env.NO_COLOR === undefined && (process.stdout.isTTY || process.env.FORCE_COLOR);
 
@@ -352,76 +352,9 @@ function drawArchitecture() {
   return render();
 }
 
-// ---------------------------------------------------------------- 3. endpoints
-
-const ENDPOINT_GROUPS = [
-  ["APP", "no sign-in", [
-    ["GET", "/  /assets/*", "Media Library app, manifest, service worker"],
-  ]],
-  ["SIGN-IN", "no sign-in", [
-    ["GET", "/api/auth/status", "sign-in state, user, role, permissions"],
-    ["POST", "/api/auth/login", "sign in, sets the HttpOnly session cookie"],
-    ["POST", "/api/auth/logout", "sign out, revokes the session"],
-  ]],
-  ["LIBRARY STATUS", "no sign-in", [
-    ["GET", "/api/library-status", "shared or not_shared (offline page)"],
-  ]],
-  ["CONNECTION", "sign-in", [
-    ["POST", "/api/connect", "Eagle version, library name, library id"],
-    ["GET", "/api/health", "Eagle status, library id (polled)"],
-  ]],
-  ["BROWSE", "sign-in, library id", [
-    ["GET", "/api/folders  /api/smart-folders", "folder trees"],
-    ["GET", "/api/items", "list, search, filter, paging"],
-    ["GET", "/api/item-types", "file extensions in the library"],
-    ["GET", "/api/tags  /api/tag-overview", "tags, tag groups, starred tags"],
-    ["GET", "/api/tag-cover", "cover item for a tag"],
-  ]],
-  ["MEDIA", "sign-in, library id, Range", [
-    ["GET HEAD", "/api/items/:id/thumb", "thumbnail"],
-    ["GET HEAD", "/api/items/:id/file", "original file"],
-    ["GET HEAD", "/file/:id", "original file in a new tab"],
-    ["GET", "/api/items/:id/url-preview", "URL of a web-link item"],
-  ]],
-  ["EDIT", "sign-in, library id, role", [
-    ["POST", "/api/items/:id/star", "rating (Editor+)"],
-    ["POST", "/api/items/:id/metadata", "tags, folders (Editor+)"],
-    ["POST", "/api/items/:id/trash", "move to or restore from trash (Admin)"],
-  ]],
-  ["EAGLE WEB API", "called by the preview server only", [
-    ["", "app/info  library/info", "Eagle version, open library"],
-    ["", "item/get  item/query  item/update", "items, search, rating, tags, folders"],
-    ["", "folder/get  smartFolder/get", "folders, smart folders"],
-    ["", "tag/get  tagGroup/get", "tags, tag groups"],
-  ]],
-];
-
-function drawEndpoints() {
-  newCanvas(100, 64);
-  centerTitle("MEDIA PREVIEW SERVER  ·  endpoints");
-  putLine(1, 2, [g(pad("preview server", 16)), w("http(s)://<host>:41532")]);
-  putLine(1, 3, [g(pad("Eagle Web API", 16)), w("http://127.0.0.1:41595/api/v2/")]);
-  putLine(1, 5, [g(pad("how to read", 16)), ["GROUP", "blue", true], g("   who may call it")]);
-  putLine(1, 6, [g(pad("", 18)), ["METHOD", "blue"], g("   "), w("PATH"), g("   what it does")]);
-  putLine(1, 8, [g(pad("", 16)), w("sign-in"), g("      session cookie, only when Password is on")]);
-  putLine(1, 9, [g(pad("", 16)), w("library id"), g("   X-Library-Id header or ?library=, from /api/connect")]);
-  putLine(1, 10, [g(pad("", 16)), w("Range"), g("        partial reads (video seeking)")]);
-  put(1, 11, "─".repeat(W - 2), "dim");
-  let y = 13;
-  for (const [name, access, rows] of ENDPOINT_GROUPS) {
-    const color = name === "EAGLE WEB API" ? "green" : "blue";
-    putLine(1, y, [[name, color, true], g(`   ${access}`)]);
-    rows.forEach(([method, path, note], i) => {
-      putLine(3, y + 1 + i, [[pad(method, 9), color], w(pad(path, 36)), g(note)]);
-    });
-    y += rows.length + 2;
-  }
-  return render();
-}
-
 // ---------------------------------------------------------------- main
 
-const VIEWS = { overview: drawOverview, architecture: drawArchitecture, api: drawEndpoints };
+const VIEWS = { overview: drawOverview, architecture: drawArchitecture };
 const requested = process.argv.slice(2).filter((arg) => arg in VIEWS);
 const output = (requested.length ? requested : Object.keys(VIEWS)).map((name) => VIEWS[name]().join("\n"));
 // A heavy rule with blank lines on both sides separates the views.
