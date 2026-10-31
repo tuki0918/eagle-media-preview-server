@@ -127,6 +127,7 @@ export function SlideshowDialog({ query, onClose }: { query: SlideshowQuery; onC
                 </span>
               </label>
               <SlideshowToggle label="Show title" checked={settings.showTitle} onChange={(showTitle) => setSettings({ ...settings, showTitle })} />
+              <SlideshowToggle label="Blur background" checked={settings.blurBackground} onChange={(blurBackground) => setSettings({ ...settings, blurBackground })} />
               <SlideshowToggle label="Loop" checked={settings.loop} onChange={(loop) => setSettings({ ...settings, loop })} />
             </div>
             <footer className="shrink-0 border-t border-border bg-card px-5 py-4">
@@ -442,7 +443,7 @@ export function SlideshowPlayer({ query, settings, onClose }: { query: Slideshow
           </div>
         </div>
       </footer>
-      {slide ? <SlideshowBackdrop key={String(slide.item.id)} item={slide.item} /> : null}
+      {slide && settings.blurBackground ? <SlideshowBackdrop key={String(slide.item.id)} item={slide.item} /> : null}
     </section>
   );
 }
@@ -536,7 +537,7 @@ function SlideshowFrame({ item, active, playbackToken, sessionEnabled, effect, m
   );
 }
 
-// The blurred thumbnail gives each slide an ambient backdrop, like the fullscreen image preview.
+// The blurred thumbnail gives each slide an ambient backdrop when "Blur background" is on.
 function SlideshowBackdrop({ item }: { item: EagleItem }) {
   const [loaded, setLoaded] = useState(false);
   const [missing, setMissing] = useState(item.noThumbnail === true);

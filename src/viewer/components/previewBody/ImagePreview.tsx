@@ -45,7 +45,7 @@ const toolbarButtonClassName =
 const imageZoomSelectClassName =
   "h-9 w-[76px] touch-manipulation appearance-none rounded-full border-0 bg-transparent py-0 pl-2 pr-6 text-center text-xs font-medium tabular-nums text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring";
 const imageZoomPresets = [0.25, 0.5, 1, 2, 4, 8];
-// Fullscreen borrows the slideshow player's look: dark ambient backdrop, gradient bars, white glass controls.
+// Fullscreen borrows the slideshow player's look: black stage, gradient bars, white glass controls.
 const stageButtonClassName =
   "inline-grid size-10 shrink-0 touch-manipulation select-none place-items-center rounded-full border-0 bg-transparent p-0 text-white/80 transition-colors hover:bg-white/15 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white disabled:pointer-events-none disabled:opacity-30 [&_svg]:size-5 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-linecap:round] [&_svg]:[stroke-linejoin:round] [&_svg]:[stroke-width:2]";
 const stageNavButtonClassName =
@@ -335,20 +335,6 @@ export function ImagePreview({ item, srcKind: requestedSrcKind, fullscreen }: { 
 
   return (
     <>
-      {fullscreen?.active ? (
-        <div className="image-stage-backdrop pointer-events-none absolute inset-0 overflow-hidden bg-black" aria-hidden="true">
-          {imageState.naturalSize ? (
-            <img
-              className="absolute inset-0 h-full w-full scale-125 object-cover opacity-55 blur-3xl saturate-150"
-              src={mediaUrl(String(item.id || ""), srcKind === "file" ? "thumb" : srcKind)}
-              alt=""
-              draggable={false}
-              onError={(event) => { event.currentTarget.hidden = true; }}
-            />
-          ) : null}
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0.15)_0%,rgba(0,0,0,0.7)_100%)]" />
-        </div>
-      ) : null}
       <div
         ref={viewportRef}
         className={`${imageViewportClassName} ${canPanImage() ? "cursor-grab active:cursor-grabbing" : "cursor-default"}`}

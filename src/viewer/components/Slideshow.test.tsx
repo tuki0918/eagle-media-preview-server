@@ -6,7 +6,7 @@ import type { EagleItem } from "../types";
 import type { SlideshowQuery, SlideshowSettings } from "../slideshow";
 
 const query: SlideshowQuery = { query: "filtered", tags: ["alpha"], folderId: "folder-1", smartFolderId: "", ext: "", rating: "" };
-const settings: SlideshowSettings = { seconds: 3, effect: "fade", loop: false, showTitle: true };
+const settings: SlideshowSettings = { seconds: 3, effect: "fade", loop: false, showTitle: true, blurBackground: true };
 let dom: JSDOM;
 let root: import("react-dom/client").Root;
 let container: HTMLElement;
@@ -316,6 +316,14 @@ test("can hide the title while retaining the current position", async () => {
   const header = container.querySelector("header")!;
   expect(header.textContent).not.toContain("Hidden title");
   expect(header.textContent).toContain("1 / 1");
+});
+
+test("blurs the current slide behind the player unless the background blur is off", async () => {
+  serve([{ id: "1", ext: "jpg" }]);
+  await renderPlayer();
+  expect(container.querySelector(".slideshow-backdrop img")?.getAttribute("src")).toBe("/api/items/1/thumb");
+  await renderPlayer({ ...settings, blurBackground: false });
+  expect(container.querySelector(".slideshow-backdrop")).toBeNull();
 });
 
 async function pointer(pointerType: string, type = "pointermove") {
