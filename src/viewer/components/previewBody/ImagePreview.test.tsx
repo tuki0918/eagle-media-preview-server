@@ -127,7 +127,8 @@ test.each([
     viewportWidth /= 2;
     await act(async () => { fit.click(); });
     expect(scale()).toBeCloseTo(Math.min(viewportWidth / size.imageWidth, size.viewportHeight / size.imageHeight));
-    expect(container.querySelector('[aria-label="Actual size"]')).toBeNull();
+    await act(async () => { container.querySelector<HTMLButtonElement>('[aria-label="Actual size"]')!.click(); });
+    expect(scale()).toBe(1);
     const zoom = container.querySelector<HTMLSelectElement>('[aria-label="Image zoom percentage"]')!;
     for (const value of ["0.25", "0.5", "1", "2"]) {
       await act(async () => {

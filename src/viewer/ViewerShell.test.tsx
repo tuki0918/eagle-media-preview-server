@@ -282,7 +282,7 @@ describe("ViewerAppShell", () => {
     expect(body).toContain('role="group" aria-label="Image size"');
     expect(body).toContain('aria-label="Fit"');
     expect(body).toContain('aria-label="Image zoom percentage"');
-    expect(body).not.toContain('aria-label="Actual size"');
+    expect(body).toContain('aria-label="Actual size"');
     expect(body).not.toContain('>Fit</span>');
     expect(body).not.toContain('>Actual size</span>');
     expect(body).toContain("text-muted-foreground");

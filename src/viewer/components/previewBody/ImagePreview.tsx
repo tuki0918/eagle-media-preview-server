@@ -551,6 +551,7 @@ function ImageToolbar({
         <span className="mx-1 h-5 w-px shrink-0 bg-border" aria-hidden="true" />
         <div role="group" aria-label="Image size" className="flex items-center gap-1">
           <ToolbarButton label="Fit" icon={<Scan aria-hidden="true" />} onClick={onFit} />
+          <button type="button" className={`${toolbarButtonClassName} w-auto px-2.5 text-xs font-semibold tabular-nums`} title="Actual size (100%)" aria-label="Actual size" onClick={() => onZoomChange(1)}>1:1</button>
         </div>
       </div>
       {fullscreen ? (
