@@ -1,9 +1,11 @@
 import { DEFAULT_VIEW_MODE } from "./constants";
+import type { ListFilters } from "./components/ResultList";
 import type { EagleItem, ViewerMode } from "./types";
 
 export type ResultSurfaceState =
   | {
     kind: "list";
+    filters?: ListFilters;
     items: readonly EagleItem[];
     onOpenPreview: (item: EagleItem) => void;
     viewMode: ViewerMode;

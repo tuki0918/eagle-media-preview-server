@@ -29,3 +29,22 @@ export const List: Story = {
     viewMode: "list",
   },
 };
+
+export const ListWithFilters: Story = {
+  args: {
+    viewMode: "list",
+    items: sampleItems.map((item, index) => index === 0
+      ? { ...item, tags: ["landing", "reference", "bright", "hero", "marketing", "2026", "draft", "approved", "desktop"] }
+      : item),
+    filters: { activeExt: "", activeTags: ["reference"], onToggleExt: noop, onToggleTag: noop },
+  },
+};
+
+export const ListInSmartFolder: Story = {
+  args: {
+    viewMode: "list",
+    items: sampleItems.map((item, index) => index === 0
+      ? { ...item, tags: ["landing", "reference", "bright", "hero", "marketing", "2026", "draft", "approved", "desktop"] }
+      : item),
+  },
+};

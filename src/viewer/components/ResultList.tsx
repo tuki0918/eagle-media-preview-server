@@ -13,6 +13,7 @@ import {
   formatDurationCell,
   displayFileName,
   isTimedMedia,
+  itemTags,
   originalFileName,
 } from "../format";
 import { hasNoThumbnail, thumbnailAriaLabel, thumbnailMediaType, thumbnailOverlayIcon } from "../media";
@@ -23,6 +24,15 @@ interface ResultListProps {
   items: readonly EagleItem[];
   viewMode: ViewerMode;
   onOpenPreview: (item: EagleItem) => void;
+  /** List rows turn their Type and Tags labels into filter toggles when these are set. */
+  filters?: ListFilters;
+}
+
+export interface ListFilters {
+  activeExt: string;
+  activeTags: readonly string[];
+  onToggleExt: (ext: string) => void;
+  onToggleTag: (tag: string) => void;
 }
 
 interface ThumbnailButtonProps {
@@ -70,7 +80,7 @@ const fileNameOverlayTextClassName =
 const durationBadgeClassName =
   "duration-badge absolute bottom-1.5 right-1.5 rounded-full bg-[rgba(10,10,12,0.62)] px-2 py-[3px] text-[10px] font-semibold leading-[1.2] text-white backdrop-blur";
 const listTableRowClassName =
-  "media-row grid min-h-[60px] grid-cols-[52px_minmax(160px,1.8fr)_80px_90px_minmax(110px,1fr)_80px_120px] items-center gap-3 border-b border-border px-3 py-2 text-[13px] text-muted-foreground transition-colors last:border-b-0 hover:bg-muted/40 max-[540px]:grid-cols-[48px_minmax(0,1fr)] [&>span:not(.row-name-cell)]:justify-self-center [&>span:not(.row-name-cell)]:text-center";
+  "media-row grid min-h-[60px] grid-cols-[52px_minmax(160px,1.6fr)_minmax(160px,2fr)_80px_80px_minmax(96px,0.8fr)_72px_104px] items-center gap-3 border-b border-border px-3 py-2 text-[13px] text-muted-foreground transition-colors last:border-b-0 hover:bg-muted/40 max-[540px]:grid-cols-[48px_minmax(0,1fr)] [&>span:not(.row-name-cell):not(.row-tags-cell)]:justify-self-center [&>span:not(.row-name-cell):not(.row-tags-cell)]:text-center";
 const listTableHeaderClassName =
   `${listTableRowClassName} media-row-header !min-h-9 !py-1 bg-transparent text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground hover:bg-transparent [&>span:nth-child(2)]:justify-self-stretch [&>span:nth-child(2)]:text-left max-[540px]:[&>span:nth-child(2)]:pl-3.5 max-[540px]:[&>span:nth-child(n+3)]:hidden`;
 const rowNameCellClassName =
@@ -80,6 +90,20 @@ const rowFileNameClassName =
 const listTableMobileMetaClassName =
   "list-table-mobile-meta hidden text-[11px] leading-[1.3] text-muted-foreground max-[540px]:col-start-2 max-[540px]:row-start-1 max-[540px]:block max-[540px]:justify-self-end max-[540px]:whitespace-nowrap max-[540px]:text-right";
 const listTableHiddenOnMobileClassName = "max-[540px]:hidden";
+const listTagsCellClassName = "row-tags-cell list-col-narrow flex min-w-0 flex-wrap items-center gap-1 justify-self-stretch py-0.5 max-[540px]:hidden";
+const pillClassName =
+  "inline-flex h-auto min-h-[22px] max-w-full items-center rounded-full border px-2 py-[2px] text-[11px] font-medium leading-[1.3]";
+const filterPillClassName =
+  `${pillClassName} filter-pill cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`;
+// Static pills (smart folders, where filters don't apply) keep the look but drop the pointer and hover.
+const staticTagPillClassName = `${pillClassName} tag-pill border-border bg-secondary text-secondary-foreground`;
+const tagPillClassName =
+  `${filterPillClassName} tag-pill border-border bg-secondary text-secondary-foreground hover:border-foreground/30 hover:bg-muted aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground`;
+const tagOverflowButtonClassName =
+  `${filterPillClassName} tag-overflow-button border-dashed border-border bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground`;
+const extPillClassName =
+  "ext-pill inline-flex h-auto w-fit min-w-11 justify-center justify-self-center rounded-full border border-border bg-muted px-2 py-[3px] text-[10px] font-semibold tracking-[0.04em] text-muted-foreground max-[540px]:hidden list-col-tiny";
+const LIST_VISIBLE_TAGS = 6;
 const cardRatingClassName =
   "rating-control absolute bottom-2 left-2 z-[2] inline-flex items-center gap-0 rounded-full bg-[rgba(10,10,12,0.55)] px-1.5 py-[3px] leading-[1.2] text-white backdrop-blur [&_.rating-star]:h-3 [&_.rating-star]:w-3 [&_.rating-star]:text-[10px] [&_.rating-star]:text-[rgba(255,255,255,0.34)] [&_.rating-star[data-active=true]]:text-yellow-300";
 const listTableRatingClassName = "rating-control inline-flex items-center justify-self-start gap-px text-left [&_.rating-star]:h-4 [&_.rating-star]:w-4 [&_.rating-star]:text-[13px]";
@@ -92,7 +116,7 @@ const ENTER_ROW_DELAY_MS = 50;
 const ENTER_MAX_ROWS = 6;
 const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
-export function ResultList({ items, viewMode, onOpenPreview }: ResultListProps) {
+export function ResultList({ items, viewMode, onOpenPreview, filters }: ResultListProps) {
   const tileFillerRef = useRef<HTMLSpanElement>(null);
   const gridAnchorRef = useRef<HTMLSpanElement>(null);
   useLastTileRowFit(tileFillerRef, viewMode === "tiles" ? items : null);
@@ -102,7 +126,7 @@ export function ResultList({ items, viewMode, onOpenPreview }: ResultListProps) 
     <>
       {viewMode === "list" && items.length ? <ListTableHeader /> : null}
       {items.map((item, index) => (
-        <ResultItem key={String(item.id || item.name || index)} item={item} viewMode={viewMode} onOpenPreview={onOpenPreview} />
+        <ResultItem key={String(item.id || item.name || index)} item={item} viewMode={viewMode} onOpenPreview={onOpenPreview} filters={filters} />
       ))}
       {viewMode === "grid" && items.length ? <span ref={gridAnchorRef} className="grid-enter-anchor hidden" aria-hidden="true" /> : null}
       {viewMode === "tiles" && items.length ? <span ref={tileFillerRef} className="tile-filler h-0 grow-[999999]" aria-hidden="true" /> : null}
@@ -110,8 +134,8 @@ export function ResultList({ items, viewMode, onOpenPreview }: ResultListProps) 
   );
 }
 
-function ResultItem({ item, viewMode, onOpenPreview }: { item: EagleItem; viewMode: ViewerMode; onOpenPreview: (item: EagleItem) => void }) {
-  if (viewMode === "list") return <ListTableRow item={item} onOpenPreview={onOpenPreview} />;
+function ResultItem({ filters, item, viewMode, onOpenPreview }: { filters?: ListFilters; item: EagleItem; viewMode: ViewerMode; onOpenPreview: (item: EagleItem) => void }) {
+  if (viewMode === "list") return <ListTableRow item={item} onOpenPreview={onOpenPreview} filters={filters} />;
   if (viewMode === "tiles") return <TileItem item={item} onOpenPreview={onOpenPreview} />;
   return <GridCard item={item} onOpenPreview={onOpenPreview} />;
 }
@@ -237,25 +261,27 @@ function ListTableHeader() {
     <div className={listTableHeaderClassName}>
       <span>Item</span>
       <span>Name</span>
-      <span>Type</span>
-      <span>Size</span>
-      <span>Dimensions</span>
-      <span>Duration</span>
-      <span>Modified</span>
+      <span className="row-tags-cell list-col-narrow text-left">Tags</span>
+      <span className="list-col-tiny">Type</span>
+      <span className="list-col-medium">Size</span>
+      <span className="list-col-wide">Dimensions</span>
+      <span className="list-col-wide">Duration</span>
+      <span className="list-col-medium">Modified</span>
     </div>
   );
 }
 
-function ListTableRow({ item, onOpenPreview }: { item: EagleItem; onOpenPreview: (item: EagleItem) => void }) {
+function ListTableRow({ filters, item, onOpenPreview }: { filters?: ListFilters; item: EagleItem; onOpenPreview: (item: EagleItem) => void }) {
   return (
     <article className={listTableRowClassName}>
       <ThumbnailButton variant="row" item={item} onOpenPreview={onOpenPreview} />
       <ListTableNameCell item={item} />
-      <ExtensionPill item={item} />
-      <ListTableCell value={formatBytes(item.size) || "-"} className={listTableHiddenOnMobileClassName} />
-      <ListTableCell value={formatDimensions(item) || "-"} className={`dimensions-cell ${listTableHiddenOnMobileClassName}`} />
-      <ListTableCell value={formatDurationCell(item) || "-"} className={`duration-cell ${listTableHiddenOnMobileClassName}`} />
-      <ListTableCell value={formatDateShort(item.modificationTime) || "-"} className={`modified-cell ${listTableHiddenOnMobileClassName}`} title={formatDate(item.modificationTime) || ""} />
+      <ListTagsCell item={item} filters={filters} />
+      <ExtensionPill item={item} filters={filters} />
+      <ListTableCell value={formatBytes(item.size) || "-"} className={`list-col-medium ${listTableHiddenOnMobileClassName}`} />
+      <ListTableCell value={formatDimensions(item) || "-"} className={`dimensions-cell list-col-wide ${listTableHiddenOnMobileClassName}`} />
+      <ListTableCell value={formatDurationCell(item) || "-"} className={`duration-cell list-col-wide ${listTableHiddenOnMobileClassName}`} />
+      <ListTableCell value={formatDateShort(item.modificationTime) || "-"} className={`modified-cell list-col-medium ${listTableHiddenOnMobileClassName}`} title={formatDate(item.modificationTime) || ""} />
     </article>
   );
 }
@@ -282,11 +308,71 @@ function ListTableCell({ className = "", title = "", value }: { className?: stri
   );
 }
 
-function ExtensionPill({ item }: { item: EagleItem }) {
-  const ext = normalizeExt(item.ext || "file");
+// Long tag lists stop after a few pills; the "+N" button expands the row in place.
+function ListTagsCell({ filters, item }: { filters?: ListFilters; item: EagleItem }) {
+  const [expanded, setExpanded] = useState(false);
+  const tags = itemTags(item);
+  if (!tags.length) return <span className={`${listTagsCellClassName} text-muted-foreground`}>-</span>;
+  const visibleTags = expanded ? tags : tags.slice(0, LIST_VISIBLE_TAGS);
+  const hiddenCount = tags.length - LIST_VISIBLE_TAGS;
+  const itemLabel = item.name || item.id || "this item";
   return (
-    <Badge variant="outline" className="ext-pill inline-flex h-auto w-fit min-w-11 justify-center rounded-full border-border bg-muted px-2 py-[3px] text-[10px] font-semibold tracking-[0.04em] text-muted-foreground max-[540px]:hidden" data-ext={ext}>
-      {String(ext).toUpperCase()}
+    <span className={listTagsCellClassName}>
+      {visibleTags.map((tag) => {
+        if (!filters) {
+          return <span key={tag} className={staticTagPillClassName}><span className="truncate">{tag}</span></span>;
+        }
+        const active = filters.activeTags.includes(tag);
+        return (
+          <button
+            key={tag}
+            type="button"
+            className={tagPillClassName}
+            aria-pressed={active}
+            title={active ? `Remove tag filter: ${tag}` : `Filter by tag: ${tag}`}
+            onClick={() => filters.onToggleTag(tag)}
+          >
+            <span className="truncate">{tag}</span>
+          </button>
+        );
+      })}
+      {hiddenCount > 0 ? (
+        <button
+          type="button"
+          className={tagOverflowButtonClassName}
+          aria-expanded={expanded}
+          aria-label={expanded ? `Show fewer tags for ${itemLabel}` : `Show ${hiddenCount} more tags for ${itemLabel}`}
+          title={expanded ? undefined : tags.slice(LIST_VISIBLE_TAGS).join(", ")}
+          onClick={() => setExpanded(!expanded)}
+        >
+          {expanded ? "−" : `+${hiddenCount}`}
+        </button>
+      ) : null}
+    </span>
+  );
+}
+
+function ExtensionPill({ filters, item }: { filters?: ListFilters; item: EagleItem }) {
+  const ext = normalizeExt(item.ext || "file");
+  const label = String(ext).toUpperCase();
+  if (filters && item.ext) {
+    const active = filters.activeExt === ext;
+    return (
+      <button
+        type="button"
+        className={`${extPillClassName} cursor-pointer transition-colors hover:border-foreground/30 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground`}
+        data-ext={ext}
+        aria-pressed={active}
+        title={active ? `Remove type filter: ${label}` : `Filter by type: ${label}`}
+        onClick={() => filters.onToggleExt(ext)}
+      >
+        {label}
+      </button>
+    );
+  }
+  return (
+    <Badge variant="outline" className={extPillClassName} data-ext={ext}>
+      {label}
     </Badge>
   );
 }

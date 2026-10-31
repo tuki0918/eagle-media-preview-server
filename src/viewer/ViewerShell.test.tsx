@@ -1513,6 +1513,37 @@ describe("ViewerAppShell", () => {
     expect(html).not.toContain("rating-star");
   });
 
+  test("renders list tags as filter toggles and collapses long tag lists", () => {
+    const tags = ["a", "b", "c", "d", "e", "f", "g", "h"];
+    const html = renderToStaticMarkup(
+      <ResultList
+        items={[{ id: "item-1", name: "Tagged.png", ext: "png", tags }]}
+        viewMode="list"
+        onOpenPreview={() => {}}
+        filters={{ activeExt: "png", activeTags: ["b"], onToggleExt: () => {}, onToggleTag: () => {} }}
+      />,
+    );
+
+    expect(html).toContain(">Tags</span>");
+    expect(html).toContain('title="Filter by tag: a"');
+    expect(html).toContain('aria-pressed="true" title="Remove tag filter: b"');
+    expect(html).toContain('title="Filter by tag: f"');
+    expect(html).not.toContain('title="Filter by tag: g"');
+    expect(html).toContain(">+2</button>");
+    expect(html).toContain('aria-pressed="true" title="Remove type filter: PNG"');
+  });
+
+  test("renders list tags and types as plain labels without filters", () => {
+    const html = renderToStaticMarkup(
+      <ResultList items={[{ id: "item-1", name: "Tagged.png", ext: "png", tags: ["a", "b"] }]} viewMode="list" onOpenPreview={() => {}} />,
+    );
+
+    expect(html).toContain(">a</span>");
+    expect(html).not.toContain("Filter by tag");
+    expect(html).not.toContain("Filter by type");
+    expect(html).not.toContain("cursor-pointer");
+  });
+
   test("uses noThumbnail instead of noPreview to detect unavailable list thumbnails", () => {
     const html = renderToStaticMarkup(
       <ResultList

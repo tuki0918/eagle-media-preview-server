@@ -862,6 +862,13 @@ function render() {
 
   setResultSurfaceState({
     kind: "list",
+    // Smart folders ignore tag and type filters, so their labels stay plain text.
+    filters: state.smartFolderId ? undefined : {
+      activeExt: state.ext,
+      activeTags: state.tags,
+      onToggleExt: toggleExtFilter,
+      onToggleTag: toggleTagFilter,
+    },
     items: state.items,
     onOpenPreview: openPreview,
     viewMode: state.viewMode,
@@ -1009,6 +1016,20 @@ function addTagFilter(value: unknown) {
   applyFilterChange({ query: "", tags: [...state.tags, tag] });
   renderTagChips();
   hideTagSuggestions();
+}
+
+// List rows toggle filters in place, keeping whatever the search box already holds.
+function toggleTagFilter(tag: string) {
+  if (state.tags.includes(tag)) {
+    removeTagFilter(tag);
+    return;
+  }
+  applyFilterChange({ tags: [...state.tags, tag] });
+  renderTagChips();
+}
+
+function toggleExtFilter(ext: string) {
+  applyFilterChange({ ext: state.ext === ext ? "" : ext });
 }
 
 function removeTagFilter(tag: string) {

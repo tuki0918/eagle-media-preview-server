@@ -21,7 +21,7 @@ export function ResultSurface({ state }: ResultSurfaceProps) {
   return (
     <section id="grid" className={resultSurfaceClassName(surfaceState.viewMode, isEmpty)} aria-label="Media items">
       {surfaceState.kind === "list" ? (
-        <ResultList items={surfaceState.items} viewMode={surfaceState.viewMode} onOpenPreview={surfaceState.onOpenPreview} />
+        <ResultList items={surfaceState.items} viewMode={surfaceState.viewMode} onOpenPreview={surfaceState.onOpenPreview} filters={surfaceState.filters} />
       ) : surfaceState.kind === "empty" ? (
         <ResultStateView {...surfaceState} viewMode={surfaceState.viewMode} />
       ) : (

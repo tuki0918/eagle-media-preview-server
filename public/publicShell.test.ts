@@ -1078,7 +1078,7 @@ test("public UI adds a masonry tiles view with infinite loading", async () => {
   assert.doesNotMatch(app, /prevButton: document\.querySelector\("#prevButton"\),/);
   assert.doesNotMatch(app, /pageButtons: document\.querySelector\("#pageButtons"\),/);
   assert.match(app, /state\.viewMode === "tiles"/);
-  assert.match(html, /export function ResultList\(\{ items, viewMode, onOpenPreview \}[^)]*\) \{/);
+  assert.match(html, /export function ResultList\(\{ items, viewMode, onOpenPreview, filters \}[^)]*\) \{/);
   assert.match(html, /aspectRatio: String\(ratio\)/);
   assert.match(html, /flexBasis: `calc\(var\(--tile-h, 190px\) \* var\(--tile-scale, 1\) \* var\(--tile-fit, 1\) \* \$\{ratio\}\)`/);
   assert.match(html, /onPointerDown=\{trigger\.onPointerDown\}/);
@@ -1121,7 +1121,7 @@ test("public extension pills and file badges use a monochrome palette", async ()
 test("public list rows left align filenames and ratings", async () => {
   const html = await readAppSources();
 
-  assert.match(html, /const listTableRowClassName =[\s\S]*\[&>span:not\(\.row-name-cell\)\]:justify-self-center/);
+  assert.match(html, /const listTableRowClassName =[\s\S]*\[&>span:not\(\.row-name-cell\):not\(\.row-tags-cell\)\]:justify-self-center/);
   assert.match(html, /const listTableHeaderClassName =[\s\S]*!min-h-9 !py-1/);
   assert.match(html, /const rowNameCellClassName =[\s\S]*text-left justify-self-stretch/);
   assert.match(html, /const listTableRatingClassName = "rating-control inline-flex items-center justify-self-start gap-px text-left/);

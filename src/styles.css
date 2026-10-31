@@ -253,6 +253,54 @@
   background: linear-gradient(to right, #ffffff var(--media-progress, 0%), rgba(255, 255, 255, 0.28) var(--media-progress, 0%));
 }
 
+/* The list follows the results area, not the viewport (the sidebar takes width too), and drops
+   its least useful columns before they would be clipped. Phones keep their own two-column layout. */
+.media-list {
+  container-type: inline-size;
+}
+
+@media (min-width: 541px) {
+  @container (max-width: 959px) {
+    .media-list .media-row {
+      grid-template-columns: 52px minmax(120px, 1.6fr) minmax(120px, 2fr) 80px 80px 104px;
+    }
+
+    .media-list .list-col-wide {
+      display: none;
+    }
+  }
+
+  @container (max-width: 719px) {
+    .media-list .media-row {
+      grid-template-columns: 52px minmax(120px, 1.6fr) minmax(120px, 2fr) 80px;
+    }
+
+    .media-list .list-col-medium {
+      display: none;
+    }
+  }
+
+  @container (max-width: 479px) {
+    .media-list .media-row {
+      grid-template-columns: 52px minmax(0, 1fr) 80px;
+    }
+
+    .media-list .list-col-narrow {
+      display: none;
+    }
+  }
+
+  @container (max-width: 339px) {
+    .media-list .media-row {
+      grid-template-columns: 52px minmax(0, 1fr);
+    }
+
+    .media-list .list-col-tiny {
+      display: none;
+    }
+  }
+}
+
 /* Grid cards and tiles rise in from below; --enter-delay sets the order (see ResultList). */
 @keyframes media-card-enter {
   from {
