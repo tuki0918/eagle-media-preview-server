@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, ChevronLeft, ChevronRight, Music, Pause, Play, Presentation, RotateCcw, Volume2, VolumeX, X } from "lucide-react";
-import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { errorMessage, mediaUrl } from "../api";
 import { displayFileName } from "../format";
@@ -16,6 +15,7 @@ import { settingsDialogClassName, settingsDialogCloseClassName, settingsDialogHe
 import { dockSurfaceClassName } from "./viewerDockStyles";
 
 const playerButton = "inline-grid size-11 shrink-0 place-items-center rounded-full text-white/80 hover:bg-white/15 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white disabled:pointer-events-none disabled:opacity-30 [&_svg]:size-5";
+const sideNavButton = "pointer-events-auto inline-grid size-12 shrink-0 place-items-center rounded-full border-0 bg-black/35 text-white/85 backdrop-blur-md transition-colors hover:bg-white/15 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white disabled:pointer-events-none disabled:opacity-0 [&_svg]:size-6";
 const selectClass = "h-10 w-full min-w-0 appearance-none rounded-xl border border-input bg-background pl-3 pr-9 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30";
 
 export function SlideshowLauncher() {
@@ -351,7 +351,7 @@ export function SlideshowPlayer({ query, settings, onClose }: { query: Slideshow
   const slideLoading = Boolean((loading || (slide && !ready) || buffering) && !error && !finished && !blocked);
   return (
     <section
-      className="relative grid h-full w-full grid-rows-[minmax(0,1fr)] bg-black text-white outline-none"
+      className="relative grid h-full w-full grid-rows-[minmax(0,1fr)] isolate overflow-hidden bg-black text-white outline-none"
       aria-label="Slideshow player"
       aria-busy={slideLoading}
       tabIndex={0}
@@ -409,12 +409,13 @@ export function SlideshowPlayer({ query, settings, onClose }: { query: Slideshow
         {/* Without a title, pin the counter to the top where the title line would start. */}
         <div className={settings.showTitle ? "min-w-0" : "min-w-0 self-start pt-0.5"}>{settings.showTitle ? <p className="truncate text-sm font-medium" title={title}>{title}</p> : null}<p className={`${settings.showTitle ? "mt-1 " : ""}text-xs text-white/60`} aria-live="off">{slide ? `${slide.index + 1} / ${total ?? "…"}` : "Slideshow"}{kind === "thumbnail" ? " · Thumbnail" : ""}</p></div>
         <div className={`flex shrink-0 items-center gap-1 transition-opacity duration-200 ${controlsVisibility}`} aria-hidden={!controlsShown}>
-          <button type="button" className={`pointer-events-auto ${playerButton}`} aria-label="Previous slide" title="Previous item" disabled={loading || Boolean(error) || !slide || slide.index === 0} onClick={() => { void navigate(currentIndex.current - 1); }}><ChevronLeft /></button>
-          <button type="button" className={`pointer-events-auto ${playerButton}`} aria-label="Next slide" title="Next item" disabled={loading || Boolean(error) || finished} onClick={advance}><ChevronRight /></button>
-          <Separator orientation="vertical" className="mx-1 h-4 w-0 border-l border-white/30 bg-transparent data-[orientation=vertical]:h-4 data-[orientation=vertical]:w-0" />
           <button type="button" className={`pointer-events-auto ${playerButton} ${controlsVisibility}`} aria-label="Close slideshow" title="Close slideshow (Esc)" onClick={onClose}><X /></button>
         </div>
       </header>
+      <div role="group" aria-label="Slide navigation" className={`pointer-events-none absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-between pl-[max(16px,env(safe-area-inset-left))] pr-[max(16px,env(safe-area-inset-right))] transition-opacity duration-200 ${controlsVisibility}`} aria-hidden={!controlsShown}>
+        <button type="button" className={sideNavButton} aria-label="Previous slide" title="Previous item" disabled={loading || Boolean(error) || !slide || slide.index === 0} onClick={() => { void navigate(currentIndex.current - 1); }}><ChevronLeft /></button>
+        <button type="button" className={sideNavButton} aria-label="Next slide" title="Next item" disabled={loading || Boolean(error) || finished} onClick={advance}><ChevronRight /></button>
+      </div>
       {!error && !finished && !loading && ready && !buffering ? (
         <div className={`pointer-events-none absolute inset-0 flex items-center justify-center gap-5 transition-opacity duration-200 ${controlsVisibility}`} aria-hidden={!controlsShown}>
           <button type="button" className="pointer-events-auto inline-grid size-24 shrink-0 place-items-center rounded-full border-0 bg-black/45 text-white backdrop-blur-md transition-colors hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white disabled:pointer-events-none disabled:opacity-30 [&_svg]:size-10" aria-label={paused ? "Resume slideshow" : "Pause slideshow"} disabled={loading} onClick={togglePause}>{paused ? <Play fill="currentColor" /> : <Pause fill="currentColor" />}</button>
@@ -441,6 +442,7 @@ export function SlideshowPlayer({ query, settings, onClose }: { query: Slideshow
           </div>
         </div>
       </footer>
+      {slide ? <SlideshowBackdrop key={String(slide.item.id)} item={slide.item} /> : null}
     </section>
   );
 }
@@ -530,6 +532,18 @@ function SlideshowFrame({ item, active, playbackToken, sessionEnabled, effect, m
       {isStatic ? <img src={mediaUrl(String(item.id), kind === "image" ? "file" : "thumb")} alt={active ? displayFileName(item) || "Untitled" : ""} className="h-full min-h-0 w-full object-contain" decoding="async" onLoad={prepareImage} onError={fail} /> : null}
       {kind === "video" ? <video ref={bindMedia} className="h-full min-h-0 w-full object-contain" src={mediaUrl(String(item.id), "file")} playsInline disablePictureInPicture muted={muted || !active} preload="auto" {...mediaEvents} /> : null}
       {kind === "audio" ? <div className="grid w-[min(420px,80vw)] justify-items-center px-4"><AudioArtwork item={item} /><audio ref={bindMedia} src={mediaUrl(String(item.id), "file")} muted={muted || !active} preload="auto" {...mediaEvents} /></div> : null}
+    </div>
+  );
+}
+
+// The blurred thumbnail gives each slide an ambient backdrop, like the fullscreen image preview.
+function SlideshowBackdrop({ item }: { item: EagleItem }) {
+  const [loaded, setLoaded] = useState(false);
+  const [missing, setMissing] = useState(item.noThumbnail === true);
+  return (
+    <div className="slideshow-backdrop pointer-events-none absolute inset-0 -z-10 overflow-hidden" aria-hidden="true">
+      {missing ? null : <img className={`absolute inset-0 h-full w-full scale-125 object-cover blur-3xl saturate-150 transition-opacity duration-700 ${loaded ? "opacity-55" : "opacity-0"}`} src={mediaUrl(String(item.id), "thumb")} alt="" decoding="async" onLoad={() => setLoaded(true)} onError={() => setMissing(true)} />}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0.15)_0%,rgba(0,0,0,0.7)_100%)]" />
     </div>
   );
 }
