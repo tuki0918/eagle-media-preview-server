@@ -260,7 +260,7 @@ function ListTableHeader() {
   return (
     <div className={listTableHeaderClassName}>
       <span>Item</span>
-      <span>Name</span>
+      <span className="row-name-cell text-left">Name</span>
       <span className="row-tags-cell list-col-narrow text-left">Tags</span>
       <span className="list-col-tiny">Type</span>
       <span className="list-col-medium">Size</span>
