@@ -39,7 +39,7 @@ export const PreviewBodyHost = forwardRef<HTMLDivElement>(function PreviewBodyHo
     <div
       ref={setSurfaceRef}
       id="previewBody"
-      className={`${previewBodyClassName(previewBodyState?.kind)}${imageFullscreen.active ? " !fixed inset-0 z-[10] !h-dvh w-screen bg-muted" : ""}`}
+      className={`${previewBodyClassName(previewBodyState?.kind)}${imageFullscreen.active ? " !fixed inset-0 z-[10] !h-dvh w-screen !bg-black" : ""}`}
     >
       {previewBodyState ? <PreviewBody key={String(previewBodyState.item.id || "")} {...previewBodyState} imageFullscreen={imageFullscreen} /> : null}
     </div>

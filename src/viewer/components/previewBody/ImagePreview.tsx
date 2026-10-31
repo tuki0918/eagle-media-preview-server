@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent, type ReactNode, type TouchEvent } from "react";
-import { ChevronDown, Expand, Minimize, Scan } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Expand, Minimize, Scan } from "lucide-react";
 import { IMAGE_FIT_MARGIN } from "../../constants";
 import { getPreviewDialogState, subscribePreviewDialogState } from "../../previewDialogState";
 import type { ImageFullscreenControls } from "../../useImageFullscreen";
-import { ChevronLeftIcon, ChevronRightIcon } from "../Icons";
 import { dockSurfaceClassName } from "../viewerDockStyles";
 import { canFallbackMedia, mediaUrl } from "../../api";
+import { displayFileName } from "../../format";
 import { hasNoThumbnail } from "../../media";
 import { closePreview, stepPreview } from "../../shellActions";
 import {
@@ -17,6 +17,8 @@ import {
 import {
   dragPreviewTransform,
   initialPreviewScales,
+  MAX_PREVIEW_SCALE,
+  minimumPreviewScale,
   nextPreviewScales,
   nextZoomScale,
   pointerDistance,
@@ -43,6 +45,16 @@ const toolbarButtonClassName =
 const imageZoomSelectClassName =
   "h-9 w-[76px] touch-manipulation appearance-none rounded-full border-0 bg-transparent py-0 pl-2 pr-6 text-center text-xs font-medium tabular-nums text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring";
 const imageZoomPresets = [0.25, 0.5, 1, 2, 4, 8];
+// Fullscreen borrows the slideshow player's look: dark ambient backdrop, gradient bars, white glass controls.
+const stageButtonClassName =
+  "inline-grid size-10 shrink-0 touch-manipulation select-none place-items-center rounded-full border-0 bg-transparent p-0 text-white/80 transition-colors hover:bg-white/15 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white disabled:pointer-events-none disabled:opacity-30 [&_svg]:size-5 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-linecap:round] [&_svg]:[stroke-linejoin:round] [&_svg]:[stroke-width:2]";
+const stageNavButtonClassName =
+  "pointer-events-auto inline-grid size-12 shrink-0 touch-manipulation place-items-center rounded-full border-0 bg-black/35 text-white/85 backdrop-blur-md transition-colors hover:bg-white/15 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white disabled:pointer-events-none disabled:opacity-0 [&_svg]:size-6";
+const stageZoomSelectClassName =
+  "h-10 w-[72px] touch-manipulation appearance-none rounded-full border-0 bg-transparent py-0 pl-2 pr-6 text-center text-xs font-medium tabular-nums text-white/85 transition-colors hover:bg-white/15 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white";
+const stageRangeClassName =
+  "media-range h-4 w-[clamp(96px,22vw,220px)] cursor-pointer touch-manipulation appearance-none bg-transparent [&::-webkit-slider-runnable-track]:h-1 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-thumb]:mt-[-4px] [&::-webkit-slider-thumb]:size-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-moz-range-track]:h-1 [&::-moz-range-track]:rounded-full [&::-moz-range-thumb]:size-3 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-white";
+const STAGE_CONTROLS_IDLE_MS = 2500;
 
 export function ImagePreview({ item, srcKind: requestedSrcKind, fullscreen }: { item: EagleItem; srcKind: "file" | "thumb"; fullscreen?: ImageFullscreenControls }) {
   // Fall back to the Eagle thumbnail when the browser cannot decode the original file.
@@ -183,6 +195,33 @@ export function ImagePreview({ item, srcKind: requestedSrcKind, fullscreen }: { 
     };
   }, [zoomImage]);
 
+  // Like the slideshow player, mouse users get controls on movement and a clean stage when idle.
+  useEffect(() => {
+    if (!fullscreen?.active) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const schedule = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        const surface = viewportRef.current?.parentElement;
+        if (surface?.querySelector(".image-stage-controls:hover, .image-stage-controls :focus-visible")) schedule();
+        else setImageOverlayControlsVisible(false);
+      }, STAGE_CONTROLS_IDLE_MS);
+    };
+    const moved = (event: globalThis.PointerEvent) => {
+      if (event.pointerType !== "mouse" || (!event.movementX && !event.movementY)) return;
+      setImageOverlayControlsVisible(true);
+      schedule();
+    };
+    setImageOverlayControlsVisible(true);
+    schedule();
+    document.addEventListener("pointermove", moved);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("pointermove", moved);
+      setImageOverlayControlsVisible(true);
+    };
+  }, [fullscreen?.active]);
+
   const canPanImage = () => {
     const viewport = viewportRef.current;
     const size = imageState.naturalSize;
@@ -296,6 +335,20 @@ export function ImagePreview({ item, srcKind: requestedSrcKind, fullscreen }: { 
 
   return (
     <>
+      {fullscreen?.active ? (
+        <div className="image-stage-backdrop pointer-events-none absolute inset-0 overflow-hidden bg-black" aria-hidden="true">
+          {imageState.naturalSize ? (
+            <img
+              className="absolute inset-0 h-full w-full scale-125 object-cover opacity-55 blur-3xl saturate-150"
+              src={mediaUrl(String(item.id || ""), srcKind === "file" ? "thumb" : srcKind)}
+              alt=""
+              draggable={false}
+              onError={(event) => { event.currentTarget.hidden = true; }}
+            />
+          ) : null}
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0.15)_0%,rgba(0,0,0,0.7)_100%)]" />
+        </div>
+      ) : null}
       <div
         ref={viewportRef}
         className={`${imageViewportClassName} ${canPanImage() ? "cursor-grab active:cursor-grabbing" : "cursor-default"}`}
@@ -351,7 +404,7 @@ export function ImagePreview({ item, srcKind: requestedSrcKind, fullscreen }: { 
       </div>
       {!imageState.naturalSize && !loadFailed && !offline ? (
         <span className="pointer-events-none absolute inset-0 z-[1] grid place-items-center" aria-hidden="true">
-          <span className="loading-spinner block size-8 animate-spin rounded-full border-[3px] border-[color-mix(in_srgb,var(--muted-foreground)_25%,transparent)] border-t-muted-foreground" />
+          <span className={`loading-spinner block size-8 animate-spin rounded-full border-[3px] ${fullscreen?.active ? "border-white/25 border-t-white" : "border-[color-mix(in_srgb,var(--muted-foreground)_25%,transparent)] border-t-muted-foreground"}`} />
         </span>
       ) : null}
       {offline && !imageState.naturalSize ? <PreviewOverlayNotice message={MEDIA_SERVER_OFFLINE_MESSAGE} /> : null}
@@ -378,6 +431,10 @@ export function ImagePreview({ item, srcKind: requestedSrcKind, fullscreen }: { 
         onZoomIn={() => zoomImage(1.18)}
         onZoomOut={() => zoomImage(0.85)}
         zoomScale={imageState.transform.scale}
+        minZoomScale={minimumPreviewScale(imageState.fitScale, imageState.naturalScale)}
+        onZoomSlide={(scale) => setImageZoom(scale)}
+        title={displayFileName(item) || item.name || "Untitled"}
+        naturalSize={imageState.naturalSize}
       />
     </>
   );
@@ -394,7 +451,15 @@ function ImageToolbar({
   onZoomOut,
   visible,
   zoomScale,
+  minZoomScale,
+  onZoomSlide,
+  title,
+  naturalSize,
 }: {
+  minZoomScale: number;
+  onZoomSlide: (scale: number) => void;
+  title: string;
+  naturalSize: ImageState["naturalSize"];
   fullscreen?: ImageFullscreenControls;
   onFullscreen: () => void;
   hasPrevious: boolean;
@@ -407,6 +472,72 @@ function ImageToolbar({
   zoomScale: number;
 }) {
   const visibility = `${visible ? "visible opacity-100" : "invisible pointer-events-none opacity-0"} transition-opacity duration-150`;
+  if (fullscreen?.active) {
+    const stageVisibility = `${visible ? "visible opacity-100" : "invisible pointer-events-none opacity-0"} transition-opacity duration-200`;
+    // The slider works in log2 space so each step feels the same at 25% and at 800%.
+    const minLog = Math.log2(minZoomScale);
+    const maxLog = Math.log2(MAX_PREVIEW_SCALE);
+    const zoomLog = Math.min(maxLog, Math.max(minLog, Math.log2(zoomScale || 1)));
+    const zoomProgress = maxLog > minLog ? (zoomLog - minLog) / (maxLog - minLog) * 100 : 0;
+    return (
+      <>
+        <header className={`image-stage-controls pointer-events-none absolute inset-x-0 top-0 z-[2] flex items-start justify-between gap-4 bg-gradient-to-b from-black/70 to-transparent pb-12 pl-[max(16px,env(safe-area-inset-left))] pr-[max(12px,env(safe-area-inset-right))] pt-[max(12px,env(safe-area-inset-top))] text-white ${stageVisibility}`}>
+          <div className="min-w-0 pt-1">
+            <p className="truncate text-sm font-medium" title={title}>{title}</p>
+            {naturalSize ? <p className="mt-1 text-xs tabular-nums text-white/60">{naturalSize.width} × {naturalSize.height}</p> : null}
+          </div>
+          <div className="image-fullscreen-control pointer-events-auto shrink-0">
+            <button type="button" className={stageButtonClassName} title="Exit full screen (Esc)" aria-label="Exit full screen" onClick={onFullscreen}>
+              <Minimize aria-hidden="true" />
+            </button>
+          </div>
+        </header>
+        <div role="group" aria-label="Image navigation" className={`image-navigation image-stage-controls pointer-events-none absolute inset-x-0 top-1/2 z-[2] flex -translate-y-1/2 justify-between pl-[max(16px,env(safe-area-inset-left))] pr-[max(16px,env(safe-area-inset-right))] ${stageVisibility}`}>
+          <button type="button" className={stageNavButtonClassName} title="Previous item" aria-label="Previous item" disabled={!hasPrevious} onClick={() => stepPreview(-1)}><ChevronLeft aria-hidden="true" /></button>
+          <button type="button" className={stageNavButtonClassName} title="Next item" aria-label="Next item" disabled={!hasNext} onClick={() => stepPreview(1)}><ChevronRight aria-hidden="true" /></button>
+        </div>
+        <footer className={`image-stage-controls pointer-events-none absolute inset-x-0 bottom-0 z-[2] flex justify-center bg-gradient-to-t from-black/75 to-transparent pb-[max(16px,env(safe-area-inset-bottom))] pl-[max(16px,env(safe-area-inset-left))] pr-[max(16px,env(safe-area-inset-right))] pt-14 text-white ${stageVisibility}`}>
+          <div className="pointer-events-auto flex max-w-full items-center gap-1 rounded-full bg-black/45 px-1.5 py-1 shadow-lg ring-1 ring-white/10 backdrop-blur-md">
+            <div role="group" aria-label="Image zoom" className="flex items-center gap-1">
+              <button type="button" className={stageButtonClassName} title="Zoom out" aria-label="Zoom out" onClick={onZoomOut}><MinusIcon /></button>
+              <input
+                type="range"
+                className={`${stageRangeClassName} max-[480px]:hidden`}
+                aria-label="Image zoom level"
+                aria-valuetext={formatImageZoomLabel(zoomScale)}
+                min={minLog}
+                max={maxLog}
+                step={0.01}
+                value={zoomLog}
+                style={{ ["--media-progress" as string]: `${zoomProgress}%` }}
+                onInput={(event) => onZoomSlide(2 ** Number(event.currentTarget.value))}
+                onChange={() => {}}
+              />
+              <button type="button" className={stageButtonClassName} title="Zoom in" aria-label="Zoom in" onClick={onZoomIn}><PlusIcon /></button>
+              <span className="relative inline-flex items-center">
+                <select
+                  className={stageZoomSelectClassName}
+                  aria-label="Image zoom percentage"
+                  title="Image zoom percentage (100% = actual size)"
+                  value={String(zoomScale)}
+                  onChange={(event) => onZoomChange(Number(event.currentTarget.value))}
+                >
+                  {!imageZoomPresets.includes(zoomScale) ? <option value={String(zoomScale)} hidden>{formatImageZoomLabel(zoomScale)}</option> : null}
+                  {imageZoomPresets.map((scale) => <option key={scale} value={String(scale)} className="bg-popover text-popover-foreground">{formatImageZoomLabel(scale)}</option>)}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-1.5 size-3.5 text-white/60" aria-hidden="true" />
+              </span>
+            </div>
+            <span className="mx-1 h-5 w-px shrink-0 bg-white/25" aria-hidden="true" />
+            <div role="group" aria-label="Image size" className="flex items-center gap-1">
+              <button type="button" className={stageButtonClassName} title="Fit" aria-label="Fit" onClick={onFit}><Scan aria-hidden="true" /></button>
+              <button type="button" className={`${stageButtonClassName} w-auto px-2.5 text-xs font-semibold tabular-nums`} title="Actual size (100%)" aria-label="Actual size" onClick={() => onZoomChange(1)}>1:1</button>
+            </div>
+          </div>
+        </footer>
+      </>
+    );
+  }
   return (
     <>
       <div className={`${imageToolbarClassName} ${imageControlSurfaceClassName} ${visibility}`}>
@@ -437,22 +568,8 @@ function ImageToolbar({
         </div>
       </div>
       {fullscreen ? (
-        <div className={`image-fullscreen-control absolute right-[calc(14px+env(safe-area-inset-right))] top-[calc(14px+env(safe-area-inset-top))] z-[2] ${fullscreen.active ? "" : "touch:hidden"} ${imageControlSurfaceClassName} ${visibility}`}>
-          <ToolbarButton
-            label={fullscreen.active ? "Exit full screen" : "Full screen"}
-            icon={fullscreen.active ? <Minimize aria-hidden="true" /> : <Expand aria-hidden="true" />}
-            onClick={onFullscreen}
-          />
-        </div>
-      ) : null}
-      {fullscreen?.active ? (
-        <div role="group" aria-label="Image navigation" className={`image-navigation pointer-events-none absolute inset-x-0 top-1/2 z-[2] flex -translate-y-1/2 justify-between pl-[calc(14px+env(safe-area-inset-left))] pr-[calc(14px+env(safe-area-inset-right))] ${visibility}`}>
-          <div className={`pointer-events-auto ${imageControlSurfaceClassName}`}>
-            <ToolbarButton label="Previous item" icon={<ChevronLeftIcon />} onClick={() => stepPreview(-1)} disabled={!hasPrevious} />
-          </div>
-          <div className={`pointer-events-auto ${imageControlSurfaceClassName}`}>
-            <ToolbarButton label="Next item" icon={<ChevronRightIcon />} onClick={() => stepPreview(1)} disabled={!hasNext} />
-          </div>
+        <div className={`image-fullscreen-control absolute right-[calc(14px+env(safe-area-inset-right))] top-[calc(14px+env(safe-area-inset-top))] z-[2] touch:hidden ${imageControlSurfaceClassName} ${visibility}`}>
+          <ToolbarButton label="Full screen" icon={<Expand aria-hidden="true" />} onClick={onFullscreen} />
         </div>
       ) : null}
     </>
