@@ -1,4 +1,4 @@
-import { DEFAULT_PAGE_SIZE, DEFAULT_VIEW_MODE, FOLDER_SECTIONS_OPEN_STORAGE_KEY, SIDEBAR_OPEN_STORAGE_KEY, TAG_SECTIONS_COLLAPSED_STORAGE_KEY } from "./constants";
+import { DEFAULT_PAGE_SIZE, DEFAULT_VIEW_MODE, FOLDER_SECTIONS_OPEN_STORAGE_KEY, SIDEBAR_OPEN_STORAGE_KEY, TAG_PICKER_SECTIONS_COLLAPSED_STORAGE_KEY, TAG_SECTIONS_COLLAPSED_STORAGE_KEY } from "./constants";
 import { changePageSize, selectViewMode } from "./shellActions";
 import { setItemActionsVisible } from "./itemActionsVisibilityState";
 import { setSubfoldersVisible } from "./subfolderVisibilityState";
@@ -55,7 +55,7 @@ export function subscribeDisplaySettingsReset(listener: () => void) {
 export function resetDisplaySettings(preferences: DisplayPreferences = DEFAULT_DISPLAY_PREFERENCES) {
   for (const key of [
     SIDEBAR_WIDTH_STORAGE_KEY, SIDEBAR_OPEN_STORAGE_KEY, FOLDER_SECTIONS_OPEN_STORAGE_KEY,
-    TAG_SECTIONS_COLLAPSED_STORAGE_KEY, "eagleSubfoldersCollapsed", "eagleShowSubfolders",
+    TAG_SECTIONS_COLLAPSED_STORAGE_KEY, TAG_PICKER_SECTIONS_COLLAPSED_STORAGE_KEY, "eagleSubfoldersCollapsed", "eagleShowSubfolders",
     "eagleSlideshowSettings", "eagleShowItemActions", "eagle-media-preview-theme", "eagleViewerZoomLevel", "eagleViewMode",
   ]) {
     try { window.localStorage.removeItem(key); } catch { /* Storage is optional. */ }

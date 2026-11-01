@@ -3,6 +3,7 @@ import { EllipsisIcon, ExternalLinkIcon as LucideExternalLinkIcon, FolderIcon, L
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { errorMessage } from "../api";
+import { TAG_PICKER_SECTIONS_COLLAPSED_STORAGE_KEY } from "../constants";
 import { directFileUrl, isStandaloneApp } from "../fileLinks";
 import { getItemActionsVisible, subscribeItemActionsVisible } from "../itemActionsVisibilityState";
 import { folderIds, itemTags } from "../format";
@@ -449,6 +450,7 @@ function PreviewMetadataEditor({
       {activeInput === "tags" ? (
         <MetadataPickerDialog
           id="tagPickerDialog"
+          collapsedStorageKey={TAG_PICKER_SECTIONS_COLLAPSED_STORAGE_KEY}
           title="Tags"
           icon={<TagIcon aria-hidden="true" />}
           placeholder="Search or add tag"

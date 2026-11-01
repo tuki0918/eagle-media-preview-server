@@ -13,6 +13,7 @@ export const RECENT_METADATA_LIMIT = 10;
 export const SIDEBAR_OPEN_STORAGE_KEY = "eagleSidebarOpen";
 export const FOLDER_SECTIONS_OPEN_STORAGE_KEY = "eagleFolderSectionsOpen";
 export const TAG_SECTIONS_COLLAPSED_STORAGE_KEY = "eagleTagSectionsCollapsed";
+export const TAG_PICKER_SECTIONS_COLLAPSED_STORAGE_KEY = "eagleTagPickerSectionsCollapsed";
 
 export const playableVideoExts = new Set(["mp4", "webm", "mov", "m4v"]);
 export const playableAudioExts = new Set(["mp3", "wav", "m4a", "aac", "ogg"]);

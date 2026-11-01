@@ -2141,6 +2141,99 @@ describe("ViewerAppShell", () => {
     }
   });
 
+  test("collapses tag picker sections and remembers them", async () => {
+    const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
+    const testGlobal = globalThis as typeof globalThis & {
+      IS_REACT_ACT_ENVIRONMENT?: boolean;
+    };
+    const previousWindow = globalThis.window;
+    const previousDocument = globalThis.document;
+    const previousNode = globalThis.Node;
+    const previousHTMLElement = globalThis.HTMLElement;
+    const previousIS_REACT_ACT_ENVIRONMENT = testGlobal.IS_REACT_ACT_ENVIRONMENT;
+    globalThis.window = dom.window;
+    globalThis.document = dom.window.document;
+    globalThis.Node = dom.window.Node;
+    globalThis.HTMLElement = dom.window.HTMLElement;
+    testGlobal.IS_REACT_ACT_ENVIRONMENT = true;
+
+    const { createRoot } = await import("react-dom/client");
+    let root: import("react-dom/client").Root | null = null;
+    try {
+      const container = dom.window.document.querySelector("#root");
+      if (!(container instanceof dom.window.HTMLElement)) throw new Error("Missing test root");
+      root = createRoot(container);
+
+      await act(async () => {
+        root?.render(
+          <PreviewDetailsPanel
+            canEditMetadata
+            item={{ id: "item-1", tags: [], folders: [] }}
+            folders={[]}
+            detailRows={[{ label: "Type", value: "Image" }]}
+            onTagSuggestions={async (query) => [
+              { value: "red", label: "red", meta: "2", group: "Colors", groupColor: "#f00", groupId: "group:g1" },
+              { value: "misc", label: "misc", meta: "3", group: "Ungrouped", groupId: "section:ungrouped" },
+            ].filter((item) => item.value.includes(query))}
+            onFolderSuggestions={() => []}
+            onSaveMetadata={async (_item, patch) => patch}
+          />,
+        );
+      });
+
+      const openPicker = async () => {
+        const addTagButton = Array.from(container.querySelectorAll(".preview-metadata-add")).find((button) => button.getAttribute("aria-label") === "Add Tags");
+        if (!(addTagButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing tag add button");
+        await act(async () => {
+          addTagButton.click();
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        });
+      };
+      const heading = (label: string) => Array.from(container.querySelectorAll("#tagPickerDialog .metadata-picker-group-heading")).find((entry) => entry.textContent?.startsWith(label)) as HTMLButtonElement;
+      const optionLabels = () => Array.from(container.querySelectorAll("#tagPickerDialog [role=\"option\"]")).map((option) => option.textContent);
+
+      await openPicker();
+      expect(optionLabels()).toEqual(["red2", "misc3"]);
+
+      await act(async () => {
+        heading("Colors").click();
+      });
+      expect(heading("Colors").getAttribute("aria-expanded")).toBe("false");
+      expect(optionLabels()).toEqual(["misc3"]);
+      expect(dom.window.localStorage.getItem("eagleTagPickerSectionsCollapsed")).toBe(JSON.stringify(["group:g1"]));
+
+      const cancelButton = Array.from(container.querySelectorAll("#tagPickerDialog button")).find((button) => button.textContent === "Cancel") as HTMLButtonElement;
+      await act(async () => {
+        cancelButton.click();
+      });
+      await openPicker();
+      expect(heading("Colors").getAttribute("aria-expanded")).toBe("false");
+      expect(optionLabels()).toEqual(["misc3"]);
+
+      const tagInput = container.querySelector("#tagPickerDialog input") as HTMLInputElement;
+      await act(async () => {
+        const valueSetter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")?.set;
+        valueSetter?.call(tagInput, "re");
+        tagInput.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      });
+      // Search results are never hidden inside a collapsed section.
+      expect(heading("Colors").getAttribute("aria-expanded")).toBe("true");
+      expect(optionLabels()).toEqual(['Create "re"New', "red2"]);
+    } finally {
+      if (root) {
+        await act(async () => {
+          root?.unmount();
+        });
+      }
+      globalThis.window = previousWindow;
+      globalThis.document = previousDocument;
+      globalThis.Node = previousNode;
+      globalThis.HTMLElement = previousHTMLElement;
+      testGlobal.IS_REACT_ACT_ENVIRONMENT = previousIS_REACT_ACT_ENVIRONMENT;
+    }
+  });
+
   test("cancels the preview metadata picker without saving", async () => {
     const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
     const testGlobal = globalThis as typeof globalThis & {

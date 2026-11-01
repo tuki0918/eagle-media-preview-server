@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { CheckIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
+import { CheckIcon, ChevronDownIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { MetadataSuggestion } from "../metadata";
 import { showErrorToast } from "../toasts";
@@ -8,6 +8,8 @@ import { settingsDialogClassName, settingsDialogCloseClassName, settingsDialogHe
 export interface MetadataPickerDialogProps {
   /** Tags accept typed values; folders must come from the suggestion list. */
   allowCreate: boolean;
+  /** localStorage key that remembers which sections are collapsed; without it they reset on every open. */
+  collapsedStorageKey?: string;
   disabled?: boolean;
   icon: ReactNode;
   id: string;
@@ -29,6 +31,7 @@ const pickerChipClassName =
 
 export function MetadataPickerDialog({
   allowCreate,
+  collapsedStorageKey,
   disabled = false,
   icon,
   id,
@@ -51,6 +54,7 @@ export function MetadataPickerDialog({
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<MetadataSuggestion[]>([]);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [collapsedSections, setCollapsedSections] = useState(() => readCollapsedSections(collapsedStorageKey));
   const titleId = `${id}Title`;
 
   useEffect(() => {
@@ -133,6 +137,21 @@ export function MetadataPickerDialog({
   const options: MetadataSuggestion[] = createValue
     ? [{ value: createValue, label: `Create "${createValue}"`, meta: "New" }, ...suggestions]
     : suggestions;
+  const sections = optionSections(options);
+  // Searching opens every section so no match is hidden inside a collapsed one.
+  const isCollapsed = (section: OptionSection) => Boolean(section.group) && !trimmedQuery && collapsedSections.has(section.id);
+  const visibleIndices = sections.flatMap((section) => isCollapsed(section) ? [] : section.entries.map((entry) => entry.index));
+
+  const toggleSection = (section: OptionSection) => {
+    if (section.entries.some((entry) => entry.index === activeIndex)) setActiveIndex(-1);
+    setCollapsedSections((current) => {
+      const next = new Set(current);
+      if (next.has(section.id)) next.delete(section.id);
+      else next.add(section.id);
+      writeCollapsedSections(collapsedStorageKey, next);
+      return next;
+    });
+  };
 
   const toggleValue = (value: string) => {
     if (!value || disabled) return;
@@ -174,10 +193,12 @@ export function MetadataPickerDialog({
   };
 
   const moveActive = (step: number) => {
-    if (!options.length) return;
-    const nextIndex = activeIndex < 0 ? (step > 0 ? 0 : options.length - 1) : (activeIndex + step + options.length) % options.length;
+    if (!visibleIndices.length) return;
+    const position = visibleIndices.indexOf(activeIndex);
+    const nextPosition = position < 0 ? (step > 0 ? 0 : visibleIndices.length - 1) : (position + step + visibleIndices.length) % visibleIndices.length;
+    const nextIndex = visibleIndices[nextPosition];
     setActiveIndex(nextIndex);
-    listRef.current?.querySelectorAll<HTMLElement>("[role=\"option\"]")[nextIndex]?.scrollIntoView?.({ block: "nearest" });
+    listRef.current?.querySelector<HTMLElement>(`#${id}Option${nextIndex}`)?.scrollIntoView?.({ block: "nearest" });
   };
 
   const handleInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -272,8 +293,9 @@ export function MetadataPickerDialog({
         ) : null}
       </div>
       <div ref={listRef} id={`${id}Options`} className="metadata-picker-options grid min-h-0 flex-1 content-start gap-0.5 overflow-y-auto overscroll-contain p-2" role="listbox" aria-multiselectable="true" aria-label={title}>
-        {options.length ? optionSections(options).map((section) => {
-          const rows = section.entries.map(({ item, index }) => {
+        {options.length ? sections.map((section) => {
+          const collapsed = isCollapsed(section);
+          const rows = collapsed ? null : section.entries.map(({ item, index }) => {
             const isCreate = Boolean(createValue) && index === 0;
             const checked = !isCreate && draft.includes(item.value);
             return (
@@ -307,12 +329,21 @@ export function MetadataPickerDialog({
           const headingId = `${id}Group${section.entries[0].index}`;
           return (
             <div key={section.key} className="metadata-picker-group grid gap-0.5 pt-2 first:pt-0" role="group" aria-labelledby={headingId}>
-              <div id={headingId} className="metadata-picker-group-heading flex min-w-0 items-center gap-2 px-2.5 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground" role="presentation">
+              <button
+                id={headingId}
+                type="button"
+                className="metadata-picker-group-heading flex min-w-0 cursor-pointer items-center gap-2 rounded-lg border-0 bg-transparent px-2.5 pb-1 pt-1 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none"
+                aria-expanded={!collapsed}
+                aria-controls={`${headingId}Options`}
+                disabled={Boolean(trimmedQuery)}
+                onClick={() => toggleSection(section)}
+              >
+                <ChevronDownIcon className={`size-3.5 shrink-0 transition-transform duration-150 ${collapsed ? "-rotate-90" : ""}`} aria-hidden="true" />
                 {section.color ? <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: section.color }} aria-hidden="true" /> : null}
                 <span className="min-w-0 truncate">{section.group}</span>
                 <span className="font-normal tabular-nums">({section.entries.length.toLocaleString()})</span>
-              </div>
-              {rows}
+              </button>
+              {rows ? <div id={`${headingId}Options`} className="grid gap-0.5">{rows}</div> : null}
             </div>
           );
         }) : (
@@ -330,9 +361,17 @@ export function MetadataPickerDialog({
   );
 }
 
+interface OptionSection {
+  color: string;
+  entries: Array<{ index: number; item: MetadataSuggestion }>;
+  group: string;
+  id: string;
+  key: string;
+}
+
 /** Splits options into runs that share a group heading, keeping each option's index in the flat list. */
 function optionSections(options: readonly MetadataSuggestion[]) {
-  const sections: Array<{ color: string; entries: Array<{ index: number; item: MetadataSuggestion }>; group: string; id: string; key: string }> = [];
+  const sections: OptionSection[] = [];
   options.forEach((item, index) => {
     const group = item.group || "";
     // Split on the section id, not the heading, so same-named sections never merge.
@@ -342,4 +381,24 @@ function optionSections(options: readonly MetadataSuggestion[]) {
     else sections.push({ color: item.groupColor || "", entries: [{ index, item }], group, id, key: `${id}\u0000${index}` });
   });
   return sections;
+}
+
+function readCollapsedSections(storageKey: string | undefined) {
+  if (!storageKey) return new Set<string>();
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(storageKey) || "[]") as unknown;
+    return new Set(Array.isArray(saved) ? saved.filter((key): key is string => typeof key === "string") : []);
+  } catch {
+    // Keep every section open when storage is unavailable or corrupted.
+    return new Set<string>();
+  }
+}
+
+function writeCollapsedSections(storageKey: string | undefined, collapsed: ReadonlySet<string>) {
+  if (!storageKey) return;
+  try {
+    window.localStorage.setItem(storageKey, JSON.stringify([...collapsed]));
+  } catch {
+    // Ignore unavailable storage; the in-memory state still updates.
+  }
 }
