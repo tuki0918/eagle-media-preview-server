@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { folderSuggestionItems, tagSuggestionItems } from "../metadata";
+import { folderSuggestionItems, groupedTagSuggestionItems } from "../metadata";
 import { PreviewActions, PreviewDetailsPanel, PreviewInfoActions, PreviewInfoDetails } from "./PreviewInfo";
 import { detailRows, sampleFolders, sampleItems, storyPanelClassName } from "./storyFixtures";
 
@@ -32,11 +32,17 @@ export const DetailsPanel: Story = {};
 export const EditableMetadata: Story = {
   args: {
     canEditMetadata: true,
-    onTagSuggestions: (query, selectedValues) => tagSuggestionItems({
+    onTagSuggestions: (query) => groupedTagSuggestionItems({
       query,
-      selectedValues,
-      recentTags: ["landing", "reference", "bright"],
-      remoteTags: ["landing", "reference", "bright", "campaign", "social"].map((name, index) => ({ name, count: 12 - index })),
+      recentTags: ["landing", "bright"],
+      overview: {
+        tags: ["landing", "reference", "bright", "campaign", "social", "warm", "cool"].map((name, index) => ({ name, imageCount: 12 - index })),
+        starred: [{ name: "reference" }],
+        groups: [
+          { id: "mood", name: "Mood", color: "#f59e0b", tags: ["bright", "warm", "cool"] },
+          { id: "channel", name: "Channel", color: "#3b82f6", tags: ["social", "campaign"] },
+        ],
+      },
     }),
     onFolderSuggestions: (query, selectedValues) => folderSuggestionItems({ query, selectedValues, recentFolderIds: [], folders: sampleFolders }),
   },

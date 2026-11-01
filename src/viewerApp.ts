@@ -33,6 +33,7 @@ import { itemMatchesFolderFilter, itemQueryParams } from "./viewer/itemQuery";
 import { setLoginConnectState } from "./viewer/loginConnectState";
 import {
   folderSuggestionItems as buildFolderSuggestionItems,
+  groupedTagSuggestionItems,
   type MetadataSuggestion,
   type RemoteTag,
   readRecentList,
@@ -1348,6 +1349,7 @@ async function savePreviewMetadata(item: EagleItem, { tags, folders }: { tags: s
       folders: Array.isArray(data.folders) ? data.folders : folders,
     };
     rememberRecentValues(RECENT_TAGS_STORAGE_KEY, patch.tags);
+    pickerTagOverview = null;
     rememberRecentValues(RECENT_FOLDERS_STORAGE_KEY, patch.folders);
     Object.assign(item, patch);
     updateItemInState(itemId, patch);
@@ -1384,8 +1386,31 @@ function applyMetadataFolderCountChanges(
   renderSearchControlButtons();
 }
 
+// The tag picker reuses one overview per library until metadata is saved, instead of fetching per keystroke.
+let pickerTagOverview: Promise<TagOverviewResponse> | null = null;
+
+function loadPickerTagOverview() {
+  if (!pickerTagOverview) {
+    const request = getJson<TagOverviewResponse>("/api/tag-overview");
+    pickerTagOverview = request;
+    request.catch(() => {
+      if (pickerTagOverview === request) pickerTagOverview = null;
+    });
+  }
+  return pickerTagOverview;
+}
+
 function tagSuggestionItems(query: string, selectedValues: string[]): Promise<MetadataSuggestion[]> | MetadataSuggestion[] {
   const recentTags = readRecentList(RECENT_TAGS_STORAGE_KEY);
+  return loadPickerTagOverview()
+    .then((overview) => groupedTagSuggestionItems({ query, recentTags, overview }))
+    .catch((error) => {
+      if (handleAuthError(error)) return [];
+      return searchedTagSuggestionItems(query, selectedValues, recentTags);
+    });
+}
+
+function searchedTagSuggestionItems(query: string, selectedValues: string[], recentTags: string[]): Promise<MetadataSuggestion[]> | MetadataSuggestion[] {
   if (!query) {
     return buildTagSuggestionItems({ query, selectedValues, recentTags });
   }
@@ -1491,6 +1516,7 @@ async function loadTagOverview() {
 
 function resetTagList() {
   tagOverviewRequestId += 1;
+  pickerTagOverview = null;
   clearTagCovers();
   setTagListState({ error: "", overview: null, status: "idle" });
 }

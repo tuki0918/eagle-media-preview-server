@@ -3,6 +3,7 @@ import {
   dedupeSuggestions,
   folderLabel,
   folderSuggestionItems,
+  groupedTagSuggestionItems,
   matchesQuery,
   readRecentList,
   rememberRecentValues,
@@ -49,6 +50,38 @@ describe("viewer metadata helpers", () => {
     })).toEqual([
       { value: "alpha", label: "alpha", meta: "Recent" },
       { value: "alpine", label: "alpine", meta: "12" },
+    ]);
+  });
+
+  test("groups registered tag suggestions like the All tags view", () => {
+    const overview = {
+      tags: [{ name: "sky", imageCount: 4 }, { name: "red", imageCount: 2 }, { name: "blue", imageCount: 1 }, { name: "misc", imageCount: 3 }],
+      starred: [{ name: "sky" }],
+      groups: [{ id: "g1", name: "Colors", color: "#f00", tags: ["red", "blue"] }],
+    };
+
+    expect(groupedTagSuggestionItems({ query: "", recentTags: ["misc"], overview })).toEqual([
+      { value: "misc", label: "misc", meta: "3", group: "Recent", groupColor: "", groupId: "section:recent" },
+      { value: "sky", label: "sky", meta: "4", group: "Starred", groupColor: "", groupId: "section:starred" },
+      { value: "blue", label: "blue", meta: "1", group: "Colors", groupColor: "#f00", groupId: "group:g1" },
+      { value: "red", label: "red", meta: "2", group: "Colors", groupColor: "#f00", groupId: "group:g1" },
+      { value: "misc", label: "misc", meta: "3", group: "Ungrouped", groupColor: "", groupId: "section:ungrouped" },
+    ]);
+    expect(groupedTagSuggestionItems({ query: "re", recentTags: ["misc"], overview }).map((item) => [item.group, item.value])).toEqual([
+      ["Colors", "red"],
+    ]);
+  });
+
+  test("keeps a tag group named like a built-in section distinct", () => {
+    const items = groupedTagSuggestionItems({
+      query: "",
+      recentTags: ["red"],
+      overview: { tags: [{ name: "red", imageCount: 1 }], groups: [{ id: "g-recent", name: "Recent", tags: ["red"] }] },
+    });
+
+    expect(items.map((item) => [item.group, item.groupId])).toEqual([
+      ["Recent", "section:recent"],
+      ["Recent", "group:g-recent"],
     ]);
   });
 

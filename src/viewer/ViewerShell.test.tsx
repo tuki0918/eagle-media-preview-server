@@ -2066,6 +2066,81 @@ describe("ViewerAppShell", () => {
     }
   });
 
+  test("shows tag picker suggestions under their group headings", async () => {
+    const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
+    const testGlobal = globalThis as typeof globalThis & {
+      IS_REACT_ACT_ENVIRONMENT?: boolean;
+    };
+    const previousWindow = globalThis.window;
+    const previousDocument = globalThis.document;
+    const previousNode = globalThis.Node;
+    const previousHTMLElement = globalThis.HTMLElement;
+    const previousIS_REACT_ACT_ENVIRONMENT = testGlobal.IS_REACT_ACT_ENVIRONMENT;
+    globalThis.window = dom.window;
+    globalThis.document = dom.window.document;
+    globalThis.Node = dom.window.Node;
+    globalThis.HTMLElement = dom.window.HTMLElement;
+    testGlobal.IS_REACT_ACT_ENVIRONMENT = true;
+
+    const { createRoot } = await import("react-dom/client");
+    let root: import("react-dom/client").Root | null = null;
+    try {
+      const container = dom.window.document.querySelector("#root");
+      if (!(container instanceof dom.window.HTMLElement)) throw new Error("Missing test root");
+      root = createRoot(container);
+
+      await act(async () => {
+        root?.render(
+          <PreviewDetailsPanel
+            canEditMetadata
+            item={{ id: "item-1", tags: ["red"], folders: [] }}
+            folders={[]}
+            detailRows={[{ label: "Type", value: "Image" }]}
+            onTagSuggestions={async () => [
+              { value: "red", label: "red", meta: "2", group: "Recent", groupId: "section:recent" },
+              { value: "red", label: "red", meta: "2", group: "Recent", groupColor: "#0f0", groupId: "group:g-recent" },
+              { value: "red", label: "red", meta: "2", group: "Colors", groupColor: "#f00", groupId: "group:g1" },
+              { value: "blue", label: "blue", meta: "1", group: "Colors", groupColor: "#f00", groupId: "group:g1" },
+              { value: "misc", label: "misc", meta: "3", group: "Ungrouped", groupId: "section:ungrouped" },
+            ]}
+            onFolderSuggestions={() => []}
+            onSaveMetadata={async (_item, patch) => patch}
+          />,
+        );
+      });
+
+      const addTagButton = Array.from(container.querySelectorAll(".preview-metadata-add")).find((button) => button.getAttribute("aria-label") === "Add Tags");
+      if (!(addTagButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing tag add button");
+      await act(async () => {
+        addTagButton.click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      const groups = Array.from(container.querySelectorAll("#tagPickerDialog [role=\"group\"]"));
+      // A user tag group named "Recent" stays its own section after the built-in Recent section.
+      expect(groups.map((group) => group.querySelector(".metadata-picker-group-heading")?.textContent)).toEqual(["Recent(1)", "Recent(1)", "Colors(2)", "Ungrouped(1)"]);
+      expect(groups[0].querySelector(".metadata-picker-group-heading span[style]")).toBeNull();
+      expect(groups[1].querySelector(".metadata-picker-group-heading span[style]")).not.toBeNull();
+      expect(Array.from(groups[2].querySelectorAll("[role=\"option\"]")).map((option) => [option.textContent, option.getAttribute("aria-selected")])).toEqual([
+        ["red2", "true"],
+        ["blue1", "false"],
+      ]);
+      expect(groups[2].querySelector(".metadata-picker-group-heading span")?.getAttribute("style")).toContain("background-color");
+      expect(new Set(Array.from(groups, (group) => group.getAttribute("aria-labelledby"))).size).toBe(groups.length);
+    } finally {
+      if (root) {
+        await act(async () => {
+          root?.unmount();
+        });
+      }
+      globalThis.window = previousWindow;
+      globalThis.document = previousDocument;
+      globalThis.Node = previousNode;
+      globalThis.HTMLElement = previousHTMLElement;
+      testGlobal.IS_REACT_ACT_ENVIRONMENT = previousIS_REACT_ACT_ENVIRONMENT;
+    }
+  });
+
   test("cancels the preview metadata picker without saving", async () => {
     const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
     const testGlobal = globalThis as typeof globalThis & {

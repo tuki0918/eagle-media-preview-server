@@ -202,7 +202,7 @@ export function MetadataPickerDialog({
     onApply(draft);
   };
 
-  const emptyMessage = trimmedQuery ? "No matches" : allowCreate ? "Type to search or create a tag" : "No folders";
+  const emptyMessage = trimmedQuery ? "No matches" : allowCreate ? "No tags yet. Type to create one." : "No folders";
 
   return (
     <dialog
@@ -272,34 +272,48 @@ export function MetadataPickerDialog({
         ) : null}
       </div>
       <div ref={listRef} id={`${id}Options`} className="metadata-picker-options grid min-h-0 flex-1 content-start gap-0.5 overflow-y-auto overscroll-contain p-2" role="listbox" aria-multiselectable="true" aria-label={title}>
-        {options.length ? options.map((item, index) => {
-          const isCreate = Boolean(createValue) && index === 0;
-          const checked = !isCreate && draft.includes(item.value);
+        {options.length ? optionSections(options).map((section) => {
+          const rows = section.entries.map(({ item, index }) => {
+            const isCreate = Boolean(createValue) && index === 0;
+            const checked = !isCreate && draft.includes(item.value);
+            return (
+              <button
+                key={isCreate ? `create:${item.value}` : `${section.key}\u0000${item.value}`}
+                id={`${id}Option${index}`}
+                type="button"
+                role="option"
+                aria-selected={checked}
+                data-active={index === activeIndex}
+                className={pickerOptionClassName}
+                disabled={disabled}
+                style={{ paddingLeft: `${10 + Math.min(Math.max(Number(item.depth || 0), 0), 8) * 16}px` }}
+                onClick={() => {
+                  setActiveIndex(index);
+                  toggleValue(item.value);
+                  if (isCreate) clearQuery();
+                }}
+              >
+                {isCreate ? (
+                  <span className="grid size-[18px] flex-none place-items-center text-muted-foreground [&_svg]:size-4" aria-hidden="true"><PlusIcon /></span>
+                ) : (
+                  <span className={pickerCheckClassName} aria-hidden="true"><CheckIcon /></span>
+                )}
+                <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{item.label}</span>
+                {item.meta ? <span className="metadata-picker-option-meta flex-none rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">{item.meta}</span> : null}
+              </button>
+            );
+          });
+          if (!section.group) return rows;
+          const headingId = `${id}Group${section.entries[0].index}`;
           return (
-            <button
-              key={isCreate ? `create:${item.value}` : item.value}
-              id={`${id}Option${index}`}
-              type="button"
-              role="option"
-              aria-selected={checked}
-              data-active={index === activeIndex}
-              className={pickerOptionClassName}
-              disabled={disabled}
-              style={{ paddingLeft: `${10 + Math.min(Math.max(Number(item.depth || 0), 0), 8) * 16}px` }}
-              onClick={() => {
-                setActiveIndex(index);
-                toggleValue(item.value);
-                if (isCreate) clearQuery();
-              }}
-            >
-              {isCreate ? (
-                <span className="grid size-[18px] flex-none place-items-center text-muted-foreground [&_svg]:size-4" aria-hidden="true"><PlusIcon /></span>
-              ) : (
-                <span className={pickerCheckClassName} aria-hidden="true"><CheckIcon /></span>
-              )}
-              <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{item.label}</span>
-              {item.meta ? <span className="metadata-picker-option-meta flex-none rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">{item.meta}</span> : null}
-            </button>
+            <div key={section.key} className="metadata-picker-group grid gap-0.5 pt-2 first:pt-0" role="group" aria-labelledby={headingId}>
+              <div id={headingId} className="metadata-picker-group-heading flex min-w-0 items-center gap-2 px-2.5 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground" role="presentation">
+                {section.color ? <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: section.color }} aria-hidden="true" /> : null}
+                <span className="min-w-0 truncate">{section.group}</span>
+                <span className="font-normal tabular-nums">({section.entries.length.toLocaleString()})</span>
+              </div>
+              {rows}
+            </div>
           );
         }) : (
           <p className="metadata-picker-empty m-0 px-3 py-8 text-center text-sm text-muted-foreground">{emptyMessage}</p>
@@ -314,4 +328,18 @@ export function MetadataPickerDialog({
       </footer>
     </dialog>
   );
+}
+
+/** Splits options into runs that share a group heading, keeping each option's index in the flat list. */
+function optionSections(options: readonly MetadataSuggestion[]) {
+  const sections: Array<{ color: string; entries: Array<{ index: number; item: MetadataSuggestion }>; group: string; id: string; key: string }> = [];
+  options.forEach((item, index) => {
+    const group = item.group || "";
+    // Split on the section id, not the heading, so same-named sections never merge.
+    const id = item.groupId || group;
+    const last = sections[sections.length - 1];
+    if (last && last.id === id) last.entries.push({ index, item });
+    else sections.push({ color: item.groupColor || "", entries: [{ index, item }], group, id, key: `${id}\u0000${index}` });
+  });
+  return sections;
 }

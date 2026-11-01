@@ -1,5 +1,6 @@
 import { RECENT_METADATA_LIMIT } from "./constants";
 import { displayFolderCount, normalizeTag } from "./format";
+import { buildTagSections, type TagEntry, type TagOverviewResponse } from "./tagOverview";
 import type { EagleFolder } from "./types";
 
 export interface MetadataSuggestion {
@@ -8,6 +9,11 @@ export interface MetadataSuggestion {
   meta: string;
   depth?: number;
   disabled?: boolean;
+  /** Section heading the picker groups this suggestion under. */
+  group?: string;
+  groupColor?: string;
+  /** Identifies the section, so a tag group named like a built-in section (e.g. "Recent") stays separate. */
+  groupId?: string;
 }
 
 export interface RemoteTag {
@@ -42,6 +48,51 @@ export function tagSuggestionItems({
       }))
       .filter((item) => item.value && !selected.has(item.value) && matchesQuery(item.label, query)),
   ]);
+}
+
+/**
+ * Lists every registered tag in the same sections as the All tags view: recent tags (only without a
+ * query), starred tags, one section per tag group, then the ungrouped rest.
+ */
+export function groupedTagSuggestionItems({
+  query,
+  recentTags,
+  overview,
+}: {
+  query: string;
+  recentTags: readonly string[];
+  overview: TagOverviewResponse | null | undefined;
+}): MetadataSuggestion[] {
+  const sections = buildTagSections(overview, query);
+  const countByName = new Map([
+    ...sections.starred,
+    ...sections.groups.flatMap((group) => group.tags),
+    ...sections.ungrouped,
+  ].map((tag) => [tag.name, tag.count]));
+  const toItems = (tags: readonly TagEntry[], groupId: string, group: string, groupColor = "") => tags.map((tag) => ({
+    value: tag.name,
+    label: tag.name,
+    meta: tag.count.toLocaleString(),
+    group,
+    groupColor,
+    groupId,
+  }));
+  const recent = query.trim()
+    ? []
+    : recentTags.map((tag) => ({
+      value: tag,
+      label: tag,
+      meta: countByName.has(tag) ? Number(countByName.get(tag)).toLocaleString() : "",
+      group: "Recent",
+      groupColor: "",
+      groupId: "section:recent",
+    }));
+  return [
+    ...recent,
+    ...toItems(sections.starred, "section:starred", "Starred"),
+    ...sections.groups.flatMap((group) => toItems(group.tags, `group:${group.id}`, group.name, group.color)),
+    ...toItems(sections.ungrouped, "section:ungrouped", "Ungrouped"),
+  ];
 }
 
 export function folderSuggestionItems({
