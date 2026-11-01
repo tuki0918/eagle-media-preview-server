@@ -1,0 +1,33 @@
+---
+title: USE CASE 1  ·  PERSONAL  (just you, at home)
+---
+block-beta
+    accDescr: Browse your own library from the sofa or in bed while Eagle keeps running on your desk.
+    columns 3
+
+    block:desk["YOUR DESK"]
+        columns 1
+        host["HOST MACHINE<br>Eagle + Media Preview Server<br>*open: localhost:41532*"]
+        library[("EAGLE LIBRARY<br>your reference images,<br>videos and music")]
+    end
+    block:wifi["HOME WI-FI  (your devices)"]
+        columns 1
+        laptop("LAPTOP<br>open the endpoint URL<br>install as a PWA")
+        phone("PHONE<br>scan the QR code<br>background audio, PiP")
+    end
+    block:conf["SETTINGS"]
+        settings["RECOMMENDED<br>✓ Public Network<br>✓ Password protection<br>✓ HTTPS  (needed for PWA)<br>*one user: you (Admin)*"]
+    end
+
+    host -->|reads| library
+    laptop <-->|"HTTPS :41532"| host
+    phone <-->|"HTTPS :41532"| host
+
+    style desk stroke:#7fd99a
+    style wifi stroke:#7fd8e8
+    style conf stroke:#e8c86e
+    style host stroke:#7fd99a
+    style library stroke:#e8c86e
+    style laptop stroke:#7fd8e8
+    style phone stroke:#7fd8e8
+    style settings stroke:#e8c86e

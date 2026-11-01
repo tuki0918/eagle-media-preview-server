@@ -1,0 +1,30 @@
+---
+title: USE CASE 3  ·  BUSINESS  (a quick share with a teammate)
+---
+block-beta
+    accDescr: B needs nothing but a browser: no Eagle install, no copy of the files.<br>On a shared PC, B should use a private window, because media stays in the browser cache for up to one hour.
+    columns 3
+
+    block:pcA["A'S PC"]
+        columns 1
+        server["MEDIA PREVIEW SERVER<br>✓ Share only Project-X<br>✓ Password, user “b”<br>*http://192.168.1.20:41532*"]
+        eagle("EAGLE APP<br>open: Project-X.library")
+    end
+    block:pcB["B'S PC"]
+        columns 1
+        browser("BROWSER<br>B signs in as “b”<br>*Viewer: browse and preview*<br>*Editor: also rate and tag*")
+    end
+    block:how["HOW TO SHARE"]
+        steps["A, IN THE PLUGIN WINDOW<br>1. add user “b”, pick a role<br>2. share only Project-X<br>3. turn on Public Network<br>4. start, send B the URL<br>5. stop when the review ends"]
+    end
+
+    browser <-->|"office LAN<br>pages, media"| server
+    server -->|edits| eagle
+
+    style pcA stroke:#7fd99a
+    style pcB stroke:#7fd8e8
+    style how stroke:#e8c86e
+    style server stroke:#b9a0f0
+    style eagle stroke:#7fd99a
+    style browser stroke:#7fd8e8
+    style steps stroke:#e8c86e

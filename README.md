@@ -121,6 +121,28 @@ See [HTTPS and mkcert CA Operations](docs/https-mkcert.md) for setup, plugin HTT
 
 </details>
 
+## Use Cases
+
+#### Personal: browse your own library from your laptop and phone
+
+Keep Eagle running on your desk and open the library from your laptop or phone on the home Wi-Fi. Turn on **Public Network** and **Password protection**, and set up **HTTPS** if you want to install the viewer as a PWA.
+
+![Use case: personal](docs/use_case_personal.png)
+
+#### Family: a home media library on a NAS
+
+An always-on host machine opens a library stored on the NAS and serves it to the whole family. Give each person their own user and role, and use **Share only selected libraries** so your other libraries stay private.
+
+![Use case: family](docs/use_case_family.png)
+
+#### Business: a quick share with a teammate
+
+A shares one project library with B for a review, then stops the server. B only needs a browser. Eagle and a copy of the files are not required.
+
+![Use case: business](docs/use_case_business.png)
+
+Diagram sources are in [docs/use-cases](docs/use-cases).
+
 ## Architecture
 
 ![Media Preview Server overview](docs/architecture_overview.png)
