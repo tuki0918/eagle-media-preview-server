@@ -152,7 +152,7 @@ function drawOverview() {
   group(36, 24, 106, 10, "STORAGE  (drives on this computer)", "yellow", 84);
 
   box(1, 6, 30, 7, {
-    title: "BROWSER",
+    title: "BROWSER / PWA",
     color: "cyan",
     lines: ["browse, search, filter", "view, play, slideshow", "edit rating and tags", [g("(Editor or Admin only)")]],
   });
