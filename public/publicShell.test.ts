@@ -574,7 +574,7 @@ test("public UI exposes direct original file URLs for each media item", async ()
   assert.match(actions, /Open file/);
   assert.match(nonAdminActions, /Open file/);
   assert.match(nonAdminActions, /direct-file-link/);
-  assert.doesNotMatch(nonAdminActions, /preview-admin-menu-trigger/);
+  assert.match(nonAdminActions, /preview-admin-menu-trigger/);
   assert.doesNotMatch(directFileUrlSource, /connectionId/);
   assert.doesNotMatch(app, /state\.connectionId/);
   assert.doesNotMatch(app, /function withConnection\(/);
@@ -865,7 +865,7 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(html, /const previewDetailValueClassName =[\s\S]*text-right[\s\S]*text-\[13px\]/);
   assert.doesNotMatch(css, /\.preview-chip-empty/);
   assert.match(html, /className="preview-info-actions sticky bottom-0[^"]*border-t border-border bg-card/);
-  assert.match(html, /preview-admin-actions relative grid gap-2/);
+  assert.match(html, /preview-admin-actions relative grid grid-cols-\[minmax\(0,1fr\)_auto\] gap-2/);
   assert.match(html, /className="preview-metadata-input grid gap-0\.5"/);
   assert.match(html, /const previewMetadataRowClassName = "preview-metadata-row grid gap-2\.5/);
   assert.match(html, /const previewEditChipListClassName = "preview-edit-chip-list/);

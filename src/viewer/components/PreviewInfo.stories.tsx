@@ -32,6 +32,10 @@ export const Actions: Story = {
   render: () => <PreviewActions canManageLibrary item={sampleItems[0]} onToggleTrash={async () => {}} />,
 };
 
+export const ViewerActions: Story = {
+  render: () => <PreviewActions item={sampleItems[0]} onToggleTrash={async () => {}} />,
+};
+
 export const StoreBackedShells: Story = {
   render: () => (
     <div className="grid gap-4">

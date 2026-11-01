@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { EllipsisIcon, ExternalLinkIcon as LucideExternalLinkIcon, FolderIcon, LinkIcon, PlusIcon, RotateCcwIcon, TagIcon, Trash2Icon, XIcon } from "lucide-react";
+import { EllipsisIcon, ExternalLinkIcon as LucideExternalLinkIcon, FolderIcon, LinkIcon, PlusIcon, LoaderCircleIcon, RotateCcwIcon, ShareIcon, TagIcon, Trash2Icon, XIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { errorMessage } from "../api";
@@ -9,6 +9,7 @@ import { folderIds, itemTags } from "../format";
 import { uniqueValues, type MetadataSuggestion } from "../metadata";
 import { getPreviewInfoState, subscribePreviewInfoState } from "../previewInfoState";
 import { revealMetadataSuggestions } from "../revealMetadataSuggestions";
+import { errorName, fetchShareFile, shareOrDownloadFile } from "../shareFile";
 import { showErrorToast, showSuccessToast } from "../toasts";
 import type { EagleFolder, EagleItem } from "../types";
 
@@ -148,7 +149,12 @@ export function PreviewActions({ canEditMetadata = false, canManageLibrary = fal
   const actionsVisible = useSyncExternalStore(subscribeItemActionsVisible, getItemActionsVisible, getItemActionsVisible);
   const standalone = isStandaloneApp();
   const [trashSaving, setTrashSaving] = useState(false);
+  // "sharing" covers the time the OS share sheet is open, after the file has finished loading.
+  const [sharePhase, setSharePhase] = useState<"idle" | "preparing" | "sharing">("idle");
+  const [shareReady, setShareReady] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const readyFileRef = useRef<File | null>(null);
+  const fetchControllerRef = useRef<AbortController | null>(null);
   useEffect(() => {
     if (!actionsVisible) setMenuOpen(false);
   }, [actionsVisible]);
@@ -178,6 +184,54 @@ export function PreviewActions({ canEditMetadata = false, canManageLibrary = fal
     };
   }, [menuOpen]);
 
+  // Drop any in-flight file fetch once this item's actions go away (preview switched or closed).
+  useEffect(() => () => {
+    fetchControllerRef.current?.abort();
+    fetchControllerRef.current = null;
+    readyFileRef.current = null;
+  }, []);
+
+  const fetchSignal = () => {
+    if (!fetchControllerRef.current || fetchControllerRef.current.signal.aborted) {
+      fetchControllerRef.current = new AbortController();
+    }
+    return fetchControllerRef.current.signal;
+  };
+
+  const handleShare = async () => {
+    if (sharePhase !== "idle") return;
+    // A file left over from a blocked share opens the sheet straight from this fresh click.
+    const readyFile = readyFileRef.current;
+    if (readyFile) {
+      readyFileRef.current = null;
+      setShareReady(false);
+      setMenuOpen(false);
+      await shareOrDownloadFile(readyFile);
+      return;
+    }
+    // The file is fetched only after Share is picked; the menu stays open to show progress.
+    setSharePhase("preparing");
+    try {
+      const file = await fetchShareFile(item, fetchSignal());
+      setSharePhase("sharing");
+      const result = await shareOrDownloadFile(file, { retryable: true });
+      if (result === "blocked") {
+        // The fetch outlived the click's user activation, so ask for one more tap.
+        readyFileRef.current = file;
+        setShareReady(true);
+        setMenuOpen(true);
+      } else {
+        setMenuOpen(false);
+      }
+    } catch (error) {
+      if (errorName(error) === "AbortError") return;
+      setMenuOpen(false);
+      showErrorToast("Unable to share", { description: errorMessage(error) });
+    } finally {
+      setSharePhase("idle");
+    }
+  };
+
   const handleToggleTrash = async () => {
     if (trashSaving || !onToggleTrash) return;
     setMenuOpen(false);
@@ -188,13 +242,12 @@ export function PreviewActions({ canEditMetadata = false, canManageLibrary = fal
       setTrashSaving(false);
     }
   };
-  const canShowAdminMenu = canManageLibrary;
   const canToggleTrash = canManageLibrary && Boolean(onToggleTrash);
 
   if (!actionsVisible) return null;
 
   return (
-    <section ref={actionsRef} className={`preview-admin-actions relative grid gap-2 ${canShowAdminMenu ? "grid-cols-[minmax(0,1fr)_auto]" : "grid-cols-1"}`}>
+    <section ref={actionsRef} className="preview-admin-actions relative grid grid-cols-[minmax(0,1fr)_auto] gap-2">
       {standalone ? (
         <Button type="button" disabled className={directFileLinkClassName}>
           <ExternalLinkIcon />
@@ -208,51 +261,60 @@ export function PreviewActions({ canEditMetadata = false, canManageLibrary = fal
           </a>
         </Button>
       )}
-      {canShowAdminMenu ? (
-        <>
-          <Button
+      <Button
+        type="button"
+        variant="outline"
+        size="icon-lg"
+        className={adminMenuTriggerClassName}
+        aria-label="More actions"
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        aria-controls="previewAdminMenu"
+        title="More actions"
+        disabled={trashSaving}
+        onClick={(event) => {
+          event.stopPropagation();
+          setMenuOpen((open) => !open);
+        }}
+      >
+        <EllipsisIcon aria-hidden="true" />
+      </Button>
+      {menuOpen ? (
+        <div
+          ref={menuRef}
+          id="previewAdminMenu"
+          role="menu"
+          className="absolute bottom-full right-0 z-50 mb-2 min-w-48 rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-lg"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <button
             type="button"
-            variant="outline"
-            size="icon-lg"
-            className={adminMenuTriggerClassName}
-            aria-label="More admin actions"
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            aria-controls="previewAdminMenu"
-            title="More admin actions"
-            disabled={trashSaving}
-            onClick={(event) => {
-              event.stopPropagation();
-              setMenuOpen((open) => !open);
+            role="menuitem"
+            className="preview-share-action relative flex w-full cursor-default items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm outline-hidden select-none hover:bg-muted disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0"
+            disabled={sharePhase !== "idle"}
+            aria-busy={sharePhase === "preparing"}
+            onClick={() => {
+              void handleShare();
             }}
           >
-            <EllipsisIcon aria-hidden="true" />
-          </Button>
-          {menuOpen ? (
-            <div
-              ref={menuRef}
-              id="previewAdminMenu"
-              role="menu"
-              className="absolute bottom-full right-0 z-50 mb-2 min-w-48 rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-lg"
-              onClick={(event) => event.stopPropagation()}
+            {sharePhase === "preparing" ? <LoaderCircleIcon aria-hidden="true" className="animate-spin" /> : <ShareIcon aria-hidden="true" />}
+            <span>{sharePhase === "preparing" ? "Preparing…" : sharePhase === "sharing" ? "Sharing…" : shareReady ? "Tap to share" : "Share"}</span>
+          </button>
+          {canToggleTrash ? (
+            <button
+              type="button"
+              role="menuitem"
+              className="preview-trash-action relative flex w-full cursor-default items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-destructive outline-hidden select-none hover:bg-destructive/10 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0"
+              disabled={trashSaving}
+              onClick={() => {
+                void handleToggleTrash();
+              }}
             >
-              {canToggleTrash ? (
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="preview-trash-action relative flex w-full cursor-default items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-destructive outline-hidden select-none hover:bg-destructive/10 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0"
-                  disabled={trashSaving}
-                  onClick={() => {
-                    void handleToggleTrash();
-                  }}
-                >
-                  {item.isDeleted ? <RotateCcwIcon aria-hidden="true" /> : <Trash2Icon aria-hidden="true" />}
-                  <span>{trashSaving ? "Saving" : trashLabel}</span>
-                </button>
-              ) : null}
-            </div>
+              {item.isDeleted ? <RotateCcwIcon aria-hidden="true" /> : <Trash2Icon aria-hidden="true" />}
+              <span>{trashSaving ? "Saving" : trashLabel}</span>
+            </button>
           ) : null}
-        </>
+        </div>
       ) : null}
     </section>
   );

@@ -43,6 +43,6 @@ test.each([[true, false], [false, true]])("standalone apps disable direct file v
   const adminHtml = renderToStaticMarkup(<PreviewActions canManageLibrary item={{ id: "item 1" }} />);
   expect(adminHtml).toMatch(/<button[^>]*disabled=""/);
   expect(adminHtml).toContain("Open file");
-  expect(adminHtml).toContain("More admin actions");
-  expect(adminHtml).toMatch(/<button(?![^>]*\sdisabled=)[^>]*aria-label="More admin actions"/);
+  expect(adminHtml).toContain("More actions");
+  expect(adminHtml).toMatch(/<button(?![^>]*\sdisabled=)[^>]*aria-label="More actions"/);
 });

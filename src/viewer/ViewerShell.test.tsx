@@ -1730,21 +1730,25 @@ describe("ViewerAppShell", () => {
     expect(actions).toContain("direct-file-link");
     expect(actions).toContain("preview-info-cta");
     expect(actions).toContain("preview-admin-menu-trigger");
-    expect(actions).toContain("More admin actions");
+    expect(actions).toContain("More actions");
     expect(actions).toContain("lucide-ellipsis");
     expect(actions).not.toContain("Move to trash");
     expect(deletedActions).toContain("preview-admin-menu-trigger");
     expect(editorActions).toContain("Open file");
     expect(editorActions).toContain("direct-file-link");
-    expect(editorActions).not.toContain("preview-admin-menu-trigger");
+    expect(editorActions).toContain("preview-admin-menu-trigger");
     expect(editorActions).not.toContain("Move to trash");
     expect(nonAdminActions).toContain("Open file");
     expect(nonAdminActions).toContain("direct-file-link");
-    expect(nonAdminActions).not.toContain("preview-admin-menu-trigger");
-    expect(nonAdminActions).not.toContain("previewAdminMenu");
+    expect(nonAdminActions).toContain("preview-admin-menu-trigger");
+    expect(nonAdminActions).not.toContain(`id="previewAdminMenu"`);
   });
 
-  test("opens preview admin actions menu from the ellipsis button", async () => {
+  test.each([
+    { role: "admin", canManageLibrary: true, trashVisible: true },
+    { role: "editor", canManageLibrary: false, trashVisible: false },
+    { role: "viewer", canManageLibrary: false, trashVisible: false },
+  ])("opens preview actions menu from the ellipsis button for $role", async ({ canManageLibrary, trashVisible }) => {
     const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
     const testGlobal = globalThis as typeof globalThis & {
       IS_REACT_ACT_ENVIRONMENT?: boolean;
@@ -1768,7 +1772,7 @@ describe("ViewerAppShell", () => {
       root = createRoot(container);
 
       await act(async () => {
-        root?.render(<PreviewActions canManageLibrary item={{ id: "item-1" }} onToggleTrash={async () => {}} />);
+        root?.render(<PreviewActions canManageLibrary={canManageLibrary} item={{ id: "item-1" }} onToggleTrash={async () => {}} />);
       });
 
       const menuButton = container.querySelector(".preview-admin-menu-trigger");
@@ -1781,11 +1785,158 @@ describe("ViewerAppShell", () => {
       const menu = container.querySelector("#previewAdminMenu");
       expect(menu).not.toBeNull();
       expect(menu?.getAttribute("role")).toBe("menu");
-      expect(menu?.textContent).toContain("Move to trash");
+      expect(menu?.textContent).toContain("Share");
+      const shareButton = menu?.querySelector(".preview-share-action");
+      if (!(shareButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing share action");
+      expect(shareButton.disabled).toBe(false);
+      if (trashVisible) {
+        expect(menu?.textContent).toContain("Move to trash");
+      } else {
+        expect(menu?.querySelector(".preview-trash-action")).toBeNull();
+      }
     } finally {
       await act(async () => {
         root?.unmount();
       });
+      globalThis.window = previousWindow;
+      globalThis.document = previousDocument;
+      globalThis.Node = previousNode;
+      globalThis.HTMLElement = previousHTMLElement;
+      testGlobal.IS_REACT_ACT_ENVIRONMENT = previousIS_REACT_ACT_ENVIRONMENT;
+      dom.window.close();
+    }
+  });
+
+  test("fetches the share file only after Share is clicked and aborts it on unmount", async () => {
+    const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
+    const testGlobal = globalThis as typeof globalThis & {
+      IS_REACT_ACT_ENVIRONMENT?: boolean;
+    };
+    const previousWindow = globalThis.window;
+    const previousDocument = globalThis.document;
+    const previousNode = globalThis.Node;
+    const previousHTMLElement = globalThis.HTMLElement;
+    const previousIS_REACT_ACT_ENVIRONMENT = testGlobal.IS_REACT_ACT_ENVIRONMENT;
+    globalThis.window = dom.window;
+    globalThis.document = dom.window.document;
+    globalThis.Node = dom.window.Node;
+    globalThis.HTMLElement = dom.window.HTMLElement;
+    testGlobal.IS_REACT_ACT_ENVIRONMENT = true;
+    const signals: AbortSignal[] = [];
+    vi.stubGlobal("fetch", vi.fn((_url: string, init?: RequestInit) => {
+      if (init?.signal) signals.push(init.signal);
+      return new Promise<Response>(() => {});
+    }));
+
+    const { createRoot } = await import("react-dom/client");
+    let root: import("react-dom/client").Root | null = null;
+    try {
+      const container = dom.window.document.querySelector("#root");
+      if (!(container instanceof dom.window.HTMLElement)) throw new Error("Missing test root");
+      root = createRoot(container);
+
+      await act(async () => {
+        root?.render(<PreviewActions item={{ id: "item-1", size: 1024 }} />);
+      });
+      const menuButton = container.querySelector(".preview-admin-menu-trigger");
+      if (!(menuButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing actions menu button");
+      await act(async () => {
+        menuButton.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+      });
+
+      expect(signals).toHaveLength(0);
+
+      const shareButton = container.querySelector(".preview-share-action");
+      if (!(shareButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing share action");
+      await act(async () => {
+        shareButton.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+      });
+
+      expect(signals).toHaveLength(1);
+      expect(signals[0].aborted).toBe(false);
+      expect(container.querySelector("#previewAdminMenu")).not.toBeNull();
+      expect(shareButton.disabled).toBe(true);
+      expect(shareButton.getAttribute("aria-busy")).toBe("true");
+      expect(shareButton.textContent).toContain("Preparing…");
+
+      await act(async () => {
+        root?.unmount();
+      });
+      root = null;
+      expect(signals[0].aborted).toBe(true);
+    } finally {
+      await act(async () => {
+        root?.unmount();
+      });
+      vi.unstubAllGlobals();
+      globalThis.window = previousWindow;
+      globalThis.document = previousDocument;
+      globalThis.Node = previousNode;
+      globalThis.HTMLElement = previousHTMLElement;
+      testGlobal.IS_REACT_ACT_ENVIRONMENT = previousIS_REACT_ACT_ENVIRONMENT;
+      dom.window.close();
+    }
+  });
+
+  test("switches the share label from Preparing to Sharing once the file is loaded", async () => {
+    const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
+    const testGlobal = globalThis as typeof globalThis & {
+      IS_REACT_ACT_ENVIRONMENT?: boolean;
+    };
+    const previousWindow = globalThis.window;
+    const previousDocument = globalThis.document;
+    const previousNode = globalThis.Node;
+    const previousHTMLElement = globalThis.HTMLElement;
+    const previousIS_REACT_ACT_ENVIRONMENT = testGlobal.IS_REACT_ACT_ENVIRONMENT;
+    globalThis.window = dom.window;
+    globalThis.document = dom.window.document;
+    globalThis.Node = dom.window.Node;
+    globalThis.HTMLElement = dom.window.HTMLElement;
+    testGlobal.IS_REACT_ACT_ENVIRONMENT = true;
+    let resolveFetch: (response: Response) => void = () => {};
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>((resolve) => {
+      resolveFetch = resolve;
+    })));
+    // The share sheet stays open until the user dismisses it, so share() never settles here.
+    const share = vi.fn(() => new Promise<void>(() => {}));
+    vi.stubGlobal("navigator", { share, canShare: () => true });
+
+    const { createRoot } = await import("react-dom/client");
+    let root: import("react-dom/client").Root | null = null;
+    try {
+      const container = dom.window.document.querySelector("#root");
+      if (!(container instanceof dom.window.HTMLElement)) throw new Error("Missing test root");
+      root = createRoot(container);
+
+      await act(async () => {
+        root?.render(<PreviewActions item={{ id: "item-1", name: "photo", ext: "png" }} />);
+      });
+      const menuButton = container.querySelector(".preview-admin-menu-trigger");
+      if (!(menuButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing actions menu button");
+      await act(async () => {
+        menuButton.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+      });
+      const shareButton = container.querySelector(".preview-share-action");
+      if (!(shareButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing share action");
+      await act(async () => {
+        shareButton.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+      });
+      expect(shareButton.textContent).toContain("Preparing…");
+
+      await act(async () => {
+        resolveFetch(new Response(new Blob(["x"], { type: "image/png" })));
+      });
+
+      expect(share).toHaveBeenCalledOnce();
+      expect(shareButton.textContent).toContain("Sharing…");
+      expect(shareButton.textContent).not.toContain("Preparing…");
+      expect(shareButton.getAttribute("aria-busy")).toBe("false");
+      expect(shareButton.querySelector(".animate-spin")).toBeNull();
+    } finally {
+      await act(async () => {
+        root?.unmount();
+      });
+      vi.unstubAllGlobals();
       globalThis.window = previousWindow;
       globalThis.document = previousDocument;
       globalThis.Node = previousNode;
