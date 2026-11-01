@@ -17,6 +17,8 @@ beforeEach(async () => {
   dom = new JSDOM('<!doctype html><div id="root"></div>', { url: "https://library.local/" });
   vi.stubGlobal("window", dom.window);
   vi.stubGlobal("document", dom.window.document);
+  // react-dom reads navigator once window exists; Node 20 (CI) has no global one.
+  vi.stubGlobal("navigator", dom.window.navigator);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   desktopMatches = true;
   listeners = new Set();
