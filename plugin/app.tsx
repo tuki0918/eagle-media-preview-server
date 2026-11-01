@@ -44,7 +44,9 @@ declare global {
   var eagle: EagleRuntime | undefined;
 }
 
-const busyStoppedFrames = Object.freeze([".", "..", "...", "....", "....."]);
+type BusyAction = "restarting" | "starting" | "stopping";
+
+const busyActionLabels = Object.freeze({ restarting: "Restarting", starting: "Starting", stopping: "Stopping" });
 const AUTH_PASSWORD_REQUIRED_MESSAGE = "Enter a password for every user before enabling password protection.";
 const HTTPS_CERTIFICATE_REQUIRED_MESSAGE = "Enter certificate and key paths before enabling HTTPS.";
 const PUBLIC_NETWORK_WITHOUT_PASSWORD_MESSAGE = "Public Network is enabled and password protection is off. Anyone on this network may be able to access the viewer. Start the server anyway?";
@@ -54,7 +56,7 @@ const HTTPS_DOCS_URL = "https://github.com/tuki0918/eagle-media-preview-server/b
 function App() {
   const managerRef = useRef<ServerManager | null>(null);
   const [busy, setBusy] = useState(false);
-  const [busyFrame, setBusyFrame] = useState(0);
+  const [busyAction, setBusyAction] = useState<BusyAction | null>(null);
   const [message, setMessageState] = useState("");
   const [messageIsError, setMessageIsError] = useState(false);
   const [urlCopied, setUrlCopied] = useState(false);
@@ -87,8 +89,7 @@ function App() {
   const settings = status.settings || {};
   const formDisabled = busy || !managerRef.current;
   const settingsInputDisabled = formDisabled || serverState === "running";
-  const restartingStopped = busy && serverState === "stopped";
-  const statusLabel = restartingStopped ? busyStoppedFrames[busyFrame] : titleCase(serverState);
+  const statusLabel = busy && busyAction ? busyActionLabels[busyAction] : titleCase(serverState);
   const authEnabled = Boolean(settings.authEnabled);
   const authUsers = normalizedAuthUsers(settings);
   const httpsEnabled = Boolean(settings.httpsEnabled);
@@ -139,17 +140,9 @@ function App() {
     return () => window.clearTimeout(timer);
   }, [urlCopied]);
 
-  useEffect(() => {
-    if (!busy) return;
-    const timer = window.setInterval(() => {
-      setBusyFrame((current) => (current + 1) % busyStoppedFrames.length);
-    }, 650);
-    return () => window.clearInterval(timer);
-  }, [busy]);
-
-  async function runCommand(command: () => Promise<PluginStatus> | PluginStatus | null | undefined, { quiet = false } = {}) {
+  async function runCommand(command: () => Promise<PluginStatus> | PluginStatus | null | undefined, { action = null, quiet = false }: { action?: BusyAction | null; quiet?: boolean } = {}) {
     setBusy(true);
-    setBusyFrame(0);
+    setBusyAction(action);
     try {
       const nextStatus = await command();
       if (nextStatus) setStatus(nextStatus);
@@ -164,6 +157,7 @@ function App() {
       return false;
     } finally {
       setBusy(false);
+      setBusyAction(null);
     }
   }
 
@@ -213,10 +207,11 @@ function App() {
 
     if (restartRunning) {
       const previousStatus = status;
-      if (willRestartServer(status, payload)) {
+      const restarting = willRestartServer(status, payload);
+      if (restarting) {
         setStatus((current) => ({ ...current, state: "stopped" }));
       }
-      const saved = await runCommand(() => managerRef.current?.saveSettings(payload), { quiet: true });
+      const saved = await runCommand(() => managerRef.current?.saveSettings(payload), { action: restarting ? "restarting" : null, quiet: true });
       if (!saved) setStatus(previousStatus);
       if (saved && hasUserPasswords) clearUserPasswordDrafts();
       if (saved) setMessage(successMessage);
@@ -341,9 +336,9 @@ function App() {
       if (!confirmUnsafePublicStart()) return;
       const saved = await saveSettings({ restartRunning: false });
       if (!saved) return;
-      await runCommand(() => managerRef.current?.start());
+      await runCommand(() => managerRef.current?.start(), { action: "starting" });
     } else {
-      await runCommand(() => managerRef.current?.stop());
+      await runCommand(() => managerRef.current?.stop(), { action: "stopping" });
     }
   }
 
@@ -469,6 +464,7 @@ function App() {
           serverState={serverState}
           settings={settings}
           statusLabel={statusLabel}
+          statusPending={busy && busyAction !== null}
           url={status.url || ""}
           urlCopied={urlCopied}
           settingsLocked={serverState === "running"}

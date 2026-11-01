@@ -289,6 +289,37 @@ test("createViewerServer starts and stops without the CLI entrypoint", async () 
   assert.equal(viewer.status().state, "stopped");
 });
 
+test("createViewerServer stops even while a request is still in flight", async () => {
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/tmp/A.library", name: "A" };
+      },
+      // Stands in for a long media stream or a stuck Eagle call that never answers.
+      folders: () => new Promise(() => {}),
+    },
+  });
+
+  await viewer.start();
+  const origin = `http://127.0.0.1:${viewer.status().port}`;
+  const pending = fetch(`${origin}/api/folders`).catch((error: unknown) => error);
+  // Keep-alive sockets that are idle must not hold the stop either.
+  await fetch(`${origin}/api/health`).then((response) => response.text());
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  const startedAt = Date.now();
+  await viewer.stop();
+
+  assert.equal(viewer.status().state, "stopped");
+  assert.ok(Date.now() - startedAt < 3000, "stop() should not wait for open connections");
+  assert.ok(await pending instanceof Error);
+});
+
 test("createViewerServer exposes smart folders and smart folder items", async () => {
   const calls: unknown[] = [];
   const viewer = createViewerServer({

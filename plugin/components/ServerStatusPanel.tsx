@@ -13,6 +13,8 @@ interface ServerStatusPanelProps {
     autoStart?: boolean;
   };
   statusLabel: string;
+  /** A start/stop/restart is in flight; the badge shows its label instead of the settled state. */
+  statusPending?: boolean;
   url: string;
   urlCopied?: boolean;
   settingsLocked?: boolean;
@@ -35,6 +37,7 @@ export function ServerStatusPanel({
   serverState,
   settings,
   statusLabel,
+  statusPending = false,
   url,
   urlCopied = false,
   settingsLocked = false,
@@ -58,7 +61,7 @@ export function ServerStatusPanel({
           </p>
         </div>
         <div className="inline-flex shrink-0 items-center gap-2.5">
-          <StatusBadge state={serverState} label={statusLabel} />
+          <StatusBadge state={serverState} label={statusLabel} pending={statusPending} />
           <PowerSwitch checked={running} disabled={formDisabled} onChange={onServerPowerChange} />
         </div>
       </div>
@@ -144,12 +147,14 @@ function SectionHeading({ children, icon }: { children: ReactNode; icon: ReactNo
   );
 }
 
-function StatusBadge({ label, state }: { label: string; state: ServerState }) {
-  const palette = {
-    error: "bg-[#fef2f2] text-[#b42318] [&>span]:bg-[#d92d20]",
-    running: "bg-[#e9f9ee] text-[#16803a] [&>span]:bg-[#34c759] [&>span]:shadow-[0_0_0_3px_rgba(52,199,89,0.2)]",
-    stopped: "bg-[#f1f2f4] text-[#626975] [&>span]:bg-[#9aa2ae]",
-  }[state];
+function StatusBadge({ label, pending = false, state }: { label: string; pending?: boolean; state: ServerState }) {
+  const palette = pending
+    ? "bg-[#fff7e6] text-[#a15c00] [&>span]:bg-[#f5a524] [&>span]:animate-pulse"
+    : {
+      error: "bg-[#fef2f2] text-[#b42318] [&>span]:bg-[#d92d20]",
+      running: "bg-[#e9f9ee] text-[#16803a] [&>span]:bg-[#34c759] [&>span]:shadow-[0_0_0_3px_rgba(52,199,89,0.2)]",
+      stopped: "bg-[#f1f2f4] text-[#626975] [&>span]:bg-[#9aa2ae]",
+    }[state];
   return (
     <span className={`inline-flex min-h-7 min-w-[86px] items-center justify-center gap-1.5 rounded-full px-3 text-[12px] font-semibold ${palette}`}>
       <span className="h-2 w-2 rounded-full" />

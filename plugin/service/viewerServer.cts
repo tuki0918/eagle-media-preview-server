@@ -30,7 +30,7 @@ const {
 } = require("./auth.cjs");
 
 import type { IncomingMessage, RequestListener, ServerResponse } from "http";
-import type { Server as NetServer } from "net";
+import type { Server as NetServer, Socket } from "net";
 
 interface ViewerServerOptions {
   customDomain?: string;
@@ -168,6 +168,8 @@ interface ApiContext {
 
 const defaultPublicDir = resolveDefaultPublicDir();
 const MAX_JSON_BODY_BYTES = 1024 * 1024;
+// In-flight requests get this long to finish after stop() before their sockets are destroyed.
+const STOP_GRACE_MS = 1000;
 const DEFAULT_ITEMS_LIMIT = 30;
 const MAX_ITEMS_LIMIT = 1000;
 const MAX_ITEMS_OFFSET = 1000000;
@@ -363,6 +365,12 @@ function createViewerServer({
       sendJson(res, status, { error: errorMessage(error) || "Internal server error", ...code });
     }
   });
+  const openSockets = new Set<Socket>();
+  // The raw TCP socket is reported for both HTTP and HTTPS, so destroying it also ends TLS sessions.
+  server.on("connection", (socket: Socket) => {
+    openSockets.add(socket);
+    socket.once("close", () => openSockets.delete(socket));
+  });
 
   return {
     async start() {
@@ -397,12 +405,23 @@ function createViewerServer({
       }
       state = "stopping";
       const closingServer = serverInstance;
-      await new Promise<void>((resolveStop, rejectStop) => {
+      // close() only stops accepting; it waits for every open socket, so keep-alive connections
+      // and long media streams would keep stop() pending until the browser lets go.
+      const closed = new Promise<void>((resolveStop, rejectStop) => {
         closingServer.close((error?: Error) => {
           if (error) rejectStop(error);
           else resolveStop();
         });
       });
+      closeIdleSockets(closingServer);
+      const forceTimer = setTimeout(() => {
+        for (const socket of openSockets) socket.destroy();
+      }, STOP_GRACE_MS);
+      try {
+        await closed;
+      } finally {
+        clearTimeout(forceTimer);
+      }
       serverInstance = null;
       boundAddress = "";
       boundPort = 0;
@@ -461,6 +480,11 @@ type LibraryPin = "none" | "required";
 function libraryPinFor(pathname: string): LibraryPin {
   if (pathname === "/api/connect" || pathname === "/api/health") return "none";
   return "required";
+}
+
+// Node 18.2+ can drop keep-alive sockets that have no request in flight right away.
+function closeIdleSockets(server: NetServer) {
+  (server as NetServer & { closeIdleConnections?: () => void }).closeIdleConnections?.();
 }
 
 function createProtocolServer({ httpsCertPath = "", httpsEnabled = false, httpsKeyPath = "" }: {

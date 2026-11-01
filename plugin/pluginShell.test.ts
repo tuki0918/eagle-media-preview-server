@@ -1225,14 +1225,15 @@ test("plugin app resolves CommonJS runtime from the plugin file location", async
   assert.doesNotMatch(app, /pluginRequirePath\("vendor\/qrcode-generator\.cjs"\)/);
 });
 
-test("plugin app animates the stopped status text while a restart is busy", async () => {
+test("plugin app labels the status badge with the in-flight server action", async () => {
   const app = await readPluginAppSource();
 
-  assert.match(app, /const busyStoppedFrames = Object\.freeze\(\["\.", "\.\.", "\.\.\.", "\.\.\.\.", "\.\.\.\.\."\]\);/);
-  assert.match(app, /const \[busyFrame, setBusyFrame\] = useState\(0\);/);
-  assert.match(app, /window\.setInterval\(\(\) => \{/);
-  assert.match(app, /busyStoppedFrames\[busyFrame\]/);
-  assert.doesNotMatch(app, /Stopped\.\.\./);
+  assert.match(app, /const busyActionLabels = Object\.freeze\(\{ restarting: "Restarting", starting: "Starting", stopping: "Stopping" \}\);/);
+  assert.match(app, /busy && busyAction \? busyActionLabels\[busyAction\]/);
+  assert.match(app, /managerRef\.current\?\.start\(\), \{ action: "starting" \}/);
+  assert.match(app, /managerRef\.current\?\.stop\(\), \{ action: "stopping" \}/);
+  assert.match(app, /action: restarting \? "restarting" : null/);
+  assert.doesNotMatch(app, /busyStoppedFrames/);
 });
 
 test("plugin app restores status when a restart settings save fails", async () => {

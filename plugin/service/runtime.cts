@@ -590,8 +590,14 @@ function createServerManager({
 
     async stop() {
       if (viewer) {
-        await viewer.stop();
+        // A failed close must not leave the old viewer behind, or the next start would reuse it.
+        const stopping = viewer;
         viewer = null;
+        try {
+          await stopping.stop();
+        } finally {
+          stateOverride = "stopped";
+        }
       }
       stateOverride = "stopped";
       lastError = "";
