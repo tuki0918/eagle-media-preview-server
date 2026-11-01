@@ -423,7 +423,8 @@ describe("ViewerAppShell", () => {
     expect(html).toContain('id="authUserLabel"');
     expect(html).toContain('id="authRoleLabel"');
     expect(html).toContain('aria-haspopup="menu"');
-    expect(html).toMatch(/id="authAvatarFallback"[^>]*>E</);
+    // The header shows a 16px UserRound line icon (like the nav rows) rather than the account's initial.
+    expect(html).toMatch(/class="lucide lucide-user-round size-4[^"]*"[^>]*id="authAvatarIcon"|id="authAvatarIcon"[^>]*class="lucide lucide-user-round size-4/);
     expect(html).toMatch(/id="eagleStatusDot"[^>]*data-status="checking"/);
 
     setEagleStatus("online");
@@ -738,6 +739,9 @@ describe("ViewerAppShell", () => {
       });
 
       expect(container.querySelector("#themeModeGroup")).toBeNull();
+      // The open menu uses the same UserRound icon as the header, not an initial avatar.
+      expect(container.querySelector("#authAccountMenu svg.lucide-user-round")).not.toBeNull();
+      expect(container.querySelector('#authAccountMenu [data-slot="avatar"]')).toBeNull();
       const preferences = container.querySelector<HTMLButtonElement>('#authAccountMenu [aria-controls="preferencesDialog"]')!;
       expect(preferences.textContent).toBe("Preferences");
       expect(preferences.querySelector("svg")).not.toBeNull();

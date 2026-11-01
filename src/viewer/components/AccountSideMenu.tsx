@@ -21,7 +21,6 @@ import {
 } from "lucide-react";
 import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { settingsDialogClassName, settingsDialogCloseClassName, settingsDialogHeaderClassName, settingsDialogTitleClassName } from "./settingsDialogStyles";
 import appIconUrl from "../../assets/app_icon.svg";
@@ -911,16 +910,16 @@ function EagleStatusDot({ status }: { status: EagleStatus }) {
   );
 }
 
-function AccountAvatar({ id, large = false, signedIn, username }: { id?: string; large?: boolean; signedIn: boolean; username: string | undefined }) {
-  const initial = signedIn ? (username || "").trim().slice(0, 1).toUpperCase() : "";
-  const sizeClassName = large ? "size-10 text-base" : "size-8 text-sm";
-  return (
-    <Avatar className={`${sizeClassName} rounded-full`}>
-      <AvatarFallback id={id} className={`rounded-full font-semibold ${signedIn ? "bg-foreground text-background" : "bg-sidebar-accent text-muted-foreground"}`}>
-        {initial || <UserRoundIcon className="size-4" aria-hidden="true" />}
-      </AvatarFallback>
-    </Avatar>
-  );
+// Account icon for the header button and the open menu: a frameless line icon sized like its
+// neighbours (16px nav icons in the header, the name text in the menu) so it never outweighs them.
+// In the header it is kept lighter than body text (a guest lighter still, since the shape is the same
+// for both); in the menu it takes the text color like the Preferences and Sign out icons.
+function AccountIcon({ id, large = false, signedIn }: { id?: string; large?: boolean; signedIn: boolean }) {
+  if (large) return <UserRoundIcon id={id} className="size-5 shrink-0" aria-hidden="true" />;
+  const colorClassName = signedIn
+    ? "text-muted-foreground"
+    : "text-[color-mix(in_srgb,var(--muted-foreground)_60%,transparent)]";
+  return <UserRoundIcon id={id} className={`size-4 shrink-0 ${colorClassName}`} aria-hidden="true" />;
 }
 
 const folderTreeDepthClasses = [
@@ -1101,7 +1100,7 @@ function AccountDropdown({
         <button
           id="authAccountLabel"
           type="button"
-          className="flex size-10 items-center justify-center rounded-full outline-hidden transition-colors hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring aria-expanded:bg-sidebar-accent"
+          className="flex size-10 items-center justify-center rounded-full outline-hidden transition-colors hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring aria-expanded:bg-sidebar-accent [&>svg]:transition-colors hover:[&>svg]:text-sidebar-foreground"
           aria-label={statusLabel}
           aria-haspopup="menu"
           aria-expanded={open}
@@ -1112,7 +1111,8 @@ function AccountDropdown({
             setOpen((current) => !current);
           }}
         >
-          <AccountAvatar id="authAvatarFallback" signedIn={signedIn} username={username} />
+          {/* A line icon like the rest of the header; the circle comes from the icon, not a filled avatar. */}
+          <AccountIcon id="authAvatarIcon" signedIn={signedIn} />
           <span id="authUserLabel" className="sr-only">{displayUsername}</span>
           <span id="authRoleLabel" className="sr-only">{displayRole}</span>
         </button>
@@ -1131,9 +1131,9 @@ function AccountDropdown({
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center gap-3 px-2 pb-2.5 pt-2 text-left text-sm">
-              <AccountAvatar signedIn={signedIn} username={username} large />
+              <AccountIcon signedIn={signedIn} large />
               <div className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left text-sm leading-tight">
-                <span className="min-w-0 truncate font-semibold">{displayUsername}</span>
+                <span className="min-w-0 truncate">{displayUsername}</span>
                 <RoleChip description={roleDescription} label={displayRole} />
               </div>
             </div>
