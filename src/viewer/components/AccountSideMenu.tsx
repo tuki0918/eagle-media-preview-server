@@ -2,7 +2,6 @@ import {
   CheckIcon,
   ChevronDownIcon,
   ChevronRightIcon,
-  ChevronsUpDownIcon,
   FolderCogIcon,
   FolderIcon,
   FolderOpenIcon,
@@ -110,8 +109,8 @@ export function AccountSideMenu() {
           clearFolderFilter();
         }}
       >
-        <SidebarHeader className="justify-center p-3 pb-1 pt-[calc(14px+env(safe-area-inset-top))]">
-          <SidebarMenu>
+        <SidebarHeader className="flex-row items-center gap-1 p-3 pb-1 pt-[calc(14px+env(safe-area-inset-top))]">
+          <SidebarMenu className="flex-1">
             <SidebarMenuItem>
               <SidebarMenuButton
                 asChild
@@ -144,6 +143,27 @@ export function AccountSideMenu() {
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
+          {signedIn ? (
+            <AccountDropdown
+              onOpenPreferences={() => setPreferencesOpen(true)}
+              disabled={loginState.disabled}
+              roleDescription={roleDescription}
+              roleLabel={roleLabel}
+              signedIn
+              statusLabel={accountStatusLabel || accountLabel || "Account"}
+              username={username}
+            />
+          ) : (
+            <AccountDropdown
+              onOpenPreferences={() => setPreferencesOpen(true)}
+              disabled={loginState.disabled}
+              roleDescription=""
+              roleLabel={GUEST_ROLE_LABEL}
+              signedIn={false}
+              statusLabel={`${GUEST_USERNAME} - ${GUEST_ROLE_LABEL}`}
+              username={GUEST_USERNAME}
+            />
+          )}
         </SidebarHeader>
 
         <SidebarContent className="overflow-hidden">
@@ -177,7 +197,7 @@ export function AccountSideMenu() {
           </FolderNavigationScrollArea>
         </SidebarContent>
 
-        <SidebarFooter className="p-2">
+        <SidebarFooter className="p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
           <form
             ref={folderFilterFormRef}
             className="relative mx-1 mb-1 group-data-[collapsible=icon]:hidden"
@@ -213,27 +233,6 @@ export function AccountSideMenu() {
               </button>
             ) : null}
           </form>
-          {signedIn ? (
-            <AccountDropdown
-              onOpenPreferences={() => setPreferencesOpen(true)}
-              disabled={loginState.disabled}
-              roleDescription={roleDescription}
-              roleLabel={roleLabel}
-              signedIn
-              statusLabel={accountStatusLabel || accountLabel || "Account"}
-              username={username}
-            />
-          ) : (
-            <AccountDropdown
-              onOpenPreferences={() => setPreferencesOpen(true)}
-              disabled={loginState.disabled}
-              roleDescription=""
-              roleLabel={GUEST_ROLE_LABEL}
-              signedIn={false}
-              statusLabel={`${GUEST_USERNAME} - ${GUEST_ROLE_LABEL}`}
-              username={GUEST_USERNAME}
-            />
-          )}
           {signedIn && authError ? (
             <p id="authFooterMessage" className="m-0 rounded-md bg-destructive/10 px-2.5 py-2 text-xs leading-[1.35] text-destructive group-data-[collapsible=icon]:hidden" role="alert">
               {authError}
@@ -1096,34 +1095,27 @@ function AccountDropdown({
   }, [open]);
 
   return (
-    <SidebarMenu>
+    <SidebarMenu className="w-auto shrink-0">
       <SidebarMenuItem ref={containerRef}>
-        <SidebarMenuButton
+        {/* Sits at the right end of the header, so only the avatar shows; the name and role are in the menu. */}
+        <button
           id="authAccountLabel"
-          size="lg"
-          className="h-14 rounded-xl px-2 hover:bg-sidebar-accent aria-expanded:bg-sidebar-accent aria-expanded:text-sidebar-foreground"
-          tooltip={statusLabel}
+          type="button"
+          className="flex size-10 items-center justify-center rounded-full outline-hidden transition-colors hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring aria-expanded:bg-sidebar-accent"
           aria-label={statusLabel}
           aria-haspopup="menu"
           aria-expanded={open}
           aria-controls="authAccountMenu"
-          title={roleDescription || undefined}
+          title={statusLabel}
           onClick={(event) => {
             event.stopPropagation();
             setOpen((current) => !current);
           }}
         >
           <AccountAvatar id="authAvatarFallback" signedIn={signedIn} username={username} />
-          <span className="grid min-w-0 flex-1 gap-0.5 text-left text-sm leading-tight">
-            <span id="authUserLabel" className="truncate font-semibold">
-              {displayUsername}
-            </span>
-            <span id="authRoleLabel" className="truncate text-xs text-muted-foreground">
-              {displayRole}
-            </span>
-          </span>
-          <ChevronsUpDownIcon className="ml-auto text-muted-foreground" aria-hidden="true" />
-        </SidebarMenuButton>
+          <span id="authUserLabel" className="sr-only">{displayUsername}</span>
+          <span id="authRoleLabel" className="sr-only">{displayRole}</span>
+        </button>
 
         {open ? (
           <div
@@ -1133,8 +1125,8 @@ function AccountDropdown({
             aria-labelledby="authAccountLabel"
             className={
               isMobile
-                ? "absolute bottom-full left-0 right-0 z-50 mb-2 rounded-2xl border border-border bg-popover p-1.5 text-popover-foreground shadow-[0_18px_48px_-16px_rgba(15,23,42,0.35)]"
-                : "absolute bottom-0 left-full z-50 ml-3 w-72 rounded-2xl border border-border bg-popover p-1.5 text-popover-foreground shadow-[0_18px_48px_-16px_rgba(15,23,42,0.35)]"
+                ? "absolute right-0 top-full z-50 mt-2 w-64 rounded-2xl border border-border bg-popover p-1.5 text-popover-foreground shadow-[0_18px_48px_-16px_rgba(15,23,42,0.35)]"
+                : "absolute left-full top-0 z-50 ml-3 w-72 rounded-2xl border border-border bg-popover p-1.5 text-popover-foreground shadow-[0_18px_48px_-16px_rgba(15,23,42,0.35)]"
             }
             onClick={(event) => event.stopPropagation()}
           >

@@ -470,7 +470,12 @@ describe("ViewerAppShell", () => {
     expect(sidebarFooter?.contains(folderFilter)).toBe(true);
     expect(scrollingFolders?.contains(folderFilter)).toBe(false);
     expect(scrollingFolders?.className).toContain("mask-image:linear-gradient");
-    expect(html.indexOf('aria-label="Filter folders"')).toBeLessThan(html.indexOf('id="authAccountLabel"'));
+    // The account sits in the header beside the library name; the footer keeps only the folder filter.
+    const sidebarHeader = accountMenuDocument.querySelector('[data-slot="sidebar-header"]');
+    const accountButton = accountMenuDocument.querySelector("#authAccountLabel");
+    expect(sidebarHeader?.contains(accountButton)).toBe(true);
+    expect(sidebarHeader?.contains(accountMenuDocument.querySelector('[aria-label="Show all items"]'))).toBe(true);
+    expect(sidebarFooter?.contains(accountButton)).toBe(false);
     expect(html).toContain("Large Images");
     expect(html).toContain(">42</span>");
     expect(html).toContain('title="Large Images"');

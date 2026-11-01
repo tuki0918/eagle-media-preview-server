@@ -197,7 +197,8 @@ test("public viewer exposes sign out when authenticated", async () => {
   assert.match(accountMenu, />ed</);
   assert.match(accountMenu, /id="authAccountLabel"/);
   assert.match(accountMenu, /aria-label="ed - Editor\. Can edit ratings, tags, and categories"/);
-  assert.match(accountMenu, /title="Can edit ratings, tags, and categories"/);
+  // The header shows only the avatar, so its tooltip names the account as well as the role.
+  assert.match(accountMenu, /title="ed - Editor\. Can edit ratings, tags, and categories"/);
   assert.match(accountMenu, /id="authRoleLabel"/);
   assert.match(accountMenu, />Editor</);
   assert.match(accountMenu, /aria-haspopup="menu"/);

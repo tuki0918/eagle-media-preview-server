@@ -342,3 +342,30 @@ describe("mobile sidebar swipe", () => {
     expect(state()).toBe("open");
   });
 });
+
+describe("desktop sidebar height", () => {
+  test("follows the visible viewport, so a phone browser in landscape leaves no gap below it", async () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    // Landscape phone width: Tailwind's `md:` query matches, so the fixed desktop sidebar is used.
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: true,
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    try {
+      await act(async () => { root.render(<SidebarProvider><Sidebar><nav>menu</nav></Sidebar></SidebarProvider>); });
+      const sidebar = container.querySelector("[data-slot=sidebar-container]")!;
+      // `svh` stays at the toolbars-shown height in mobile browsers; `dvh` tracks what is visible.
+      expect(sidebar.classList).toContain("h-dvh");
+      expect(sidebar.classList).not.toContain("h-svh");
+    } finally {
+      await act(async () => { root.unmount(); });
+      container.remove();
+      vi.unstubAllGlobals();
+    }
+  });
+});
