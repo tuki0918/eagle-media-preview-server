@@ -7,6 +7,24 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-11-01
+
+### Added
+
+- Added a Share action to the preview's More actions menu; it opens the device share sheet, or downloads the file when sharing is not supported.
+- The list view now shows tags, and clicking a tag or file type filters the results by it.
+- Added a picker dialog for editing tags and folders, with tags grouped like the All tags view.
+- Slideshows now show a blurred background behind each slide; turn it off with the Blur background option.
+- Swipe to close the sidebar on phones.
+
+### Changed
+
+- Improved the UI of the viewer and the plugin panel.
+
+### Fixed
+
+- Stopping or restarting the server no longer waits for open connections, such as video playback, to finish.
+
 ## [0.6.2] - 2026-10-31
 
 ### Changed
@@ -341,7 +359,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 - Initial release of Eagle Media Preview Server.
 
-[Unreleased]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.6.2...HEAD
+[Unreleased]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.6.3...HEAD
+[0.6.3]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.5.3...v0.6.0
