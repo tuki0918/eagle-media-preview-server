@@ -1,4 +1,6 @@
 import { StrictMode, act } from "react";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { JSDOM } from "jsdom";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { SlideshowDialog, SlideshowPlayer } from "./Slideshow";
@@ -459,4 +461,13 @@ test("a failed preload leaves playback intact and is loaded fresh when selected"
   expect(container.querySelector(".slideshow-frame img")?.getAttribute("src")).toBe("/file/2");
   await loaded();
   expect(container.querySelector('[aria-label="Loading slide"]')).toBeNull();
+});
+
+test("the launcher slides with the desktop sidebar instead of jumping ahead of it", () => {
+  const css = readFileSync(resolve("src/styles.css"), "utf8");
+  const sidebar = readFileSync(resolve("src/components/ui/sidebar.tsx"), "utf8");
+
+  // The content follows the sidebar gap's width transition; the fixed launcher must use the same timing.
+  expect(sidebar).toContain("relative w-[var(--sidebar-width)] bg-sidebar transition-[width] duration-100 ease-out");
+  expect(css).toMatch(/\.slideshow-launcher \{\s*transition: left 100ms cubic-bezier\(0, 0, 0\.2, 1\);/);
 });

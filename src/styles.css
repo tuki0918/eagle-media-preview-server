@@ -340,6 +340,10 @@
 
 /* Keep the left action inside the results area when the desktop sidebar is open. */
 @media (min-width: 768px) {
+  /* Slide with the sidebar and content (the sidebar gap's `duration-100 ease-out`) instead of jumping ahead. */
+  .slideshow-launcher {
+    transition: left 100ms cubic-bezier(0, 0, 0.2, 1);
+  }
   [data-slot="sidebar-wrapper"]:has(> [data-slot="sidebar"][data-state="expanded"]) .slideshow-launcher {
     left: calc(var(--sidebar-width) + 24px);
   }
