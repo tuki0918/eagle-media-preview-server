@@ -1,9 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { useEffect } from "react";
+import { clearPreviewBodyState, setPreviewBodyState } from "../previewBodyState";
 import { resetPreviewDialogState, setPreviewDialogState } from "../previewDialogState";
 import { clearPreviewInfoState, setPreviewInfoState } from "../previewInfoState";
 import { setPreviewTextState } from "../previewTextState";
 import { PreviewDialog } from "./PreviewDialog";
+import { sampleItems } from "./storyFixtures";
 
 const meta = {
   title: "Viewer/PreviewDialog",
@@ -35,6 +37,23 @@ export const DetailsOpen: Story = {
       return () => {
         resetPreviewDialogState();
         clearPreviewInfoState();
+        setPreviewTextState({ displayName: "", originalName: "" });
+      };
+    }, []);
+    return <Story />;
+  }],
+};
+
+// Phone-sized viewports overlay the header on the image; toggle the html "dark" class to compare themes.
+export const ImageOverlay: Story = {
+  decorators: [(Story) => {
+    useEffect(() => {
+      setPreviewDialogState({ infoOpen: false, mode: "image", open: true });
+      setPreviewTextState({ displayName: "landing-page-reference", originalName: "landing-page-reference.jpg" });
+      setPreviewBodyState({ item: sampleItems[0], kind: "image", srcKind: "thumb" });
+      return () => {
+        resetPreviewDialogState();
+        clearPreviewBodyState();
         setPreviewTextState({ displayName: "", originalName: "" });
       };
     }, []);

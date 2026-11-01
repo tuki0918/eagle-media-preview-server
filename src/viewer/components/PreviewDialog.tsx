@@ -48,11 +48,12 @@ export function PreviewDialog() {
     // Share horizontal spacing and control-row height with document previews, including in landscape.
     // Safe-area side insets constrain the whole screen and unnecessarily squeeze this top header.
     overlayMode
-      ? "touch:absolute touch:inset-x-0 touch:top-0 touch:z-[5] touch:!h-[calc(var(--preview-header-height)+env(safe-area-inset-top)+1.5rem)] touch:bg-transparent touch:bg-[linear-gradient(180deg,rgba(5,7,10,0.78),transparent)] touch:pb-6 touch:pt-[env(safe-area-inset-top)] touch:text-white touch:transition-opacity touch:duration-200 touch:[&_.icon-button]:!text-white touch:[&_.preview-original-name-value]:!text-white touch:[&_[data-slot=separator]]:!border-white/30"
+      ? "touch:absolute touch:inset-x-0 touch:top-0 touch:z-[5] touch:!h-[calc(var(--preview-header-height)+env(safe-area-inset-top)+1.5rem)] touch:bg-transparent touch:bg-[image:var(--preview-overlay-gradient)] touch:pb-6 touch:pt-[env(safe-area-inset-top)] touch:text-[color:var(--preview-overlay-foreground)] touch:transition-opacity touch:duration-200 touch:[&_.icon-button]:!text-[color:var(--preview-overlay-foreground)] touch:[&_.preview-original-name-value]:!text-[color:var(--preview-overlay-foreground)] touch:[&_[data-slot=separator]]:!border-[color:var(--preview-overlay-divider)]"
       : "",
     overlayMode && !overlayControlsVisible ? "touch:pointer-events-none touch:opacity-0" : "",
-    // Overlaid headers use a dark gradient and palette for contrast over the media.
-    overlayMode && touchViewport ? "dark" : "",
+    // Video plays on a black stage, so its overlaid header always uses the dark palette;
+    // image headers follow the theme so light mode matches the gray image stage.
+    videoMode && touchViewport ? "dark" : "",
   ].filter(Boolean).join(" ");
   const dialogClassName = [
     "fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none touch-none grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] overscroll-none rounded-none border-0 bg-background p-0 text-foreground open:grid desktop:transition-[grid-template-columns] desktop:duration-200 desktop:ease-out",

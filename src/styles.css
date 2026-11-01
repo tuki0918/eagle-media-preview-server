@@ -61,6 +61,11 @@
     --app-nav: var(--foreground);
     --shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
     --shadow-soft: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    /* Touch preview headers fade into the media. Light starts opaque under the status bar so it
+       meets the white theme-color with no seam, then fades into the gray image stage. */
+    --preview-overlay-gradient: linear-gradient(180deg, var(--background) env(safe-area-inset-top, 0px), color-mix(in srgb, var(--muted) 0%, transparent));
+    --preview-overlay-foreground: var(--foreground);
+    --preview-overlay-divider: color-mix(in srgb, var(--foreground) 22%, transparent);
   }
 
   * {
@@ -169,6 +174,9 @@
     --sidebar-accent-foreground: #fafafa;
     --sidebar-border: rgba(255, 255, 255, 0.1);
     --sidebar-ring: #737373;
+    --preview-overlay-gradient: linear-gradient(180deg, rgba(5, 7, 10, 0.78), transparent);
+    --preview-overlay-foreground: #ffffff;
+    --preview-overlay-divider: rgba(255, 255, 255, 0.3);
   }
   button:not(:disabled), [role="button"]:not(:disabled) {
     cursor: pointer;

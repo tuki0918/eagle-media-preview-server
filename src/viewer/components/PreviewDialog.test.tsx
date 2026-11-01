@@ -131,3 +131,42 @@ test("image taps toggle the touch header and toolbar together without changing o
     }
   }
 });
+
+test("touch image headers follow the theme while video headers stay dark", async () => {
+  const dom = new JSDOM('<!doctype html><div id="root"></div>', { url: "http://localhost" });
+  let root: Root | undefined;
+  try {
+    for (const name of ["window", "document", "navigator", "Node", "Element", "HTMLElement"] as const) {
+      vi.stubGlobal(name, name === "window" ? dom.window : dom.window[name]);
+    }
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    // Only the touch query matches, as on a phone.
+    dom.window.matchMedia = ((query: string) => ({
+      matches: query.includes("pointer: coarse"),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    })) as unknown as typeof dom.window.matchMedia;
+    setPreviewDialogState({ infoOpen: false, mode: "image", open: true });
+    const { createRoot } = await import("react-dom/client");
+    const container = dom.window.document.querySelector("#root")!;
+    root = createRoot(container);
+    await act(async () => { root?.render(<PreviewDialog />); });
+    const header = container.querySelector("header")!;
+    expect(header.classList.contains("touch:absolute")).toBe(true);
+    expect(header.classList.contains("dark")).toBe(false);
+    expect(header.classList.contains("touch:bg-[image:var(--preview-overlay-gradient)]")).toBe(true);
+    expect(header.classList.contains("touch:text-[color:var(--preview-overlay-foreground)]")).toBe(true);
+    expect([...header.classList].some((name) => /white|black|rgba/.test(name))).toBe(false);
+    await act(async () => { setPreviewDialogState({ infoOpen: false, mode: "video", open: true }); });
+    expect(header.classList.contains("dark")).toBe(true);
+  } finally {
+    try { await act(async () => root?.unmount()); }
+    finally {
+      resetPreviewDialogState();
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+      dom.window.close();
+    }
+  }
+});
