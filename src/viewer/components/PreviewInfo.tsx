@@ -8,10 +8,10 @@ import { getItemActionsVisible, subscribeItemActionsVisible } from "../itemActio
 import { folderIds, itemTags } from "../format";
 import { uniqueValues, type MetadataSuggestion } from "../metadata";
 import { getPreviewInfoState, subscribePreviewInfoState } from "../previewInfoState";
-import { revealMetadataSuggestions } from "../revealMetadataSuggestions";
 import { errorName, fetchShareFile, shareOrDownloadFile } from "../shareFile";
 import { showErrorToast, showSuccessToast } from "../toasts";
 import type { EagleFolder, EagleItem } from "../types";
+import { MetadataPickerDialog } from "./MetadataPickerDialog";
 
 export interface PreviewDetailRow {
   label: string;
@@ -47,9 +47,6 @@ const previewChipListClassName = "preview-chip-list flex flex-wrap justify-end g
 const previewChipClassName = "preview-chip inline-flex h-auto min-h-7 items-center gap-1.5 rounded-full border border-border bg-secondary px-2.5 text-xs font-medium text-secondary-foreground [&_svg]:size-3.5 [&_svg]:text-muted-foreground";
 const previewEditChipListClassName = "preview-edit-chip-list flex min-h-0 flex-wrap gap-1.5";
 const previewEditChipClassName = "preview-edit-chip inline-flex h-auto min-h-7 max-w-full items-center gap-1.5 rounded-full border border-border bg-secondary py-0 pl-2.5 pr-1 text-xs font-medium text-secondary-foreground [&_svg]:size-3.5";
-const previewChipInputClassName = "preview-chip-input min-h-10 w-full min-w-0 rounded-xl border border-input bg-background px-3 text-base text-foreground min-[720px]:text-sm";
-const previewChipSuggestionsClassName = "preview-chip-suggestions mt-1 grid max-h-[220px] overflow-auto rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-lg max-[540px]:max-h-[28dvh]";
-const previewChipSuggestionClassName = "preview-chip-suggestion flex min-h-9 cursor-pointer items-center justify-between gap-3 rounded-lg border-0 bg-transparent px-2.5 text-left text-[13px] text-popover-foreground hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-popover-foreground";
 const previewMetadataRowClassName = "preview-metadata-row grid gap-2.5";
 const previewMetadataEmptyClassName = "preview-metadata-empty m-0 text-[13px] text-muted-foreground";
 
@@ -405,42 +402,18 @@ function PreviewMetadataEditor({
     }
   };
 
-  const addTag = async (rawValue: string) => {
-    const values = rawValue.split(",").map((value) => value.trim()).filter(Boolean);
-    const nextTags = [...tags];
-    const addedTags: string[] = [];
-    for (const value of values) {
-      if (nextTags.includes(value)) continue;
-      nextTags.push(value);
-      addedTags.push(value);
-    }
-    if (sameStringValues(nextTags, tags)) return;
-    await saveMetadata(nextTags, categories, {
-      title: "Tags saved",
-      description: addedTags.length === 1 ? `"${addedTags[0]}" was added.` : `${addedTags.length} tags were added.`,
-    });
-  };
-
-  const addFolder = async (rawValue: string) => {
-    const query = rawValue.trim();
-    if (!query) return;
-    const lowerQuery = query.toLowerCase();
-    const folderItems = folderTreeItems(folders);
-    const exactFolder = folderItems.find((folder) => folder.id === query || folder.name.toLowerCase() === lowerQuery);
-    const suggestions = exactFolder ? [] : await onFolderSuggestions(query, categories);
-    const suggestionFolder = suggestions.find((suggestion) => String(suggestion.value).toLowerCase() === lowerQuery || suggestion.label.toLowerCase() === lowerQuery) || suggestions[0];
-    const folderId = exactFolder?.id || String(suggestionFolder?.value || "");
-    if (!folderId || categories.includes(folderId)) {
-      if (!folderId) {
-        showErrorToast("Unable to add folder", {
-          description: "Choose an existing folder.",
-        });
-      }
+  const applyValues = async (kind: "tags" | "folders", nextValues: string[]) => {
+    const currentValues = kind === "tags" ? tags : categories;
+    if (sameStringValues(nextValues, currentValues)) {
+      closeInput();
       return;
     }
-    await saveMetadata(tags, [...categories, folderId], {
-      title: "Folders saved",
-      description: `"${folderLabel(folderId, folders)}" was added.`,
+    const labelFor = (value: string) => kind === "tags" ? value : folderLabel(value, folders);
+    const added = nextValues.filter((value) => !currentValues.includes(value));
+    const removed = currentValues.filter((value) => !nextValues.includes(value));
+    await saveMetadata(kind === "tags" ? nextValues : tags, kind === "folders" ? nextValues : categories, {
+      title: kind === "tags" ? "Tags saved" : "Folders saved",
+      description: metadataChangeSummary(added, removed, labelFor, kind === "tags" ? "tag" : "folder"),
     });
   };
 
@@ -456,14 +429,7 @@ function PreviewMetadataEditor({
         label="Tags"
         values={tags.map((value) => ({ label: value, value }))}
         disabled={saving}
-        inputOpen={activeInput === "tags"}
-        inputLabel="Add tag"
-        inputPlaceholder="Add tag"
         onAdd={() => openInput("tags")}
-        onCloseInput={closeInput}
-        onSuggestions={onTagSuggestions}
-        selectedValues={tags}
-        onSubmitValue={addTag}
         onRemove={(value) => saveMetadata(tags.filter((entry) => entry !== value), categories, {
           title: "Tags saved",
           description: `"${value}" was removed.`,
@@ -474,19 +440,42 @@ function PreviewMetadataEditor({
         label="Folders"
         values={categories.map((value) => ({ label: folderLabel(value, folders), value }))}
         disabled={saving}
-        inputOpen={activeInput === "folders"}
-        inputLabel="Add folder"
-        inputPlaceholder="Search folder"
         onAdd={() => openInput("folders")}
-        onCloseInput={closeInput}
-        onSuggestions={onFolderSuggestions}
-        selectedValues={categories}
-        onSubmitValue={addFolder}
         onRemove={(value) => saveMetadata(tags, categories.filter((entry) => entry !== value), {
           title: "Folders saved",
           description: `"${folderLabel(value, folders)}" was removed.`,
         })}
       />
+      {activeInput === "tags" ? (
+        <MetadataPickerDialog
+          id="tagPickerDialog"
+          title="Tags"
+          icon={<TagIcon aria-hidden="true" />}
+          placeholder="Search or add tag"
+          allowCreate
+          disabled={saving}
+          initialValues={tags}
+          labelFor={(value) => value}
+          onSuggestions={onTagSuggestions}
+          onApply={(values) => applyValues("tags", values)}
+          onClose={closeInput}
+        />
+      ) : null}
+      {activeInput === "folders" ? (
+        <MetadataPickerDialog
+          id="folderPickerDialog"
+          title="Folders"
+          icon={<FolderIcon aria-hidden="true" />}
+          placeholder="Search folder"
+          allowCreate={false}
+          disabled={saving}
+          initialValues={categories}
+          labelFor={(value) => folderLabel(value, folders)}
+          onSuggestions={onFolderSuggestions}
+          onApply={(values) => applyValues("folders", values)}
+          onClose={closeInput}
+        />
+      ) : null}
     </section>
   );
 }
@@ -516,29 +505,15 @@ function MetadataHeading({ count, label }: { count: number; label: string }) {
 function EditableMetadataRow({
   disabled,
   icon,
-  inputLabel,
-  inputOpen,
-  inputPlaceholder,
   label,
   onAdd,
-  onCloseInput,
-  onSuggestions,
-  selectedValues,
-  onSubmitValue,
   onRemove,
   values,
 }: {
   disabled?: boolean;
   icon: ReactNode;
-  inputLabel: string;
-  inputOpen: boolean;
-  inputPlaceholder: string;
   label: string;
   onAdd: () => void;
-  onCloseInput: () => void;
-  onSuggestions: (query: string, selectedValues: string[]) => Promise<MetadataSuggestion[]> | MetadataSuggestion[];
-  selectedValues: string[];
-  onSubmitValue: (value: string) => void | Promise<void>;
   onRemove: (value: string) => void;
   values: Array<{ label: string; value: string }>;
 }) {
@@ -546,172 +521,6 @@ function EditableMetadataRow({
     <div className={previewMetadataRowClassName}>
       <MetadataHeading label={label} count={values.length} />
       <MetadataChipList editable disabled={disabled} icon={icon} values={values} onAdd={onAdd} onRemove={onRemove} addLabel={`Add ${label}`} />
-      {inputOpen ? (
-        <MetadataInlineInput
-          disabled={disabled}
-          icon={icon}
-          inputLabel={inputLabel}
-          inputPlaceholder={inputPlaceholder}
-          onCloseInput={onCloseInput}
-          onSuggestions={onSuggestions}
-          selectedValues={selectedValues}
-          onSubmitValue={onSubmitValue}
-        />
-      ) : null}
-    </div>
-  );
-}
-
-function MetadataInlineInput({
-  disabled,
-  icon,
-  inputLabel,
-  inputPlaceholder,
-  onCloseInput,
-  onSuggestions,
-  selectedValues,
-  onSubmitValue,
-}: {
-  disabled?: boolean;
-  icon: ReactNode;
-  inputLabel: string;
-  inputPlaceholder: string;
-  onCloseInput: () => void;
-  onSuggestions: (query: string, selectedValues: string[]) => Promise<MetadataSuggestion[]> | MetadataSuggestion[];
-  selectedValues: string[];
-  onSubmitValue: (value: string) => void | Promise<void>;
-}) {
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const suggestionsRef = useRef<HTMLDivElement | null>(null);
-  const [suggestions, setSuggestions] = useState<MetadataSuggestion[]>([]);
-  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
-  const requestId = useRef(0);
-  const debounceTimer = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (!suggestionsOpen) return;
-    const reveal = () => {
-      if (inputRef.current && suggestionsRef.current) {
-        revealMetadataSuggestions(inputRef.current, suggestionsRef.current);
-      }
-    };
-    const timer = window.setTimeout(reveal, 0);
-    // iOS can finish opening the keyboard after the suggestions have rendered.
-    const viewport = window.visualViewport;
-    viewport?.addEventListener("resize", reveal);
-    return () => {
-      window.clearTimeout(timer);
-      viewport?.removeEventListener("resize", reveal);
-    };
-  }, [suggestionsOpen]);
-
-  const clearDebounceTimer = () => {
-    if (!debounceTimer.current) return;
-    window.clearTimeout(debounceTimer.current);
-    debounceTimer.current = null;
-  };
-
-  const updateSuggestions = async (query: string) => {
-    if (disabled) return;
-    const currentRequest = ++requestId.current;
-    try {
-      const items = await onSuggestions(query.trim(), selectedValues);
-      if (currentRequest !== requestId.current) return;
-      setSuggestions(items);
-      setSuggestionsOpen(items.length > 0);
-    } catch {
-      if (currentRequest !== requestId.current) return;
-      setSuggestions([]);
-      setSuggestionsOpen(false);
-    }
-  };
-
-  const queueSuggestions = (query: string) => {
-    clearDebounceTimer();
-    debounceTimer.current = window.setTimeout(() => updateSuggestions(query), 120);
-  };
-
-  useEffect(() => {
-    const input = inputRef.current;
-    if (!input) return;
-    updateSuggestions(input.value);
-    return () => {
-      requestId.current += 1;
-      clearDebounceTimer();
-    };
-  }, [onSuggestions, selectedValues.join("\u0000")]);
-
-  useEffect(() => {
-    const input = inputRef.current;
-    if (!input) return;
-    const handleInput = () => {
-      queueSuggestions(input.value);
-    };
-    const handleFocus = () => {
-      updateSuggestions(input.value);
-    };
-    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onCloseInput();
-        return;
-      }
-      if (event.key !== "Enter") return;
-      event.preventDefault();
-      onSubmitValue(input.value);
-    };
-    input.addEventListener("input", handleInput);
-    input.addEventListener("focus", handleFocus);
-    input.addEventListener("pointerdown", handleFocus);
-    input.addEventListener("keydown", handleKeyDown);
-    return () => {
-      input.removeEventListener("input", handleInput);
-      input.removeEventListener("focus", handleFocus);
-      input.removeEventListener("pointerdown", handleFocus);
-      input.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [onCloseInput, onSubmitValue, onSuggestions, selectedValues.join("\u0000")]);
-
-  return (
-    <div className="preview-metadata-input grid gap-0.5">
-      <label className="relative block">
-        <span className="pointer-events-none absolute left-3 top-1/2 grid size-4 -translate-y-1/2 place-items-center text-muted-foreground [&_svg]:size-4" aria-hidden="true">
-          {icon}
-        </span>
-        <input
-          ref={inputRef}
-          className={`${previewChipInputClassName} pl-9 pr-10`}
-          placeholder={inputPlaceholder}
-          aria-label={inputLabel}
-          autoComplete="off"
-          disabled={disabled}
-        />
-        <Button type="button" variant="ghost" size="icon-xs" className="absolute right-2 top-1/2 size-6 -translate-y-1/2 rounded-full text-muted-foreground hover:text-foreground" title="Close" aria-label="Close" disabled={disabled} onClick={onCloseInput}>
-          <XIcon aria-hidden="true" />
-        </Button>
-      </label>
-      {suggestionsOpen ? (
-        <div ref={suggestionsRef} className={previewChipSuggestionsClassName} role="listbox">
-          {suggestions.map((item) => (
-            <button
-              key={item.value}
-              type="button"
-              className={previewChipSuggestionClassName}
-              role="option"
-              aria-selected={item.disabled ? "true" : "false"}
-              disabled={disabled || item.disabled}
-              style={{ paddingLeft: `${10 + Math.min(Math.max(Number(item.depth || 0), 0), 8) * 16}px` }}
-              onClick={() => {
-                if (item.disabled) return;
-                onSubmitValue(String(item.value || ""));
-              }}
-            >
-              <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{item.label}</span>
-              {item.meta ? <span className="preview-chip-suggestion-meta flex-none rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">{item.meta}</span> : null}
-            </button>
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -802,6 +611,16 @@ function tagValues(value: unknown) {
 
 function categoryValues(value: unknown) {
   return uniqueValues(folderIds(value));
+}
+
+function metadataChangeSummary(added: readonly string[], removed: readonly string[], labelFor: (value: string) => string, noun: string) {
+  if (added.length === 1 && !removed.length) return `"${labelFor(added[0])}" was added.`;
+  if (removed.length === 1 && !added.length) return `"${labelFor(removed[0])}" was removed.`;
+  const parts = [
+    added.length ? `${added.length} ${noun}${added.length === 1 ? "" : "s"} added` : "",
+    removed.length ? `${removed.length} ${added.length ? "" : `${noun}${removed.length === 1 ? "" : "s"} `}removed` : "",
+  ].filter(Boolean);
+  return `${parts.join(", ")}.`;
 }
 
 function sameStringValues(left: readonly string[], right: readonly string[]) {

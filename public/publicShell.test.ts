@@ -68,6 +68,7 @@ async function readAppSources() {
     "../src/viewer/components/Icons.tsx",
     "../src/viewer/components/LibraryFooter.tsx",
     "../src/viewer/components/LoginView.tsx",
+    "../src/viewer/components/MetadataPickerDialog.tsx",
     "../src/viewer/loginConnectState.ts",
     "../src/viewer/components/Pager.tsx",
     "../src/viewer/components/PreviewBody.tsx",
@@ -813,10 +814,9 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(html, /setCategories\(saved\.folders\);/);
   assert.match(html, /showSuccessToast\(successToast\.title/);
   assert.match(html, /showErrorToast\("Unable to save metadata"/);
-  assert.match(html, /const addTag = async \(rawValue: string\) => \{/);
-  assert.match(html, /const addFolder = async \(rawValue: string\) => \{/);
+  assert.match(html, /const applyValues = async \(kind: "tags" \| "folders", nextValues: string\[\]\) => \{/);
   assert.match(html, /function sameStringValues\(left: readonly string\[\], right: readonly string\[\]\) \{/);
-  assert.match(html, /onSubmitValue=\{addTag\}/);
+  assert.match(html, /onApply=\{\(values\) => applyValues\("tags", values\)\}/);
   assert.match(app, /postJson<\{[\s\S]*folders\?: unknown;[\s\S]*\}>\(`\/api\/items\/\$\{encodeURIComponent\(String\(item\.id \|\| ""\)\)\}\/metadata`, \{ tags, folders \}\)/);
   assert.match(app, /rememberRecentValues\(RECENT_TAGS_STORAGE_KEY, patch\.tags\);/);
   assert.match(app, /rememberRecentValues\(RECENT_FOLDERS_STORAGE_KEY, patch\.folders\);/);
@@ -829,14 +829,10 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(app, /const RECENT_TAGS_STORAGE_KEY = "eagleRecentTags";/);
   assert.match(app, /const RECENT_FOLDERS_STORAGE_KEY = "eagleRecentFolders";/);
   assert.match(html, /function MetadataChipList\(\{/);
-  assert.match(html, /function MetadataInlineInput\(\{/);
+  assert.match(html, /export function MetadataPickerDialog\(\{/);
   assert.match(html, /function MetadataReadOnlyRow\(\{/);
-  assert.doesNotMatch(html, /initialValues/);
-  assert.match(html, /const clearDebounceTimer = \(\) => \{/);
-  assert.match(html, /return \(\) => \{\s*requestId\.current \+= 1;\s*clearDebounceTimer\(\);\s*\};/);
-  assert.match(html, /input\.addEventListener\("input", handleInput\);/);
-  assert.match(html, /input\.addEventListener\("keydown", handleKeyDown\);/);
-  assert.doesNotMatch(html, /input\.onkeydown = handleKeyDown;/);
+  assert.match(html, /return \(\) => \{\s*requestId\.current \+= 1;/);
+  assert.match(html, /onKeyDown=\{handleInputKeyDown\}/);
   assert.doesNotMatch(html, /className="preview-add-tag/);
   assert.match(app, /function readRecentList\(key[^)]*\) \{/);
   assert.match(app, /function writeRecentList\(key[^,]*,\s*values[^)]*\) \{/);
@@ -866,18 +862,15 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.doesNotMatch(css, /\.preview-chip-empty/);
   assert.match(html, /className="preview-info-actions sticky bottom-0[^"]*border-t border-border bg-card/);
   assert.match(html, /preview-admin-actions relative grid grid-cols-\[minmax\(0,1fr\)_auto\] gap-2/);
-  assert.match(html, /className="preview-metadata-input grid gap-0\.5"/);
   assert.match(html, /const previewMetadataRowClassName = "preview-metadata-row grid gap-2\.5/);
   assert.match(html, /const previewEditChipListClassName = "preview-edit-chip-list/);
   assert.match(html, /preview-metadata-add h-7 gap-1 rounded-full border-dashed/);
   assert.match(html, /aria-label=\{addLabel\}/);
   assert.doesNotMatch(html, /preview-folder-current-badge/);
   assert.doesNotMatch(html, /preview-folder-option-meta/);
-  assert.match(html, /className=\{`\$\{previewChipInputClassName\} pl-9 pr-10`\}/);
-  assert.match(html, /const previewChipInputClassName = "preview-chip-input/);
-  assert.match(html, /const previewChipSuggestionsClassName = "preview-chip-suggestions/);
-  assert.doesNotMatch(html, /preview-chip-suggestions[^"]*max-\[540px\]:fixed/);
-  assert.match(html, /const previewChipSuggestionClassName = "preview-chip-suggestion/);
+  assert.match(html, /<MetadataPickerDialog[\s\S]*id="tagPickerDialog"/);
+  assert.match(html, /<MetadataPickerDialog[\s\S]*id="folderPickerDialog"/);
+  assert.doesNotMatch(html, /preview-chip-suggestions/);
   assert.doesNotMatch(html, /preview-edit-cancel/);
   assert.doesNotMatch(html, /Save changes/);
   assert.match(html, /const directFileLinkClassName =[\s\S]*min-h-11 w-full[\s\S]*bg-primary[\s\S]*text-primary-foreground/);

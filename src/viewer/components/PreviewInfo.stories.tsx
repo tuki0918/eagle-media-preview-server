@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
+import { folderSuggestionItems, tagSuggestionItems } from "../metadata";
 import { PreviewActions, PreviewDetailsPanel, PreviewInfoActions, PreviewInfoDetails } from "./PreviewInfo";
 import { detailRows, sampleFolders, sampleItems, storyPanelClassName } from "./storyFixtures";
 
@@ -27,6 +28,19 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const DetailsPanel: Story = {};
+
+export const EditableMetadata: Story = {
+  args: {
+    canEditMetadata: true,
+    onTagSuggestions: (query, selectedValues) => tagSuggestionItems({
+      query,
+      selectedValues,
+      recentTags: ["landing", "reference", "bright"],
+      remoteTags: ["landing", "reference", "bright", "campaign", "social"].map((name, index) => ({ name, count: 12 - index })),
+    }),
+    onFolderSuggestions: (query, selectedValues) => folderSuggestionItems({ query, selectedValues, recentFolderIds: [], folders: sampleFolders }),
+  },
+};
 
 export const Actions: Story = {
   render: () => <PreviewActions canManageLibrary item={sampleItems[0]} onToggleTrash={async () => {}} />,

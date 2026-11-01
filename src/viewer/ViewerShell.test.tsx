@@ -1976,7 +1976,7 @@ describe("ViewerAppShell", () => {
     expect(details).not.toContain(">url<");
   });
 
-  test("adds preview tags immediately from the inline input", async () => {
+  test("adds typed preview tags from the picker dialog", async () => {
     const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
     const testGlobal = globalThis as typeof globalThis & {
       IS_REACT_ACT_ENVIRONMENT?: boolean;
@@ -2023,22 +2023,35 @@ describe("ViewerAppShell", () => {
       await act(async () => {
         addTagButton.click();
       });
-      const tagInput = Array.from(container.querySelectorAll("input")).find((input) => input.placeholder === "Add tag");
+      const dialog = container.querySelector("#tagPickerDialog");
+      expect(dialog?.hasAttribute("open")).toBe(true);
+      const tagInput = dialog?.querySelector("input");
       if (!(tagInput instanceof dom.window.HTMLInputElement)) throw new Error("Missing tag input");
+      expect(tagInput.placeholder).toBe("Search or add tag");
 
-      expect(tagInput.className).toContain("pl-9");
-      expect(tagInput.parentElement?.innerHTML).toContain("lucide-tag");
-      expect(tagInput.parentElement?.innerHTML).toContain("aria-label=\"Close\"");
       await act(async () => {
         const valueSetter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")?.set;
         valueSetter?.call(tagInput, "beta");
+        tagInput.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+      });
+      await act(async () => {
         tagInput.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
+      });
+
+      expect(savedPatches).toEqual([]);
+      expect(dialog?.querySelector(".metadata-picker-selected")?.textContent).toContain("beta");
+      expect(tagInput.value).toBe("");
+
+      const doneButton = Array.from(container.querySelectorAll("dialog button")).find((button) => button.textContent === "Done");
+      if (!(doneButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing picker done button");
+      await act(async () => {
+        doneButton.click();
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
 
       expect(savedPatches).toEqual([{ tags: ["alpha", "beta"], folders: ["folder-1"] }]);
       expect(container.textContent).toContain("beta-saved");
-      expect(container.querySelector(".preview-metadata-input")).toBeNull();
+      expect(container.querySelector("#tagPickerDialog")).toBeNull();
     } finally {
       if (root) {
         await act(async () => {
@@ -2053,7 +2066,7 @@ describe("ViewerAppShell", () => {
     }
   });
 
-  test("closes preview metadata input without saving", async () => {
+  test("cancels the preview metadata picker without saving", async () => {
     const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
     const testGlobal = globalThis as typeof globalThis & {
       IS_REACT_ACT_ENVIRONMENT?: boolean;
@@ -2097,18 +2110,24 @@ describe("ViewerAppShell", () => {
         addTagButton.click();
       });
 
-      const tagInput = Array.from(container.querySelectorAll("input")).find((input) => input.placeholder === "Add tag");
+      const tagInput = container.querySelector("#tagPickerDialog input");
       if (!(tagInput instanceof dom.window.HTMLInputElement)) throw new Error("Missing tag input");
-      const closeButton = container.querySelector(".preview-metadata-input button");
-      if (!(closeButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing close input button");
+      const cancelButton = Array.from(container.querySelectorAll("#tagPickerDialog button")).find((button) => button.textContent === "Cancel");
+      if (!(cancelButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing picker cancel button");
 
       await act(async () => {
         const valueSetter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")?.set;
         valueSetter?.call(tagInput, "beta");
-        closeButton.click();
+        tagInput.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+      });
+      await act(async () => {
+        tagInput.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
+      });
+      await act(async () => {
+        cancelButton.click();
       });
 
-      expect(container.querySelector(".preview-metadata-input")).toBeNull();
+      expect(container.querySelector("#tagPickerDialog")).toBeNull();
       expect(container.textContent).not.toContain("beta");
     } finally {
       if (root) {
@@ -2245,7 +2264,7 @@ describe("ViewerAppShell", () => {
         addFolderButton.click();
       });
 
-      const folderInput = Array.from(container.querySelectorAll("input")).find((input) => input.placeholder === "Search folder");
+      const folderInput = container.querySelector("#folderPickerDialog input");
       if (!(folderInput instanceof dom.window.HTMLInputElement)) {
         throw new Error("Missing category editor controls");
       }
@@ -2253,7 +2272,17 @@ describe("ViewerAppShell", () => {
       await act(async () => {
         const valueSetter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")?.set;
         valueSetter?.call(folderInput, "New folder");
+        folderInput.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      });
+      await act(async () => {
         folderInput.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
+      });
+      expect(container.querySelector("#folderPickerDialog [role=\"option\"]")).toBeNull();
+      const doneButton = Array.from(container.querySelectorAll("dialog button")).find((button) => button.textContent === "Done");
+      if (!(doneButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing picker done button");
+      await act(async () => {
+        doneButton.click();
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
 
@@ -2273,7 +2302,7 @@ describe("ViewerAppShell", () => {
     }
   });
 
-  test("adds folders immediately from suggestions", async () => {
+  test("adds typed folders from picker suggestions", async () => {
     const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
     const testGlobal = globalThis as typeof globalThis & {
       IS_REACT_ACT_ENVIRONMENT?: boolean;
@@ -2323,13 +2352,22 @@ describe("ViewerAppShell", () => {
         addFolderButton.click();
       });
 
-      const folderInput = Array.from(container.querySelectorAll("input")).find((input) => input.placeholder === "Search folder");
+      const folderInput = container.querySelector("#folderPickerDialog input");
       if (!(folderInput instanceof dom.window.HTMLInputElement)) throw new Error("Missing folder input");
 
       await act(async () => {
         const valueSetter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")?.set;
         valueSetter?.call(folderInput, "Folder 2");
+        folderInput.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      });
+      await act(async () => {
         folderInput.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
+      });
+      const doneButton = Array.from(container.querySelectorAll("dialog button")).find((button) => button.textContent === "Done");
+      if (!(doneButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing picker done button");
+      await act(async () => {
+        doneButton.click();
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
 
@@ -2408,6 +2446,13 @@ describe("ViewerAppShell", () => {
 
       await act(async () => {
         childSuggestion.click();
+      });
+      expect(childSuggestion.getAttribute("aria-selected")).toBe("true");
+      expect(savedPatches).toEqual([]);
+      const doneButton = Array.from(container.querySelectorAll("dialog button")).find((button) => button.textContent === "Done");
+      if (!(doneButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing picker done button");
+      await act(async () => {
+        doneButton.click();
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
 
@@ -2427,7 +2472,183 @@ describe("ViewerAppShell", () => {
     }
   });
 
-  test("does not add folder suggestions on pointer down before tap is confirmed", async () => {
+  test("waits for the latest folder search before adding on enter", async () => {
+    const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
+    const testGlobal = globalThis as typeof globalThis & {
+      IS_REACT_ACT_ENVIRONMENT?: boolean;
+    };
+    const previousWindow = globalThis.window;
+    const previousDocument = globalThis.document;
+    const previousNode = globalThis.Node;
+    const previousHTMLElement = globalThis.HTMLElement;
+    const previousIS_REACT_ACT_ENVIRONMENT = testGlobal.IS_REACT_ACT_ENVIRONMENT;
+    globalThis.window = dom.window;
+    globalThis.document = dom.window.document;
+    globalThis.Node = dom.window.Node;
+    globalThis.HTMLElement = dom.window.HTMLElement;
+    testGlobal.IS_REACT_ACT_ENVIRONMENT = true;
+
+    const { createRoot } = await import("react-dom/client");
+    let root: import("react-dom/client").Root | null = null;
+    const savedPatches: Array<{ tags: string[]; folders: string[] }> = [];
+    try {
+      const container = dom.window.document.querySelector("#root");
+      if (!(container instanceof dom.window.HTMLElement)) throw new Error("Missing test root");
+      root = createRoot(container);
+
+      await act(async () => {
+        root?.render(
+          <PreviewDetailsPanel
+            canEditMetadata
+            item={{ id: "item-1", tags: [], folders: [] }}
+            folders={[{ id: "music", name: "Music" }, { id: "photos", name: "Photos" }]}
+            detailRows={[{ label: "Type", value: "Image" }]}
+            onTagSuggestions={() => []}
+            onFolderSuggestions={async (query) => [
+              { value: "music", label: "Music", meta: "" },
+              { value: "photos", label: "Photos", meta: "" },
+            ].filter((item) => item.label.toLowerCase().includes(query.toLowerCase()))}
+            onSaveMetadata={async (_item, patch) => {
+              savedPatches.push(patch);
+              return patch;
+            }}
+          />,
+        );
+      });
+
+      const addFolderButton = Array.from(container.querySelectorAll(".preview-metadata-add")).find((button) => button.getAttribute("aria-label") === "Add Folders");
+      if (!(addFolderButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing folder add button");
+      await act(async () => {
+        addFolderButton.click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      const folderInput = container.querySelector("#folderPickerDialog input");
+      if (!(folderInput instanceof dom.window.HTMLInputElement)) throw new Error("Missing folder input");
+
+      await act(async () => {
+        const valueSetter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")?.set;
+        valueSetter?.call(folderInput, "Photo");
+        folderInput.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+      });
+      await act(async () => {
+        folderInput.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      const doneButton = Array.from(container.querySelectorAll("dialog button")).find((button) => button.textContent === "Done");
+      if (!(doneButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing picker done button");
+      await act(async () => {
+        doneButton.click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      expect(savedPatches).toEqual([{ tags: [], folders: ["photos"] }]);
+    } finally {
+      if (root) {
+        await act(async () => {
+          root?.unmount();
+        });
+      }
+      globalThis.window = previousWindow;
+      globalThis.document = previousDocument;
+      globalThis.Node = previousNode;
+      globalThis.HTMLElement = previousHTMLElement;
+      testGlobal.IS_REACT_ACT_ENVIRONMENT = previousIS_REACT_ACT_ENVIRONMENT;
+    }
+  });
+
+  test("saves several folder picker toggles together on done", async () => {
+    const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
+    const testGlobal = globalThis as typeof globalThis & {
+      IS_REACT_ACT_ENVIRONMENT?: boolean;
+    };
+    const previousWindow = globalThis.window;
+    const previousDocument = globalThis.document;
+    const previousNode = globalThis.Node;
+    const previousHTMLElement = globalThis.HTMLElement;
+    const previousIS_REACT_ACT_ENVIRONMENT = testGlobal.IS_REACT_ACT_ENVIRONMENT;
+    globalThis.window = dom.window;
+    globalThis.document = dom.window.document;
+    globalThis.Node = dom.window.Node;
+    globalThis.HTMLElement = dom.window.HTMLElement;
+    testGlobal.IS_REACT_ACT_ENVIRONMENT = true;
+
+    const { createRoot } = await import("react-dom/client");
+    let root: import("react-dom/client").Root | null = null;
+    const savedPatches: Array<{ tags: string[]; folders: string[] }> = [];
+    try {
+      const container = dom.window.document.querySelector("#root");
+      if (!(container instanceof dom.window.HTMLElement)) throw new Error("Missing test root");
+      root = createRoot(container);
+
+      await act(async () => {
+        root?.render(
+          <PreviewDetailsPanel
+            canEditMetadata
+            item={{ id: "item-1", tags: ["alpha"], folders: ["folder-1"] }}
+            folders={[{ id: "folder-1", name: "Folder 1" }, { id: "folder-2", name: "Folder 2" }, { id: "folder-3", name: "Folder 3" }]}
+            detailRows={[{ label: "Type", value: "Image" }]}
+            onTagSuggestions={() => []}
+            onFolderSuggestions={(_query, selected) => [
+              { value: "folder-1", label: "Folder 1", meta: "" },
+              { value: "folder-2", label: "Folder 2", meta: "" },
+              { value: "folder-3", label: "Folder 3", meta: "" },
+            ].filter((item) => !selected.includes(item.value))}
+            onSaveMetadata={async (_item, patch) => {
+              savedPatches.push(patch);
+              return patch;
+            }}
+          />,
+        );
+      });
+
+      const addFolderButton = Array.from(container.querySelectorAll(".preview-metadata-add")).find((button) => button.getAttribute("aria-label") === "Add Folders");
+      if (!(addFolderButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing folder add button");
+
+      await act(async () => {
+        addFolderButton.click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      const option = (label: string) => Array.from(container.querySelectorAll("#folderPickerDialog [role=\"option\"]")).find((entry) => entry.textContent?.includes(label));
+      expect(option("Folder 1")?.getAttribute("aria-selected")).toBe("true");
+
+      await act(async () => {
+        (option("Folder 1") as HTMLButtonElement).click();
+      });
+      await act(async () => {
+        (option("Folder 2") as HTMLButtonElement).click();
+      });
+      await act(async () => {
+        (option("Folder 3") as HTMLButtonElement).click();
+      });
+      expect(savedPatches).toEqual([]);
+
+      const doneButton = Array.from(container.querySelectorAll("dialog button")).find((button) => button.textContent === "Done");
+      if (!(doneButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing picker done button");
+      await act(async () => {
+        doneButton.click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      expect(savedPatches).toEqual([{ tags: ["alpha"], folders: ["folder-2", "folder-3"] }]);
+      expect(container.querySelector("#folderPickerDialog")).toBeNull();
+    } finally {
+      if (root) {
+        await act(async () => {
+          root?.unmount();
+        });
+      }
+      globalThis.window = previousWindow;
+      globalThis.document = previousDocument;
+      globalThis.Node = previousNode;
+      globalThis.HTMLElement = previousHTMLElement;
+      testGlobal.IS_REACT_ACT_ENVIRONMENT = previousIS_REACT_ACT_ENVIRONMENT;
+    }
+  });
+
+  test("does not toggle folder suggestions on pointer down before tap is confirmed", async () => {
     const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
     const testGlobal = globalThis as typeof globalThis & {
       IS_REACT_ACT_ENVIRONMENT?: boolean;
@@ -2492,8 +2713,15 @@ describe("ViewerAppShell", () => {
 
       expect(savedPatches).toEqual([]);
 
+      expect(folderSuggestion.getAttribute("aria-selected")).toBe("false");
+
       await act(async () => {
         folderSuggestion.click();
+      });
+      const doneButton = Array.from(container.querySelectorAll("dialog button")).find((button) => button.textContent === "Done");
+      if (!(doneButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing picker done button");
+      await act(async () => {
+        doneButton.click();
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
 
