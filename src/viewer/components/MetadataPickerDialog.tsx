@@ -3,6 +3,7 @@ import { CheckIcon, ChevronDownIcon, PlusIcon, SearchIcon, XIcon } from "lucide-
 import { Button } from "@/components/ui/button";
 import type { MetadataSuggestion } from "../metadata";
 import { showErrorToast } from "../toasts";
+import { HighlightedText } from "./HighlightedText";
 import { settingsDialogClassName, settingsDialogCloseClassName, settingsDialogHeaderClassName, settingsDialogTitleClassName } from "./settingsDialogStyles";
 
 export interface MetadataPickerDialogProps {
@@ -138,6 +139,8 @@ export function MetadataPickerDialog({
     ? [{ value: createValue, label: `Create "${createValue}"`, meta: "New" }, ...suggestions]
     : suggestions;
   const sections = optionSections(options);
+  // Highlight the query the visible list was loaded for, so the marks never run ahead of the results.
+  const highlightQuery = loadedQuery.current ?? "";
   // Searching opens every section so no match is hidden inside a collapsed one.
   const isCollapsed = (section: OptionSection) => Boolean(section.group) && !trimmedQuery && collapsedSections.has(section.id);
   const visibleIndices = sections.flatMap((section) => isCollapsed(section) ? [] : section.entries.map((entry) => entry.index));
@@ -181,7 +184,8 @@ export function MetadataPickerDialog({
     if ((inputRef.current?.value.trim() ?? submittedQuery) !== submittedQuery) return;
     const lowerQuery = submittedQuery.toLowerCase();
     const match = currentSuggestions.find((item) => item.value.toLowerCase() === lowerQuery || item.label.toLowerCase() === lowerQuery)
-      || currentSuggestions.find((item) => !item.disabled && !draft.includes(item.value));
+      // Parents listed for context come before the match, so only consider items whose own name matches.
+      || currentSuggestions.find((item) => !item.disabled && !draft.includes(item.value) && item.label.toLowerCase().includes(lowerQuery));
     if (!match) {
       showErrorToast("Unable to add folder", {
         description: "Choose an existing folder.",
@@ -320,7 +324,7 @@ export function MetadataPickerDialog({
                 ) : (
                   <span className={pickerCheckClassName} aria-hidden="true"><CheckIcon /></span>
                 )}
-                <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{item.label}</span>
+                <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{isCreate ? item.label : <HighlightedText text={item.label} query={highlightQuery} />}</span>
                 {item.meta ? <span className="metadata-picker-option-meta flex-none rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">{item.meta}</span> : null}
               </button>
             );

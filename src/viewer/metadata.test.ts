@@ -91,14 +91,26 @@ describe("viewer metadata helpers", () => {
     ];
 
     expect(folderLabel("child", folders)).toBe("Root / Child");
+    // Like the sidebar search, the parent of a match stays listed for context.
     expect(folderSuggestionItems({
       query: "chi",
       selectedValues: [],
       recentFolderIds: ["child"],
       folders,
     })).toEqual([
+      { value: "root", label: "Root", meta: "10 items", depth: 0, disabled: false },
       { value: "child", label: "Child", meta: "3 items", depth: 1, disabled: false },
     ]);
+    // A matching folder keeps its subfolders.
+    expect(folderSuggestionItems({ query: "roo", selectedValues: [], recentFolderIds: [], folders }).map((item) => item.value)).toEqual(["root", "child"]);
+    expect(folderSuggestionItems({ query: "nothing", selectedValues: [], recentFolderIds: [], folders })).toEqual([]);
+    // Depth-only lists (no children arrays) resolve parents the same way.
+    const flatFolders = [
+      { id: "a", name: "Alpha", depth: 0 },
+      { id: "a1", name: "Social", depth: 1 },
+      { id: "b", name: "Beta", depth: 0 },
+    ];
+    expect(folderSuggestionItems({ query: "soc", selectedValues: [], recentFolderIds: [], folders: flatFolders }).map((item) => item.value)).toEqual(["a", "a1"]);
 
     expect(folderSuggestionItems({
       query: "",

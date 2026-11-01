@@ -22,6 +22,7 @@ import {
 import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { HighlightedText } from "./HighlightedText";
 import { settingsDialogClassName, settingsDialogCloseClassName, settingsDialogHeaderClassName, settingsDialogTitleClassName } from "./settingsDialogStyles";
 import appIconUrl from "../../assets/app_icon.svg";
 import {
@@ -938,16 +939,6 @@ function folderTreeDepthClass(depth: number) {
   return folderTreeDepthClasses[Math.max(0, Math.min(depth, folderTreeDepthClasses.length - 1))];
 }
 
-function highlightFolderName(label: string, query: string) {
-  if (!query) return label;
-  const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return label.split(new RegExp(`(${escapedQuery})`, "giu")).map((part, index) => (
-    index % 2 === 1
-      ? <mark key={index} className="bg-transparent text-blue-700 dark:text-blue-400">{part}</mark>
-      : part
-  ));
-}
-
 function FolderNavItem({
   active,
   count,
@@ -1026,7 +1017,7 @@ function FolderNavItem({
           onClick={onSelect}
         >
           <Icon className={active ? "text-[var(--sidebar-active-foreground)]" : "text-muted-foreground"} aria-hidden="true" />
-          <span className="min-w-0 truncate">{highlightFolderName(label, filterQuery)}</span>
+          <span className="min-w-0 truncate"><HighlightedText text={label} query={filterQuery} /></span>
           {displayCount === undefined ? null : (
             <span className={`ml-auto shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium leading-none [font-variant-numeric:tabular-nums] group-data-[collapsible=icon]:hidden ${active ? "bg-background text-sidebar-foreground" : "bg-sidebar-accent text-muted-foreground"}`}>
               {displayCount.toLocaleString()}

@@ -2726,6 +2726,99 @@ describe("ViewerAppShell", () => {
     }
   });
 
+  test("highlights folder matches and lists their parents like the sidebar search", async () => {
+    const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
+    const testGlobal = globalThis as typeof globalThis & {
+      IS_REACT_ACT_ENVIRONMENT?: boolean;
+    };
+    const previousWindow = globalThis.window;
+    const previousDocument = globalThis.document;
+    const previousNode = globalThis.Node;
+    const previousHTMLElement = globalThis.HTMLElement;
+    const previousIS_REACT_ACT_ENVIRONMENT = testGlobal.IS_REACT_ACT_ENVIRONMENT;
+    globalThis.window = dom.window;
+    globalThis.document = dom.window.document;
+    globalThis.Node = dom.window.Node;
+    globalThis.HTMLElement = dom.window.HTMLElement;
+    testGlobal.IS_REACT_ACT_ENVIRONMENT = true;
+
+    const { createRoot } = await import("react-dom/client");
+    const { folderSuggestionItems } = await import("./metadata");
+    let root: import("react-dom/client").Root | null = null;
+    const savedPatches: Array<{ tags: string[]; folders: string[] }> = [];
+    try {
+      const container = dom.window.document.querySelector("#root");
+      if (!(container instanceof dom.window.HTMLElement)) throw new Error("Missing test root");
+      root = createRoot(container);
+      const folders = [
+        { id: "campaigns", name: "Campaigns", depth: 0, children: [{ id: "social", name: "Social", depth: 1 }] },
+        { id: "photos", name: "Photos", depth: 0 },
+      ];
+
+      await act(async () => {
+        root?.render(
+          <PreviewDetailsPanel
+            canEditMetadata
+            item={{ id: "item-1", tags: [], folders: [] }}
+            folders={folders}
+            detailRows={[{ label: "Type", value: "Image" }]}
+            onTagSuggestions={() => []}
+            onFolderSuggestions={(query, selectedValues) => folderSuggestionItems({ query, selectedValues, recentFolderIds: [], folders })}
+            onSaveMetadata={async (_item, patch) => {
+              savedPatches.push(patch);
+              return patch;
+            }}
+          />,
+        );
+      });
+
+      const addFolderButton = Array.from(container.querySelectorAll(".preview-metadata-add")).find((button) => button.getAttribute("aria-label") === "Add Folders");
+      if (!(addFolderButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing folder add button");
+      await act(async () => {
+        addFolderButton.click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      const folderInput = container.querySelector("#folderPickerDialog input") as HTMLInputElement;
+      await act(async () => {
+        const valueSetter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")?.set;
+        valueSetter?.call(folderInput, "soc");
+        folderInput.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      });
+
+      const options = Array.from(container.querySelectorAll("#folderPickerDialog [role=\"option\"]"));
+      expect(options.map((option) => option.textContent)).toEqual(["Campaigns", "Social"]);
+      expect(options[0].querySelector("mark")).toBeNull();
+      expect(options[1].querySelector("mark")?.textContent).toBe("Soc");
+      expect(options[1].querySelector("mark")?.className).toContain("text-blue-700");
+
+      await act(async () => {
+        folderInput.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      const doneButton = Array.from(container.querySelectorAll("dialog button")).find((button) => button.textContent === "Done") as HTMLButtonElement;
+      await act(async () => {
+        doneButton.click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      // Enter adds the match, not the parent listed above it for context.
+      expect(savedPatches).toEqual([{ tags: [], folders: ["social"] }]);
+    } finally {
+      if (root) {
+        await act(async () => {
+          root?.unmount();
+        });
+      }
+      globalThis.window = previousWindow;
+      globalThis.document = previousDocument;
+      globalThis.Node = previousNode;
+      globalThis.HTMLElement = previousHTMLElement;
+      testGlobal.IS_REACT_ACT_ENVIRONMENT = previousIS_REACT_ACT_ENVIRONMENT;
+    }
+  });
+
   test("saves several folder picker toggles together on done", async () => {
     const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
     const testGlobal = globalThis as typeof globalThis & {

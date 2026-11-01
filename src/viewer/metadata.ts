@@ -121,9 +121,30 @@ export function folderSuggestionItems({
       disabled,
     };
   };
+  const visibleIds = matchingFolderIds(folders, query);
   return folderItems
-    .filter((folder) => matchesQuery(folderLabel(folder.id, folders), query))
+    .filter((folder) => visibleIds.has(folder.id))
     .map((folder) => suggestionForFolder(folder.id));
+}
+
+/**
+ * Matches folder names like the sidebar search: a matching folder keeps all of its subfolders, and
+ * the parents of a match stay listed so its place in the tree is visible.
+ */
+function matchingFolderIds(folders: readonly EagleFolder[], query: string) {
+  const ids = new Set<string>();
+  // Walk the flattened tree by depth (like folderLabel) so nested and depth-only folder lists both work.
+  const ancestors: Array<{ depth: number; id: string; included: boolean }> = [];
+  for (const folder of folderTreeItems(folders)) {
+    const depth = Number(folder.depth || 0);
+    while (ancestors.length && ancestors[ancestors.length - 1].depth >= depth) ancestors.pop();
+    const matched = matchesQuery(folder.name, query);
+    const included = matched || ancestors.some((ancestor) => ancestor.included);
+    if (included) ids.add(folder.id);
+    if (matched) for (const ancestor of ancestors) ids.add(ancestor.id);
+    ancestors.push({ depth, id: folder.id, included });
+  }
+  return ids;
 }
 
 export function dedupeSuggestions(items: readonly MetadataSuggestion[]) {
