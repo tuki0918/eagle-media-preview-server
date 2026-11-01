@@ -15,7 +15,7 @@ interface PagerProps {
 }
 
 const pagerButtonClassName =
-  "min-h-10 w-auto rounded-full px-[18px] text-sm font-medium max-[540px]:row-start-2 max-[540px]:w-full max-[540px]:px-3.5 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-linecap:round] [&_svg]:[stroke-linejoin:round] [&_svg]:[stroke-width:2]";
+  "min-h-10 w-auto rounded-full px-[18px] text-sm font-medium pager-compact:row-start-2 pager-compact:w-full pager-compact:px-3.5 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:[stroke-linecap:round] [&_svg]:[stroke-linejoin:round] [&_svg]:[stroke-width:2]";
 
 export function Pager({
   current,
@@ -39,25 +39,27 @@ export function Pager({
   }
 
   return (
-    <nav
-      className="pager static mt-[18px] grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 bg-transparent pb-[calc(10px+env(safe-area-inset-bottom))] pt-2.5 shadow-none backdrop-blur-none max-[540px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] max-[540px]:gap-2"
-      aria-label="Pagination"
-    >
-      <Button id="prevButton" className={`${pagerButtonClassName} max-[540px]:col-[1]`} variant="outline" type="button" disabled={displayPreviousDisabled} onClick={goToPreviousPage}>
-        <ChevronLeftIcon data-icon="inline-start" />
-        <span>Previous</span>
-      </Button>
-      <div id="pageButtons" className="page-buttons inline-flex items-center justify-center gap-2.5 max-[540px]:hidden" aria-label="Page shortcuts">
-        <PageButtons current={displayCurrent} pages={displayPages} onSelect={displayOnSelectPage} />
-      </div>
-      <div id="pageSummary" className="hidden min-h-6 items-center justify-center text-xs text-muted-foreground [font-variant-numeric:tabular-nums] max-[540px]:col-span-2 max-[540px]:row-start-1 max-[540px]:flex" aria-live="polite">
-        {pageSummary}
-      </div>
-      <Button id="nextButton" className={`${pagerButtonClassName} max-[540px]:col-[2]`} variant="outline" type="button" disabled={displayNextDisabled} onClick={goToNextPage}>
-        <span>Next</span>
-        <ChevronRightIcon data-icon="inline-end" />
-      </Button>
-    </nav>
+    <div className="w-full [container:pager/inline-size]">
+      <nav
+        className="pager static mt-[18px] grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 bg-transparent pb-[calc(10px+env(safe-area-inset-bottom))] pt-2.5 shadow-none backdrop-blur-none pager-compact:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] pager-compact:gap-2"
+        aria-label="Pagination"
+      >
+        <Button id="prevButton" className={`${pagerButtonClassName} pager-compact:col-[1]`} variant="outline" type="button" disabled={displayPreviousDisabled} onClick={goToPreviousPage}>
+          <ChevronLeftIcon data-icon="inline-start" />
+          <span>Previous</span>
+        </Button>
+        <div id="pageButtons" className="page-buttons inline-flex items-center justify-center gap-2.5 pager-compact:hidden" aria-label="Page shortcuts">
+          <PageButtons current={displayCurrent} pages={displayPages} onSelect={displayOnSelectPage} />
+        </div>
+        <div id="pageSummary" className="hidden min-h-6 items-center justify-center text-xs text-muted-foreground [font-variant-numeric:tabular-nums] pager-compact:col-span-2 pager-compact:row-start-1 pager-compact:flex" aria-live="polite">
+          {pageSummary}
+        </div>
+        <Button id="nextButton" className={`${pagerButtonClassName} pager-compact:col-[2]`} variant="outline" type="button" disabled={displayNextDisabled} onClick={goToNextPage}>
+          <span>Next</span>
+          <ChevronRightIcon data-icon="inline-end" />
+        </Button>
+      </nav>
+    </div>
   );
 }
 

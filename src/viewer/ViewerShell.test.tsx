@@ -337,8 +337,9 @@ describe("ViewerAppShell", () => {
 
     expect(html).toContain('id="pageSummary"');
     expect(html).toContain("Page 3 of 10");
-    expect(html).toContain("max-[540px]:row-start-1");
-    expect(html).toContain("max-[540px]:row-start-2");
+    expect(html).toContain("[container:pager/inline-size]");
+    expect(html).toContain("pager-compact:row-start-1");
+    expect(html).toContain("pager-compact:row-start-2");
   });
 
   test("keeps bottom spacing when pagination is hidden for tiles", () => {
