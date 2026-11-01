@@ -122,9 +122,9 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.doesNotMatch(uiSource, /id="authUsersStatus"[^>]+role="status"/);
   assert.match(uiSource, /Saved users apply when password protection is enabled\./);
   assert.match(uiSource, /Admin has all permissions\./);
-  assert.match(uiSource, /<span role="columnheader">Username<\/span>/);
-  assert.match(uiSource, /<span role="columnheader">Role<\/span>/);
-  assert.match(uiSource, /<span role="columnheader">Password<\/span>/);
+  assert.match(uiSource, /<span className="px-\[7px\]" role="columnheader">Username<\/span>/);
+  assert.match(uiSource, /<span className="px-\[7px\]" role="columnheader">Role<\/span>/);
+  assert.match(uiSource, /<span className="px-\[7px\]" role="columnheader">Password<\/span>/);
   assert.match(uiSource, /aria-label=\{`Username for user \$\{index \+ 1\}`\}/);
   assert.match(uiSource, /aria-label=\{`Role for \$\{user\.username \|\| `user \$\{index \+ 1\}`\}`\}/);
   assert.match(uiSource, /aria-label=\{`Password for \$\{user\.username \|\| `user \$\{index \+ 1\}`\}`\}/);
@@ -134,7 +134,7 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(uiSource, /role="table" aria-label="Users"/);
   assert.match(uiSource, /const settingInputClassName = /);
   assert.match(uiSource, /className=\{tableInputClassName\}/);
-  assert.match(uiSource, /className=\{`\$\{tableInputClassName\} px-1`\}/);
+  assert.match(uiSource, /className=\{`\$\{tableInputClassName\} appearance-none pr-6`\}/);
   assert.match(uiSource, /const authActionButtonClassName = /);
   assert.match(uiSource, /\$\{authActionButtonClassName\}/);
   assert.match(uiSource, /disabled:cursor-not-allowed disabled:opacity-45/);

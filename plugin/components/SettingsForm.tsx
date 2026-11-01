@@ -151,11 +151,12 @@ export function SettingsForm({
         <div id="accessSettingsPanel" role="tabpanel" aria-labelledby="accessSettingsTab" hidden={settingsTab !== "access"}>
           <SettingRow label="Users" help={authEnabled ? "Viewer can browse. Editor can edit metadata. Admin has all permissions." : "Saved users apply when password protection is enabled."}>
             <div className="overflow-hidden rounded-xl border border-[#e6e6e9]" role="table" aria-label="Users">
-              <div className="grid grid-cols-[minmax(0,1fr)_86px_minmax(0,0.85fr)_28px_28px] items-center gap-1 border-b border-[#efeff1] bg-[#f7f7f8] py-1 pl-3 pr-1.5 text-[10px] font-semibold uppercase leading-none tracking-[0.06em] text-[#8a8f99]" role="row">
-                <span role="columnheader">Username</span>
-                <span role="columnheader">Role</span>
-                <span role="columnheader">Password</span>
+              <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)_28px_86px_28px] items-center gap-1 border-b border-[#efeff1] bg-[#f7f7f8] px-1.5 py-1 text-[10px] font-semibold uppercase leading-none tracking-[0.06em] text-[#8a8f99]" role="row">
+                {/* Headers share the rows' grid and start at the controls' text inset (6px padding + 1px border). */}
+                <span className="px-[7px]" role="columnheader">Username</span>
+                <span className="px-[7px]" role="columnheader">Password</span>
                 <span role="columnheader"><span className="sr-only">Password visibility</span></span>
+                <span className="px-[7px]" role="columnheader">Role</span>
                 <span className="grid place-items-center" role="columnheader">
                   <span className="sr-only">Actions</span>
                   <button className={`grid h-7 w-7 place-items-center rounded-lg ${tableIconButtonClassName}`} type="button" aria-label="Add user" title="Add user" disabled={settingsInputDisabled} onClick={onAddAuthUser}>
@@ -167,7 +168,7 @@ export function SettingsForm({
                 const canTogglePasswordVisible = !user.passwordHash;
                 const passwordVisible = canTogglePasswordVisible && passwordVisibleByIndex[String(index)];
                 return (
-                  <div key={index} className="grid min-h-10 grid-cols-[minmax(0,1fr)_86px_minmax(0,0.85fr)_28px_28px] items-center gap-1 border-b border-[#efeff1] py-1 pl-1.5 pr-1.5 last:border-b-0" role="row">
+                  <div key={index} className="grid min-h-10 grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)_28px_86px_28px] items-center gap-1 border-b border-[#efeff1] py-1 pl-1.5 pr-1.5 last:border-b-0" role="row">
                     <div className="min-w-0" role="cell">
                       <input
                         className={tableInputClassName}
@@ -179,19 +180,6 @@ export function SettingsForm({
                         value={user.username}
                         onChange={(event) => onUpdateAuthUser(index, { username: event.currentTarget.value })}
                       />
-                    </div>
-                    <div className="min-w-0" role="cell">
-                      <select
-                        className={`${tableInputClassName} px-1`}
-                        aria-label={`Role for ${user.username || `user ${index + 1}`}`}
-                        disabled={settingsInputDisabled}
-                        value={user.role}
-                        onChange={(event) => onUpdateAuthUser(index, { role: event.currentTarget.value as UserRole })}
-                      >
-                        <option value="viewer">Viewer</option>
-                        <option value="editor">Editor</option>
-                        <option value="admin">Admin</option>
-                      </select>
                     </div>
                     <div className="min-w-0" role="cell">
                       <input
@@ -217,6 +205,21 @@ export function SettingsForm({
                       >
                         {passwordVisible ? <EyeIcon className="h-[13px] w-[13px]" /> : <EyeOffIcon className="h-[13px] w-[13px]" />}
                       </button>
+                    </div>
+                    <div className="relative min-w-0" role="cell">
+                      {/* The native select adds its own text inset, so it is drawn plainly to line up with the header. */}
+                      <select
+                        className={`${tableInputClassName} appearance-none pr-6`}
+                        aria-label={`Role for ${user.username || `user ${index + 1}`}`}
+                        disabled={settingsInputDisabled}
+                        value={user.role}
+                        onChange={(event) => onUpdateAuthUser(index, { role: event.currentTarget.value as UserRole })}
+                      >
+                        <option value="viewer">Viewer</option>
+                        <option value="editor">Editor</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                      <ChevronIcon className="pointer-events-none absolute right-1.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8a8f99]" />
                     </div>
                     <div className="grid place-items-center" role="cell">
                       <button className={`grid h-7 w-7 place-items-center rounded-lg ${tableIconButtonClassName} hover:text-[#d92d20]`} type="button" aria-label={`Remove ${user.username || "user"}`} title="Remove user" disabled={settingsInputDisabled || authUsers.length <= 1} onClick={() => onRemoveAuthUser(index)}>
