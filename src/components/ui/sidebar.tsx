@@ -5,6 +5,7 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { Slot } from "radix-ui"
 
 import { useIsMobile } from "@/hooks/use-mobile"
+import { useMobileSidebarSwipe, type SidebarMobileDrag } from "@/components/ui/sidebar-swipe"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,7 +23,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { MenuIcon, PanelLeftIcon } from "lucide-react"
+import { MenuIcon, PanelLeftCloseIcon } from "lucide-react"
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
@@ -101,6 +102,11 @@ function sidebarWidthClass(width: number) {
   return sidebarWidthClasses.find((item) => item.width === width)?.className ?? sidebarWidthClasses[8].className
 }
 
+const SidebarMobileDragContext = React.createContext<{
+  sheetId: string
+  drag: SidebarMobileDrag | null
+}>({ sheetId: "", drag: null })
+
 function SidebarProvider({
   defaultOpen = true,
   open: openProp,
@@ -124,6 +130,10 @@ function SidebarProvider({
 }) {
   const isMobile = useIsMobile()
   const [openMobile, setOpenMobile] = React.useState(false)
+  const sheetId = React.useId()
+  const mobileDrag = useMobileSidebarSwipe(isMobile && openMobile, setOpenMobile, sheetId)
+  // Separate from the main context so drag frames only re-render the Sheet, not every sidebar consumer.
+  const mobileDragValue = React.useMemo(() => ({ sheetId, drag: mobileDrag }), [sheetId, mobileDrag])
 
   // This is the internal state of the sidebar.
   // We use openProp and setOpenProp for control from outside the component.
@@ -210,17 +220,19 @@ function SidebarProvider({
 
   return (
     <SidebarContext.Provider value={contextValue}>
-      <div
-        data-slot="sidebar-wrapper"
-        className={cn(
-          "group/sidebar-wrapper flex min-h-svh w-full [--sidebar-width-icon:3rem] has-data-[variant=inset]:bg-sidebar",
-          typeof sidebarWidth === "number" ? sidebarWidthClass(clampedSidebarWidth) : "[--sidebar-width:16rem]",
-          className
-        )}
-        {...props}
-      >
-        {children}
-      </div>
+      <SidebarMobileDragContext.Provider value={mobileDragValue}>
+        <div
+          data-slot="sidebar-wrapper"
+          className={cn(
+            "group/sidebar-wrapper flex min-h-svh w-full [--sidebar-width-icon:3rem] has-data-[variant=inset]:bg-sidebar",
+            typeof sidebarWidth === "number" ? sidebarWidthClass(clampedSidebarWidth) : "[--sidebar-width:16rem]",
+            className
+          )}
+          {...props}
+        >
+          {children}
+        </div>
+      </SidebarMobileDragContext.Provider>
     </SidebarContext.Provider>
   )
 }
@@ -241,6 +253,7 @@ function Sidebar({
   onEscapeKeyDown?: React.ComponentProps<typeof SheetContent>["onEscapeKeyDown"]
 }) {
   const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
+  const { sheetId, drag } = React.useContext(SidebarMobileDragContext)
 
   if (collapsible === "none") {
     return (
@@ -266,6 +279,11 @@ function Sidebar({
           data-sidebar="sidebar"
           data-slot="sidebar"
           data-mobile="true"
+          data-sidebar-sheet={sheetId}
+          style={drag ? {
+            transform: `translateX(clamp(-100%, ${drag.offset}, 0px))`,
+            transition: drag.dragging ? "none" : undefined,
+          } : undefined}
           className="w-[var(--sidebar-width)] bg-sidebar p-0 text-sidebar-foreground [--sidebar-width:18rem] [&>button]:hidden"
           side={side}
         >
@@ -332,7 +350,7 @@ function SidebarTrigger({
   ...props
 }: React.ComponentProps<typeof Button>) {
   const { toggleSidebar, isMobile, openMobile, state } = useSidebar()
-  const Icon = (isMobile ? !openMobile : state === "collapsed") ? MenuIcon : PanelLeftIcon
+  const Icon = (isMobile ? !openMobile : state === "collapsed") ? MenuIcon : PanelLeftCloseIcon
 
   return (
     <Button
