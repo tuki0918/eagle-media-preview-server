@@ -1723,7 +1723,11 @@ describe("ViewerAppShell", () => {
 
     expect(details).toContain("preview-details-section");
     expect(details).toContain("preview-metadata-summary");
-    expect(details).toContain("preview-metadata-add");
+    expect(details).toContain("preview-metadata-edit");
+    expect(details).toContain('aria-label="Edit tags"');
+    expect(details).toContain('aria-label="Edit folders"');
+    expect(details).toContain("lucide-pencil");
+    expect(details).not.toContain(">Add<");
     expect(details).not.toContain("Metadata");
     expect(details).not.toContain("preview-edit-toggle");
     expect(details).not.toContain("preview-edit-form");
@@ -2017,7 +2021,7 @@ describe("ViewerAppShell", () => {
         );
       });
 
-      const addTagButton = Array.from(container.querySelectorAll(".preview-metadata-add")).find((button) => button.getAttribute("aria-label") === "Add Tags");
+      const addTagButton = Array.from(container.querySelectorAll(".preview-metadata-edit")).find((button) => button.getAttribute("aria-label") === "Edit tags");
       if (!(addTagButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing tag add button");
 
       await act(async () => {
@@ -2109,7 +2113,7 @@ describe("ViewerAppShell", () => {
         );
       });
 
-      const addTagButton = Array.from(container.querySelectorAll(".preview-metadata-add")).find((button) => button.getAttribute("aria-label") === "Add Tags");
+      const addTagButton = Array.from(container.querySelectorAll(".preview-metadata-edit")).find((button) => button.getAttribute("aria-label") === "Edit tags");
       if (!(addTagButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing tag add button");
       await act(async () => {
         addTagButton.click();
@@ -2182,7 +2186,7 @@ describe("ViewerAppShell", () => {
       });
 
       const openPicker = async () => {
-        const addTagButton = Array.from(container.querySelectorAll(".preview-metadata-add")).find((button) => button.getAttribute("aria-label") === "Add Tags");
+        const addTagButton = Array.from(container.querySelectorAll(".preview-metadata-edit")).find((button) => button.getAttribute("aria-label") === "Edit tags");
         if (!(addTagButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing tag add button");
         await act(async () => {
           addTagButton.click();
@@ -2271,7 +2275,7 @@ describe("ViewerAppShell", () => {
         );
       });
 
-      const addTagButton = Array.from(container.querySelectorAll(".preview-metadata-add")).find((button) => button.getAttribute("aria-label") === "Add Tags");
+      const addTagButton = Array.from(container.querySelectorAll(".preview-metadata-edit")).find((button) => button.getAttribute("aria-label") === "Edit tags");
       if (!(addTagButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing tag add button");
 
       await act(async () => {
@@ -2425,7 +2429,7 @@ describe("ViewerAppShell", () => {
         );
       });
 
-      const addFolderButton = Array.from(container.querySelectorAll(".preview-metadata-add")).find((button) => button.getAttribute("aria-label") === "Add Folders");
+      const addFolderButton = Array.from(container.querySelectorAll(".preview-metadata-edit")).find((button) => button.getAttribute("aria-label") === "Edit folders");
       if (!(addFolderButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing folder add button");
 
       await act(async () => {
@@ -2513,7 +2517,7 @@ describe("ViewerAppShell", () => {
         );
       });
 
-      const addFolderButton = Array.from(container.querySelectorAll(".preview-metadata-add")).find((button) => button.getAttribute("aria-label") === "Add Folders");
+      const addFolderButton = Array.from(container.querySelectorAll(".preview-metadata-edit")).find((button) => button.getAttribute("aria-label") === "Edit folders");
       if (!(addFolderButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing folder add button");
 
       await act(async () => {
@@ -2601,7 +2605,7 @@ describe("ViewerAppShell", () => {
         );
       });
 
-      const addFolderButton = Array.from(container.querySelectorAll(".preview-metadata-add")).find((button) => button.getAttribute("aria-label") === "Add Folders");
+      const addFolderButton = Array.from(container.querySelectorAll(".preview-metadata-edit")).find((button) => button.getAttribute("aria-label") === "Edit folders");
       if (!(addFolderButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing folder add button");
 
       await act(async () => {
@@ -2684,7 +2688,7 @@ describe("ViewerAppShell", () => {
         );
       });
 
-      const addFolderButton = Array.from(container.querySelectorAll(".preview-metadata-add")).find((button) => button.getAttribute("aria-label") === "Add Folders");
+      const addFolderButton = Array.from(container.querySelectorAll(".preview-metadata-edit")).find((button) => button.getAttribute("aria-label") === "Edit folders");
       if (!(addFolderButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing folder add button");
       await act(async () => {
         addFolderButton.click();
@@ -2772,7 +2776,7 @@ describe("ViewerAppShell", () => {
         );
       });
 
-      const addFolderButton = Array.from(container.querySelectorAll(".preview-metadata-add")).find((button) => button.getAttribute("aria-label") === "Add Folders");
+      const addFolderButton = Array.from(container.querySelectorAll(".preview-metadata-edit")).find((button) => button.getAttribute("aria-label") === "Edit folders");
       if (!(addFolderButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing folder add button");
       await act(async () => {
         addFolderButton.click();
@@ -2864,7 +2868,7 @@ describe("ViewerAppShell", () => {
         );
       });
 
-      const addFolderButton = Array.from(container.querySelectorAll(".preview-metadata-add")).find((button) => button.getAttribute("aria-label") === "Add Folders");
+      const addFolderButton = Array.from(container.querySelectorAll(".preview-metadata-edit")).find((button) => button.getAttribute("aria-label") === "Edit folders");
       if (!(addFolderButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing folder add button");
 
       await act(async () => {
@@ -2950,7 +2954,7 @@ describe("ViewerAppShell", () => {
         );
       });
 
-      const addFolderButton = Array.from(container.querySelectorAll(".preview-metadata-add")).find((button) => button.getAttribute("aria-label") === "Add Folders");
+      const addFolderButton = Array.from(container.querySelectorAll(".preview-metadata-edit")).find((button) => button.getAttribute("aria-label") === "Edit folders");
       if (!(addFolderButton instanceof dom.window.HTMLButtonElement)) throw new Error("Missing folder add button");
 
       await act(async () => {
@@ -3100,7 +3104,68 @@ describe("ViewerAppShell", () => {
     expect(details).toContain("Folders");
     expect(details).not.toContain("No tags");
     expect(details).not.toContain("No folders");
-    expect(details).not.toContain("preview-metadata-add");
+    expect(details).not.toContain("preview-metadata-edit");
+  });
+
+  test("opens the metadata picker from an empty editable row", async () => {
+    const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
+    const testGlobal = globalThis as typeof globalThis & {
+      IS_REACT_ACT_ENVIRONMENT?: boolean;
+    };
+    const previousWindow = globalThis.window;
+    const previousDocument = globalThis.document;
+    const previousNode = globalThis.Node;
+    const previousHTMLElement = globalThis.HTMLElement;
+    const previousIS_REACT_ACT_ENVIRONMENT = testGlobal.IS_REACT_ACT_ENVIRONMENT;
+    globalThis.window = dom.window;
+    globalThis.document = dom.window.document;
+    globalThis.Node = dom.window.Node;
+    globalThis.HTMLElement = dom.window.HTMLElement;
+    testGlobal.IS_REACT_ACT_ENVIRONMENT = true;
+
+    const { createRoot } = await import("react-dom/client");
+    let root: import("react-dom/client").Root | null = null;
+    try {
+      const container = dom.window.document.querySelector("#root");
+      if (!(container instanceof dom.window.HTMLElement)) throw new Error("Missing test root");
+      root = createRoot(container);
+
+      await act(async () => {
+        root?.render(
+          <PreviewDetailsPanel
+            canEditMetadata
+            item={{ id: "item-1", tags: [], folders: [] }}
+            folders={[]}
+            detailRows={[{ label: "Type", value: "Image" }]}
+            onTagSuggestions={() => []}
+            onFolderSuggestions={() => []}
+            onSaveMetadata={async (_item, patch) => patch}
+          />,
+        );
+      });
+
+      const emptyButtons = Array.from(container.querySelectorAll(".preview-metadata-empty-edit"));
+      expect(emptyButtons.map((button) => [button.textContent, button.getAttribute("title")])).toEqual([
+        ["No tags", "Edit tags"],
+        ["No folders", "Edit folders"],
+      ]);
+
+      await act(async () => {
+        (emptyButtons[1] as HTMLButtonElement).click();
+      });
+      expect(container.querySelector("#folderPickerDialog")).not.toBeNull();
+    } finally {
+      if (root) {
+        await act(async () => {
+          root?.unmount();
+        });
+      }
+      globalThis.window = previousWindow;
+      globalThis.document = previousDocument;
+      globalThis.Node = previousNode;
+      globalThis.HTMLElement = previousHTMLElement;
+      testGlobal.IS_REACT_ACT_ENVIRONMENT = previousIS_REACT_ACT_ENVIRONMENT;
+    }
   });
 
   test("deduplicates preview metadata chips from existing item values", () => {

@@ -864,8 +864,9 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(html, /preview-admin-actions relative grid grid-cols-\[minmax\(0,1fr\)_auto\] gap-2/);
   assert.match(html, /const previewMetadataRowClassName = "preview-metadata-row grid gap-2\.5/);
   assert.match(html, /const previewEditChipListClassName = "preview-edit-chip-list/);
-  assert.match(html, /preview-metadata-add h-7 gap-1 rounded-full border-dashed/);
-  assert.match(html, /aria-label=\{addLabel\}/);
+  assert.match(html, /preview-metadata-edit -my-2 size-8/);
+  assert.match(html, /aria-label=\{editLabel\}/);
+  assert.doesNotMatch(html, /preview-metadata-add/);
   assert.doesNotMatch(html, /preview-folder-current-badge/);
   assert.doesNotMatch(html, /preview-folder-option-meta/);
   assert.match(html, /<MetadataPickerDialog[\s\S]*id="tagPickerDialog"/);

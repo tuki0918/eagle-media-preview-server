@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { EllipsisIcon, ExternalLinkIcon as LucideExternalLinkIcon, FolderIcon, LinkIcon, PlusIcon, LoaderCircleIcon, RotateCcwIcon, ShareIcon, TagIcon, Trash2Icon, XIcon } from "lucide-react";
+import { EllipsisIcon, ExternalLinkIcon as LucideExternalLinkIcon, FolderIcon, LinkIcon, LoaderCircleIcon, PencilIcon, RotateCcwIcon, ShareIcon, TagIcon, Trash2Icon, XIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { errorMessage } from "../api";
@@ -430,7 +430,7 @@ function PreviewMetadataEditor({
         label="Tags"
         values={tags.map((value) => ({ label: value, value }))}
         disabled={saving}
-        onAdd={() => openInput("tags")}
+        onEdit={() => openInput("tags")}
         onRemove={(value) => saveMetadata(tags.filter((entry) => entry !== value), categories, {
           title: "Tags saved",
           description: `"${value}" was removed.`,
@@ -441,7 +441,7 @@ function PreviewMetadataEditor({
         label="Folders"
         values={categories.map((value) => ({ label: folderLabel(value, folders), value }))}
         disabled={saving}
-        onAdd={() => openInput("folders")}
+        onEdit={() => openInput("folders")}
         onRemove={(value) => saveMetadata(tags, categories.filter((entry) => entry !== value), {
           title: "Folders saved",
           description: `"${folderLabel(value, folders)}" was removed.`,
@@ -495,12 +495,19 @@ function MetadataReadOnlyRow({ icon, label, values }: { icon: ReactNode; label: 
   );
 }
 
-function MetadataHeading({ count, label }: { count: number; label: string }) {
-  return (
+function MetadataHeading({ action, count, label }: { action?: ReactNode; count: number; label: string }) {
+  const heading = (
     <h3 className={previewSectionHeadingClassName}>
       <span>{label}</span>
       {count > 0 ? <span className={previewSectionCountClassName}>{count.toLocaleString()}</span> : null}
     </h3>
+  );
+  if (!action) return heading;
+  return (
+    <div className="flex min-h-5 items-center justify-between gap-3">
+      {heading}
+      {action}
+    </div>
   );
 }
 
@@ -508,21 +515,37 @@ function EditableMetadataRow({
   disabled,
   icon,
   label,
-  onAdd,
+  onEdit,
   onRemove,
   values,
 }: {
   disabled?: boolean;
   icon: ReactNode;
   label: string;
-  onAdd: () => void;
+  onEdit: () => void;
   onRemove: (value: string) => void;
   values: Array<{ label: string; value: string }>;
 }) {
+  const editLabel = `Edit ${label.toLowerCase()}`;
   return (
     <div className={previewMetadataRowClassName}>
-      <MetadataHeading label={label} count={values.length} />
-      <MetadataChipList editable disabled={disabled} icon={icon} values={values} onAdd={onAdd} onRemove={onRemove} addLabel={`Add ${label}`} />
+      <MetadataHeading
+        label={label}
+        count={values.length}
+        action={(
+          // The negative margin keeps the larger tap target from growing the heading row.
+          <Button type="button" variant="ghost" size="icon" className="preview-metadata-edit -my-2 size-8 shrink-0 rounded-full text-muted-foreground hover:text-foreground max-[540px]:size-9 [&_svg]:size-4" title={editLabel} aria-label={editLabel} disabled={disabled} onClick={onEdit}>
+            <PencilIcon aria-hidden="true" />
+          </Button>
+        )}
+      />
+      {values.length ? (
+        <MetadataChipList editable disabled={disabled} icon={icon} values={values} onRemove={onRemove} />
+      ) : (
+        <button type="button" className="preview-metadata-empty-edit flex min-h-9 w-full cursor-pointer items-center rounded-xl border border-dashed border-border bg-transparent px-3 text-left text-[13px] text-muted-foreground transition-colors hover:border-input hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45" title={editLabel} disabled={disabled} onClick={onEdit}>
+          No {label.toLowerCase()}
+        </button>
+      )}
     </div>
   );
 }
@@ -531,18 +554,14 @@ function MetadataChipList({
   disabled,
   editable = false,
   icon,
-  onAdd,
   onRemove,
   values,
-  addLabel,
 }: {
   disabled?: boolean;
   editable?: boolean;
   icon: ReactNode;
-  onAdd?: () => void;
   onRemove?: (value: string) => void;
   values: Array<{ label: string; value: string }>;
-  addLabel?: string;
 }) {
   return (
     <div className={previewEditChipListClassName}>
@@ -557,12 +576,6 @@ function MetadataChipList({
           ) : null}
         </Badge>
       ))}
-      {editable ? (
-        <Button type="button" variant="outline" size="sm" className="preview-metadata-add h-7 gap-1 rounded-full border-dashed px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground [&_svg]:size-3.5" title={addLabel} aria-label={addLabel} disabled={disabled} onClick={onAdd}>
-          <PlusIcon aria-hidden="true" />
-          <span>Add</span>
-        </Button>
-      ) : null}
     </div>
   );
 }
