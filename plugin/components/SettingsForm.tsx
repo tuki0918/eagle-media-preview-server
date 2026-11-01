@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { AuthUser, LibraryCandidate, LibraryList, PluginSettings, SettingsTab, UserRole } from "../types";
-import { CheckIcon, ChevronIcon, CloseIcon, EyeIcon, EyeOffIcon, FolderOpenIcon, PlusIcon, RefreshIcon, SettingsIcon } from "./Icons";
+import { CheckIcon, ChevronIcon, EyeIcon, EyeOffIcon, FolderOpenIcon, MinusIcon, PlusIcon, RefreshIcon, SettingsIcon } from "./Icons";
 
 interface SettingsFormProps {
   authEnabled: boolean;
@@ -44,6 +44,9 @@ const DEFAULT_PORT = 41532;
 const MIN_SESSION_DURATION_DAYS = 1;
 const MAX_SESSION_DURATION_DAYS = 365;
 const settingInputClassName = "h-8 min-w-0 rounded-lg border border-[#e1e2e6] bg-white px-2.5 text-[12px] text-[#171717] outline-0 transition-shadow placeholder:text-[#a3a7ae] focus:border-[#171717] focus:shadow-[0_0_0_3px_rgba(23,23,23,0.08)] disabled:cursor-not-allowed disabled:bg-[#f4f5f7] disabled:text-[#8a8f99]";
+// Table cells drop the input border until hover/focus, so rows read as one list like Libraries.
+const tableInputClassName = "h-8 w-full min-w-0 rounded-lg border border-transparent bg-transparent px-1.5 text-[12px] text-[#171717] outline-0 transition-[background-color,box-shadow] placeholder:text-[#a3a7ae] hover:bg-[#f4f4f6] focus:border-[#171717] focus:bg-white focus:shadow-[0_0_0_3px_rgba(23,23,23,0.08)] disabled:cursor-not-allowed disabled:bg-transparent disabled:text-[#8a8f99]";
+const tableIconButtonClassName = "border-0 bg-transparent p-0 text-[#555c66] hover:bg-[#ececef] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent";
 const authActionButtonClassName = "border border-[#e1e2e6] bg-white text-[#555c66] hover:bg-[#f4f4f6] disabled:cursor-not-allowed disabled:opacity-45";
 const primaryButtonClassName = "border border-[#171717] bg-[#171717] text-white hover:bg-[#2b2b2b] disabled:cursor-not-allowed disabled:opacity-35";
 
@@ -147,72 +150,82 @@ export function SettingsForm({
 
         <div id="accessSettingsPanel" role="tabpanel" aria-labelledby="accessSettingsTab" hidden={settingsTab !== "access"}>
           <SettingRow label="Users" help={authEnabled ? "Viewer can browse. Editor can edit metadata. Admin has all permissions." : "Saved users apply when password protection is enabled."}>
-            <div className="grid gap-2">
-              <div className="grid grid-cols-[minmax(80px,1fr)_86px_minmax(76px,0.8fr)_32px_32px] gap-1.5 px-0.5 text-[10px] font-semibold uppercase leading-none tracking-[0.06em] text-[#8a8f99]">
-                <span>Username</span>
-                <span>Role</span>
-                <span>Password</span>
-                <span aria-hidden="true" />
-                <span aria-hidden="true" />
+            <div className="overflow-hidden rounded-xl border border-[#e6e6e9]" role="table" aria-label="Users">
+              <div className="grid grid-cols-[minmax(0,1fr)_86px_minmax(0,0.85fr)_28px_28px] items-center gap-1 border-b border-[#efeff1] bg-[#f7f7f8] py-1 pl-3 pr-1.5 text-[10px] font-semibold uppercase leading-none tracking-[0.06em] text-[#8a8f99]" role="row">
+                <span role="columnheader">Username</span>
+                <span role="columnheader">Role</span>
+                <span role="columnheader">Password</span>
+                <span role="columnheader"><span className="sr-only">Password visibility</span></span>
+                <span className="grid place-items-center" role="columnheader">
+                  <span className="sr-only">Actions</span>
+                  <button className={`grid h-7 w-7 place-items-center rounded-lg ${tableIconButtonClassName}`} type="button" aria-label="Add user" title="Add user" disabled={settingsInputDisabled} onClick={onAddAuthUser}>
+                    <PlusIcon className="h-[14px] w-[14px]" />
+                  </button>
+                </span>
               </div>
               {authUsers.map((user, index) => {
                 const canTogglePasswordVisible = !user.passwordHash;
                 const passwordVisible = canTogglePasswordVisible && passwordVisibleByIndex[String(index)];
                 return (
-                  <div key={index} className="grid grid-cols-[minmax(80px,1fr)_86px_minmax(76px,0.8fr)_32px_32px] items-center gap-1.5">
-                    <input
-                      className={settingInputClassName}
-                      type="text"
-                      aria-label={`Username for user ${index + 1}`}
-                      autoComplete="username"
-                      disabled={settingsInputDisabled}
-                      value={user.username}
-                      onChange={(event) => onUpdateAuthUser(index, { username: event.currentTarget.value })}
-                    />
-                    <select
-                      className={`${settingInputClassName} px-1.5`}
-                      aria-label={`Role for ${user.username || `user ${index + 1}`}`}
-                      disabled={settingsInputDisabled}
-                      value={user.role}
-                      onChange={(event) => onUpdateAuthUser(index, { role: event.currentTarget.value as UserRole })}
-                    >
-                      <option value="viewer">Viewer</option>
-                      <option value="editor">Editor</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                    <input
-                      key={`${passwordDraftRevision}-${index}`}
-                      className={settingInputClassName}
-                      type={passwordVisible ? "text" : "password"}
-                      aria-label={`Password for ${user.username || `user ${index + 1}`}`}
-                      autoComplete="new-password"
-                      disabled={settingsInputDisabled}
-                      placeholder={user.passwordHash ? "••••••••" : "Password"}
-                      defaultValue={userPasswords[String(index)] || ""}
-                      onChange={(event) => onUserPasswordDraftChange(index, event.currentTarget.value)}
-                    />
-                    <button
-                      className={`grid h-8 w-8 place-items-center rounded-lg p-1 ${authActionButtonClassName}`}
-                      type="button"
-                      aria-label={canTogglePasswordVisible ? (passwordVisible ? `Hide password for ${user.username || `user ${index + 1}`}` : `Show password for ${user.username || `user ${index + 1}`}`) : `Saved password for ${user.username || `user ${index + 1}`} is hidden`}
-                      title={canTogglePasswordVisible ? (passwordVisible ? "Hide password" : "Show password") : "Saved password is hidden"}
-                      disabled={settingsInputDisabled || !canTogglePasswordVisible}
-                      onClick={canTogglePasswordVisible ? () => onTogglePasswordVisible(index) : undefined}
-                    >
-                      {passwordVisible ? <EyeIcon className="h-[13px] w-[13px]" /> : <EyeOffIcon className="h-[13px] w-[13px]" />}
-                    </button>
-                    <button className={`grid h-8 w-8 place-items-center rounded-lg ${authActionButtonClassName}`} type="button" aria-label={`Remove ${user.username || "user"}`} title="Remove user" disabled={settingsInputDisabled || authUsers.length <= 1} onClick={() => onRemoveAuthUser(index)}>
-                      <CloseIcon className="h-[11px] w-[11px]" />
-                    </button>
+                  <div key={index} className="grid min-h-10 grid-cols-[minmax(0,1fr)_86px_minmax(0,0.85fr)_28px_28px] items-center gap-1 border-b border-[#efeff1] py-1 pl-1.5 pr-1.5 last:border-b-0" role="row">
+                    <div className="min-w-0" role="cell">
+                      <input
+                        className={tableInputClassName}
+                        type="text"
+                        aria-label={`Username for user ${index + 1}`}
+                        autoComplete="username"
+                        disabled={settingsInputDisabled}
+                        placeholder="Username"
+                        value={user.username}
+                        onChange={(event) => onUpdateAuthUser(index, { username: event.currentTarget.value })}
+                      />
+                    </div>
+                    <div className="min-w-0" role="cell">
+                      <select
+                        className={`${tableInputClassName} px-1`}
+                        aria-label={`Role for ${user.username || `user ${index + 1}`}`}
+                        disabled={settingsInputDisabled}
+                        value={user.role}
+                        onChange={(event) => onUpdateAuthUser(index, { role: event.currentTarget.value as UserRole })}
+                      >
+                        <option value="viewer">Viewer</option>
+                        <option value="editor">Editor</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    </div>
+                    <div className="min-w-0" role="cell">
+                      <input
+                        key={`${passwordDraftRevision}-${index}`}
+                        className={tableInputClassName}
+                        type={passwordVisible ? "text" : "password"}
+                        aria-label={`Password for ${user.username || `user ${index + 1}`}`}
+                        autoComplete="new-password"
+                        disabled={settingsInputDisabled}
+                        placeholder={user.passwordHash ? "••••••••" : "Password"}
+                        defaultValue={userPasswords[String(index)] || ""}
+                        onChange={(event) => onUserPasswordDraftChange(index, event.currentTarget.value)}
+                      />
+                    </div>
+                    <div className="grid place-items-center" role="cell">
+                      <button
+                        className={`grid h-7 w-7 place-items-center rounded-lg ${tableIconButtonClassName}`}
+                        type="button"
+                        aria-label={canTogglePasswordVisible ? (passwordVisible ? `Hide password for ${user.username || `user ${index + 1}`}` : `Show password for ${user.username || `user ${index + 1}`}`) : `Saved password for ${user.username || `user ${index + 1}`} is hidden`}
+                        title={canTogglePasswordVisible ? (passwordVisible ? "Hide password" : "Show password") : "Saved password is hidden"}
+                        disabled={settingsInputDisabled || !canTogglePasswordVisible}
+                        onClick={canTogglePasswordVisible ? () => onTogglePasswordVisible(index) : undefined}
+                      >
+                        {passwordVisible ? <EyeIcon className="h-[13px] w-[13px]" /> : <EyeOffIcon className="h-[13px] w-[13px]" />}
+                      </button>
+                    </div>
+                    <div className="grid place-items-center" role="cell">
+                      <button className={`grid h-7 w-7 place-items-center rounded-lg ${tableIconButtonClassName} hover:text-[#d92d20]`} type="button" aria-label={`Remove ${user.username || "user"}`} title="Remove user" disabled={settingsInputDisabled || authUsers.length <= 1} onClick={() => onRemoveAuthUser(index)}>
+                        <MinusIcon className="h-[14px] w-[14px]" />
+                      </button>
+                    </div>
                   </div>
                 );
               })}
-              <div className="flex items-center justify-start gap-2">
-                <button className={`inline-flex h-8 items-center gap-1.5 rounded-full border-dashed px-3 text-[12px] font-medium text-[#171717] ${authActionButtonClassName}`} type="button" disabled={settingsInputDisabled} onClick={onAddAuthUser}>
-                  <PlusIcon className="h-[12px] w-[12px]" />
-                  <span>Add user</span>
-                </button>
-              </div>
             </div>
           </SettingRow>
           <SettingRow label="Session" help="How long browser sign-ins stay active. Shorter durations can require signing in again.">

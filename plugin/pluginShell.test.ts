@@ -122,17 +122,19 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.doesNotMatch(uiSource, /id="authUsersStatus"[^>]+role="status"/);
   assert.match(uiSource, /Saved users apply when password protection is enabled\./);
   assert.match(uiSource, /Admin has all permissions\./);
-  assert.match(uiSource, /<span>Username<\/span>/);
-  assert.match(uiSource, /<span>Role<\/span>/);
-  assert.match(uiSource, /<span>Password<\/span>/);
+  assert.match(uiSource, /<span role="columnheader">Username<\/span>/);
+  assert.match(uiSource, /<span role="columnheader">Role<\/span>/);
+  assert.match(uiSource, /<span role="columnheader">Password<\/span>/);
   assert.match(uiSource, /aria-label=\{`Username for user \$\{index \+ 1\}`\}/);
   assert.match(uiSource, /aria-label=\{`Role for \$\{user\.username \|\| `user \$\{index \+ 1\}`\}`\}/);
   assert.match(uiSource, /aria-label=\{`Password for \$\{user\.username \|\| `user \$\{index \+ 1\}`\}`\}/);
-  assert.match(uiSource, /<PlusIcon className="h-\[12px\] w-\[12px\]" \/>/);
-  assert.match(uiSource, /<span>Add user<\/span>/);
+  assert.match(uiSource, /aria-label="Add user" title="Add user"/);
+  assert.match(uiSource, /<PlusIcon className="h-\[14px\] w-\[14px\]" \/>/);
+  assert.match(uiSource, /<MinusIcon className="h-\[14px\] w-\[14px\]" \/>/);
+  assert.match(uiSource, /role="table" aria-label="Users"/);
   assert.match(uiSource, /const settingInputClassName = /);
-  assert.match(uiSource, /className=\{settingInputClassName\}/);
-  assert.match(uiSource, /className=\{`\$\{settingInputClassName\} px-1\.5`\}/);
+  assert.match(uiSource, /className=\{tableInputClassName\}/);
+  assert.match(uiSource, /className=\{`\$\{tableInputClassName\} px-1`\}/);
   assert.match(uiSource, /const authActionButtonClassName = /);
   assert.match(uiSource, /\$\{authActionButtonClassName\}/);
   assert.match(uiSource, /disabled:cursor-not-allowed disabled:opacity-45/);
@@ -926,6 +928,101 @@ test("plugin saves public network with HTTP password protection without asking w
   assert.equal(publicNetwork.checked, true);
 });
 
+test("plugin confirms with an Eagle message box before removing a user", async () => {
+  const bundle = await esbuild({
+    bundle: true,
+    define: {
+      "process.env.NODE_ENV": JSON.stringify("test"),
+    },
+    entryPoints: [new URL("./app.tsx", import.meta.url).pathname],
+    format: "iife",
+    platform: "browser",
+    write: false,
+  });
+  const domOptions = {
+    runScripts: "outside-only",
+    url: "file:///tmp/eagle-plugin/plugin/index.html",
+  } as unknown as ConstructorParameters<typeof JSDOM>[1];
+  const dom = new JSDOM("<!doctype html><html><body><div id=\"root\"></div></body></html>", domOptions);
+  const pluginWindow = dom.window as unknown as Window & {
+    eval: (source: string) => unknown;
+    eagle: unknown;
+    require: (id: string) => unknown;
+  };
+  const messageBoxes: Array<{ buttons?: string[]; message: string; type?: string }> = [];
+  const responses = [0, 1];
+  pluginWindow.eagle = {
+    dialog: {
+      async showMessageBox(options: { buttons?: string[]; message: string; type?: string }) {
+        messageBoxes.push(options);
+        return { response: responses.shift() ?? 0 };
+      },
+    },
+  };
+  const status = {
+    settings: {
+      authEnabled: false,
+      authUsers: [
+        { username: "eagle", role: "viewer", passwordHash: "hash" },
+        { username: "admin", role: "admin", passwordHash: "hash" },
+      ],
+      host: "127.0.0.1",
+      port: 41532,
+    },
+    state: "stopped",
+    url: "",
+  };
+  pluginWindow.require = (id: string) => {
+    if (id === "path") return path;
+    return {
+      createServerManager() {
+        return {
+          async init() {
+            return status;
+          },
+          async status() {
+            return status;
+          },
+        };
+      },
+    };
+  };
+
+  pluginWindow.eval(bundle.outputFiles[0].text);
+  const doc = dom.window.document;
+  const usernames = () => Array.from(doc.querySelectorAll<HTMLInputElement>('[aria-label="Users"] input[autocomplete="username"]')).map((input) => input.value);
+  const removeEagle = () => doc.querySelector<HTMLButtonElement>('button[aria-label="Remove eagle"]');
+  // Wait for init: the default settings render enabled for a moment before the loaded users arrive.
+  await waitFor(() => usernames().join(",") === "eagle,admin" && removeEagle()?.disabled === false, { timeoutMs: 5000 });
+
+  // StrictMode runs init twice, so a click can land on a briefly disabled button; click until the dialog opens.
+  const openRemoveDialog = (count: number) => waitFor(() => {
+    if (messageBoxes.length >= count) return true;
+    removeEagle()?.click();
+    return false;
+  }, { timeoutMs: 5000 });
+
+  // Every row exposes the same five columns, so each control is announced with its column header.
+  const rows = Array.from(doc.querySelectorAll('[aria-label="Users"] > [role="row"]'));
+  assert.equal(rows.length, 3);
+  assert.deepEqual(rows.map((row) => Array.from(row.children).map((child) => child.getAttribute("role")).join(",")), [
+    "columnheader,columnheader,columnheader,columnheader,columnheader",
+    "cell,cell,cell,cell,cell",
+    "cell,cell,cell,cell,cell",
+  ]);
+
+  await openRemoveDialog(1);
+  assert.equal(messageBoxes[0].message, "Remove eagle?");
+  assert.equal(messageBoxes[0].type, "warning");
+  assert.equal(JSON.stringify(messageBoxes[0].buttons), JSON.stringify(["Cancel", "Remove"]));
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.deepEqual(usernames(), ["eagle", "admin"], "Cancel keeps the user");
+
+  await openRemoveDialog(2);
+  await waitFor(() => usernames().join(",") === "admin");
+  assert.equal(doc.querySelector<HTMLButtonElement>('button[aria-label="Remove admin"]')?.disabled, true, "the last user cannot be removed");
+});
+
 test("plugin settings inputs are disabled while the server is running", async () => {
   const bundle = await esbuild({
     bundle: true,
@@ -1017,7 +1114,7 @@ test("plugin settings inputs are disabled while the server is running", async ()
   const tlsKeyInput = dom.window.document.querySelector("input[placeholder=\"/path/to/key.pem\"]");
   assert.ok(tlsKeyInput instanceof dom.window.HTMLInputElement);
   assert.equal(tlsKeyInput.disabled, true);
-  const addUserButton = Array.from(dom.window.document.querySelectorAll("button")).find((button) => button.textContent?.includes("Add user"));
+  const addUserButton = Array.from(dom.window.document.querySelectorAll("button")).find((button) => button.getAttribute("aria-label") === "Add user");
   assert.ok(addUserButton instanceof dom.window.HTMLButtonElement);
   assert.equal(addUserButton.disabled, true);
   const saveButton = Array.from(dom.window.document.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Save settings");

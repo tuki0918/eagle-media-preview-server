@@ -28,6 +28,13 @@ interface EagleRuntime {
       properties?: string[];
       title?: string;
     }) => Promise<{ canceled: boolean; filePaths: string[] }>;
+    showMessageBox?: (options: {
+      buttons?: string[];
+      detail?: string;
+      message: string;
+      title?: string;
+      type?: "error" | "info" | "none" | "question" | "warning";
+    }) => Promise<{ response: number }>;
   };
   onLibraryChanged?: (callback: (libraryPath: string) => void) => void;
   onPluginCreate?: (callback: () => void) => void;
@@ -314,8 +321,9 @@ function App() {
     updateAuthUsers([...authUsers, nextDefaultUser(authUsers)]);
   }
 
-  function removeAuthUser(index: number) {
+  async function removeAuthUser(index: number) {
     if (authUsers.length <= 1) return;
+    if (!(await confirmRemoveAuthUser(authUsers[index]?.username || `user ${index + 1}`))) return;
     const nextUsers = authUsers.filter((_, userIndex) => userIndex !== index);
     const nextUserPasswords = removeIndexedValue(userPasswordsRef.current, index);
     setPasswordVisibleByIndex((current) => removeIndexedValue(current, index));
@@ -347,6 +355,23 @@ function App() {
     if (!authEnabled) return confirmUnsafePublicNetwork();
     if (!httpsEnabled) return confirmInsecurePublicHttp();
     return true;
+  }
+
+  async function confirmRemoveAuthUser(username: string) {
+    const message = `Remove ${username}?`;
+    const detail = "The user is removed when you save settings.";
+    const showMessageBox = globalThis.eagle?.dialog?.showMessageBox;
+    if (!showMessageBox) {
+      return typeof window.confirm === "function" && window.confirm(`${message}\n${detail}`);
+    }
+    try {
+      // Cancel comes first so pressing Enter by accident keeps the user.
+      const result = await showMessageBox({ type: "warning", message, detail, buttons: ["Cancel", "Remove"] });
+      return result.response === 1;
+    } catch (error) {
+      setErrorMessage(error);
+      return false;
+    }
   }
 
   function confirmUnsafePublicNetwork() {
@@ -525,7 +550,7 @@ function App() {
           onLibrarySharedChange={changeLibraryShared}
           onReloadLibraries={() => void refreshLibraries({ reportErrors: true })}
           onPortChange={(value) => updateSettings({ port: value })}
-          onRemoveAuthUser={removeAuthUser}
+          onRemoveAuthUser={(index) => void removeAuthUser(index)}
           onSaveSettings={() => saveSettings({ forceSave: true, successMessage: "Saved" })}
           onSessionDurationDaysChange={(value) => updateSettings({ sessionDurationDays: value })}
           onSettingsExpandedChange={setSettingsExpanded}

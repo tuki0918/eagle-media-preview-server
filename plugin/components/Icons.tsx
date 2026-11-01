@@ -8,6 +8,7 @@ import {
   Globe,
   KeyRound,
   Lock,
+  Minus,
   Plus,
   Power,
   QrCode,
@@ -36,6 +37,7 @@ export const EyeOffIcon = iconComponent(EyeOff);
 export const GlobeIcon = iconComponent(Globe);
 export const KeyIcon = iconComponent(KeyRound);
 export const LockIcon = iconComponent(Lock);
+export const MinusIcon = iconComponent(Minus);
 export const PlusIcon = iconComponent(Plus);
 export const PowerIcon = iconComponent(Power);
 export const RefreshIcon = iconComponent(RefreshCw);
