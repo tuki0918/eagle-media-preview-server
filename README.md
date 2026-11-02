@@ -44,12 +44,21 @@ The browser viewer can be installed from a supported desktop or mobile browser. 
 
 The PWA caches only the application shell. Eagle API responses and library media are intentionally excluded from the service-worker cache, so browsing library content still requires a connection to the running plugin server.
 
+On iPhone and iPad, open the viewer in Safari, tap **Share → Add to Home Screen**, and keep **Open as Web App** turned on.
+
+<p>
+  <img src="docs/pwa_add_to_home_screen.webp" width="240" alt="Add to Home Screen on iPhone" />
+  <img src="docs/pwa_icon.png" width="120" alt="Media Library icon on the Home Screen" />
+</p>
+
 </details>
 
 <details>
 <summary><strong>Slideshow</strong></summary>
 
 Slideshows start muted on all devices. To hear video or audio, use the speaker button in the bottom playback bar to turn sound on during playback.
+
+![Slideshow on iPhone](docs/screenshot_slideshow_iphone_frame.png)
 
 </details>
 
