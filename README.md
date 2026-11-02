@@ -1,5 +1,9 @@
 # Eagle | Media Preview Server
 
+[![Version](https://img.shields.io/badge/last%20release-v0.6.3-blue)](https://github.com/tuki0918/eagle-media-preview-server/releases/tag/v0.6.3)
+[![Version](https://img.shields.io/badge/dynamic/json?url=https://community-en.eagle.cool/api/plugin/1f58b8d4-3229-4d77-bbdc-074e688022c9?locale=en&query=$.data.lasteVersion.version&label=store&prefix=v&color=blue)](https://community-en.eagle.cool/plugin/1f58b8d4-3229-4d77-bbdc-074e688022c9)
+[![Downloads](https://img.shields.io/badge/dynamic/json?url=https://community-en.eagle.cool/api/plugin/1f58b8d4-3229-4d77-bbdc-074e688022c9?locale=en&query=$.data.downloads&label=downloads&color=blue)](https://community-en.eagle.cool/plugin/1f58b8d4-3229-4d77-bbdc-074e688022c9)
+
 <p align="center">
   <img src="plugin/assets/icon_on.png" width="128" height="128" alt="Media Preview Server icon" />
 </p>
