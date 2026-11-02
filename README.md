@@ -4,8 +4,10 @@
   <img src="plugin/assets/icon_on.png" width="128" height="128" alt="Media Preview Server icon" />
 </p>
 
-Media Preview Server is an Eagle plugin that shares your Eagle library (**Media Library**) on your local network with one click.
-Anyone on the same network can then browse it from phones, tablets, and other computers.
+Media Preview Server is an Eagle plugin that turns the Eagle on your Mac or PC into a self-hosted media server.
+Start it with one click, then browse your library (**Media Library**) from phones, tablets, and PCs on your local network.
+
+![Media Preview Server: your Eagle library, on every screen](docs/promo/cover_1.png)
 
 ![](docs/screenshot.png)
 ![](docs/screenshot_detail.png)
