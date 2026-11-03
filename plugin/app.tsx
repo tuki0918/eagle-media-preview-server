@@ -669,27 +669,6 @@ function App() {
           onServerPowerChange={startOrStopServer}
         />
 
-        <AccessLogPanel
-          activeClients={connectedCount}
-          autoRefresh={accessLogAutoRefresh}
-          blockedAddresses={settings.blockedAddresses || []}
-          eventFilter={accessLogEventFilter}
-          expanded={activityExpanded}
-          loading={accessLogLoading}
-          range={accessLogRange}
-          summary={accessLog}
-          onAutoRefreshChange={setAccessLogAutoRefresh}
-          onBlock={blockAddress}
-          onClear={() => void clearAccessLog()}
-          onEventFilterChange={setAccessLogEventFilter}
-          onRefresh={() => void refreshAccessLog()}
-          onUnblock={(address) => void unblockAddress(address)}
-          onExpandedChange={setActivityExpanded}
-          onExport={() => void exportAccessLog()}
-          onRangeChange={setAccessLogRange}
-          onRevealFile={globalThis.eagle?.shell?.showItemInFolder ? () => void revealAccessLogFile() : undefined}
-        />
-
         <SettingsForm
           authEnabled={authEnabled}
           authUsers={authUsers}
@@ -723,6 +702,27 @@ function App() {
           onTogglePasswordVisible={togglePasswordVisible}
           onUpdateAuthUser={updateAuthUser}
           onUserPasswordDraftChange={setUserPasswordDraft}
+        />
+
+        <AccessLogPanel
+          activeClients={connectedCount}
+          autoRefresh={accessLogAutoRefresh}
+          blockedAddresses={settings.blockedAddresses || []}
+          eventFilter={accessLogEventFilter}
+          expanded={activityExpanded}
+          loading={accessLogLoading}
+          range={accessLogRange}
+          summary={accessLog}
+          onAutoRefreshChange={setAccessLogAutoRefresh}
+          onBlock={blockAddress}
+          onClear={() => void clearAccessLog()}
+          onEventFilterChange={setAccessLogEventFilter}
+          onRefresh={() => void refreshAccessLog()}
+          onUnblock={(address) => void unblockAddress(address)}
+          onExpandedChange={setActivityExpanded}
+          onExport={() => void exportAccessLog()}
+          onRangeChange={setAccessLogRange}
+          onRevealFile={globalThis.eagle?.shell?.showItemInFolder ? () => void revealAccessLogFile() : undefined}
         />
       </div>
     </main>
