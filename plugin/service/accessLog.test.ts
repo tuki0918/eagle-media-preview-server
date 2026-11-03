@@ -132,3 +132,233 @@ test("access log summary splits a shared address into one row per user", async (
   assert.equal(summary.activeClients, 2);
   assert.equal(log.activeClients(), 2);
 });
+
+test("access log CSV keeps client-supplied cells from running as spreadsheet formulas", () => {
+  const csv = accessLogCsv([{ at: Date.UTC(2026, 0, 1), type: "auth", event: "login_failure", ip: "10.0.0.1", user: "=1+1", path: "@SUM(A1)" }]);
+  assert.equal(csv.split("\n")[1], "2026-01-01T00:00:00.000Z,auth,login_failure,10.0.0.1,'=1+1,,'@SUM(A1),,,,");
+});
+
+test("access log rotation does not write a pending entry twice", async () => {
+  const filePath = await tempLogPath();
+  // The first entry is large so the next flush rotates, and the rewritten file is small enough to append to.
+  const log = createAccessLog({ filePath, flushDelayMs: 60_000, maxEntries: 2, maxFileBytes: 350 });
+  log.record({ type: "browse", event: "items", ip: "10.0.0.1", path: `/api/items?q=${"x".repeat(250)}` });
+  await log.flush();
+  log.record({ type: "browse", event: "items", ip: "10.0.0.2" });
+  // The flush rotates; the entry recorded while it waits must not also be appended afterwards.
+  const rotating = log.flush();
+  log.record({ type: "browse", event: "items", ip: "10.0.0.3" });
+  await rotating;
+  await log.flush();
+  const ips = (await readFile(filePath, "utf8")).trim().split("\n").map((line) => JSON.parse(line).ip);
+  assert.equal(new Set(ips).size, ips.length, `duplicate lines: ${ips.join(",")}`);
+
+  const restored = createAccessLog({ filePath, maxEntries: 2 });
+  await restored.load();
+  assert.deepEqual(restored.entries().map((entry: { ip: string }) => entry.ip), ["10.0.0.3", "10.0.0.2"]);
+});
+
+test("access log overlapping flushes during a rotation do not write an entry twice", async () => {
+  const filePath = await tempLogPath();
+  const log = createAccessLog({ filePath, flushDelayMs: 60_000, maxEntries: 2, maxFileBytes: 350 });
+  log.record({ type: "browse", event: "items", ip: "10.0.0.1", path: `/api/items?q=${"x".repeat(250)}` });
+  await log.flush();
+  log.record({ type: "browse", event: "items", ip: "10.0.0.2" });
+  const rotating = log.flush();
+  log.record({ type: "browse", event: "items", ip: "10.0.0.3" });
+  // A second flush queued before the rotation has written its copy of 10.0.0.3.
+  const second = log.flush();
+  await Promise.all([rotating, second]);
+  const ips = (await readFile(filePath, "utf8")).trim().split("\n").map((line) => JSON.parse(line).ip);
+  assert.deepEqual(ips, ["10.0.0.2", "10.0.0.3"]);
+
+  const restored = createAccessLog({ filePath, maxEntries: 2 });
+  await restored.load();
+  assert.deepEqual(restored.entries().map((entry: { ip: string }) => entry.ip), ["10.0.0.3", "10.0.0.2"]);
+});
+
+test("access log keeps an event recorded right after clear while earlier writes are queued", async () => {
+  const filePath = await tempLogPath();
+  const log = createAccessLog({ filePath, flushDelayMs: 60_000 });
+  log.record({ type: "browse", event: "items", ip: "10.0.0.1" });
+  const before = log.flush();
+  const clearing = log.clear();
+  log.record({ type: "browse", event: "items", ip: "10.0.0.2" });
+  const after = log.flush();
+  await Promise.all([before, clearing, after]);
+  const ips = (await readFile(filePath, "utf8")).trim().split("\n").map((line) => JSON.parse(line).ip);
+  assert.deepEqual(ips, ["10.0.0.2"]);
+
+  const restored = createAccessLog({ filePath });
+  await restored.load();
+  assert.deepEqual(restored.entries().map((entry: { ip: string }) => entry.ip), ["10.0.0.2"]);
+});
+
+test("access log drops what it was reading when clear runs during load", async () => {
+  const filePath = await tempLogPath();
+  const writer = createAccessLog({ filePath });
+  writer.record({ type: "view", event: "view", ip: "10.0.0.1" });
+  await writer.flush();
+
+  const log = createAccessLog({ filePath });
+  const loading = log.load();
+  const clearing = log.clear();
+  log.record({ type: "browse", event: "items", ip: "10.0.0.2" });
+  await Promise.all([loading, clearing, log.flush()]);
+  assert.deepEqual(log.entries().map((entry: { ip: string }) => entry.ip), ["10.0.0.2"]);
+  const ips = (await readFile(filePath, "utf8")).trim().split("\n").map((line) => JSON.parse(line).ip);
+  assert.deepEqual(ips, ["10.0.0.2"]);
+});
+
+test("access log load waits for a removal queued by an earlier clear", async () => {
+  const filePath = await tempLogPath();
+  const writer = createAccessLog({ filePath });
+  writer.record({ type: "view", event: "view", ip: "10.0.0.1" });
+  await writer.flush();
+
+  const log = createAccessLog({ filePath });
+  // A queued append keeps the removal from running before load starts reading.
+  log.record({ type: "browse", event: "items", ip: "10.0.0.2" });
+  const flushing = log.flush();
+  const clearing = log.clear();
+  const loading = log.load();
+  await Promise.all([flushing, clearing, loading]);
+  assert.deepEqual(log.entries(), []);
+  await assert.rejects(readFile(filePath, "utf8"));
+});
+
+test("access log first load does not restore events this run already wrote", async () => {
+  const filePath = await tempLogPath();
+  const earlier = createAccessLog({ filePath });
+  earlier.record({ type: "view", event: "view", ip: "10.0.0.1" });
+  await earlier.flush();
+
+  const log = createAccessLog({ filePath });
+  log.record({ type: "browse", event: "items", ip: "10.0.0.2" });
+  const flushing = log.flush();
+  const loading = log.load();
+  await Promise.all([flushing, loading]);
+  await log.flush();
+  assert.deepEqual(log.entries().map((entry: { ip: string }) => entry.ip).sort(), ["10.0.0.1", "10.0.0.2"]);
+  const ips = (await readFile(filePath, "utf8")).trim().split("\n").map((line) => JSON.parse(line).ip);
+  assert.deepEqual(ips.sort(), ["10.0.0.1", "10.0.0.2"]);
+});
+
+test("access log first flush keeps an earlier run's entries before rotating", async () => {
+  const filePath = await tempLogPath();
+  const earlier = createAccessLog({ filePath });
+  earlier.record({ type: "view", event: "view", ip: "10.0.0.1" });
+  await earlier.flush();
+
+  // The new events alone exceed the file limit, and flush is called before any explicit load.
+  const log = createAccessLog({ filePath, flushDelayMs: 60_000, maxFileBytes: 350 });
+  log.record({ type: "browse", event: "items", ip: "10.0.0.2", path: `/api/items?q=${"x".repeat(150)}` });
+  log.record({ type: "browse", event: "items", ip: "10.0.0.3", path: `/api/items?q=${"y".repeat(150)}` });
+  await log.flush();
+  await log.load();
+  assert.deepEqual(log.entries().map((entry: { ip: string }) => entry.ip).sort(), ["10.0.0.1", "10.0.0.2", "10.0.0.3"]);
+  const ips = (await readFile(filePath, "utf8")).trim().split("\n").map((line) => JSON.parse(line).ip);
+  assert.deepEqual(ips.sort(), ["10.0.0.1", "10.0.0.2", "10.0.0.3"]);
+});
+
+test("access log shares one restoration when the first load overlaps a large flush", async () => {
+  const filePath = await tempLogPath();
+  const earlier = createAccessLog({ filePath });
+  earlier.record({ type: "view", event: "view", ip: "10.0.0.1" });
+  await earlier.flush();
+
+  const log = createAccessLog({ filePath, maxFileBytes: 200 });
+  const loading = log.load();
+  log.record({ type: "browse", event: "items", ip: "10.0.0.2", path: `/api/items?q=${"x".repeat(200)}` });
+  await Promise.all([loading, log.flush()]);
+
+  assert.deepEqual(log.entries().map((entry: { ip: string }) => entry.ip).sort(), ["10.0.0.1", "10.0.0.2"]);
+  const ips = (await readFile(filePath, "utf8")).trim().split("\n").map((line) => JSON.parse(line).ip);
+  assert.deepEqual(ips.sort(), ["10.0.0.1", "10.0.0.2"]);
+});
+
+test("access log summary lists failed views without counting them as views", async () => {
+  const filePath = await tempLogPath();
+  const now = Date.UTC(2026, 10, 3, 12);
+  const log = createAccessLog({ filePath, now: () => now });
+  log.record({ type: "view", event: "view", ip: "10.0.0.1", user: "alice", status: 200, at: now - 1000 });
+  log.record({ type: "view", event: "view_failed", ip: "10.0.0.1", user: "alice", status: 404, at: now - 500 });
+  const summary = log.summary();
+  assert.equal(summary.totals.view, 1);
+  assert.equal(summary.totals.viewFailures, 1);
+  assert.equal(summary.buckets.reduce((sum: number, bucket: { view: number }) => sum + bucket.view, 0), 1);
+  // The chart's buckets still add up to every request: the failure is kept in its own count.
+  assert.equal(summary.buckets.reduce((sum: number, bucket: { viewFailures: number }) => sum + bucket.viewFailures, 0), 1);
+  assert.equal(summary.clients[0].views, 1);
+  assert.equal(summary.clients[0].requests, 2);
+  assert.equal(log.entries({ type: "view" }).length, 2);
+});
+
+test("access log does not show refused requests as connected", async () => {
+  const filePath = await tempLogPath();
+  const now = Date.UTC(2026, 10, 3, 12);
+  const log = createAccessLog({ filePath, now: () => now });
+  log.record({ type: "auth", event: "blocked", ip: "10.0.0.9", status: 403 });
+  log.record({ type: "auth", event: "login_failure", ip: "10.0.0.8", user: "bob", status: 401 });
+  assert.equal(log.activeClients(), 0);
+  const summary = log.summary();
+  assert.equal(summary.activeClients, 0);
+  assert.ok(summary.clients.every((client: { active: boolean }) => !client.active));
+  assert.equal(summary.clientCount, 2);
+});
+
+test("access log devices count only the selected range", async () => {
+  const filePath = await tempLogPath();
+  const now = Date.UTC(2026, 10, 3, 12, 30);
+  const log = createAccessLog({ filePath, now: () => now });
+  log.record({ type: "view", event: "view", ip: "10.0.0.1", user: "alice", status: 200, at: now - 3 * HOUR });
+  log.record({ type: "view", event: "view", ip: "10.0.0.1", user: "alice", status: 200, at: now - 10 * 60 * 1000 });
+  log.record({ type: "view", event: "view", ip: "10.0.0.2", user: "bob", status: 200, at: now - 5 * HOUR });
+  const hour = log.summary({ range: "1h" });
+  assert.equal(hour.totals.view, 1);
+  assert.deepEqual(hour.clients.map((client: { ip: string; views: number }) => [client.ip, client.views]), [["10.0.0.1", 1]]);
+  const day = log.summary({ range: "24h" });
+  assert.deepEqual(day.clients.map((client: { ip: string; views: number }) => [client.ip, client.views]), [["10.0.0.1", 2], ["10.0.0.2", 1]]);
+});
+
+test("access log measures the file limit in bytes", async () => {
+  const filePath = await tempLogPath();
+  // Each entry is about 60 characters but over 200 bytes in UTF-8, so two of them pass a 400-byte limit.
+  const log = createAccessLog({ filePath, flushDelayMs: 60_000, maxEntries: 1, maxFileBytes: 400 });
+  log.record({ type: "browse", event: "search", ip: "10.0.0.1", path: `/api/items?q=${"風".repeat(60)}` });
+  await log.flush();
+  log.record({ type: "browse", event: "search", ip: "10.0.0.2", path: `/api/items?q=${"景".repeat(60)}` });
+  await log.flush();
+  const lines = (await readFile(filePath, "utf8")).trim().split("\n");
+  assert.deepEqual(lines.map((line) => JSON.parse(line).ip), ["10.0.0.2"]);
+});
+
+test("access log forgets the device seen longest ago when presence is full", () => {
+  let now = Date.UTC(2026, 10, 3, 12);
+  const log = createAccessLog({ filePath: join(tmpdir(), "unused-access-log.jsonl"), now: () => now });
+  for (let index = 0; index < 2000; index += 1) log.touch(`10.0.${Math.floor(index / 250)}.${index % 250}`);
+  // Seen again, so it is no longer the oldest.
+  log.touch("10.0.0.0");
+  log.touch("192.168.1.1");
+  const ips = log.summary({ clientLimit: 5000 }).clients.map((client: { ip: string }) => client.ip);
+  assert.equal(ips.length, 2000);
+  assert.ok(ips.includes("10.0.0.0"));
+  assert.ok(!ips.includes("10.0.0.1"));
+  assert.ok(ips.includes("192.168.1.1"));
+});
+
+test("access log shows the unsigned row when only it is connected on an address", async () => {
+  const filePath = await tempLogPath();
+  let now = Date.UTC(2026, 10, 3, 12);
+  const log = createAccessLog({ filePath, now: () => now });
+  log.record({ type: "auth", event: "login_success", ip: "10.0.0.5", user: "alice", status: 200 });
+  log.touch("10.0.0.5", "");
+  // While alice is connected, the unsigned poll adds no row of its own.
+  assert.deepEqual(log.summary().clients.map((client: { user: string }) => client.user), ["alice"]);
+
+  now += 3 * 60 * 1000;
+  log.touch("10.0.0.5", "");
+  const summary = log.summary();
+  assert.equal(summary.activeClients, 1);
+  assert.deepEqual(summary.clients.map((client: { user: string; active: boolean }) => [client.user, client.active]).sort(), [["", true], ["alice", false]]);
+});

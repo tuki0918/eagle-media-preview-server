@@ -7,8 +7,9 @@ interface BlockedAddress {
 
 const MAX_BLOCKED_ADDRESSES = 500;
 
-// Accepts a single address or a CIDR range ("192.168.1.0/24", "fd00::/8"). Ranges that would
-// cover this machine's loopback are refused, so the admin can never lock out the local viewer.
+// Accepts a single address or a CIDR range ("192.168.1.0/24", "fd00::/8"). Entries that overlap
+// this machine's loopback (127.0.0.0/8, ::1) are refused, so the admin can never lock out the
+// local viewer.
 function normalizeBlockedAddress(value: unknown) {
   const text = String(value ?? "").trim().toLowerCase();
   const [rawAddress, rawPrefix, extra] = text.split("/");
@@ -23,9 +24,11 @@ function normalizeBlockedAddress(value: unknown) {
     prefix = Number(rawPrefix);
   }
   const normalized = prefix === maxPrefix ? address : `${address}/${prefix}`;
-  if (createMatcher([normalized])(family === 4 ? "127.0.0.1" : "::1")) {
-    throw new Error("Loopback addresses (this computer) cannot be blocked");
-  }
+  // An IPv4 entry overlaps 127.0.0.0/8 when it covers it (prefix up to 8) or sits inside it.
+  const overlapsLoopback = family === 4
+    ? (prefix <= 8 ? createMatcher([normalized])("127.0.0.1") : address.startsWith("127."))
+    : createMatcher([normalized])("::1");
+  if (overlapsLoopback) throw new Error("Loopback addresses (this computer) cannot be blocked");
   return normalized;
 }
 
@@ -78,12 +81,14 @@ function createAddressBlockList(initial: Array<BlockedAddress | string> = []) {
   };
 }
 
+// Maps an IPv4-mapped IPv6 form ("::ffff:192.168.1.5") to plain IPv4, as sockets report it.
 function normalizeAddress(address: string) {
   return String(address || "").trim().replace(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i, "$1");
 }
 
 module.exports = {
   createAddressBlockList,
+  normalizeClientAddress: normalizeAddress,
   normalizeBlockedAddress,
   normalizeBlockedAddresses,
 };

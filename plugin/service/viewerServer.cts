@@ -1,8 +1,9 @@
 const { readFileSync } = require("fs");
 const { createServer: createHttpServer } = require("http");
 const { createServer: createHttpsServer } = require("https");
+const { isIP } = require("net");
 const { createHmac, randomBytes } = require("crypto");
-const { createAddressBlockList } = require("./addressBlockList.cjs");
+const { createAddressBlockList, normalizeClientAddress } = require("./addressBlockList.cjs");
 const { normalizeCustomDomain } = require("./customDomain.cjs");
 const { EagleRequestError, createEagleClient, normalizeStringArray } = require("./eagleClient.cjs");
 const { createConnectionContext } = require("./connection.cjs");
@@ -41,6 +42,8 @@ interface AccessLogRecorder {
 interface ViewerServerOptions {
   accessLog?: AccessLogRecorder | null;
   blockedAddresses?: Array<string | { address: string; addedAt?: number }>;
+  /** Believe X-Forwarded-For from a proxy on this machine. Off unless the admin confirms the proxy sets it. */
+  trustForwardedFor?: boolean;
   customDomain?: string;
   allowMetadataEditing?: boolean;
   authUsers?: AuthUser[];
@@ -230,6 +233,7 @@ function createViewerServer({
   sessionMaxAgeSeconds = AUTH_SESSION_MAX_AGE_SECONDS,
   sessionSecret = "",
   sharedLibraries = null,
+  trustForwardedFor = false,
   eagleClient = createEagleClient(),
 }: ViewerServerOptions = {}) {
   let serverInstance: NetServer | null = null;
@@ -338,7 +342,7 @@ function createViewerServer({
     try {
       const url = new URL(req.url || "/", `${httpsEnabled ? "https" : "http"}://${req.headers.host}`);
       // Direct clients are dropped when they connect; this also catches clients behind a local proxy.
-      const requestAddress = displayClientAddress(req);
+      const requestAddress = displayClientAddress(req, trustForwardedFor);
       if (blockList.isBlocked(requestAddress)) {
         logBlocked(requestAddress, url.pathname);
         res.writeHead(403, { ...securityHeaders, "Connection": "close", "Content-Type": "application/json; charset=utf-8" });
@@ -346,18 +350,19 @@ function createViewerServer({
         return;
       }
       const recordAuth: AuthContext["recordAuth"] = (event, username, status) => {
-        accessLog?.record({ type: "auth", event, ip: displayClientAddress(req), method: req.method, path: url.pathname, status, user: username });
+        accessLog?.record({ type: "auth", event, ip: requestAddress, method: req.method, path: url.pathname, status, user: username });
       };
-      const auth = { authSessions, loginFailures, recordAuth, revokedAuthSessions, secureCookies: httpsEnabled, sessionMaxAgeSeconds, sessionSecret: resolvedSessionSecret, users: resolvedAuthUsers };
+      const auth = { authSessions, clientAddress: requestAddress, loginFailures, recordAuth, revokedAuthSessions, secureCookies: httpsEnabled, sessionMaxAgeSeconds, sessionSecret: resolvedSessionSecret, users: resolvedAuthUsers };
       if (!isTrustedUnsafeRequest(req, url, trustedCustomDomain)) {
         sendJson(res, 403, { error: "Cross-origin writes are not allowed" });
         return;
       }
+      const countRequest = () => attachRequestCounter(res, ({ status }) => {
+        requestCount += 1;
+        if (accessLog) logAccess(accessLog, req, res, url, status, authenticatedUser(req, auth)?.username || "", requestAddress);
+      });
       if (url.pathname.startsWith("/api/")) {
-        attachRequestCounter(res, ({ status }) => {
-          requestCount += 1;
-          if (accessLog) logAccess(accessLog, req, res, url, status, authenticatedUser(req, auth)?.username || "");
-        });
+        countRequest();
         if (await handleAuthRoutes(req, url, res, auth)) return;
         if (url.pathname === "/api/library-status") {
           await handleLibraryStatus(req, res, currentSession, libraryAccess);
@@ -379,14 +384,11 @@ function createViewerServer({
       }
       const fileMatch = url.pathname.match(/^\/file\/([^/]+)(?:\/[^/]+)?$/);
       if (fileMatch) {
+        countRequest();
         if (!isAuthorized(req, auth)) {
           sendAuthRequired(res);
           return;
         }
-        attachRequestCounter(res, ({ status }) => {
-          requestCount += 1;
-          if (accessLog) logAccess(accessLog, req, res, url, status, authenticatedUser(req, auth)?.username || "");
-        });
         if (!(await admitLibraryRequest(req, url, res))) return;
         await streamItemMedia(decodeURIComponent(fileMatch[1]), "file", req, res, currentSession, libraryGuards.get(res)?.stillOpen);
         return;
@@ -405,7 +407,7 @@ function createViewerServer({
   server.on("connection", (socket: Socket) => {
     const remote = socket.remoteAddress || "";
     if (blockList.isBlocked(remote)) {
-      logBlocked(remote.replace(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/, "$1"));
+      logBlocked(normalizeClientAddress(remote));
       socket.destroy();
       return;
     }
@@ -817,6 +819,8 @@ function boundedInteger(value: unknown, fallback: number, min: number, max: numb
 
 interface AuthContext {
   authSessions: Map<string, AuthSession>;
+  /** The client as the log and block list see it, so a trusted proxy's clients are locked out one by one. */
+  clientAddress?: string;
   loginFailures: Map<string, LoginFailure>;
   revokedAuthSessions: Set<string>;
   secureCookies?: boolean;
@@ -852,7 +856,7 @@ async function handleAuthRoutes(req: IncomingMessage, url: URL, res: ServerRespo
     const body = await readJson(req);
     const username = String(body.username || "").trim();
     const password = String(body.password || "");
-    const loginKey = loginFailureKey(req, username);
+    const loginKey = loginFailureKey(auth.clientAddress || clientAddress(req), username);
     const activeLockSeconds = activeLoginLockSeconds(auth.loginFailures, loginKey);
     if (activeLockSeconds > 0) {
       auth.recordAuth?.("login_locked", username, 429);
@@ -914,8 +918,8 @@ async function handleAuthRoutes(req: IncomingMessage, url: URL, res: ServerRespo
   return false;
 }
 
-function loginFailureKey(req: IncomingMessage, username: string) {
-  return `${clientAddress(req)}:${username.toLowerCase()}`;
+function loginFailureKey(address: string, username: string) {
+  return `${address}:${username.toLowerCase()}`;
 }
 
 function clientAddress(req: IncomingMessage) {
@@ -925,8 +929,7 @@ function clientAddress(req: IncomingMessage) {
 // Status polls and thumbnails only mark the client as connected; everything else becomes an entry.
 const PRESENCE_ONLY_PATHS = new Set(["/api/auth/status", "/api/connect", "/api/health", "/api/library-status"]);
 
-function logAccess(accessLog: AccessLogRecorder, req: IncomingMessage, res: ServerResponse, url: URL, status: number, user: string) {
-  const ip = displayClientAddress(req);
+function logAccess(accessLog: AccessLogRecorder, req: IncomingMessage, res: ServerResponse, url: URL, status: number, user: string, ip: string) {
   const pathname = url.pathname;
   // Login and logout write their own entries with the outcome.
   if (pathname.startsWith("/api/auth/") && pathname !== "/api/auth/status") return;
@@ -937,10 +940,16 @@ function logAccess(accessLog: AccessLogRecorder, req: IncomingMessage, res: Serv
   const base = { ip, method: req.method, status, user };
   const media = pathname.match(/^\/file\/([^/]+)/) || pathname.match(/^\/api\/items\/([^/]+)\/file$/);
   if (media) {
-    // A video plays as many range requests; only the one that starts the file counts as a view.
-    const range = String(req.headers.range || "");
-    if (range && !/^bytes=0-/.test(range)) {
-      if (status < 400) accessLog.touch(ip, user);
+    // A failed fetch stays in the history (under Views); the summary leaves it out of the view counts.
+    if (status >= 400) {
+      accessLog.record({ ...base, type: "view", event: "view_failed", itemId: safeDecode(media[1]), path: pathname });
+      return;
+    }
+    // A video plays as many range requests, and players probe first: HEAD, or Safari's
+    // "bytes=0-1". Only the request that starts reading the file counts as a view.
+    const range = String(req.headers.range || "").trim();
+    if (req.method === "HEAD" || (range && (!/^bytes=0-/.test(range) || /^bytes=0-[01]$/.test(range)))) {
+      accessLog.touch(ip, user);
       return;
     }
     const served = servedMediaInfo(res);
@@ -949,7 +958,7 @@ function logAccess(accessLog: AccessLogRecorder, req: IncomingMessage, res: Serv
   }
   const urlPreview = pathname.match(/^\/api\/items\/([^/]+)\/url-preview$/);
   if (urlPreview) {
-    accessLog.record({ ...base, type: "view", event: "url_preview", itemId: safeDecode(urlPreview[1]), path: pathname });
+    accessLog.record({ ...base, type: "view", event: status >= 400 ? "view_failed" : "url_preview", itemId: safeDecode(urlPreview[1]), path: pathname });
     return;
   }
   const edit = pathname.match(/^\/api\/items\/([^/]+)\/(star|metadata|trash)$/);
@@ -962,16 +971,24 @@ function logAccess(accessLog: AccessLogRecorder, req: IncomingMessage, res: Serv
 }
 
 // Requests relayed by a proxy on this machine (a tunnel for the custom domain) carry the real
-// client in X-Forwarded-For. The header is only believed from loopback, where nobody else can set it.
-function displayClientAddress(req: IncomingMessage) {
+// client in X-Forwarded-For. A proxy that forwards the header unchanged lets the client choose
+// every hop, so it is believed only when the admin turns it on, only from loopback, and only its
+// last hop: proxies that append put the peer they saw there.
+function displayClientAddress(req: IncomingMessage, trustForwardedFor: boolean) {
   const remote = normalizeClientAddress(clientAddress(req));
-  if (!isLoopbackAddress(remote)) return remote;
-  const forwarded = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
-  return forwarded ? normalizeClientAddress(forwarded) : remote;
+  if (!trustForwardedFor || !isLoopbackAddress(remote)) return remote;
+  const header = req.headers["x-forwarded-for"];
+  const hops = (Array.isArray(header) ? header.join(",") : String(header || "")).split(",").map((hop) => hop.trim()).filter(Boolean);
+  const forwarded = normalizeClientAddress(stripForwardedPort(hops.at(-1) || ""));
+  return isIP(forwarded) ? forwarded : remote;
 }
 
-function normalizeClientAddress(address: string) {
-  return address.replace(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/, "$1");
+// Some proxies append "203.0.113.5:51234" or "[2001:db8::1]:443"; a bare IPv6 address is left as is.
+function stripForwardedPort(hop: string) {
+  const bracketed = hop.match(/^\[([^\]]+)\](?::\d+)?$/);
+  if (bracketed) return bracketed[1];
+  const ipv4WithPort = hop.match(/^(\d+\.\d+\.\d+\.\d+):\d+$/);
+  return ipv4WithPort ? ipv4WithPort[1] : hop;
 }
 
 function isLoopbackAddress(address: string) {

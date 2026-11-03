@@ -1170,6 +1170,30 @@ test("createViewerServer logs out cookie sessions", async () => {
   }
 });
 
+test("createViewerServer locks out each client behind a trusted proxy on its own", async () => {
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    trustForwardedFor: true,
+    authUsers: [{ username: "eagle", passwordHash: sha256("secret"), role: "viewer" }],
+  });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const login = (forwardedFor: string, password: string) => fetch(`${origin}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: origin, "X-Forwarded-For": forwardedFor },
+      body: JSON.stringify({ username: "eagle", password }),
+    });
+    for (let attempt = 0; attempt < 5; attempt += 1) await login("203.0.113.5", "wrong");
+    assert.equal((await login("203.0.113.5", "secret")).status, 429);
+    // Another client through the same tunnel is not locked out by the first one's failures.
+    assert.equal((await login("198.51.100.7", "secret")).status, 200);
+  } finally {
+    await viewer.stop();
+  }
+});
+
 test("createViewerServer rate-limits repeated failed logins by client and username", async () => {
   const viewer = createViewerServer({
     host: "127.0.0.1",
@@ -3433,16 +3457,30 @@ test("createViewerServer writes auth, browse, and view events to the access log"
     const sessionCookie = cookie.split(/,\s*/).map((part) => part.split(";")[0]).join("; ");
     assert.equal((await fetch(`${origin}/api/folders`, { headers: { Cookie: sessionCookie } })).status, 200);
     assert.equal((await fetch(`${origin}/api/health`, { headers: { Cookie: sessionCookie } })).status, 200);
-    // A later range request of the same file is not counted as another view.
+    // ITEM 1 has no file behind it, so both fetches fail; the later part is recorded as well.
     await fetch(`${origin}/file/ITEM%201`, { headers: { Cookie: sessionCookie } });
     await fetch(`${origin}/file/ITEM%201`, { headers: { Cookie: sessionCookie, Range: "bytes=100-" } });
     await new Promise((resolveWait) => setTimeout(resolveWait, 20));
+    // Fetches that fail stay in the history without counting as views.
+    assert.equal((await fetch(`${origin}/file/ITEM%202`)).status, 401);
+    assert.equal((await fetch(`${origin}/api/items/ITEM%203/file`)).status, 401);
+    // A later part of a video that fails is recorded too.
+    assert.equal((await fetch(`${origin}/file/ITEM%204`, { headers: { Range: "bytes=100-" } })).status, 401);
+    await new Promise((resolveWait) => setTimeout(resolveWait, 20));
+    const failedViews = entries.splice(4);
+    assert.deepEqual(failedViews.map((entry) => [entry.type, entry.event, entry.status, entry.itemId]), [
+      ["view", "view_failed", 404, "ITEM 1"],
+      ["view", "view_failed", 401, "ITEM 2"],
+      ["view", "view_failed", 401, "ITEM 3"],
+      ["view", "view_failed", 401, "ITEM 4"],
+    ]);
 
     assert.deepEqual(entries.map((entry) => [entry.type, entry.event, entry.user || "", entry.ip]), [
       ["auth", "login_failure", "eagle", "127.0.0.1"],
       ["auth", "login_success", "eagle", "127.0.0.1"],
       ["browse", "folders", "eagle", "127.0.0.1"],
-      ["view", "view", "eagle", "127.0.0.1"],
+      // ITEM 1 has no file behind it, so the fetch fails and is not a view.
+      ["view", "view_failed", "eagle", "127.0.0.1"],
     ]);
     assert.equal(entries[3].itemId, "ITEM 1");
     assert.ok(touched.includes("127.0.0.1:eagle"));
@@ -3484,6 +3522,18 @@ test("createViewerServer logs the file type and size of a viewed original", asyn
     assert.equal(response.status, 200);
     await response.text();
     await new Promise((resolveWait) => setTimeout(resolveWait, 20));
+    // A later part of the same file is not counted as another view.
+    const part = await fetch(`${origin}/file/${itemId}${await libraryQuery(origin)}`, { headers: { Range: "bytes=5-" } });
+    assert.equal(part.status, 206);
+    await part.text();
+    // Safari's two-byte probe before playback is not a view.
+    const probe = await fetch(`${origin}/file/${itemId}${await libraryQuery(origin)}`, { headers: { Range: "bytes=0-1" } });
+    assert.equal(probe.status, 206);
+    await probe.text();
+    // A HEAD probe is not a view either.
+    assert.equal((await fetch(`${origin}/file/${itemId}${await libraryQuery(origin)}`, { method: "HEAD" })).status, 200);
+    await new Promise((resolveWait) => setTimeout(resolveWait, 20));
+    assert.equal(entries.length, 1);
     const view = entries.find((entry) => entry.type === "view");
     assert.equal(view?.ext, "png");
     assert.equal(view?.size, "original-image".length);
@@ -3492,25 +3542,38 @@ test("createViewerServer logs the file type and size of a viewed original", asyn
   }
 });
 
-test("createViewerServer trusts X-Forwarded-For only from loopback for the access log", async () => {
-  const entries: Array<Record<string, unknown>> = [];
-  const viewer = createViewerServer({
-    host: "127.0.0.1",
-    port: 0,
-    passwordHash: sha256("secret"),
-    accessLog: { record: (entry: Record<string, unknown>) => entries.push(entry), touch() {} },
-  });
-  await viewer.start();
-  try {
-    const origin = `http://127.0.0.1:${viewer.status().port}`;
-    await fetch(`${origin}/api/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Origin: origin, "X-Forwarded-For": "192.168.1.50, 10.0.0.1" },
-      body: JSON.stringify({ username: "eagle", password: "wrong" }),
+test("createViewerServer ignores X-Forwarded-For unless the admin trusts the local proxy", async () => {
+  for (const trustForwardedFor of [false, true]) {
+    const entries: Array<Record<string, unknown>> = [];
+    const viewer = createViewerServer({
+      host: "127.0.0.1",
+      port: 0,
+      passwordHash: sha256("secret"),
+      trustForwardedFor,
+      accessLog: { record: (entry: Record<string, unknown>) => entries.push(entry), touch() {} },
     });
-    assert.equal(entries[0]?.ip, "192.168.1.50");
-  } finally {
-    await viewer.stop();
+    await viewer.start();
+    try {
+      const origin = `http://127.0.0.1:${viewer.status().port}`;
+      await fetch(`${origin}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Origin: origin, "X-Forwarded-For": "192.168.1.50, 10.0.0.1" },
+        body: JSON.stringify({ username: "eagle", password: "wrong" }),
+      });
+      // When trusted, the local proxy's appended hop is used; earlier hops are whatever the client sent.
+      assert.equal(entries[0]?.ip, trustForwardedFor ? "10.0.0.1" : "127.0.0.1");
+      for (const [header, expected] of [["192.168.1.50:51234", "192.168.1.50"], ["[2001:db8::1]:443", "2001:db8::1"], ["2001:db8::2", "2001:db8::2"]]) {
+        await fetch(`${origin}/api/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Origin: origin, "X-Forwarded-For": header },
+          body: JSON.stringify({ username: "eagle", password: "wrong" }),
+        });
+        // A port or brackets around the appended hop are stripped before the address is used.
+        assert.equal(entries.at(-1)?.ip, trustForwardedFor ? expected : "127.0.0.1");
+      }
+    } finally {
+      await viewer.stop();
+    }
   }
 });
 
@@ -3521,6 +3584,7 @@ test("createViewerServer refuses blocked addresses, including behind a local pro
     port: 0,
     accessLog: { record: (entry: Record<string, unknown>) => entries.push(entry), touch() {} },
     blockedAddresses: ["192.168.1.0/24"],
+    trustForwardedFor: true,
   });
   await viewer.start();
   try {
@@ -3530,6 +3594,9 @@ test("createViewerServer refuses blocked addresses, including behind a local pro
     assert.deepEqual(await blocked.json(), { error: "Access from this address is blocked" });
     await fetch(`${origin}/api/auth/status`, { headers: { "X-Forwarded-For": "192.168.1.50" } });
     assert.deepEqual(entries.map((entry) => [entry.event, entry.ip]), [["blocked", "192.168.1.50"]]);
+
+    // A spoofed first hop does not hide the address the proxy appended.
+    assert.equal((await fetch(`${origin}/api/auth/status`, { headers: { "X-Forwarded-For": "10.0.0.9, 192.168.1.50" } })).status, 403);
 
     assert.equal((await fetch(`${origin}/api/auth/status`, { headers: { "X-Forwarded-For": "10.0.0.2" } })).status, 200);
     viewer.setBlockedAddresses(["10.0.0.2"]);

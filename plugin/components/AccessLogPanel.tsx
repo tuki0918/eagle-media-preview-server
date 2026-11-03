@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { formatBytes } from "../../src/viewer/format";
 import type { AccessLogBucket, AccessLogEntry, AccessLogEventFilter, AccessLogRange, AccessLogSummary, BlockedAddress } from "../types";
 import { ActivityIcon, BanIcon, ChevronIcon, CloseIcon, DownloadIcon, FolderOpenIcon, SelectItemIcon, RefreshIcon, TrashIcon } from "./Icons";
 
@@ -10,6 +11,8 @@ interface AccessLogPanelProps {
   eventFilter: AccessLogEventFilter;
   expanded: boolean;
   loading?: boolean;
+  /** Result of the last Activity action (export, block, select); errors stay until the next one. */
+  notice?: { isError: boolean; text: string } | null;
   range: AccessLogRange;
   summary: AccessLogSummary | null;
   onAutoRefreshChange: (checked: boolean) => void;
@@ -28,11 +31,13 @@ interface AccessLogPanelProps {
   onUnblock: (address: string) => void;
 }
 
-// Categorical slots 1–3 of the reference palette, in fixed order: views, browsing, sign-ins.
+// Categorical slots 1–4 of the reference palette, in fixed order (validated as adjacent stack
+// pairs): views, browsing, sign-ins, failed views. Together they add up to every logged request.
 const SERIES = [
   { key: "view", label: "Views", color: "#2a78d6" },
   { key: "browse", label: "Browsing", color: "#eb6834" },
   { key: "auth", label: "Sign-ins", color: "#1baf7a" },
+  { key: "failed", label: "Failed views", color: "#eda100" },
 ] as const;
 
 const RANGE_OPTIONS: Array<{ label: string; value: AccessLogRange }> = [
@@ -61,10 +66,12 @@ const EVENT_LABELS: Record<string, string> = {
   trash: "Moved to trash",
   url_preview: "Opened URL",
   view: "Viewed",
+  view_failed: "View failed",
 };
 
 const FAILED_EVENTS = new Set(["blocked", "login_failure", "login_locked"]);
-const RECENT_LIMIT = 100;
+// How many recent events the panel lists; the app asks the manager for exactly this many.
+export const RECENT_EVENT_LIMIT = 100;
 
 export function AccessLogPanel({
   activeClients,
@@ -73,6 +80,7 @@ export function AccessLogPanel({
   eventFilter,
   expanded,
   loading = false,
+  notice = null,
   range,
   summary,
   onAutoRefreshChange,
@@ -87,7 +95,7 @@ export function AccessLogPanel({
   onSelectItem,
   onUnblock,
 }: AccessLogPanelProps) {
-  const recent = (summary?.recent || []).slice(0, RECENT_LIMIT);
+  const recent = summary?.recent || [];
   const totals = summary?.totals;
   const [tab, setTab] = useState<"blocked" | "overview">("overview");
   const blocked = new Set(blockedAddresses.map((entry) => entry.address));
@@ -125,6 +133,12 @@ export function AccessLogPanel({
           </TabButton>
         </div>
 
+        {notice ? (
+          <p className={`m-0 rounded-lg px-2.5 py-1.5 text-[11px] leading-snug ${notice.isError ? "bg-[#fef2f2] text-[#b42318]" : "bg-[#ecfdf3] text-[#178c35]"}`} role={notice.isError ? "alert" : "status"}>
+            {notice.text}
+          </p>
+        ) : null}
+
         <div id="activityOverviewPanel" className="grid gap-3" role="tabpanel" aria-labelledby="activityOverviewTab" hidden={tab !== "overview"}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="grid grid-cols-3 rounded-full bg-[#f1f1f3] p-1" role="group" aria-label="Time range">
@@ -148,7 +162,7 @@ export function AccessLogPanel({
           <div className="grid grid-cols-4 gap-2 max-[520px]:grid-cols-2">
             <StatTile label="Connected" value={activeClients} help="Devices seen in the last 2 minutes" />
             <StatTile label="Views" value={totals?.view ?? 0} />
-            <StatTile label="Requests" value={(totals?.browse ?? 0) + (totals?.edit ?? 0) + (totals?.view ?? 0) + (totals?.auth ?? 0)} />
+            <StatTile label="Requests" value={(totals?.browse ?? 0) + (totals?.edit ?? 0) + (totals?.view ?? 0) + (totals?.viewFailures ?? 0) + (totals?.auth ?? 0)} />
             <StatTile label="Failed sign-ins" value={totals?.authFailures ?? 0} />
           </div>
 
@@ -243,8 +257,8 @@ function BlockedAddressList({ blockedAddresses, onBlock, onUnblock }: { blockedA
 
 function ActivityChart({ buckets, range }: { buckets: AccessLogBucket[]; range: AccessLogRange }) {
   const [hovered, setHovered] = useState<number | null>(null);
-  const stacks = buckets.map((bucket) => ({ view: bucket.view, browse: bucket.browse + bucket.edit, auth: bucket.auth }));
-  const max = niceMax(Math.max(0, ...stacks.map((stack) => stack.view + stack.browse + stack.auth)));
+  const stacks = buckets.map((bucket) => ({ view: bucket.view, browse: bucket.browse + bucket.edit, auth: bucket.auth, failed: bucket.viewFailures ?? 0 }));
+  const max = niceMax(Math.max(0, ...stacks.map((stack) => stack.view + stack.browse + stack.auth + stack.failed)));
   const labelEvery = range === "24h" ? 6 : range === "1h" ? 3 : 1;
   const hoveredBucket = hovered === null ? null : buckets[hovered];
   return (
@@ -512,19 +526,6 @@ function formatTime(at: number) {
 
 function formatDateTime(at: number) {
   return new Date(at).toLocaleString([], { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
-}
-
-// Same units as the viewer's file details.
-function formatBytes(value: number | undefined) {
-  if (!value || value <= 0) return "";
-  const units = ["B", "KB", "MB", "GB"];
-  let size = value;
-  let unit = 0;
-  while (size >= 1024 && unit < units.length - 1) {
-    size /= 1024;
-    unit += 1;
-  }
-  return `${size.toFixed(size >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
 }
 
 function formatRelative(at: number) {

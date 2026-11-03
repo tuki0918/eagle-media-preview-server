@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import qrcodeFactory from "qrcode-generator";
-import { AccessLogPanel } from "./components/AccessLogPanel";
+import { AccessLogPanel, RECENT_EVENT_LIMIT } from "./components/AccessLogPanel";
 import { CloseIcon } from "./components/Icons";
 import { ServerStatusPanel } from "./components/ServerStatusPanel";
 import { SettingsForm, type HttpsFileField } from "./components/SettingsForm";
@@ -11,7 +11,7 @@ import type { AccessLogEventFilter, AccessLogRange, AccessLogSummary, AuthUser, 
 interface ServerManager {
   accessLogConnectedCount?(): number;
   accessLogPath?(): string;
-  accessLogSummary?(input: { range: AccessLogRange; type?: string }): Promise<AccessLogSummary>;
+  accessLogSummary?(input: { limit?: number; range: AccessLogRange; type?: string }): Promise<AccessLogSummary>;
   blockAddress?(address: string): Promise<PluginStatus>;
   clearAccessLog?(): Promise<void>;
   exportAccessLog?(filePath: string, format: "csv" | "jsonl"): Promise<{ count: number; filePath: string }>;
@@ -101,6 +101,7 @@ function App() {
   const [accessLogEventFilter, setAccessLogEventFilter] = useState<AccessLogEventFilter>("");
   const [accessLogAutoRefresh, setAccessLogAutoRefresh] = useState(false);
   const [accessLogLoading, setAccessLogLoading] = useState(false);
+  const [activityNotice, setActivityNotice] = useState<{ isError: boolean; text: string } | null>(null);
   const [status, setStatus] = useState<PluginStatus>(() => ({
     settings: {
       customDomain: "",
@@ -192,6 +193,12 @@ function App() {
   }, [activityExpanded, accessLogAutoRefresh, accessLogRange, accessLogEventFilter]);
 
   useEffect(() => {
+    if (!activityNotice || activityNotice.isError) return;
+    const timer = window.setTimeout(() => setActivityNotice(null), 3000);
+    return () => window.clearTimeout(timer);
+  }, [activityNotice]);
+
+  useEffect(() => {
     if (!message || messageIsError) return;
     const timer = window.setTimeout(() => setMessage(""), 3000);
     return () => window.clearTimeout(timer);
@@ -254,6 +261,7 @@ function App() {
       sessionDurationDays: settings.sessionDurationDays || 7,
       libraryProtectionEnabled: Boolean(settings.libraryProtectionEnabled),
       sharedLibraries: Array.isArray(settings.sharedLibraries) ? settings.sharedLibraries : [],
+      trustForwardedFor: Boolean(settings.trustForwardedFor),
       ...patch,
       authEnabled: nextAuthEnabled,
       authUsers: effectiveAuthUsers,
@@ -312,7 +320,7 @@ function App() {
   async function refreshAccessLog() {
     setAccessLogLoading(true);
     try {
-      const next = await managerRef.current?.accessLogSummary?.({ range: accessLogRange, type: accessLogEventFilter });
+      const next = await managerRef.current?.accessLogSummary?.({ limit: RECENT_EVENT_LIMIT, range: accessLogRange, type: accessLogEventFilter });
       if (next) {
         setAccessLog(next);
         setConnectedCount(next.activeClients);
@@ -322,6 +330,23 @@ function App() {
     } finally {
       setAccessLogLoading(false);
     }
+  }
+
+  // Takes only the saved block list, so unsaved edits in the Settings form are kept.
+  function applyBlockedAddresses(nextStatus: PluginStatus) {
+    setStatus((current) => ({
+      ...current,
+      settings: { ...(current.settings || {}), blockedAddresses: nextStatus.settings?.blockedAddresses || [] },
+    }));
+  }
+
+  // Activity actions report inside the Activity panel; the Settings message line may be collapsed.
+  function showActivityNotice(text: string, isError = false) {
+    setActivityNotice(text ? { isError, text } : null);
+  }
+
+  function showActivityError(error: unknown) {
+    showActivityNotice(errorMessage(error), true);
   }
 
   async function blockAddress(address: string) {
@@ -336,10 +361,10 @@ function App() {
         : typeof window.confirm !== "function" || window.confirm(`${confirmMessage}\n${detail}`);
       if (!confirmed) return false;
       const nextStatus = await managerRef.current?.blockAddress?.(trimmed);
-      if (nextStatus) setStatus(nextStatus);
+      if (nextStatus) applyBlockedAddresses(nextStatus);
       return true;
     } catch (error) {
-      setErrorMessage(error);
+      showActivityError(error);
       return false;
     }
   }
@@ -347,9 +372,9 @@ function App() {
   async function unblockAddress(address: string) {
     try {
       const nextStatus = await managerRef.current?.unblockAddress?.(address);
-      if (nextStatus) setStatus(nextStatus);
+      if (nextStatus) applyBlockedAddresses(nextStatus);
     } catch (error) {
-      setErrorMessage(error);
+      showActivityError(error);
     }
   }
 
@@ -357,7 +382,7 @@ function App() {
     const showSaveDialog = globalThis.eagle?.dialog?.showSaveDialog;
     const manager = managerRef.current;
     if (!showSaveDialog || !manager?.exportAccessLog) {
-      setMessage("Exporting is unavailable in this Eagle window.", true);
+      showActivityNotice("Exporting is unavailable in this Eagle window.", true);
       return;
     }
     try {
@@ -369,9 +394,9 @@ function App() {
       });
       if (result.canceled || !result.filePath) return;
       const exported = await manager.exportAccessLog(result.filePath, result.filePath.endsWith(".jsonl") ? "jsonl" : "csv");
-      setMessage(`Exported ${exported.count} entries.`);
+      showActivityNotice(`Exported ${exported.count} entries.`);
     } catch (error) {
-      setErrorMessage(error);
+      showActivityError(error);
     }
   }
 
@@ -381,7 +406,7 @@ function App() {
     try {
       await globalThis.eagle?.shell?.showItemInFolder?.(filePath);
     } catch (error) {
-      setErrorMessage(error);
+      showActivityError(error);
     }
   }
 
@@ -390,12 +415,12 @@ function App() {
     if (!item?.select) return;
     try {
       if (item.getById && !(await item.getById(itemId))) {
-        setMessage("This item is no longer in the library.", true);
+        showActivityNotice("This item is no longer in the library.", true);
         return;
       }
       await item.select([itemId]);
     } catch (error) {
-      setErrorMessage(error);
+      showActivityError(error);
     }
   }
 
@@ -412,7 +437,7 @@ function App() {
       await managerRef.current?.clearAccessLog?.();
       await refreshAccessLog();
     } catch (error) {
-      setErrorMessage(error);
+      showActivityError(error);
     }
   }
 
@@ -718,6 +743,7 @@ function App() {
           onSessionDurationDaysChange={(value) => updateSettings({ sessionDurationDays: value })}
           onSettingsExpandedChange={setSettingsExpanded}
           onSettingsTabChange={setSettingsTab}
+          onTrustForwardedForChange={(checked) => updateSettings({ trustForwardedFor: checked })}
           onTogglePasswordVisible={togglePasswordVisible}
           onUpdateAuthUser={updateAuthUser}
           onUserPasswordDraftChange={setUserPasswordDraft}
@@ -730,6 +756,7 @@ function App() {
           eventFilter={accessLogEventFilter}
           expanded={activityExpanded}
           loading={accessLogLoading}
+          notice={activityNotice}
           range={accessLogRange}
           summary={accessLog}
           onAutoRefreshChange={setAccessLogAutoRefresh}

@@ -17,9 +17,12 @@ test("blocked addresses accept single addresses and CIDR ranges", () => {
 });
 
 test("blocked addresses never cover this computer's loopback", () => {
-  for (const loopback of ["127.0.0.1", "127.0.0.0/8", "0.0.0.0/0", "::1", "::/0"]) {
+  // Anything overlapping 127.0.0.0/8 counts, not only ranges that contain 127.0.0.1.
+  for (const loopback of ["127.0.0.1", "127.0.0.2", "127.0.0.128/25", "127.0.0.0/8", "126.0.0.0/7", "0.0.0.0/0", "::1", "::/0"]) {
     assert.throws(() => normalizeBlockedAddress(loopback), /Loopback/, loopback);
   }
+  assert.equal(normalizeBlockedAddress("128.0.0.0/8"), "128.0.0.0/8");
+  assert.equal(normalizeBlockedAddress("126.0.0.0/8"), "126.0.0.0/8");
 });
 
 test("blocked address settings drop invalid and duplicate entries", () => {

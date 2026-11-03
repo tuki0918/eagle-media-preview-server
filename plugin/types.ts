@@ -45,6 +45,8 @@ export interface PluginSettings {
   passwordHash?: string;
   port?: number | string;
   sessionDurationDays?: number | string;
+  /** Believe X-Forwarded-For from a proxy on this machine; off by default. */
+  trustForwardedFor?: boolean;
   sharedLibraries?: SharedLibrary[];
 }
 
@@ -82,6 +84,8 @@ export interface AccessLogBucket {
   end: number;
   start: number;
   view: number;
+  /** Failed media fetches: requests, but not views. */
+  viewFailures?: number;
 }
 
 /** One row per address and signed-in user ("" when the requests carried no user). */
@@ -97,17 +101,16 @@ export interface AccessLogClient {
 
 export interface AccessLogSummary {
   activeClients: number;
-  bucketMs: number;
   buckets: AccessLogBucket[];
-  /** Every device in the log; `clients` holds only the most recently seen ones. */
+  /** Every device seen in the selected range; `clients` holds only the most recently seen ones. */
   clientCount: number;
   clients: AccessLogClient[];
-  filePath: string;
   /** When the manager built this summary. */
   generatedAt?: number;
   oldestAt: number | null;
   range: AccessLogRange;
   recent: AccessLogEntry[];
   retainedEntries: number;
-  totals: { auth: number; authFailures: number; browse: number; edit: number; view: number };
+  /** viewFailures: failed media fetches, listed under Views but not counted as views. */
+  totals: { auth: number; authFailures: number; browse: number; edit: number; view: number; viewFailures?: number };
 }
