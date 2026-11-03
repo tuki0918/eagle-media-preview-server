@@ -1,13 +1,20 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import qrcodeFactory from "qrcode-generator";
+import { AccessLogPanel, RECENT_EVENT_LIMIT } from "./components/AccessLogPanel";
 import { CloseIcon } from "./components/Icons";
 import { ServerStatusPanel } from "./components/ServerStatusPanel";
 import { SettingsForm, type HttpsFileField } from "./components/SettingsForm";
 import { serverRestartSettingsChanged, settingsPayloadChanged } from "./settingsChange";
-import type { AuthUser, LibraryCandidate, LibraryList, PluginSettings, PluginStatus, ServerState, SettingsTab, SharedLibrary, UserRole } from "./types";
+import type { AccessLogEventFilter, AccessLogRange, AccessLogSummary, AuthUser, LibraryCandidate, LibraryList, PluginSettings, PluginStatus, ServerState, SettingsTab, SharedLibrary, UserRole } from "./types";
 
 interface ServerManager {
+  accessLogConnectedCount?(): number;
+  accessLogPath?(): string;
+  accessLogSummary?(input: { limit?: number; range: AccessLogRange; type?: string }): Promise<AccessLogSummary>;
+  blockAddress?(address: string): Promise<PluginStatus>;
+  clearAccessLog?(): Promise<void>;
+  exportAccessLog?(filePath: string, format: "csv" | "jsonl"): Promise<{ count: number; filePath: string }>;
   init(): Promise<PluginStatus>;
   libraries?(input: { current: SharedLibrary | null; userDataPath: string }): Promise<LibraryList>;
   libraryChanged?(): void;
@@ -15,11 +22,17 @@ interface ServerManager {
   start(): Promise<PluginStatus>;
   status(): Promise<PluginStatus>;
   stop(): Promise<PluginStatus>;
+  unblockAddress?(address: string): Promise<PluginStatus>;
 }
 
 interface EagleRuntime {
   app?: { getPath?: (name: string) => Promise<string> };
   clipboard?: { writeText?: (value: string) => Promise<void> };
+  item?: {
+    getById?: (itemId: string) => Promise<unknown>;
+    /** Eagle 4.0 build12+: replaces the main window's selection. */
+    select?: (itemIds: string[]) => Promise<boolean | void>;
+  };
   library?: { name?: string; path?: string };
   dialog?: {
     showOpenDialog?: (options: {
@@ -28,6 +41,11 @@ interface EagleRuntime {
       properties?: string[];
       title?: string;
     }) => Promise<{ canceled: boolean; filePaths: string[] }>;
+    showSaveDialog?: (options: {
+      defaultPath?: string;
+      filters?: Array<{ extensions: string[]; name: string }>;
+      title?: string;
+    }) => Promise<{ canceled: boolean; filePath?: string }>;
     showMessageBox?: (options: {
       buttons?: string[];
       detail?: string;
@@ -39,7 +57,7 @@ interface EagleRuntime {
   onLibraryChanged?: (callback: (libraryPath: string) => void) => void;
   onPluginCreate?: (callback: () => void) => void;
   onPluginShow?: (callback: () => void) => void;
-  shell?: { openExternal?: (value: string) => Promise<void> };
+  shell?: { openExternal?: (value: string) => Promise<void>; showItemInFolder?: (value: string) => Promise<void> | void };
   window?: { close?: () => void; hide?: () => void };
 }
 
@@ -58,6 +76,9 @@ const AUTH_PASSWORD_REQUIRED_MESSAGE = "Enter a password for every user before e
 const HTTPS_CERTIFICATE_REQUIRED_MESSAGE = "Enter certificate and key paths before enabling HTTPS.";
 const PUBLIC_NETWORK_WITHOUT_PASSWORD_MESSAGE = "Public Network is enabled and password protection is off. Anyone on this network may be able to access the viewer. Start the server anyway?";
 const PUBLIC_NETWORK_HTTP_WITH_PASSWORD_MESSAGE = "HTTPS is disabled, so the connection is not protected. Start the server?";
+// Only the connected-device count is live; the detailed view reloads on demand or with Auto refresh.
+const CONNECTED_COUNT_REFRESH_MS = 3000;
+const ACCESS_LOG_AUTO_REFRESH_MS = 10000;
 const HTTPS_DOCS_URL = "https://github.com/tuki0918/eagle-media-preview-server/blob/main/docs/https-mkcert.md";
 
 function App() {
@@ -73,6 +94,14 @@ function App() {
   const [passwordDraftRevision, setPasswordDraftRevision] = useState(0);
   const userPasswordsRef = useRef<Record<string, string>>({});
   const [libraries, setLibraries] = useState<LibraryList | null>(null);
+  const [accessLog, setAccessLog] = useState<AccessLogSummary | null>(null);
+  const [accessLogRange, setAccessLogRange] = useState<AccessLogRange>("24h");
+  const [activityExpanded, setActivityExpanded] = useState(false);
+  const [connectedCount, setConnectedCount] = useState(0);
+  const [accessLogEventFilter, setAccessLogEventFilter] = useState<AccessLogEventFilter>("");
+  const [accessLogAutoRefresh, setAccessLogAutoRefresh] = useState(false);
+  const [accessLogLoading, setAccessLogLoading] = useState(false);
+  const [activityNotice, setActivityNotice] = useState<{ isError: boolean; text: string } | null>(null);
   const [status, setStatus] = useState<PluginStatus>(() => ({
     settings: {
       customDomain: "",
@@ -134,6 +163,40 @@ function App() {
       setErrorMessage(error);
     }
   }, []);
+
+  // Polls even while collapsed, so the header can show how many devices are connected.
+  useEffect(() => {
+    const refresh = () => {
+      try {
+        const count = managerRef.current?.accessLogConnectedCount?.();
+        if (typeof count === "number") setConnectedCount(count);
+      } catch {
+        // The count keeps its last value.
+      }
+    };
+    refresh();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") refresh();
+    }, CONNECTED_COUNT_REFRESH_MS);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  // Details load when the panel opens or the view changes, then only on request.
+  useEffect(() => {
+    if (!activityExpanded) return;
+    void refreshAccessLog();
+    if (!accessLogAutoRefresh) return;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refreshAccessLog();
+    }, ACCESS_LOG_AUTO_REFRESH_MS);
+    return () => window.clearInterval(timer);
+  }, [activityExpanded, accessLogAutoRefresh, accessLogRange, accessLogEventFilter]);
+
+  useEffect(() => {
+    if (!activityNotice || activityNotice.isError) return;
+    const timer = window.setTimeout(() => setActivityNotice(null), 3000);
+    return () => window.clearTimeout(timer);
+  }, [activityNotice]);
 
   useEffect(() => {
     if (!message || messageIsError) return;
@@ -250,6 +313,130 @@ function App() {
     } catch (error) {
       // The picker keeps the last list; sharing itself is enforced by the server.
       if (reportErrors) setErrorMessage(error);
+    }
+  }
+
+  async function refreshAccessLog() {
+    setAccessLogLoading(true);
+    try {
+      const next = await managerRef.current?.accessLogSummary?.({ limit: RECENT_EVENT_LIMIT, range: accessLogRange, type: accessLogEventFilter });
+      if (next) {
+        setAccessLog(next);
+        setConnectedCount(next.activeClients);
+      }
+    } catch {
+      // The panel keeps the last summary; logging never blocks the server controls.
+    } finally {
+      setAccessLogLoading(false);
+    }
+  }
+
+  // Takes only the saved block list, so unsaved edits in the Settings form are kept.
+  function applyBlockedAddresses(nextStatus: PluginStatus) {
+    setStatus((current) => ({
+      ...current,
+      settings: { ...(current.settings || {}), blockedAddresses: nextStatus.settings?.blockedAddresses || [] },
+    }));
+  }
+
+  // Activity actions report inside the Activity panel; the Settings message line may be collapsed.
+  function showActivityNotice(text: string, isError = false) {
+    setActivityNotice(text ? { isError, text } : null);
+  }
+
+  function showActivityError(error: unknown) {
+    showActivityNotice(errorMessage(error), true);
+  }
+
+  async function blockAddress(address: string) {
+    const trimmed = address.trim();
+    if (!trimmed) return false;
+    const confirmMessage = `Block ${trimmed}?`;
+    const detail = "Requests from this address are refused right away, including signed-in devices.";
+    const showMessageBox = globalThis.eagle?.dialog?.showMessageBox;
+    try {
+      const confirmed = showMessageBox
+        ? (await showMessageBox({ type: "warning", message: confirmMessage, detail, buttons: ["Cancel", "Block"] })).response === 1
+        : typeof window.confirm !== "function" || window.confirm(`${confirmMessage}\n${detail}`);
+      if (!confirmed) return false;
+      const nextStatus = await managerRef.current?.blockAddress?.(trimmed);
+      if (nextStatus) applyBlockedAddresses(nextStatus);
+      return true;
+    } catch (error) {
+      showActivityError(error);
+      return false;
+    }
+  }
+
+  async function unblockAddress(address: string) {
+    try {
+      const nextStatus = await managerRef.current?.unblockAddress?.(address);
+      if (nextStatus) applyBlockedAddresses(nextStatus);
+    } catch (error) {
+      showActivityError(error);
+    }
+  }
+
+  async function exportAccessLog() {
+    const showSaveDialog = globalThis.eagle?.dialog?.showSaveDialog;
+    const manager = managerRef.current;
+    if (!showSaveDialog || !manager?.exportAccessLog) {
+      showActivityNotice("Exporting is unavailable in this Eagle window.", true);
+      return;
+    }
+    try {
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+      const result = await showSaveDialog({
+        title: "Export access log",
+        defaultPath: `access-log-${stamp}.csv`,
+        filters: [{ name: "CSV", extensions: ["csv"] }, { name: "JSON Lines", extensions: ["jsonl"] }],
+      });
+      if (result.canceled || !result.filePath) return;
+      const exported = await manager.exportAccessLog(result.filePath, result.filePath.endsWith(".jsonl") ? "jsonl" : "csv");
+      showActivityNotice(`Exported ${exported.count} entries.`);
+    } catch (error) {
+      showActivityError(error);
+    }
+  }
+
+  async function revealAccessLogFile() {
+    const filePath = managerRef.current?.accessLogPath?.();
+    if (!filePath) return;
+    try {
+      await globalThis.eagle?.shell?.showItemInFolder?.(filePath);
+    } catch (error) {
+      showActivityError(error);
+    }
+  }
+
+  async function selectItemInEagle(itemId: string) {
+    const item = globalThis.eagle?.item;
+    if (!item?.select) return;
+    try {
+      if (item.getById && !(await item.getById(itemId))) {
+        showActivityNotice("This item is no longer in the library.", true);
+        return;
+      }
+      await item.select([itemId]);
+    } catch (error) {
+      showActivityError(error);
+    }
+  }
+
+  async function clearAccessLog() {
+    const message = "Clear the access log?";
+    const detail = "All recorded events are deleted. This cannot be undone.";
+    const showMessageBox = globalThis.eagle?.dialog?.showMessageBox;
+    let confirmed = false;
+    try {
+      confirmed = showMessageBox
+        ? (await showMessageBox({ type: "warning", message, detail, buttons: ["Cancel", "Clear"] })).response === 1
+        : typeof window.confirm === "function" && window.confirm(`${message}\n${detail}`);
+      if (!confirmed) return;
+      await managerRef.current?.clearAccessLog?.();
+      await refreshAccessLog();
+    } catch (error) {
+      showActivityError(error);
     }
   }
 
@@ -558,6 +745,29 @@ function App() {
           onTogglePasswordVisible={togglePasswordVisible}
           onUpdateAuthUser={updateAuthUser}
           onUserPasswordDraftChange={setUserPasswordDraft}
+        />
+
+        <AccessLogPanel
+          activeClients={connectedCount}
+          autoRefresh={accessLogAutoRefresh}
+          blockedAddresses={settings.blockedAddresses || []}
+          eventFilter={accessLogEventFilter}
+          expanded={activityExpanded}
+          loading={accessLogLoading}
+          notice={activityNotice}
+          range={accessLogRange}
+          summary={accessLog}
+          onAutoRefreshChange={setAccessLogAutoRefresh}
+          onBlock={blockAddress}
+          onClear={() => void clearAccessLog()}
+          onEventFilterChange={setAccessLogEventFilter}
+          onRefresh={() => void refreshAccessLog()}
+          onUnblock={(address) => void unblockAddress(address)}
+          onExpandedChange={setActivityExpanded}
+          onExport={() => void exportAccessLog()}
+          onRangeChange={setAccessLogRange}
+          onRevealFile={globalThis.eagle?.shell?.showItemInFolder ? () => void revealAccessLogFile() : undefined}
+          onSelectItem={globalThis.eagle?.item?.select ? (itemId) => void selectItemInEagle(itemId) : undefined}
         />
       </div>
     </main>

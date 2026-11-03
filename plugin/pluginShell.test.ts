@@ -1264,7 +1264,7 @@ test("plugin server caches authenticated users per request", async () => {
   assert.match(serverSource, /\{ error: RATING_WRITE_FORBIDDEN_MESSAGE \}/);
   assert.match(serverSource, /\{ error: METADATA_WRITE_FORBIDDEN_MESSAGE \}/);
   assert.doesNotMatch(serverSource, /Invalid password/);
-  assert.match(serverSource, /const auth = \{ authSessions, loginFailures, revokedAuthSessions, secureCookies: httpsEnabled, sessionMaxAgeSeconds, sessionSecret: resolvedSessionSecret, users: resolvedAuthUsers \};/);
+  assert.match(serverSource, /const auth = \{ authSessions, clientAddress: requestAddress, loginFailures, recordAuth, revokedAuthSessions, secureCookies: httpsEnabled, sessionMaxAgeSeconds, sessionSecret: resolvedSessionSecret, users: resolvedAuthUsers \};/);
   assert.match(serverSource, /const loginFailures = new Map\(\);/);
   assert.match(serverSource, /revokedAuthSessions\.add\(token\)/);
   assert.match(authSource, /auth\.revokedAuthSessions\.has\(token\)/);

@@ -1,12 +1,14 @@
 const { readFileSync } = require("fs");
 const { createServer: createHttpServer } = require("http");
 const { createServer: createHttpsServer } = require("https");
+const { isIP } = require("net");
 const { createHmac, randomBytes } = require("crypto");
+const { createAddressBlockList, normalizeClientAddress } = require("./addressBlockList.cjs");
 const { normalizeCustomDomain } = require("./customDomain.cjs");
 const { EagleRequestError, createEagleClient, normalizeStringArray } = require("./eagleClient.cjs");
 const { createConnectionContext } = require("./connection.cjs");
 const { createLibraryAccessPolicy, libraryPathKey } = require("./libraryAccess.cjs");
-const { readInternetShortcutUrl, streamItemMedia } = require("./media.cjs");
+const { readInternetShortcutUrl, servedMediaInfo, streamItemMedia } = require("./media.cjs");
 const { resolveDefaultPublicDir, securityHeaders, serveStatic } = require("./static.cjs");
 const {
   AUTH_SESSION_MAX_AGE_SECONDS,
@@ -32,7 +34,16 @@ const {
 import type { IncomingMessage, RequestListener, ServerResponse } from "http";
 import type { Server as NetServer, Socket } from "net";
 
+interface AccessLogRecorder {
+  record(entry: { event: string; ext?: string; ip: string; itemId?: string; method?: string; path?: string; size?: number; status?: number; type: "auth" | "browse" | "edit" | "view"; user?: string }): unknown;
+  touch(ip: string, user?: string): void;
+}
+
 interface ViewerServerOptions {
+  accessLog?: AccessLogRecorder | null;
+  blockedAddresses?: Array<string | { address: string; addedAt?: number }>;
+  /** Believe X-Forwarded-For from a proxy on this machine. Off unless the admin confirms the proxy sets it. */
+  trustForwardedFor?: boolean;
   customDomain?: string;
   allowMetadataEditing?: boolean;
   authUsers?: AuthUser[];
@@ -182,6 +193,7 @@ const LOGIN_FAILURE_LIMIT = 5;
 const LOGIN_FAILURE_MAX_ENTRIES = 500;
 const LOGIN_FAILURE_WINDOW_MS = 10 * 60 * 1000;
 const LOGIN_LOCK_MS = 5 * 60 * 1000;
+const BLOCKED_LOG_INTERVAL_MS = 60 * 1000;
 
 class HttpError extends Error {
   code: string;
@@ -204,6 +216,8 @@ interface LibraryGuard {
 const libraryGuards = new WeakMap<ServerResponse, LibraryGuard>();
 
 function createViewerServer({
+  accessLog = null,
+  blockedAddresses = [],
   customDomain = "",
   host = "0.0.0.0",
   allowMetadataEditing = false,
@@ -219,6 +233,7 @@ function createViewerServer({
   sessionMaxAgeSeconds = AUTH_SESSION_MAX_AGE_SECONDS,
   sessionSecret = "",
   sharedLibraries = null,
+  trustForwardedFor = false,
   eagleClient = createEagleClient(),
 }: ViewerServerOptions = {}) {
   let serverInstance: NetServer | null = null;
@@ -233,6 +248,17 @@ function createViewerServer({
   const authSessions = new Map<string, AuthSession>();
   const revokedAuthSessions = new Set<string>();
   const loginFailures = new Map<string, LoginFailure>();
+  const blockList = createAddressBlockList(blockedAddresses);
+  // A blocked client usually retries in a loop, so each address is logged at most once a minute.
+  const blockedLoggedAt = new Map<string, number>();
+  const logBlocked = (ip: string, path = "") => {
+    if (!accessLog) return;
+    const at = Date.now();
+    if (at - (blockedLoggedAt.get(ip) || 0) < BLOCKED_LOG_INTERVAL_MS) return;
+    if (blockedLoggedAt.size > LOGIN_FAILURE_MAX_ENTRIES) blockedLoggedAt.clear();
+    blockedLoggedAt.set(ip, at);
+    accessLog.record({ type: "auth", event: "blocked", ip, path, status: 403 });
+  };
   const libraryAccess: LibraryAccessPolicy = createLibraryAccessPolicy(sharedLibraries);
   // An opaque, per-install id lets viewers notice a library switch without learning the path.
   const libraryId = (libraryPath: unknown) => {
@@ -315,15 +341,28 @@ function createViewerServer({
   const server = createProtocolServer({ httpsCertPath, httpsEnabled, httpsKeyPath }, async (req: IncomingMessage, res: ServerResponse) => {
     try {
       const url = new URL(req.url || "/", `${httpsEnabled ? "https" : "http"}://${req.headers.host}`);
-      const auth = { authSessions, loginFailures, revokedAuthSessions, secureCookies: httpsEnabled, sessionMaxAgeSeconds, sessionSecret: resolvedSessionSecret, users: resolvedAuthUsers };
+      // Direct clients are dropped when they connect; this also catches clients behind a local proxy.
+      const requestAddress = displayClientAddress(req, trustForwardedFor);
+      if (blockList.isBlocked(requestAddress)) {
+        logBlocked(requestAddress, url.pathname);
+        res.writeHead(403, { ...securityHeaders, "Connection": "close", "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ error: "Access from this address is blocked" }));
+        return;
+      }
+      const recordAuth: AuthContext["recordAuth"] = (event, username, status) => {
+        accessLog?.record({ type: "auth", event, ip: requestAddress, method: req.method, path: url.pathname, status, user: username });
+      };
+      const auth = { authSessions, clientAddress: requestAddress, loginFailures, recordAuth, revokedAuthSessions, secureCookies: httpsEnabled, sessionMaxAgeSeconds, sessionSecret: resolvedSessionSecret, users: resolvedAuthUsers };
       if (!isTrustedUnsafeRequest(req, url, trustedCustomDomain)) {
         sendJson(res, 403, { error: "Cross-origin writes are not allowed" });
         return;
       }
+      const countRequest = () => attachRequestCounter(res, ({ status }) => {
+        requestCount += 1;
+        if (accessLog) logAccess(accessLog, req, res, url, status, authenticatedUser(req, auth)?.username || "", requestAddress);
+      });
       if (url.pathname.startsWith("/api/")) {
-        attachRequestCounter(res, () => {
-          requestCount += 1;
-        });
+        countRequest();
         if (await handleAuthRoutes(req, url, res, auth)) return;
         if (url.pathname === "/api/library-status") {
           await handleLibraryStatus(req, res, currentSession, libraryAccess);
@@ -345,13 +384,11 @@ function createViewerServer({
       }
       const fileMatch = url.pathname.match(/^\/file\/([^/]+)(?:\/[^/]+)?$/);
       if (fileMatch) {
+        countRequest();
         if (!isAuthorized(req, auth)) {
           sendAuthRequired(res);
           return;
         }
-        attachRequestCounter(res, () => {
-          requestCount += 1;
-        });
         if (!(await admitLibraryRequest(req, url, res))) return;
         await streamItemMedia(decodeURIComponent(fileMatch[1]), "file", req, res, currentSession, libraryGuards.get(res)?.stillOpen);
         return;
@@ -368,6 +405,12 @@ function createViewerServer({
   const openSockets = new Set<Socket>();
   // The raw TCP socket is reported for both HTTP and HTTPS, so destroying it also ends TLS sessions.
   server.on("connection", (socket: Socket) => {
+    const remote = socket.remoteAddress || "";
+    if (blockList.isBlocked(remote)) {
+      logBlocked(normalizeClientAddress(remote));
+      socket.destroy();
+      return;
+    }
     openSockets.add(socket);
     socket.once("close", () => openSockets.delete(socket));
   });
@@ -441,6 +484,14 @@ function createViewerServer({
         activeSessions: authSessions.size,
         requestCount,
       };
+    },
+
+    // Takes effect for the next request; open connections from a newly blocked address are closed.
+    setBlockedAddresses(next: Array<string | { address: string; addedAt?: number }>) {
+      blockList.replace(next);
+      for (const socket of openSockets) {
+        if (blockList.isBlocked(socket.remoteAddress || "")) socket.destroy();
+      }
     },
 
     // Called when Eagle reports a library switch so no request is answered from stale library info,
@@ -768,10 +819,14 @@ function boundedInteger(value: unknown, fallback: number, min: number, max: numb
 
 interface AuthContext {
   authSessions: Map<string, AuthSession>;
+  /** The client as the log and block list see it, so a trusted proxy's clients are locked out one by one. */
+  clientAddress?: string;
   loginFailures: Map<string, LoginFailure>;
   revokedAuthSessions: Set<string>;
   secureCookies?: boolean;
   sessionMaxAgeSeconds: number;
+  /** Writes login and logout outcomes to the access log; never given the password. */
+  recordAuth?: (event: "login_failure" | "login_locked" | "login_success" | "logout", username: string, status: number) => void;
   sessionSecret: string;
   users: AuthUser[];
 }
@@ -801,9 +856,10 @@ async function handleAuthRoutes(req: IncomingMessage, url: URL, res: ServerRespo
     const body = await readJson(req);
     const username = String(body.username || "").trim();
     const password = String(body.password || "");
-    const loginKey = loginFailureKey(req, username);
+    const loginKey = loginFailureKey(auth.clientAddress || clientAddress(req), username);
     const activeLockSeconds = activeLoginLockSeconds(auth.loginFailures, loginKey);
     if (activeLockSeconds > 0) {
+      auth.recordAuth?.("login_locked", username, 429);
       sendLoginRateLimited(res, activeLockSeconds);
       return true;
     }
@@ -811,12 +867,15 @@ async function handleAuthRoutes(req: IncomingMessage, url: URL, res: ServerRespo
     if (!user) {
       const retryAfterSeconds = recordFailedLogin(auth.loginFailures, loginKey);
       if (retryAfterSeconds > 0) {
+        auth.recordAuth?.("login_locked", username, 429);
         sendLoginRateLimited(res, retryAfterSeconds);
         return true;
       }
+      auth.recordAuth?.("login_failure", username, 401);
       sendJson(res, 401, { error: INVALID_LOGIN_MESSAGE });
       return true;
     }
+    auth.recordAuth?.("login_success", user.username, 200);
     auth.loginFailures.delete(loginKey);
     pruneAuthSessions(auth.authSessions);
     const session = {
@@ -841,6 +900,8 @@ async function handleAuthRoutes(req: IncomingMessage, url: URL, res: ServerRespo
       return true;
     }
     const token = authSessionTokenFromRequest(req, auth.secureCookies);
+    const signedInUser = authenticatedUser(req, auth);
+    if (signedInUser) auth.recordAuth?.("logout", signedInUser.username, 200);
     if (token) {
       auth.authSessions.delete(token);
       auth.revokedAuthSessions.add(token);
@@ -857,12 +918,89 @@ async function handleAuthRoutes(req: IncomingMessage, url: URL, res: ServerRespo
   return false;
 }
 
-function loginFailureKey(req: IncomingMessage, username: string) {
-  return `${clientAddress(req)}:${username.toLowerCase()}`;
+function loginFailureKey(address: string, username: string) {
+  return `${address}:${username.toLowerCase()}`;
 }
 
 function clientAddress(req: IncomingMessage) {
   return req.socket?.remoteAddress || "unknown";
+}
+
+// Status polls and thumbnails only mark the client as connected; everything else becomes an entry.
+const PRESENCE_ONLY_PATHS = new Set(["/api/auth/status", "/api/connect", "/api/health", "/api/library-status"]);
+
+function logAccess(accessLog: AccessLogRecorder, req: IncomingMessage, res: ServerResponse, url: URL, status: number, user: string, ip: string) {
+  const pathname = url.pathname;
+  // Login and logout write their own entries with the outcome.
+  if (pathname.startsWith("/api/auth/") && pathname !== "/api/auth/status") return;
+  if (PRESENCE_ONLY_PATHS.has(pathname) || /^\/api\/items\/[^/]+\/thumb$/.test(pathname)) {
+    if (status < 400) accessLog.touch(ip, user);
+    return;
+  }
+  const base = { ip, method: req.method, status, user };
+  const media = pathname.match(/^\/file\/([^/]+)/) || pathname.match(/^\/api\/items\/([^/]+)\/file$/);
+  if (media) {
+    // A failed fetch stays in the history (under Views); the summary leaves it out of the view counts.
+    if (status >= 400) {
+      accessLog.record({ ...base, type: "view", event: "view_failed", itemId: safeDecode(media[1]), path: pathname });
+      return;
+    }
+    // A video plays as many range requests, and players probe first: HEAD, or Safari's
+    // "bytes=0-1". Only the request that starts reading the file counts as a view.
+    const range = String(req.headers.range || "").trim();
+    if (req.method === "HEAD" || (range && (!/^bytes=0-/.test(range) || /^bytes=0-[01]$/.test(range)))) {
+      accessLog.touch(ip, user);
+      return;
+    }
+    const served = servedMediaInfo(res);
+    accessLog.record({ ...base, type: "view", event: "view", ext: served?.ext, itemId: safeDecode(media[1]), path: pathname, size: served?.size });
+    return;
+  }
+  const urlPreview = pathname.match(/^\/api\/items\/([^/]+)\/url-preview$/);
+  if (urlPreview) {
+    accessLog.record({ ...base, type: "view", event: status >= 400 ? "view_failed" : "url_preview", itemId: safeDecode(urlPreview[1]), path: pathname });
+    return;
+  }
+  const edit = pathname.match(/^\/api\/items\/([^/]+)\/(star|metadata|trash)$/);
+  if (edit) {
+    accessLog.record({ ...base, type: "edit", event: edit[2], itemId: safeDecode(edit[1]), path: pathname });
+    return;
+  }
+  const event = pathname === "/api/items" && url.searchParams.get("q") ? "search" : pathname.replace(/^\/api\//, "") || "api";
+  accessLog.record({ ...base, type: "browse", event, path: `${pathname}${url.search}` });
+}
+
+// Requests relayed by a proxy on this machine (a tunnel for the custom domain) carry the real
+// client in X-Forwarded-For. A proxy that forwards the header unchanged lets the client choose
+// every hop, so it is believed only when the admin turns it on, only from loopback, and only its
+// last hop: proxies that append put the peer they saw there.
+function displayClientAddress(req: IncomingMessage, trustForwardedFor: boolean) {
+  const remote = normalizeClientAddress(clientAddress(req));
+  if (!trustForwardedFor || !isLoopbackAddress(remote)) return remote;
+  const header = req.headers["x-forwarded-for"];
+  const hops = (Array.isArray(header) ? header.join(",") : String(header || "")).split(",").map((hop) => hop.trim()).filter(Boolean);
+  const forwarded = normalizeClientAddress(stripForwardedPort(hops.at(-1) || ""));
+  return isIP(forwarded) ? forwarded : remote;
+}
+
+// Some proxies append "203.0.113.5:51234" or "[2001:db8::1]:443"; a bare IPv6 address is left as is.
+function stripForwardedPort(hop: string) {
+  const bracketed = hop.match(/^\[([^\]]+)\](?::\d+)?$/);
+  if (bracketed) return bracketed[1];
+  const ipv4WithPort = hop.match(/^(\d+\.\d+\.\d+\.\d+):\d+$/);
+  return ipv4WithPort ? ipv4WithPort[1] : hop;
+}
+
+function isLoopbackAddress(address: string) {
+  return address === "::1" || address.startsWith("127.");
+}
+
+function safeDecode(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 function activeLoginLockSeconds(loginFailures: Map<string, LoginFailure>, key: string) {

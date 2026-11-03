@@ -11,6 +11,7 @@ export interface ServerRestartSettings {
   port?: unknown;
   sessionDurationDays?: unknown;
   sharedLibraries?: unknown;
+  trustForwardedFor?: unknown;
 }
 
 export type SettingsPatch = Record<string, unknown>;
@@ -30,6 +31,7 @@ export function serverSettingsChanged(current: ServerRestartSettings, nextSettin
   if ((nextSettings.httpsKeyPath ?? current.httpsKeyPath ?? "") !== (current.httpsKeyPath ?? "")) return true;
   if (Number(nextSettings.port ?? current.port) !== Number(current.port)) return true;
   if (Number(nextSettings.sessionDurationDays ?? current.sessionDurationDays ?? 7) !== Number(current.sessionDurationDays ?? 7)) return true;
+  if (Boolean(nextSettings.trustForwardedFor ?? current.trustForwardedFor) !== Boolean(current.trustForwardedFor)) return true;
   if (Boolean(nextSettings.authEnabled ?? current.authEnabled) !== Boolean(current.authEnabled)) return true;
   if (JSON.stringify(nextSettings.authUsers ?? current.authUsers ?? []) !== JSON.stringify(current.authUsers ?? [])) return true;
   return false;
@@ -46,6 +48,7 @@ export function serverRestartSettingsChanged(current: ServerRestartSettings, nex
   if ((nextSettings.httpsKeyPath ?? current.httpsKeyPath ?? "") !== (current.httpsKeyPath ?? "")) return true;
   if (Number(nextSettings.port ?? current.port) !== Number(current.port)) return true;
   if (Number(nextSettings.sessionDurationDays ?? current.sessionDurationDays ?? 7) !== Number(current.sessionDurationDays ?? 7)) return true;
+  if (Boolean(nextSettings.trustForwardedFor ?? current.trustForwardedFor) !== Boolean(current.trustForwardedFor)) return true;
   if (nextAuthEnabled !== currentAuthEnabled) return true;
   if (!currentAuthEnabled && !nextAuthEnabled) return false;
   if (hasPasswordUpdates(nextSettings.userPasswords)) return true;

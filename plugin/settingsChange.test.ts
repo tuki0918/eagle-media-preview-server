@@ -37,6 +37,13 @@ describe("settingsChange", () => {
     expect(serverRestartSettingsChanged(configured, { sharedLibraries: [] })).toBe(true);
   });
 
+  test("persists and restarts when trusting the local proxy changes", () => {
+    expect(settingsPayloadChanged(baseSettings, { trustForwardedFor: false })).toBe(false);
+    expect(settingsPayloadChanged(baseSettings, { trustForwardedFor: true })).toBe(true);
+    expect(serverRestartSettingsChanged(baseSettings, { trustForwardedFor: true })).toBe(true);
+    expect(serverRestartSettingsChanged({ ...baseSettings, trustForwardedFor: true }, { trustForwardedFor: false })).toBe(true);
+  });
+
   test("treats auto start as a persisted setting that does not restart the server", () => {
     expect(settingsPayloadChanged(baseSettings, { autoStart: true })).toBe(true);
     expect(serverRestartSettingsChanged(baseSettings, { autoStart: true })).toBe(false);

@@ -223,6 +223,35 @@ test("generated settings store migrates legacy auth fields into canonical auth u
   assert.equal("passwordHash" in raw, false);
 });
 
+test("generated settings store runs loads that migrate in the same queue as saves", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-runtime-"));
+  const filePath = join(dir, "settings.json");
+  // A legacy file: the first load migrates it and writes it back.
+  await writeFile(filePath, JSON.stringify({ authEnabled: false, basicAuthUser: "legacy", port: 41532 }), "utf8");
+  const store = createSettingsStore({ filePath });
+
+  const saving = store.save({ autoStart: true });
+  const migrating = store.load();
+  const later = store.load();
+  const [saved, loaded] = await Promise.all([saving, migrating, later]);
+  assert.equal(saved.autoStart, true);
+  // Loads queued after the save see it, and none of them writes the old settings back.
+  assert.equal(loaded.autoStart, true);
+  assert.equal(JSON.parse(await readFile(filePath, "utf8")).autoStart, true);
+});
+
+test("generated settings store keeps a hand-edited trustForwardedFor when the panel saves", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-runtime-"));
+  const filePath = join(dir, "settings.json");
+  const store = createSettingsStore({ filePath });
+  assert.equal((await store.load()).trustForwardedFor, false);
+  const raw = JSON.parse(await readFile(filePath, "utf8"));
+  await writeFile(filePath, JSON.stringify({ ...raw, trustForwardedFor: true }), "utf8");
+  // The panel never sends the field, so a save leaves the hand-edited value alone.
+  await store.save({ port: 41600 });
+  assert.equal(JSON.parse(await readFile(filePath, "utf8")).trustForwardedFor, true);
+});
+
 test("generated settings store saves multiple auth users with roles", async () => {
   const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-runtime-"));
   const store = createSettingsStore({ filePath: join(dir, "settings.json") });
@@ -477,6 +506,42 @@ test("generated server manager passes session duration and restarts when it chan
     ["create", 14 * 24 * 60 * 60],
     ["start", 14 * 24 * 60 * 60],
   ]);
+});
+
+test("generated server manager does not trust X-Forwarded-For by default and restarts when it is turned on", async () => {
+  const calls: unknown[] = [];
+  let settings = { ...DEFAULT_SETTINGS, host: "127.0.0.1", port: 41532 };
+  const manager = createServerManager({
+    settingsStore: {
+      async load() {
+        return settings;
+      },
+      async save(input: Record<string, unknown>) {
+        settings = { ...settings, ...input };
+        return settings;
+      },
+    },
+    viewerServerFactory(options: { trustForwardedFor?: boolean }) {
+      calls.push(["create", options.trustForwardedFor]);
+      return {
+        async start() {},
+        async stop() {
+          calls.push(["stop", options.trustForwardedFor]);
+        },
+        status() {
+          return { state: "running", host: "127.0.0.1", port: 41532 };
+        },
+      };
+    },
+    lanAddressProvider() {
+      return [{ label: "lo0", address: "127.0.0.1" }];
+    },
+  });
+
+  assert.equal(DEFAULT_SETTINGS.trustForwardedFor, false);
+  await manager.start();
+  await manager.saveSettings({ trustForwardedFor: true });
+  assert.deepEqual(calls, [["create", false], ["stop", false], ["create", true]]);
 });
 
 test("generated server manager passes HTTPS settings and restarts when they change", async () => {
@@ -1034,4 +1099,51 @@ test("generated server manager still lists saved libraries without Eagle setting
     current: null,
     items: [{ path: "/Users/me/Work.library", name: "Work", current: false, shared: false }],
   });
+});
+
+test("server manager blocks addresses live without a restart and keeps the access log after stop", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-block-manager-"));
+  const store = createSettingsStore({ filePath: join(dir, "settings.json") });
+  const { createAccessLog } = require("../../dist/.generated/plugin-service/accessLog.cjs");
+  const accessLog = createAccessLog({ filePath: join(dir, "access-log.jsonl") });
+  const calls: unknown[] = [];
+  const manager = createServerManager({
+    accessLog,
+    settingsStore: store,
+    lanAddressProvider: () => [],
+    viewerServerFactory(options: { blockedAddresses: Array<{ address: string }>; host: string; port: number }) {
+      calls.push(["create", options.blockedAddresses.map((entry) => entry.address)]);
+      return {
+        async start() {},
+        async stop() { calls.push(["stop"]); },
+        setBlockedAddresses(next: Array<{ address: string }>) { calls.push(["live", next.map((entry) => entry.address)]); },
+        status: () => ({ state: "running", host: options.host, port: options.port }),
+      };
+    },
+  });
+  await manager.start();
+  const blocked = await manager.blockAddress("192.168.1.50");
+  assert.deepEqual(blocked.settings.blockedAddresses.map((entry: { address: string }) => entry.address), ["192.168.1.50"]);
+  await assert.rejects(manager.blockAddress("127.0.0.1"), /Loopback/);
+  const unblocked = await manager.unblockAddress("192.168.1.50");
+  assert.deepEqual(unblocked.settings.blockedAddresses, []);
+  assert.deepEqual(calls, [["create", []], ["live", ["192.168.1.50"]], ["live", []]]);
+  // A settings save alongside a block change keeps both.
+  await Promise.all([manager.blockAddress("192.168.1.70"), manager.saveSettings({ autoStart: true })]);
+  const both = await store.load();
+  assert.equal(both.autoStart, true);
+  assert.deepEqual(both.blockedAddresses.map((entry: { address: string }) => entry.address), ["192.168.1.70"]);
+  await manager.unblockAddress("192.168.1.70");
+  await manager.saveSettings({ autoStart: false });
+  // Two changes at once both land: each starts from the list the previous one saved.
+  await Promise.all([manager.blockAddress("192.168.1.60"), manager.blockAddress("192.168.1.61")]);
+  assert.deepEqual((await store.load()).blockedAddresses.map((entry: { address: string }) => entry.address), ["192.168.1.60", "192.168.1.61"]);
+  await Promise.all([manager.unblockAddress("192.168.1.60"), manager.unblockAddress("192.168.1.61")]);
+  assert.deepEqual((await store.load()).blockedAddresses, []);
+
+  accessLog.record({ type: "view", event: "view", ip: "192.168.1.20" });
+  await manager.stop();
+  const summary = await manager.accessLogSummary({ range: "1h" });
+  assert.equal(summary.recent.length, 1);
+  assert.equal(manager.accessLogConnectedCount(), 1);
 });

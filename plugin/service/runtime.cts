@@ -3,6 +3,8 @@ const { createPrivateKey, createPublicKey, pbkdf2Sync, randomBytes, X509Certific
 const { dirname, join } = require("path");
 const { homedir, networkInterfaces } = require("os");
 const { createViewerServer } = require("./viewerServer.cjs");
+const { accessLogCsv, createAccessLog } = require("./accessLog.cjs");
+const { normalizeBlockedAddress, normalizeBlockedAddresses } = require("./addressBlockList.cjs");
 const { serverRestartSettingsChanged } = require("./settingsChange.cjs");
 const { normalizeCustomDomain } = require("./customDomain.cjs");
 const { libraryNameFromPath, libraryPathKey, normalizeSharedLibraries } = require("./libraryAccess.cjs");
@@ -21,7 +23,13 @@ interface SharedLibrary {
   path: string;
 }
 
+interface BlockedAddress {
+  address: string;
+  addedAt: number;
+}
+
 interface PluginSettings {
+  blockedAddresses: BlockedAddress[];
   customDomain: string;
   allowMetadataEditing: boolean;
   authUsers: AuthUser[];
@@ -40,6 +48,7 @@ interface PluginSettings {
   sessionSecret: string;
   settingsVersion: number;
   sharedLibraries: SharedLibrary[];
+  trustForwardedFor: boolean;
 }
 
 type SettingsInput = Partial<Omit<PluginSettings, "port">> & {
@@ -67,6 +76,7 @@ interface ViewerStatus {
 
 interface ManagedViewer {
   notifyLibraryChanged?(): void;
+  setBlockedAddresses?(addresses: BlockedAddress[]): void;
   start(): Promise<unknown>;
   stop(): Promise<unknown>;
   status(): ViewerStatus;
@@ -84,7 +94,10 @@ interface LibraryCandidate extends SharedLibrary {
   shared: boolean;
 }
 
+type AccessLog = ReturnType<typeof createAccessLog>;
+
 interface ServerManagerOptions {
+  accessLog?: AccessLog;
   lanAddressProvider?: () => LanAddress[];
   defaultEagleUserDataPath?: () => string;
   settingsStore?: SettingsStore;
@@ -99,6 +112,9 @@ interface ServerManagerOptions {
     sessionMaxAgeSeconds: number;
     sessionSecret: string;
     sharedLibraries: string[] | null;
+    accessLog?: AccessLog;
+    blockedAddresses?: BlockedAddress[];
+    trustForwardedFor?: boolean;
   }) => ManagedViewer;
 }
 
@@ -109,6 +125,7 @@ interface NetworkEntry {
 }
 
 const DEFAULT_SETTINGS: PluginSettings = {
+  blockedAddresses: [],
   customDomain: "",
   allowMetadataEditing: false,
   authUsers: [],
@@ -127,6 +144,7 @@ const DEFAULT_SETTINGS: PluginSettings = {
   sessionSecret: "",
   settingsVersion: 2,
   sharedLibraries: [],
+  trustForwardedFor: false,
 };
 const CURRENT_SETTINGS_VERSION = 2;
 const MIN_SESSION_DURATION_DAYS = 1;
@@ -140,69 +158,84 @@ function defaultSettingsPath() {
 }
 
 function createSettingsStore({ filePath = defaultSettingsPath() }: { filePath?: string } = {}) {
-  return {
+  // save() reads the file, merges and writes it back, and load() writes it when migrating or
+  // creating it. Either running alongside a save could write back stale settings over the save, so
+  // all file access runs one at a time.
+  let fileChain: Promise<unknown> = Promise.resolve();
+  function queued<T>(task: () => Promise<T>) {
+    const run = fileChain.then(task);
+    fileChain = run.catch(() => {});
+    return run;
+  }
+
+  // Reads (and migrates or creates) the file; only called from inside the queue.
+  async function loadNow() {
+    try {
+      const raw = await readFile(filePath, "utf8");
+      const input = withLoadableCustomDomain(JSON.parse(raw));
+      const settings = normalizeSettings(input);
+      if (needsSettingsMigration(input, settings)) {
+        const migrated = withSessionSecret(settings);
+        await writeSettingsFile(filePath, migrated);
+        return migrated;
+      }
+      return settings;
+    } catch (error) {
+      if (isNodeError(error) && error.code === "ENOENT") {
+        const created = createDefaultSettings();
+        await writeSettingsFile(filePath, created);
+        return created;
+      }
+      throw error;
+    }
+  }
+
+  const store = {
     filePath,
-
-    async load() {
-      try {
-        const raw = await readFile(filePath, "utf8");
-        const input = withLoadableCustomDomain(JSON.parse(raw));
-        const settings = normalizeSettings(input);
-        if (needsSettingsMigration(input, settings)) {
-          const migrated = withSessionSecret(settings);
-          await writeSettingsFile(filePath, migrated);
-          return migrated;
-        }
-        return settings;
-      } catch (error) {
-        if (isNodeError(error) && error.code === "ENOENT") {
-          const created = createDefaultSettings();
-          await writeSettingsFile(filePath, created);
-          return created;
-        }
-        throw error;
-      }
-    },
-
-    async save(input: SettingsInput = {}) {
-      const current = await this.load();
-      validateAuthUsersInput(input.authUsers);
-      const next = withSessionSecret(normalizeSettings({ ...current, ...input }));
-      const userPasswords = normalizeUserPasswords(input.userPasswords);
-
-      if (userPasswords.size) {
-        next.authUsers = next.authUsers.map((user) => {
-          const password = userPasswords.get(user.username);
-          return password ? { ...user, passwordHash: hashPassword(password) } : user;
-        });
-      }
-
-      if (next.authEnabled && authUsersMissingPassword(next.authUsers)) {
-        throw new Error("Password is required for every enabled user");
-      }
-      if (next.httpsEnabled && (!next.httpsCertPath || !next.httpsKeyPath)) {
-        throw new Error("HTTPS requires certificate and key paths");
-      }
-      if (next.httpsEnabled) {
-        await validateHttpsCredentials(next.httpsCertPath, next.httpsKeyPath);
-      }
-      if (!next.authEnabled) {
-        if (input.allowMetadataEditing === true) {
-          throw new Error("Password protection is required when metadata editing is enabled");
-        }
-        next.passwordHash = "";
-        next.allowMetadataEditing = false;
-      }
-      if (next.authUsers.length) {
-        next.basicAuthUser = next.authUsers[0].username;
-        next.passwordHash = next.authEnabled ? next.authUsers[0].passwordHash : "";
-        next.allowMetadataEditing = next.authEnabled && authUsersCanEditMetadata(next.authUsers);
-      }
-
-      await writeSettingsFile(filePath, next);
-      return next;
-    },
+    load: () => queued(loadNow),
+    save: (input: SettingsInput = {}) => queued(() => saveNow(input)),
   };
+
+  async function saveNow(input: SettingsInput) {
+    const current = await loadNow();
+    validateAuthUsersInput(input.authUsers);
+    const next = withSessionSecret(normalizeSettings({ ...current, ...input }));
+    const userPasswords = normalizeUserPasswords(input.userPasswords);
+
+    if (userPasswords.size) {
+      next.authUsers = next.authUsers.map((user) => {
+        const password = userPasswords.get(user.username);
+        return password ? { ...user, passwordHash: hashPassword(password) } : user;
+      });
+    }
+
+    if (next.authEnabled && authUsersMissingPassword(next.authUsers)) {
+      throw new Error("Password is required for every enabled user");
+    }
+    if (next.httpsEnabled && (!next.httpsCertPath || !next.httpsKeyPath)) {
+      throw new Error("HTTPS requires certificate and key paths");
+    }
+    if (next.httpsEnabled) {
+      await validateHttpsCredentials(next.httpsCertPath, next.httpsKeyPath);
+    }
+    if (!next.authEnabled) {
+      if (input.allowMetadataEditing === true) {
+        throw new Error("Password protection is required when metadata editing is enabled");
+      }
+      next.passwordHash = "";
+      next.allowMetadataEditing = false;
+    }
+    if (next.authUsers.length) {
+      next.basicAuthUser = next.authUsers[0].username;
+      next.passwordHash = next.authEnabled ? next.authUsers[0].passwordHash : "";
+      next.allowMetadataEditing = next.authEnabled && authUsersCanEditMetadata(next.authUsers);
+    }
+
+    await writeSettingsFile(filePath, next);
+    return next;
+  }
+
+  return store;
 }
 
 async function writeSettingsFile(filePath: string, settings: PluginSettings) {
@@ -238,6 +271,7 @@ function normalizeSettings(input: SettingsInput = {}): PluginSettings {
   const firstAuthUser = authUsers[0];
   const sessionDurationDays = normalizeSessionDurationDays(input.sessionDurationDays);
   return {
+    blockedAddresses: normalizeBlockedAddresses(input.blockedAddresses),
     customDomain: normalizeCustomDomain(input.customDomain),
     autoStart: Boolean(input.autoStart ?? DEFAULT_SETTINGS.autoStart),
     allowMetadataEditing: authEnabled && authUsersCanEditMetadata(authUsers),
@@ -258,12 +292,14 @@ function normalizeSettings(input: SettingsInput = {}): PluginSettings {
       : DEFAULT_SETTINGS.lastServerStatus,
     libraryProtectionEnabled: Boolean(input.libraryProtectionEnabled ?? DEFAULT_SETTINGS.libraryProtectionEnabled),
     sharedLibraries: normalizeSharedLibraries(input.sharedLibraries),
+    trustForwardedFor: input.trustForwardedFor === true,
   };
 }
 
 function canonicalSettings(settings: PluginSettings) {
   return {
     settingsVersion: CURRENT_SETTINGS_VERSION,
+    blockedAddresses: settings.blockedAddresses,
     customDomain: settings.customDomain,
     authUsers: settings.authUsers,
     autoStart: settings.autoStart,
@@ -278,6 +314,7 @@ function canonicalSettings(settings: PluginSettings) {
     sessionDurationDays: settings.sessionDurationDays,
     sessionSecret: settings.sessionSecret,
     sharedLibraries: settings.sharedLibraries,
+    trustForwardedFor: settings.trustForwardedFor,
   };
 }
 
@@ -519,6 +556,7 @@ function selectLanAddress({ lanAddresses = [], host = "0.0.0.0" }: {
 }
 
 function createServerManager({
+  accessLog = createAccessLog(),
   settingsStore = createSettingsStore(),
   viewerServerFactory = createViewerServer,
   lanAddressProvider = getLanAddresses,
@@ -552,6 +590,26 @@ function createServerManager({
     };
   }
 
+  // Settings saves and block-list changes each read the settings, change them and save them; one
+  // at a time, so two quick changes don't both start from the same settings and drop one.
+  let settingsChain: Promise<unknown> = Promise.resolve();
+  function queueSettingsChange<T>(task: () => Promise<T>) {
+    const run = settingsChain.then(task);
+    settingsChain = run.catch(() => {});
+    return run;
+  }
+
+  function updateBlockedAddresses(change: (current: BlockedAddress[]) => BlockedAddress[] | null) {
+    return queueSettingsChange(async () => {
+      const current = await settingsStore.load();
+      const next = change(current.blockedAddresses);
+      if (!next) return snapshot(current);
+      const settings = await settingsStore.save({ blockedAddresses: next });
+      viewer?.setBlockedAddresses?.(settings.blockedAddresses);
+      return snapshot(settings);
+    });
+  }
+
   async function createViewer(settings: PluginSettings) {
     return viewerServerFactory({
       customDomain: settings.customDomain,
@@ -564,11 +622,15 @@ function createServerManager({
       sessionSecret: settings.sessionSecret,
       sharedLibraries: sharedLibraryPaths(settings),
       authUsers: settings.authEnabled ? settings.authUsers : [],
+      accessLog,
+      blockedAddresses: settings.blockedAddresses,
+      trustForwardedFor: settings.trustForwardedFor,
     });
   }
 
   return {
     async init() {
+      await accessLog.load();
       const settings = await settingsStore.load();
       if (settings.autoStart) return this.start();
       return snapshot(settings);
@@ -609,16 +671,18 @@ function createServerManager({
       return this.start();
     },
 
-    async saveSettings(input: SettingsInput) {
-      const wasRunning = viewer?.status().state === "running";
-      const current = await settingsStore.load();
-      const settings = await settingsStore.save(input);
-      const restartRequired = serverRestartSettingsChanged(current, settings);
-      if (viewer && restartRequired) {
-        await this.stop();
-        if (wasRunning) return this.start();
-      }
-      return snapshot(settings);
+    saveSettings(input: SettingsInput) {
+      return queueSettingsChange(async () => {
+        const wasRunning = viewer?.status().state === "running";
+        const current = await settingsStore.load();
+        const settings = await settingsStore.save(input);
+        const restartRequired = serverRestartSettingsChanged(current, settings);
+        if (viewer && restartRequired) {
+          await this.stop();
+          if (wasRunning) return this.start();
+        }
+        return snapshot(settings);
+      });
     },
 
     libraryChanged() {
@@ -651,6 +715,44 @@ function createServerManager({
 
     async status() {
       return snapshot();
+    },
+
+    // The log belongs to the manager, not the viewer, so it stays readable after the server stops.
+    async accessLogSummary({ limit = 200, range = "24h", type = "" }: { limit?: number; range?: "1h" | "24h" | "7d"; type?: string } = {}) {
+      await accessLog.load();
+      return { ...accessLog.summary({ range }), generatedAt: Date.now(), recent: accessLog.entries({ limit, type }) };
+    },
+
+    accessLogConnectedCount() {
+      return accessLog.activeClients();
+    },
+
+    // Blocking applies to the running server right away and is saved for the next start.
+    async blockAddress(address: string) {
+      const normalized = normalizeBlockedAddress(address);
+      return updateBlockedAddresses((current) => current.some((entry) => entry.address === normalized)
+        ? null
+        : [...current, { address: normalized, addedAt: Date.now() }]);
+    },
+
+    async unblockAddress(address: string) {
+      return updateBlockedAddresses((current) => current.filter((entry) => entry.address !== address));
+    },
+
+    async exportAccessLog(filePath: string, format: "csv" | "jsonl" = "csv") {
+      await accessLog.load();
+      const entries = accessLog.entries({ limit: Number.MAX_SAFE_INTEGER }).reverse();
+      const body = format === "jsonl" ? entries.map((entry: object) => `${JSON.stringify(entry)}\n`).join("") : accessLogCsv(entries);
+      await writeFile(filePath, body, "utf8");
+      return { count: entries.length, filePath };
+    },
+
+    async clearAccessLog() {
+      await accessLog.clear();
+    },
+
+    accessLogPath() {
+      return accessLog.filePath;
     },
   };
 }
