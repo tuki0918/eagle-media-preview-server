@@ -28,6 +28,11 @@ interface ServerManager {
 interface EagleRuntime {
   app?: { getPath?: (name: string) => Promise<string> };
   clipboard?: { writeText?: (value: string) => Promise<void> };
+  item?: {
+    getById?: (itemId: string) => Promise<unknown>;
+    /** Eagle 4.0 build12+: replaces the main window's selection. */
+    select?: (itemIds: string[]) => Promise<boolean | void>;
+  };
   library?: { name?: string; path?: string };
   dialog?: {
     showOpenDialog?: (options: {
@@ -380,6 +385,20 @@ function App() {
     }
   }
 
+  async function selectItemInEagle(itemId: string) {
+    const item = globalThis.eagle?.item;
+    if (!item?.select) return;
+    try {
+      if (item.getById && !(await item.getById(itemId))) {
+        setMessage("This item is no longer in the library.", true);
+        return;
+      }
+      await item.select([itemId]);
+    } catch (error) {
+      setErrorMessage(error);
+    }
+  }
+
   async function clearAccessLog() {
     const message = "Clear the access log?";
     const detail = "All recorded events are deleted. This cannot be undone.";
@@ -723,6 +742,7 @@ function App() {
           onExport={() => void exportAccessLog()}
           onRangeChange={setAccessLogRange}
           onRevealFile={globalThis.eagle?.shell?.showItemInFolder ? () => void revealAccessLogFile() : undefined}
+          onSelectItem={globalThis.eagle?.item?.select ? (itemId) => void selectItemInEagle(itemId) : undefined}
         />
       </div>
     </main>

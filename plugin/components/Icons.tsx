@@ -10,6 +10,7 @@ import {
   FolderOpen,
   Globe,
   KeyRound,
+  SquareMousePointer,
   Lock,
   Minus,
   Plus,
@@ -35,6 +36,7 @@ export const ActivityIcon = iconComponent(Activity);
 export const BanIcon = iconComponent(Ban);
 export const CloseIcon = iconComponent(X);
 export const DownloadIcon = iconComponent(Download);
+export const SelectItemIcon = iconComponent(SquareMousePointer);
 export const TrashIcon = iconComponent(Trash2);
 export const CheckIcon = iconComponent(Check);
 export const CopyIcon = iconComponent(Copy);

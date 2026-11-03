@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import type { AccessLogBucket, AccessLogEntry, AccessLogEventFilter, AccessLogRange, AccessLogSummary, BlockedAddress } from "../types";
-import { ActivityIcon, BanIcon, ChevronIcon, CloseIcon, DownloadIcon, FolderOpenIcon, RefreshIcon, TrashIcon } from "./Icons";
+import { ActivityIcon, BanIcon, ChevronIcon, CloseIcon, DownloadIcon, FolderOpenIcon, SelectItemIcon, RefreshIcon, TrashIcon } from "./Icons";
 
 interface AccessLogPanelProps {
   /** Live count, refreshed every few seconds even while the details are not reloaded. */
@@ -23,6 +23,8 @@ interface AccessLogPanelProps {
   onRefresh: () => void;
   /** Reveals the log file in Finder/Explorer; omitted when Eagle has no shell API for it. */
   onRevealFile?: () => void;
+  /** Selects the item in Eagle's main window; omitted when Eagle has no item selection API. */
+  onSelectItem?: (itemId: string) => void;
   onUnblock: (address: string) => void;
 }
 
@@ -82,6 +84,7 @@ export function AccessLogPanel({
   onRangeChange,
   onRefresh,
   onRevealFile,
+  onSelectItem,
   onUnblock,
 }: AccessLogPanelProps) {
   const recent = (summary?.recent || []).slice(0, RECENT_LIMIT);
@@ -165,7 +168,7 @@ export function AccessLogPanel({
                 ))}
               </div>
             </div>
-            <EventTable entries={recent} />
+            <EventTable entries={recent} onSelectItem={onSelectItem} />
           </div>
 
           <p className="m-0 text-[10.5px] leading-snug text-[#9a9ea6]">
@@ -368,7 +371,7 @@ function ClientTable({ blocked, summary, onBlock }: { blocked: Set<string>; summ
   );
 }
 
-function EventTable({ entries }: { entries: AccessLogEntry[] }) {
+function EventTable({ entries, onSelectItem }: { entries: AccessLogEntry[]; onSelectItem?: (itemId: string) => void }) {
   if (!entries.length) return <EmptyRow>No events in the log.</EmptyRow>;
   return (
     <div className="max-h-[240px] overflow-auto rounded-xl border border-[#e6e6e9]" role="table" aria-label="Recent events">
@@ -378,6 +381,7 @@ function EventTable({ entries }: { entries: AccessLogEntry[] }) {
         <span role="columnheader">User</span>
         <span role="columnheader">Event</span>
         <span role="columnheader">Detail</span>
+        <span role="columnheader"><span className="sr-only">Actions</span></span>
       </div>
       {entries.map((entry, index) => {
         const failed = entry.type === "auth" ? FAILED_EVENTS.has(entry.event) : (entry.status ?? 0) >= 400;
@@ -391,6 +395,13 @@ function EventTable({ entries }: { entries: AccessLogEntry[] }) {
               {failed && entry.type !== "auth" && entry.status ? ` (${entry.status})` : ""}
             </span>
             <span className="truncate font-mono text-[10.5px] text-[#6b7079]" role="cell" title={entry.path}>{entry.itemId || entry.path || ""}</span>
+            <span className="grid place-items-center" role="cell">
+              {entry.itemId && onSelectItem ? (
+                <button className="grid h-6 w-6 place-items-center rounded-md border-0 bg-transparent p-0 text-[#8a8f99] transition-colors hover:bg-[#f1f1f3] hover:text-[#171717]" type="button" aria-label={`Select ${entry.itemId} in Eagle`} title="Select in Eagle" onClick={() => onSelectItem(entry.itemId as string)}>
+                  <SelectItemIcon className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
+            </span>
           </div>
         );
       })}
@@ -460,7 +471,7 @@ function EmptyRow({ children }: { children: ReactNode }) {
 const fieldLabelClassName = "text-[10.5px] font-semibold uppercase leading-tight tracking-[0.06em] text-[#7a7f88]";
 const tableHeaderClassName = "text-[10px] font-semibold uppercase leading-none tracking-[0.06em] text-[#8a8f99]";
 const clientGridClassName = "grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_72px_44px_60px_48px_24px] items-center gap-2 px-2.5 py-1.5";
-const eventGridClassName = "grid grid-cols-[76px_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.2fr)] items-center gap-2 px-2.5 py-1.5";
+const eventGridClassName = "grid grid-cols-[76px_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.2fr)_24px] items-center gap-2 px-2.5 py-1.5";
 
 function isLoopback(address: string) {
   return address === "::1" || address.startsWith("127.");
