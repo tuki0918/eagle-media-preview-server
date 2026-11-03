@@ -1796,8 +1796,13 @@ describe("ViewerAppShell", () => {
       expect(shareButton.disabled).toBe(false);
       if (trashVisible) {
         expect(menu?.textContent).toContain("Move to trash");
+        // A separator sits between Share and the destructive trash action.
+        const separator = menu?.querySelector('[role="separator"]');
+        expect(separator?.previousElementSibling).toBe(shareButton);
+        expect(separator?.nextElementSibling?.classList.contains("preview-trash-action")).toBe(true);
       } else {
         expect(menu?.querySelector(".preview-trash-action")).toBeNull();
+        expect(menu?.querySelector('[role="separator"]')).toBeNull();
       }
     } finally {
       await act(async () => {

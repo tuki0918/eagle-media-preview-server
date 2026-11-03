@@ -299,18 +299,22 @@ export function PreviewActions({ canEditMetadata = false, canManageLibrary = fal
             <span>{sharePhase === "preparing" ? "Preparing…" : sharePhase === "sharing" ? "Sharing…" : shareReady ? "Tap to share" : "Share"}</span>
           </button>
           {canToggleTrash ? (
-            <button
-              type="button"
-              role="menuitem"
-              className="preview-trash-action relative flex w-full cursor-default items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-destructive outline-hidden select-none hover:bg-destructive/10 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0"
-              disabled={trashSaving}
-              onClick={() => {
-                void handleToggleTrash();
-              }}
-            >
-              {item.isDeleted ? <RotateCcwIcon aria-hidden="true" /> : <Trash2Icon aria-hidden="true" />}
-              <span>{trashSaving ? "Saving" : trashLabel}</span>
-            </button>
+            <>
+              {/* Keeps the destructive action apart from Share; same look as the dropdown menu separator. */}
+              <div role="separator" aria-orientation="horizontal" className="preview-menu-separator -mx-1 my-1 h-px bg-border" />
+              <button
+                type="button"
+                role="menuitem"
+                className="preview-trash-action relative flex w-full cursor-default items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-destructive outline-hidden select-none hover:bg-destructive/10 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0"
+                disabled={trashSaving}
+                onClick={() => {
+                  void handleToggleTrash();
+                }}
+              >
+                {item.isDeleted ? <RotateCcwIcon aria-hidden="true" /> : <Trash2Icon aria-hidden="true" />}
+                <span>{trashSaving ? "Saving" : trashLabel}</span>
+              </button>
+            </>
           ) : null}
         </div>
       ) : null}
