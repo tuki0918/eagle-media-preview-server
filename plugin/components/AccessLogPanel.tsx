@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import type { AccessLogBucket, AccessLogEntry, AccessLogEventFilter, AccessLogRange, AccessLogSummary, BlockedAddress } from "../types";
-import { ActivityIcon, BanIcon, ChevronIcon, DownloadIcon, FolderOpenIcon, RefreshIcon, TrashIcon } from "./Icons";
+import { ActivityIcon, BanIcon, ChevronIcon, CloseIcon, DownloadIcon, FolderOpenIcon, RefreshIcon, TrashIcon } from "./Icons";
 
 interface AccessLogPanelProps {
   /** Live count, refreshed every few seconds even while the details are not reloaded. */
@@ -86,7 +86,9 @@ export function AccessLogPanel({
 }: AccessLogPanelProps) {
   const recent = (summary?.recent || []).slice(0, RECENT_LIMIT);
   const totals = summary?.totals;
+  const [tab, setTab] = useState<"blocked" | "overview">("overview");
   const blocked = new Set(blockedAddresses.map((entry) => entry.address));
+  const connectedLabel = `${activeClients.toLocaleString()} ${activeClients === 1 ? "device" : "devices"} connected`;
   return (
     <section className="rounded-2xl border border-[#e6e6e9] bg-white px-4 pb-3.5 pt-3.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
       <button
@@ -100,82 +102,82 @@ export function AccessLogPanel({
         <span className="inline-flex items-center gap-2">
           <span className="inline-flex items-center text-[#5f6670] [&_svg]:h-4 [&_svg]:w-4" aria-hidden="true"><ActivityIcon /></span>
           <span className="m-0 text-[15px] font-semibold leading-none text-[#171717]">Activity</span>
-          <span className="inline-flex items-center gap-1.5 text-[11.5px] font-medium text-[#7a7f88]">
-            <span className={`h-1.5 w-1.5 rounded-full ${activeClients ? "bg-[#34c759]" : "bg-[#c8ccd4]"}`} aria-hidden="true" />
-            {activeClients} connected
+          <span
+            className="shrink-0 rounded-full bg-[#f1f1f3] px-2 py-[3px] text-[11px] font-semibold leading-none text-[#737373] [font-variant-numeric:tabular-nums]"
+            aria-label={connectedLabel}
+            title={connectedLabel}
+          >
+            {activeClients.toLocaleString()}
           </span>
         </span>
         <ChevronIcon className={`h-[14px] w-[14px] text-[#555c66] transition-transform ${expanded ? "rotate-180" : ""}`} />
       </button>
 
       <div id="activityPanel" className="mt-2.5 grid gap-3" hidden={!expanded}>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="grid grid-cols-3 rounded-full bg-[#f1f1f3] p-1" role="group" aria-label="Time range">
-            {RANGE_OPTIONS.map((option) => (
-              <PillButton key={option.value} active={range === option.value} onClick={() => onRangeChange(option.value)}>{option.label}</PillButton>
-            ))}
-          </div>
-          <div className="inline-flex items-center gap-1.5">
-            <IconButton label="Export log as CSV" onClick={onExport}><DownloadIcon className="h-[15px] w-[15px]" /></IconButton>
-            {onRevealFile ? <IconButton label="Show log file" onClick={onRevealFile}><FolderOpenIcon className="h-[15px] w-[15px]" /></IconButton> : null}
-            <IconButton label="Clear log" onClick={onClear}><TrashIcon className="h-[15px] w-[15px]" /></IconButton>
-          </div>
+        <div className="grid grid-cols-2 rounded-full bg-[#f1f1f3] p-1" role="tablist" aria-label="Activity sections">
+          <TabButton active={tab === "overview"} controls="activityOverviewPanel" id="activityOverviewTab" onClick={() => setTab("overview")}>Overview</TabButton>
+          <TabButton active={tab === "blocked"} controls="activityBlockedPanel" id="activityBlockedTab" onClick={() => setTab("blocked")}>
+            Blocked addresses
+            {blockedAddresses.length ? <span className="ml-1.5 rounded-full bg-[#e6e6e9] px-1.5 py-px text-[10px] font-semibold tabular-nums text-[#737373]">{blockedAddresses.length}</span> : null}
+          </TabButton>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#f7f7f8] px-3 py-2">
-          <span className="text-[11px] text-[#6b7079]">
-            {summary ? `Updated ${formatTime(summary.generatedAt ?? Date.now())}` : "Not loaded yet"}
-          </span>
-          <span className="inline-flex items-center gap-3">
-            <label className="inline-flex cursor-pointer items-center gap-2 text-[11.5px] font-medium text-[#3a3f47]">
-              <SmallSwitch checked={autoRefresh} label="Auto refresh" onChange={onAutoRefreshChange} />
-              Auto refresh
-            </label>
-            <button
-              className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-[#e6e6e9] bg-white px-2.5 text-[11.5px] font-medium text-[#3a3f47] transition-colors hover:bg-[#f4f4f6] disabled:cursor-wait disabled:opacity-60"
-              type="button"
-              disabled={loading}
-              onClick={onRefresh}
-            >
-              <RefreshIcon className={`h-[13px] w-[13px] ${loading ? "animate-spin" : ""}`} />
-              Refresh
-            </button>
-          </span>
-        </div>
-
-        <div className="grid grid-cols-4 gap-2 max-[520px]:grid-cols-2">
-          <StatTile label="Connected" value={activeClients} help="Devices seen in the last 2 minutes" />
-          <StatTile label="Views" value={totals?.view ?? 0} />
-          <StatTile label="Requests" value={(totals?.browse ?? 0) + (totals?.edit ?? 0) + (totals?.view ?? 0) + (totals?.auth ?? 0)} />
-          <StatTile label="Failed sign-ins" value={totals?.authFailures ?? 0} />
-        </div>
-
-        <ActivityChart buckets={summary?.buckets || []} range={range} />
-
-        <div className="grid gap-1.5">
-          <span className={fieldLabelClassName}>Devices</span>
-          <ClientTable blocked={blocked} summary={summary} onBlock={onBlock} />
-        </div>
-
-        <BlockedAddressList blockedAddresses={blockedAddresses} onBlock={onBlock} onUnblock={onUnblock} />
-
-        <div className="grid gap-1.5">
+        <div id="activityOverviewPanel" className="grid gap-3" role="tabpanel" aria-labelledby="activityOverviewTab" hidden={tab !== "overview"}>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className={fieldLabelClassName}>Recent events</span>
-            <div className="inline-flex rounded-full bg-[#f1f1f3] p-0.5" role="group" aria-label="Event type">
-              {EVENT_FILTERS.map((option) => (
-                <PillButton key={option.value || "all"} small active={eventFilter === option.value} onClick={() => onEventFilterChange(option.value)}>{option.label}</PillButton>
+            <div className="grid grid-cols-3 rounded-full bg-[#f1f1f3] p-1" role="group" aria-label="Time range">
+              {RANGE_OPTIONS.map((option) => (
+                <PillButton key={option.value} active={range === option.value} onClick={() => onRangeChange(option.value)}>{option.label}</PillButton>
               ))}
             </div>
+            <div className="inline-flex items-center gap-1.5">
+              <label className="mr-1 inline-flex cursor-pointer items-center gap-1.5 text-[11.5px] font-medium text-[#3a3f47]" title="Reload the details every 10 seconds">
+                <SmallSwitch checked={autoRefresh} label="Auto refresh" onChange={onAutoRefreshChange} />
+                Auto
+              </label>
+              <IconButton disabled={loading} label="Refresh" onClick={onRefresh}><RefreshIcon className={`h-[15px] w-[15px] ${loading ? "animate-spin" : ""}`} /></IconButton>
+              <span className="mx-0.5 h-5 w-px bg-[#e6e6e9]" aria-hidden="true" />
+              <IconButton label="Export log as CSV" onClick={onExport}><DownloadIcon className="h-[15px] w-[15px]" /></IconButton>
+              {onRevealFile ? <IconButton label="Show log file" onClick={onRevealFile}><FolderOpenIcon className="h-[15px] w-[15px]" /></IconButton> : null}
+              <IconButton label="Clear log" onClick={onClear}><TrashIcon className="h-[15px] w-[15px]" /></IconButton>
+            </div>
           </div>
-          <EventTable entries={recent} />
+
+          <div className="grid grid-cols-4 gap-2 max-[520px]:grid-cols-2">
+            <StatTile label="Connected" value={activeClients} help="Devices seen in the last 2 minutes" />
+            <StatTile label="Views" value={totals?.view ?? 0} />
+            <StatTile label="Requests" value={(totals?.browse ?? 0) + (totals?.edit ?? 0) + (totals?.view ?? 0) + (totals?.auth ?? 0)} />
+            <StatTile label="Failed sign-ins" value={totals?.authFailures ?? 0} />
+          </div>
+
+          <ActivityChart buckets={summary?.buckets || []} range={range} />
+
+          <div className="grid gap-1.5">
+            <span className={fieldLabelClassName}>Devices</span>
+            <ClientTable blocked={blocked} summary={summary} onBlock={onBlock} />
+          </div>
+
+          <div className="grid gap-1.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className={fieldLabelClassName}>Recent events</span>
+              <div className="inline-flex rounded-full bg-[#f1f1f3] p-0.5" role="group" aria-label="Event type">
+                {EVENT_FILTERS.map((option) => (
+                  <PillButton key={option.value || "all"} small active={eventFilter === option.value} onClick={() => onEventFilterChange(option.value)}>{option.label}</PillButton>
+                ))}
+              </div>
+            </div>
+            <EventTable entries={recent} />
+          </div>
+
+          <p className="m-0 text-[10.5px] leading-snug text-[#9a9ea6]">
+            {summary
+              ? `Updated ${formatTime(summary.generatedAt ?? Date.now())} · ${summary.retainedEntries.toLocaleString()} entries kept${summary.oldestAt ? ` since ${formatDateTime(summary.oldestAt)}` : ""}. Saved in the temporary folder for up to 7 days; it is readable after the server stops and may be removed on restart.`
+              : "Loading activity…"}
+          </p>
         </div>
 
-        <p className="m-0 text-[10.5px] leading-snug text-[#9a9ea6]">
-          {summary
-            ? `${summary.retainedEntries.toLocaleString()} entries kept${summary.oldestAt ? ` since ${formatDateTime(summary.oldestAt)}` : ""}. Saved in the temporary folder for up to 7 days; it is readable after the server stops and may be removed on restart.`
-            : "Loading activity…"}
-        </p>
+        <div id="activityBlockedPanel" role="tabpanel" aria-labelledby="activityBlockedTab" hidden={tab !== "blocked"}>
+          <BlockedAddressList blockedAddresses={blockedAddresses} onBlock={onBlock} onUnblock={onUnblock} />
+        </div>
       </div>
     </section>
   );
@@ -190,8 +192,8 @@ function BlockedAddressList({ blockedAddresses, onBlock, onUnblock }: { blockedA
     });
   };
   return (
-    <div className="grid gap-1.5">
-      <span className={fieldLabelClassName}>Blocked addresses</span>
+    <div className="grid gap-2">
+      <p className="m-0 text-[11px] leading-snug text-[#7a7f88]">Blocked addresses cannot open the viewer or sign in. Changes apply right away, also while the server is running. Accepts an address or a CIDR range.</p>
       {/* Not a <form>: the Settings card below owns the window's only form. */}
       <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
         <input
@@ -223,14 +225,14 @@ function BlockedAddressList({ blockedAddresses, onBlock, onUnblock }: { blockedA
                 <span className="truncate font-medium text-[#171717]">{entry.address}</span>
                 {entry.addedAt ? <span className="text-[10.5px] text-[#9a9ea6]">since {formatDateTime(entry.addedAt)}</span> : null}
               </span>
-              <button className="border-0 bg-transparent p-0 text-[11px] font-medium text-[#1463e8] underline underline-offset-2" type="button" onClick={() => onUnblock(entry.address)}>
-                Unblock
+              <button className="grid h-6 w-6 shrink-0 place-items-center rounded-md border-0 bg-transparent p-0 text-[#8a8f99] transition-colors hover:bg-[#f1f1f3] hover:text-[#171717]" type="button" aria-label={`Unblock ${entry.address}`} title="Unblock" onClick={() => onUnblock(entry.address)}>
+                <CloseIcon className="h-3.5 w-3.5" />
               </button>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="m-0 text-[10.5px] leading-snug text-[#9a9ea6]">Blocked addresses cannot open the viewer or sign in. Changes apply right away, also while the server is running.</p>
+        <EmptyRow>No addresses are blocked.</EmptyRow>
       )}
     </div>
   );
@@ -423,9 +425,25 @@ function PillButton({ active, children, onClick, small = false }: { active: bool
   );
 }
 
-function IconButton({ children, label, onClick }: { children: ReactNode; label: string; onClick: () => void }) {
+function TabButton({ active, children, controls, id, onClick }: { active: boolean; children: ReactNode; controls: string; id: string; onClick: () => void }) {
   return (
-    <button className="grid h-8 w-8 place-items-center rounded-lg border border-[#e6e6e9] bg-white p-0 text-[#3a3f47] transition-colors hover:bg-[#f4f4f6]" type="button" aria-label={label} title={label} onClick={onClick}>
+    <button
+      className={`inline-flex h-7 items-center justify-center rounded-full border-0 px-2 text-[12px] font-medium transition-colors ${active ? "bg-white text-[#171717] shadow-[0_1px_3px_rgba(16,24,40,0.12)]" : "bg-transparent text-[#6b7079] hover:text-[#171717]"}`}
+      type="button"
+      role="tab"
+      id={id}
+      aria-controls={controls}
+      aria-selected={active}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}
+
+function IconButton({ children, disabled = false, label, onClick }: { children: ReactNode; disabled?: boolean; label: string; onClick: () => void }) {
+  return (
+    <button className="grid h-8 w-8 place-items-center rounded-lg border border-[#e6e6e9] bg-white p-0 text-[#3a3f47] transition-colors hover:bg-[#f4f4f6] disabled:cursor-wait disabled:opacity-60" type="button" aria-label={label} title={label} disabled={disabled} onClick={onClick}>
       {children}
     </button>
   );
