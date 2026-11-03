@@ -329,21 +329,24 @@ function ClientTable({ blocked, summary, onBlock }: { blocked: Set<string>; summ
     <div className="max-h-[180px] overflow-auto rounded-xl border border-[#e6e6e9]" role="table" aria-label="Devices">
       <div className={`${clientGridClassName} sticky top-0 border-b border-[#efeff1] bg-[#f7f7f8] ${tableHeaderClassName}`} role="row">
         <span role="columnheader">Address</span>
-        <span role="columnheader">Users</span>
+        <span role="columnheader">User</span>
         <span role="columnheader">Last seen</span>
         <span className="text-right" role="columnheader">Views</span>
         <span className="text-right" role="columnheader">Requests</span>
         <span className="text-right" role="columnheader">Failed</span>
         <span role="columnheader"><span className="sr-only">Actions</span></span>
       </div>
-      {clients.map((client) => (
-        <div key={client.ip} className={`${clientGridClassName} border-b border-[#f3f3f5] text-[11.5px] text-[#3a3f47] last:border-b-0`} role="row">
-          <span className="inline-flex min-w-0 items-center gap-1.5 font-medium text-[#171717]" role="cell">
+      {clients.map((client, index) => {
+        // Rows of one address are adjacent; repeat rows dim the address so each user reads as a sub-row.
+        const sameAddress = index > 0 && clients[index - 1].ip === client.ip;
+        return (
+        <div key={`${client.ip}\u0000${client.user}`} className={`${clientGridClassName} border-b border-[#f3f3f5] text-[11.5px] text-[#3a3f47] last:border-b-0`} role="row">
+          <span className={`inline-flex min-w-0 items-center gap-1.5 font-medium ${sameAddress ? "text-[#a3a7ae]" : "text-[#171717]"}`} role="cell">
             <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${client.active ? "bg-[#34c759]" : "bg-[#c8ccd4]"}`} title={client.active ? "Connected" : "Not connected"} />
             <span className="truncate">{client.ip}</span>
             <span className="sr-only">{client.active ? "(connected)" : ""}</span>
           </span>
-          <span className="truncate" role="cell">{client.users.join(", ") || "—"}</span>
+          <span className="truncate" role="cell" title={client.user ? client.user : "Not signed in"}>{client.user || "—"}</span>
           <span className="tabular-nums" role="cell">{formatRelative(client.lastSeen)}</span>
           <span className="text-right tabular-nums" role="cell">{client.views}</span>
           <span className="text-right tabular-nums" role="cell">{client.requests}</span>
@@ -358,8 +361,9 @@ function ClientTable({ blocked, summary, onBlock }: { blocked: Set<string>; summ
             )}
           </span>
         </div>
-      ))}
-      {hidden ? <p className="m-0 px-2.5 py-1.5 text-[10.5px] text-[#9a9ea6]">{hidden.toLocaleString()} more device{hidden === 1 ? "" : "s"} in the log. Export it to see all.</p> : null}
+        );
+      })}
+      {hidden ? <p className="m-0 px-2.5 py-1.5 text-[10.5px] text-[#9a9ea6]">{hidden.toLocaleString()} more row{hidden === 1 ? "" : "s"} in the log. Export it to see all.</p> : null}
     </div>
   );
 }
@@ -407,7 +411,7 @@ function StatTile({ help, label, value }: { help?: string; label: string; value:
   return (
     <div className="grid gap-1 rounded-xl border border-[#e6e6e9] px-3 py-2.5" title={help}>
       <span className={fieldLabelClassName}>{label}</span>
-      <strong className="text-[20px] font-semibold leading-none tabular-nums text-[#171717]">{value.toLocaleString()}</strong>
+      <strong className="text-right text-[20px] font-semibold leading-none tabular-nums text-[#171717]">{value.toLocaleString()}</strong>
     </div>
   );
 }

@@ -61,8 +61,8 @@ test("access log summary buckets by hour and tracks connected clients", async ()
   assert.equal(summary.totals.authFailures, 1);
   assert.equal(summary.activeClients, 1);
   assert.equal(summary.clients[0].ip, "192.168.1.40");
-  assert.deepEqual(summary.clients[0].users, ["bob"]);
-  assert.deepEqual(summary.clients.find((client: { ip: string }) => client.ip === "192.168.1.20").users, ["alice"]);
+  assert.equal(summary.clients[0].user, "bob");
+  assert.equal(summary.clients.find((client: { ip: string }) => client.ip === "192.168.1.20").user, "alice");
 
   now += 5 * 60 * 1000;
   assert.equal(log.summary().activeClients, 0);
@@ -108,4 +108,27 @@ test("access log reads recent entries from the newest end and counts active clie
   assert.equal(log.activeClients(), 0);
   assert.equal(log.summary({ clientLimit: 1 }).clients.length, 1);
   assert.equal(log.summary({ clientLimit: 1 }).clientCount, 3);
+});
+
+test("access log summary splits a shared address into one row per user", async () => {
+  const filePath = await tempLogPath();
+  const now = Date.UTC(2026, 10, 3, 12);
+  const log = createAccessLog({ filePath, now: () => now });
+  log.touch("10.0.0.5", "");
+  log.record({ type: "auth", event: "login_failure", ip: "10.0.0.5", user: "bob", status: 401, at: now - 60 * 1000 });
+  log.record({ type: "auth", event: "login_success", ip: "10.0.0.5", user: "alice", at: now - 30 * 1000 });
+  log.record({ type: "view", event: "view", ip: "10.0.0.5", user: "alice", at: now - 20 * 1000 });
+  log.record({ type: "browse", event: "items", ip: "10.0.0.9", at: now - 90 * 1000 });
+
+  const summary = log.summary();
+  const rows = summary.clients.map((client: { ip: string; user: string; requests: number; authFailures: number; views: number }) => [client.ip, client.user, client.requests, client.views, client.authFailures]);
+  // The pre-sign-in poll on 10.0.0.5 adds no "no user" row; rows of one address stay together.
+  assert.deepEqual(rows, [
+    ["10.0.0.5", "alice", 2, 1, 0],
+    ["10.0.0.5", "bob", 1, 0, 1],
+    ["10.0.0.9", "", 1, 0, 0],
+  ]);
+  assert.equal(summary.clientCount, 3);
+  assert.equal(summary.activeClients, 2);
+  assert.equal(log.activeClients(), 2);
 });

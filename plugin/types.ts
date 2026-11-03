@@ -81,13 +81,14 @@ export interface AccessLogBucket {
   view: number;
 }
 
+/** One row per address and signed-in user ("" when the requests carried no user). */
 export interface AccessLogClient {
   active: boolean;
   authFailures: number;
   ip: string;
   lastSeen: number;
   requests: number;
-  users: string[];
+  user: string;
   views: number;
 }
 

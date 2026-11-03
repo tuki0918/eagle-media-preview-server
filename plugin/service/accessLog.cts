@@ -27,12 +27,13 @@ interface AccessLogBucket {
   view: number;
 }
 
+// One row per address and signed-in user, so a shared address still shows who did what.
 interface AccessLogClient {
   authFailures: number;
   ip: string;
   lastSeen: number;
   requests: number;
-  users: string[];
+  user: string;
   views: number;
 }
 
@@ -76,8 +77,8 @@ function createAccessLog({
   now = Date.now,
 }: AccessLogOptions = {}) {
   let entries: AccessLogEntry[] = [];
-  // Last heartbeat per address; polls are counted here instead of being written as entries.
-  const presence = new Map<string, { lastSeen: number; user: string }>();
+  // Last heartbeat per address and user; polls are counted here instead of being written as entries.
+  const presence = new Map<string, { ip: string; lastSeen: number; user: string }>();
   let pendingLines: string[] = [];
   let flushTimer: ReturnType<typeof setTimeout> | null = null;
   let writeChain: Promise<void> = Promise.resolve();
@@ -197,14 +198,7 @@ function createAccessLog({
     },
 
     // Cheap enough to poll every few seconds: it only reads the per-address heartbeat table.
-    activeClients() {
-      const cutoff = now() - ACTIVE_CLIENT_WINDOW_MS;
-      let count = 0;
-      for (const seen of presence.values()) {
-        if (seen.lastSeen >= cutoff) count += 1;
-      }
-      return count;
-    },
+    activeClients: countActiveAddresses,
 
     summary({ clientLimit = MAX_SUMMARY_CLIENTS, range = "24h" }: { clientLimit?: number; range?: AccessLogRange } = {}) {
       prune();
@@ -221,16 +215,23 @@ function createAccessLog({
         edit: 0,
         view: 0,
       }));
-      const clients = new Map<string, AccessLogClient & { userSet: Set<string> }>();
+      const clients = new Map<string, AccessLogClient>();
+      const clientFor = (ip: string, user: string) => {
+        const key = clientKey(ip, user);
+        let client = clients.get(key);
+        if (!client) {
+          client = { authFailures: 0, ip, lastSeen: 0, requests: 0, user, views: 0 };
+          clients.set(key, client);
+        }
+        return client;
+      };
       const totals = { auth: 0, authFailures: 0, browse: 0, edit: 0, view: 0 };
       for (const entry of entries) {
-        const client = clients.get(entry.ip) || { authFailures: 0, ip: entry.ip, lastSeen: 0, requests: 0, users: [], userSet: new Set<string>(), views: 0 };
+        const client = clientFor(entry.ip, entry.user || "");
         client.requests += 1;
         client.lastSeen = Math.max(client.lastSeen, entry.at);
-        if (entry.user) client.userSet.add(entry.user);
         if (entry.type === "view") client.views += 1;
         if (isAuthFailure(entry)) client.authFailures += 1;
-        clients.set(entry.ip, client);
         if (entry.at < firstStart) continue;
         const bucket = buckets[Math.floor((entry.at - firstStart) / bucketMs)];
         if (!bucket) continue;
@@ -241,17 +242,23 @@ function createAccessLog({
           totals.authFailures += 1;
         }
       }
-      for (const [ip, seen] of presence) {
-        const client = clients.get(ip) || { authFailures: 0, ip, lastSeen: 0, requests: 0, users: [], userSet: new Set<string>(), views: 0 };
+      const signedInAddresses = new Set<string>();
+      for (const client of clients.values()) if (client.user) signedInAddresses.add(client.ip);
+      for (const seen of presence.values()) if (seen.user) signedInAddresses.add(seen.ip);
+      for (const seen of presence.values()) {
+        // Polls before sign-in carry no user; they don't add a row next to the address's signed-in rows.
+        if (!seen.user && signedInAddresses.has(seen.ip) && !clients.has(clientKey(seen.ip, ""))) continue;
+        const client = clientFor(seen.ip, seen.user);
         client.lastSeen = Math.max(client.lastSeen, seen.lastSeen);
-        if (seen.user) client.userSet.add(seen.user);
-        clients.set(ip, client);
       }
+      // Rows of one address stay together, ordered by that address's latest activity.
+      const addressLastSeen = new Map<string, number>();
+      for (const client of clients.values()) addressLastSeen.set(client.ip, Math.max(addressLastSeen.get(client.ip) || 0, client.lastSeen));
       const clientList = [...clients.values()]
-        .map(({ userSet, ...client }) => ({ ...client, active: at - client.lastSeen <= ACTIVE_CLIENT_WINDOW_MS, users: [...userSet].sort() }))
-        .sort((a, b) => b.lastSeen - a.lastSeen);
+        .map((client) => ({ ...client, active: at - client.lastSeen <= ACTIVE_CLIENT_WINDOW_MS }))
+        .sort((a, b) => (addressLastSeen.get(b.ip) || 0) - (addressLastSeen.get(a.ip) || 0) || a.ip.localeCompare(b.ip) || b.lastSeen - a.lastSeen);
       return {
-        activeClients: clientList.filter((client) => client.active).length,
+        activeClients: countActiveAddresses(),
         bucketMs,
         buckets,
         clientCount: clientList.length,
@@ -265,16 +272,31 @@ function createAccessLog({
     },
   };
 
+  // Counts addresses, not rows: one device signed in as two users is still one connection.
+  function countActiveAddresses() {
+    const cutoff = now() - ACTIVE_CLIENT_WINDOW_MS;
+    const addresses = new Set<string>();
+    for (const seen of presence.values()) {
+      if (seen.lastSeen >= cutoff) addresses.add(seen.ip);
+    }
+    return addresses.size;
+  }
+
   function touch(ip: string, user = "", at = now()) {
     if (!ip) return;
-    const previous = presence.get(ip);
-    presence.set(ip, { lastSeen: Math.max(previous?.lastSeen || 0, at), user: user || previous?.user || "" });
+    const key = clientKey(ip, user);
+    const previous = presence.get(key);
+    presence.set(key, { ip, lastSeen: Math.max(previous?.lastSeen || 0, at), user });
     if (presence.size > MAX_PRESENCE_ENTRIES) {
       // Forget the addresses seen longest ago; their entries still carry their history.
       const oldest = [...presence.entries()].sort((a, b) => a[1].lastSeen - b[1].lastSeen);
-      for (const [address] of oldest.slice(0, presence.size - MAX_PRESENCE_ENTRIES)) presence.delete(address);
+      for (const [key] of oldest.slice(0, presence.size - MAX_PRESENCE_ENTRIES)) presence.delete(key);
     }
   }
+}
+
+function clientKey(ip: string, user: string) {
+  return `${ip}\u0000${user}`;
 }
 
 function isAuthFailure(entry: AccessLogEntry) {
