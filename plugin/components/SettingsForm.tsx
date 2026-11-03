@@ -34,7 +34,6 @@ interface SettingsFormProps {
   onSettingsExpandedChange: (updater: (current: boolean) => boolean) => void;
   onSettingsTabChange: (tab: SettingsTab) => void;
   onTogglePasswordVisible: (index: number) => void;
-  onTrustForwardedForChange: (checked: boolean) => void;
   onUpdateAuthUser: (index: number, patch: AuthUser) => void;
   onUserPasswordDraftChange: (index: number, value: string) => void;
 }
@@ -82,7 +81,6 @@ export function SettingsForm({
   onSettingsExpandedChange,
   onSettingsTabChange,
   onTogglePasswordVisible,
-  onTrustForwardedForChange,
   onUpdateAuthUser,
   onUserPasswordDraftChange,
 }: SettingsFormProps) {
@@ -350,21 +348,6 @@ export function SettingsForm({
               onChange={onHttpsKeyPathChange}
               onChoose={onChooseHttpsFile ? () => onChooseHttpsFile("key") : undefined}
             />
-          </SettingRow>
-          <SettingRow
-            label="Proxy"
-            help="Turn on only if a tunnel or proxy on this computer appends the client address to X-Forwarded-For or replaces the header. One that passes the header through unchanged lets clients choose their own address. While off, clients reached through a tunnel all appear as this computer, so Activity cannot tell them apart or block them one by one."
-          >
-            <label className="inline-flex items-center gap-2 text-[12px] text-[#171717] has-[:disabled]:opacity-60">
-              <input
-                type="checkbox"
-                aria-label="Trust X-Forwarded-For from a local proxy"
-                disabled={settingsInputDisabled}
-                checked={Boolean(settings.trustForwardedFor)}
-                onChange={(event) => onTrustForwardedForChange(event.currentTarget.checked)}
-              />
-              <span>Trust X-Forwarded-For from a local proxy</span>
-            </label>
           </SettingRow>
         </div>
 

@@ -134,6 +134,31 @@ See [HTTPS and mkcert CA Operations](docs/https-mkcert.md) for setup, plugin HTT
 - `TLS Cert`: the certificate file
 - `TLS Key`: the matching private key file
 
+##### Tunnels and reverse proxies
+
+The server identifies each visitor by the address of the connection it receives. A tunnel or reverse proxy running on the same computer as Eagle, such as Cloudflare Tunnel, ngrok, or nginx, opens that connection itself, so everyone who comes in through it appears as this computer (`127.0.0.1`). In **Activity**, those visitors share one Devices row, cannot be blocked one by one, and share the lockout after repeated failed sign-ins. Devices that connect directly over the LAN are shown and blocked by their own address.
+
+This is deliberate. A tunnel passes the visitor's address in the `X-Forwarded-For` header, but if the tunnel forwards that header exactly as the visitor sent it, a visitor can make up any address, get around a block, or appear as someone else in the log. The plugin cannot tell which kind of tunnel it is behind, so it ignores the header.
+
+If your tunnel adds the visitor's address to `X-Forwarded-For` itself, by appending it or replacing the header, you can have the server use it. There is no switch in the panel for this:
+
+1. Stop the server.
+2. Open `~/.eagle-media-preview-server/settings.json` and set `"trustForwardedFor": true`.
+3. Start the server. To turn it off again, set the value to `false`, or remove it, and restart.
+
+When it is on, the server uses the last address in `X-Forwarded-For`, and only for requests that come from this computer. That address is used for the Activity log, blocked addresses, and the sign-in lockout.
+
+To check your tunnel after turning it on:
+
+1. Open the viewer through the tunnel from a device on another network, such as a phone on mobile data. **Activity → Devices** should show that device's public address, not `127.0.0.1`.
+2. Send a request with a made-up address through the tunnel. `/api/auth/status` answers without signing in, so this works with password protection on:
+
+   ```bash
+   curl -s -o /dev/null -w "%{http_code}\n" -H "X-Forwarded-For: 203.0.113.99" https://your-tunnel.example.com/api/auth/status
+   ```
+
+   Make sure it prints `200`. With any other code, such as `403` when the address is blocked, this check cannot tell you anything. Then press **Refresh** in **Activity**. **Devices** should show your real public address, not `203.0.113.99`. If `203.0.113.99` appears, the tunnel passes the header through unchanged: set the value back to `false`.
+
 </details>
 
 ## Use Cases

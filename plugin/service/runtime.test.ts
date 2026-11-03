@@ -240,6 +240,18 @@ test("generated settings store runs loads that migrate in the same queue as save
   assert.equal(JSON.parse(await readFile(filePath, "utf8")).autoStart, true);
 });
 
+test("generated settings store keeps a hand-edited trustForwardedFor when the panel saves", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-runtime-"));
+  const filePath = join(dir, "settings.json");
+  const store = createSettingsStore({ filePath });
+  assert.equal((await store.load()).trustForwardedFor, false);
+  const raw = JSON.parse(await readFile(filePath, "utf8"));
+  await writeFile(filePath, JSON.stringify({ ...raw, trustForwardedFor: true }), "utf8");
+  // The panel never sends the field, so a save leaves the hand-edited value alone.
+  await store.save({ port: 41600 });
+  assert.equal(JSON.parse(await readFile(filePath, "utf8")).trustForwardedFor, true);
+});
+
 test("generated settings store saves multiple auth users with roles", async () => {
   const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-runtime-"));
   const store = createSettingsStore({ filePath: join(dir, "settings.json") });

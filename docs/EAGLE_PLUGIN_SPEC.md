@@ -59,6 +59,7 @@ Defaults and how to change them:
 | HTTPS | disabled | **HTTPS** toggle, with TLS paths under **Settings → Security** |
 | Public Network | disabled | **Public Network** toggle |
 | Auto start | disabled | **Auto start** toggle |
+| Trust `X-Forwarded-For` from this computer | disabled | Not in the panel; set `"trustForwardedFor": true` in `settings.json` while the server is stopped (see README → Security → Tunnels and reverse proxies) |
 
 All values are saved to `~/.eagle-media-preview-server/settings.json`. Fields under **Settings** are locked while the server runs and take effect at the next start. The toggles in Server Status stay available while it runs, and a change to Password, Public Network, or HTTPS restarts the running server.
 

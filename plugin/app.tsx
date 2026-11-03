@@ -261,7 +261,6 @@ function App() {
       sessionDurationDays: settings.sessionDurationDays || 7,
       libraryProtectionEnabled: Boolean(settings.libraryProtectionEnabled),
       sharedLibraries: Array.isArray(settings.sharedLibraries) ? settings.sharedLibraries : [],
-      trustForwardedFor: Boolean(settings.trustForwardedFor),
       ...patch,
       authEnabled: nextAuthEnabled,
       authUsers: effectiveAuthUsers,
@@ -743,7 +742,6 @@ function App() {
           onSessionDurationDaysChange={(value) => updateSettings({ sessionDurationDays: value })}
           onSettingsExpandedChange={setSettingsExpanded}
           onSettingsTabChange={setSettingsTab}
-          onTrustForwardedForChange={(checked) => updateSettings({ trustForwardedFor: checked })}
           onTogglePasswordVisible={togglePasswordVisible}
           onUpdateAuthUser={updateAuthUser}
           onUserPasswordDraftChange={setUserPasswordDraft}
