@@ -8,10 +8,13 @@ type AccessLogRange = "1h" | "24h" | "7d";
 interface AccessLogEntry {
   at: number;
   event: string;
+  /** File type and size of the original a view served. */
+  ext?: string;
   ip: string;
   itemId?: string;
   method?: string;
   path?: string;
+  size?: number;
   status?: number;
   type: AccessLogType;
   user?: string;
@@ -309,6 +312,8 @@ function compactEntry(entry: AccessLogEntry): AccessLogEntry {
   if (entry.method) output.method = String(entry.method);
   if (entry.path) output.path = String(entry.path).slice(0, 512);
   if (entry.itemId) output.itemId = String(entry.itemId);
+  if (entry.ext) output.ext = String(entry.ext).slice(0, 16);
+  if (typeof entry.size === "number" && Number.isFinite(entry.size) && entry.size >= 0) output.size = entry.size;
   if (typeof entry.status === "number") output.status = entry.status;
   return output;
 }
@@ -325,7 +330,7 @@ function parseEntry(line: string): AccessLogEntry | null {
 }
 
 function accessLogCsv(entries: AccessLogEntry[]) {
-  const columns: Array<keyof AccessLogEntry> = ["at", "type", "event", "ip", "user", "method", "path", "itemId", "status"];
+  const columns: Array<keyof AccessLogEntry> = ["at", "type", "event", "ip", "user", "method", "path", "itemId", "ext", "size", "status"];
   const cell = (value: unknown) => {
     const text = String(value ?? "");
     return /[",\n]/.test(text) ? `"${text.replace(/"/g, "\"\"")}"` : text;

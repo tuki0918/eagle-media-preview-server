@@ -7,7 +7,7 @@ const { normalizeCustomDomain } = require("./customDomain.cjs");
 const { EagleRequestError, createEagleClient, normalizeStringArray } = require("./eagleClient.cjs");
 const { createConnectionContext } = require("./connection.cjs");
 const { createLibraryAccessPolicy, libraryPathKey } = require("./libraryAccess.cjs");
-const { readInternetShortcutUrl, streamItemMedia } = require("./media.cjs");
+const { readInternetShortcutUrl, servedMediaInfo, streamItemMedia } = require("./media.cjs");
 const { resolveDefaultPublicDir, securityHeaders, serveStatic } = require("./static.cjs");
 const {
   AUTH_SESSION_MAX_AGE_SECONDS,
@@ -34,7 +34,7 @@ import type { IncomingMessage, RequestListener, ServerResponse } from "http";
 import type { Server as NetServer, Socket } from "net";
 
 interface AccessLogRecorder {
-  record(entry: { event: string; ip: string; itemId?: string; method?: string; path?: string; status?: number; type: "auth" | "browse" | "edit" | "view"; user?: string }): unknown;
+  record(entry: { event: string; ext?: string; ip: string; itemId?: string; method?: string; path?: string; size?: number; status?: number; type: "auth" | "browse" | "edit" | "view"; user?: string }): unknown;
   touch(ip: string, user?: string): void;
 }
 
@@ -356,7 +356,7 @@ function createViewerServer({
       if (url.pathname.startsWith("/api/")) {
         attachRequestCounter(res, ({ status }) => {
           requestCount += 1;
-          if (accessLog) logAccess(accessLog, req, url, status, authenticatedUser(req, auth)?.username || "");
+          if (accessLog) logAccess(accessLog, req, res, url, status, authenticatedUser(req, auth)?.username || "");
         });
         if (await handleAuthRoutes(req, url, res, auth)) return;
         if (url.pathname === "/api/library-status") {
@@ -385,7 +385,7 @@ function createViewerServer({
         }
         attachRequestCounter(res, ({ status }) => {
           requestCount += 1;
-          if (accessLog) logAccess(accessLog, req, url, status, authenticatedUser(req, auth)?.username || "");
+          if (accessLog) logAccess(accessLog, req, res, url, status, authenticatedUser(req, auth)?.username || "");
         });
         if (!(await admitLibraryRequest(req, url, res))) return;
         await streamItemMedia(decodeURIComponent(fileMatch[1]), "file", req, res, currentSession, libraryGuards.get(res)?.stillOpen);
@@ -925,7 +925,7 @@ function clientAddress(req: IncomingMessage) {
 // Status polls and thumbnails only mark the client as connected; everything else becomes an entry.
 const PRESENCE_ONLY_PATHS = new Set(["/api/auth/status", "/api/connect", "/api/health", "/api/library-status"]);
 
-function logAccess(accessLog: AccessLogRecorder, req: IncomingMessage, url: URL, status: number, user: string) {
+function logAccess(accessLog: AccessLogRecorder, req: IncomingMessage, res: ServerResponse, url: URL, status: number, user: string) {
   const ip = displayClientAddress(req);
   const pathname = url.pathname;
   // Login and logout write their own entries with the outcome.
@@ -943,7 +943,8 @@ function logAccess(accessLog: AccessLogRecorder, req: IncomingMessage, url: URL,
       if (status < 400) accessLog.touch(ip, user);
       return;
     }
-    accessLog.record({ ...base, type: "view", event: "view", itemId: safeDecode(media[1]), path: pathname });
+    const served = servedMediaInfo(res);
+    accessLog.record({ ...base, type: "view", event: "view", ext: served?.ext, itemId: safeDecode(media[1]), path: pathname, size: served?.size });
     return;
   }
   const urlPreview = pathname.match(/^\/api\/items\/([^/]+)\/url-preview$/);

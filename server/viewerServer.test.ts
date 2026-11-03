@@ -3452,6 +3452,46 @@ test("createViewerServer writes auth, browse, and view events to the access log"
   }
 });
 
+test("createViewerServer logs the file type and size of a viewed original", async () => {
+  const root = join(tmpdir(), `eagle-media-preview-server-log-media-${Date.now()}`);
+  const itemId = "ML3OU9S3PAJRO";
+  const itemDir = join(root, "images", `${itemId}.info`);
+  await mkdir(itemDir, { recursive: true });
+  await writeFile(join(itemDir, "metadata.json"), "{}");
+  await writeFile(join(itemDir, "Shimiko.png"), "original-image");
+  const entries: Array<Record<string, unknown>> = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    accessLog: { record: (entry: Record<string, unknown>) => entries.push(entry), touch() {} },
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: root, name: "Test Library" };
+      },
+      async itemById() {
+        return { data: [{ id: itemId, name: "Shimiko", ext: "png", filePath: join(itemDir, "Shimiko.png") }] };
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const response = await fetch(`${origin}/file/${itemId}${await libraryQuery(origin)}`);
+    assert.equal(response.status, 200);
+    await response.text();
+    await new Promise((resolveWait) => setTimeout(resolveWait, 20));
+    const view = entries.find((entry) => entry.type === "view");
+    assert.equal(view?.ext, "png");
+    assert.equal(view?.size, "original-image".length);
+  } finally {
+    await viewer.stop();
+  }
+});
+
 test("createViewerServer trusts X-Forwarded-For only from loopback for the access log", async () => {
   const entries: Array<Record<string, unknown>> = [];
   const viewer = createViewerServer({

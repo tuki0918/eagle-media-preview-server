@@ -394,7 +394,12 @@ function EventTable({ entries, onSelectItem }: { entries: AccessLogEntry[]; onSe
               {EVENT_LABELS[entry.event] || entry.event}
               {failed && entry.type !== "auth" && entry.status ? ` (${entry.status})` : ""}
             </span>
-            <span className="truncate font-mono text-[10.5px] text-[#6b7079]" role="cell" title={entry.path}>{entry.itemId || entry.path || ""}</span>
+            <span className="grid min-w-0" role="cell" title={entry.path}>
+              <span className="truncate font-mono text-[10.5px] text-[#6b7079]">{entry.itemId || entry.path || ""}</span>
+              {entry.ext || entry.size ? (
+                <span className="truncate text-[10px] leading-tight text-[#9a9ea6]">{[entry.ext?.toUpperCase(), formatBytes(entry.size)].filter(Boolean).join(" · ")}</span>
+              ) : null}
+            </span>
             <span className="grid place-items-center" role="cell">
               {entry.itemId && onSelectItem ? (
                 <button className="grid h-6 w-6 place-items-center rounded-md border-0 bg-transparent p-0 text-[#8a8f99] transition-colors hover:bg-[#f1f1f3] hover:text-[#171717]" type="button" aria-label={`Select ${entry.itemId} in Eagle`} title="Select in Eagle" onClick={() => onSelectItem(entry.itemId as string)}>
@@ -507,6 +512,19 @@ function formatTime(at: number) {
 
 function formatDateTime(at: number) {
   return new Date(at).toLocaleString([], { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+// Same units as the viewer's file details.
+function formatBytes(value: number | undefined) {
+  if (!value || value <= 0) return "";
+  const units = ["B", "KB", "MB", "GB"];
+  let size = value;
+  let unit = 0;
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024;
+    unit += 1;
+  }
+  return `${size.toFixed(size >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
 }
 
 function formatRelative(at: number) {

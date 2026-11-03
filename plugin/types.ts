@@ -62,10 +62,13 @@ export type AccessLogEventFilter = "" | AccessLogType;
 export interface AccessLogEntry {
   at: number;
   event: string;
+  /** File type and size of the original a view served. */
+  ext?: string;
   ip: string;
   itemId?: string;
   method?: string;
   path?: string;
+  size?: number;
   status?: number;
   type: AccessLogType;
   user?: string;

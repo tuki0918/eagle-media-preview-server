@@ -8,6 +8,8 @@ import type { IncomingMessage, ServerResponse } from "http";
 
 type MediaKind = "file" | "thumb";
 const MAX_INTERNET_SHORTCUT_BYTES = 128 * 1024;
+// What an original file response served, so the access log can note the file type and size.
+const servedMedia = new WeakMap<ServerResponse, { ext: string; size: number }>();
 const ACTIVE_DOCUMENT_CONTENT_TYPES = new Set([
   "application/javascript",
   "application/xhtml+xml",
@@ -80,6 +82,10 @@ async function streamItemMedia(id: string, kind: MediaKind, req: IncomingMessage
   if (stillOpen && !stillOpen()) {
     sendJson(res, 409, { error: "The library open in Eagle has changed", code: "LIBRARY_CHANGED" });
     return;
+  }
+  if (kind === "file") {
+    const ext = String(itemData?.ext || extname(filePath).slice(1)).toLowerCase();
+    servedMedia.set(res, { ext, size: info.size });
   }
   const detectedContentType = mediaContentType(filePath, itemData);
   const contentType = safeMediaContentType(detectedContentType);
@@ -415,4 +421,8 @@ async function getLibraryPath(session: EagleMediaSession) {
   return library?.path || "";
 }
 
-module.exports = { pipeMediaStream, readInternetShortcutUrl, streamItemMedia };
+function servedMediaInfo(res: ServerResponse) {
+  return servedMedia.get(res);
+}
+
+module.exports = { pipeMediaStream, readInternetShortcutUrl, servedMediaInfo, streamItemMedia };
