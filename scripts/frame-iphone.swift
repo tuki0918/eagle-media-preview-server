@@ -71,11 +71,18 @@ let o = CGRect(x: pad, y: pad, width: pw - 2 * pad, height: ph - 2 * pad)   // d
 
 // Buttons sit under the chrome, at the chrome.json offsets from the top.
 // Left edge: Action 180pt, volume up 268pt, volume down 354pt. Right edge: power 293pt.
+// The chrome is semi-transparent, so clip the buttons to just inside the outline;
+// otherwise the hidden part of each button shows through as a dark block.
+pctx.saveGState()
+pctx.addRect(CGRect(x: 0, y: 0, width: pw, height: ph))
+pctx.addPath(CGPath(roundedRect: o.insetBy(dx: 1, dy: 1), cornerWidth: 79, cornerHeight: 79, transform: nil))
+pctx.clip(using: .evenOdd)
 draw("Mute BTN", CGRect(x: o.minX - buttonProtrude, y: o.maxY - 180 - 34, width: 16, height: 34))
 for top: CGFloat in [268, 354] {
     draw("Vol BTN", CGRect(x: o.minX - buttonProtrude, y: o.maxY - top - 64, width: 16, height: 64))
 }
 draw("X_Power BTN", CGRect(x: o.maxX - 16 + buttonProtrude, y: o.maxY - 293 - 101, width: 16, height: 101))
+pctx.restoreGState()
 
 // Edges butt against the corners; draw() snaps the joins to whole pixels.
 let ov: CGFloat = 0
