@@ -94,3 +94,18 @@ test("access log CSV quotes cells that need it", () => {
   const csv = accessLogCsv([{ at: Date.UTC(2026, 0, 1), type: "browse", event: "search", ip: "10.0.0.1", path: "/api/items?q=a,\"b\"" }]);
   assert.equal(csv, "at,type,event,ip,user,method,path,itemId,status\n2026-01-01T00:00:00.000Z,browse,search,10.0.0.1,,,\"/api/items?q=a,\"\"b\"\"\",,\n");
 });
+
+test("access log reads recent entries from the newest end and counts active clients cheaply", async () => {
+  const filePath = await tempLogPath();
+  let now = Date.UTC(2026, 10, 3, 12);
+  const log = createAccessLog({ filePath, now: () => now });
+  for (let index = 0; index < 50; index += 1) log.record({ type: index % 10 ? "browse" : "auth", event: "x", ip: `10.0.0.${index % 3}` });
+  const auth = log.entries({ limit: 2, type: "auth" });
+  assert.equal(auth.length, 2);
+  assert.ok(auth.every((entry: { type: string }) => entry.type === "auth"));
+  assert.equal(log.activeClients(), 3);
+  now += 3 * 60 * 1000;
+  assert.equal(log.activeClients(), 0);
+  assert.equal(log.summary({ clientLimit: 1 }).clients.length, 1);
+  assert.equal(log.summary({ clientLimit: 1 }).clientCount, 3);
+});

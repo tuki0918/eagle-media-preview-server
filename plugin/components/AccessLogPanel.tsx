@@ -1,20 +1,30 @@
 import { useState, type ReactNode } from "react";
-import type { AccessLogBucket, AccessLogEntry, AccessLogRange, AccessLogSummary, AccessLogType } from "../types";
-import { ActivityIcon, ChevronIcon, DownloadIcon, FolderOpenIcon, TrashIcon } from "./Icons";
+import type { AccessLogBucket, AccessLogEntry, AccessLogEventFilter, AccessLogRange, AccessLogSummary, BlockedAddress } from "../types";
+import { ActivityIcon, BanIcon, ChevronIcon, DownloadIcon, FolderOpenIcon, RefreshIcon, TrashIcon } from "./Icons";
 
 interface AccessLogPanelProps {
+  /** Live count, refreshed every few seconds even while the details are not reloaded. */
+  activeClients: number;
+  autoRefresh: boolean;
+  blockedAddresses: BlockedAddress[];
+  eventFilter: AccessLogEventFilter;
   expanded: boolean;
+  loading?: boolean;
   range: AccessLogRange;
   summary: AccessLogSummary | null;
+  onAutoRefreshChange: (checked: boolean) => void;
+  /** Resolves true once the address is blocked (the admin may cancel the confirmation). */
+  onBlock: (address: string) => Promise<boolean>;
   onClear: () => void;
+  onEventFilterChange: (filter: AccessLogEventFilter) => void;
   onExport: () => void;
   onExpandedChange: (updater: (current: boolean) => boolean) => void;
   onRangeChange: (range: AccessLogRange) => void;
+  onRefresh: () => void;
   /** Reveals the log file in Finder/Explorer; omitted when Eagle has no shell API for it. */
   onRevealFile?: () => void;
+  onUnblock: (address: string) => void;
 }
-
-type EventFilter = "" | AccessLogType;
 
 // Categorical slots 1–3 of the reference palette, in fixed order: views, browsing, sign-ins.
 const SERIES = [
@@ -29,7 +39,7 @@ const RANGE_OPTIONS: Array<{ label: string; value: AccessLogRange }> = [
   { label: "7 days", value: "7d" },
 ];
 
-const EVENT_FILTERS: Array<{ label: string; value: EventFilter }> = [
+const EVENT_FILTERS: Array<{ label: string; value: AccessLogEventFilter }> = [
   { label: "All", value: "" },
   { label: "Views", value: "view" },
   { label: "Sign-ins", value: "auth" },
@@ -38,6 +48,7 @@ const EVENT_FILTERS: Array<{ label: string; value: EventFilter }> = [
 ];
 
 const EVENT_LABELS: Record<string, string> = {
+  blocked: "Blocked",
   login_failure: "Sign-in failed",
   login_locked: "Sign-in locked",
   login_success: "Signed in",
@@ -50,12 +61,32 @@ const EVENT_LABELS: Record<string, string> = {
   view: "Viewed",
 };
 
+const FAILED_EVENTS = new Set(["blocked", "login_failure", "login_locked"]);
 const RECENT_LIMIT = 100;
 
-export function AccessLogPanel({ expanded, range, summary, onClear, onExport, onExpandedChange, onRangeChange, onRevealFile }: AccessLogPanelProps) {
-  const [eventFilter, setEventFilter] = useState<EventFilter>("");
-  const recent = (summary?.recent || []).filter((entry) => !eventFilter || entry.type === eventFilter).slice(0, RECENT_LIMIT);
+export function AccessLogPanel({
+  activeClients,
+  autoRefresh,
+  blockedAddresses,
+  eventFilter,
+  expanded,
+  loading = false,
+  range,
+  summary,
+  onAutoRefreshChange,
+  onBlock,
+  onClear,
+  onEventFilterChange,
+  onExport,
+  onExpandedChange,
+  onRangeChange,
+  onRefresh,
+  onRevealFile,
+  onUnblock,
+}: AccessLogPanelProps) {
+  const recent = (summary?.recent || []).slice(0, RECENT_LIMIT);
   const totals = summary?.totals;
+  const blocked = new Set(blockedAddresses.map((entry) => entry.address));
   return (
     <section className="rounded-2xl border border-[#e6e6e9] bg-white px-4 pb-3.5 pt-3.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
       <button
@@ -69,7 +100,10 @@ export function AccessLogPanel({ expanded, range, summary, onClear, onExport, on
         <span className="inline-flex items-center gap-2">
           <span className="inline-flex items-center text-[#5f6670] [&_svg]:h-4 [&_svg]:w-4" aria-hidden="true"><ActivityIcon /></span>
           <span className="m-0 text-[15px] font-semibold leading-none text-[#171717]">Activity</span>
-          {summary ? <span className="text-[11.5px] font-medium text-[#7a7f88]">{summary.activeClients} connected</span> : null}
+          <span className="inline-flex items-center gap-1.5 text-[11.5px] font-medium text-[#7a7f88]">
+            <span className={`h-1.5 w-1.5 rounded-full ${activeClients ? "bg-[#34c759]" : "bg-[#c8ccd4]"}`} aria-hidden="true" />
+            {activeClients} connected
+          </span>
         </span>
         <ChevronIcon className={`h-[14px] w-[14px] text-[#555c66] transition-transform ${expanded ? "rotate-180" : ""}`} />
       </button>
@@ -88,8 +122,29 @@ export function AccessLogPanel({ expanded, range, summary, onClear, onExport, on
           </div>
         </div>
 
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#f7f7f8] px-3 py-2">
+          <span className="text-[11px] text-[#6b7079]">
+            {summary ? `Updated ${formatTime(summary.generatedAt ?? Date.now())}` : "Not loaded yet"}
+          </span>
+          <span className="inline-flex items-center gap-3">
+            <label className="inline-flex cursor-pointer items-center gap-2 text-[11.5px] font-medium text-[#3a3f47]">
+              <SmallSwitch checked={autoRefresh} label="Auto refresh" onChange={onAutoRefreshChange} />
+              Auto refresh
+            </label>
+            <button
+              className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-[#e6e6e9] bg-white px-2.5 text-[11.5px] font-medium text-[#3a3f47] transition-colors hover:bg-[#f4f4f6] disabled:cursor-wait disabled:opacity-60"
+              type="button"
+              disabled={loading}
+              onClick={onRefresh}
+            >
+              <RefreshIcon className={`h-[13px] w-[13px] ${loading ? "animate-spin" : ""}`} />
+              Refresh
+            </button>
+          </span>
+        </div>
+
         <div className="grid grid-cols-4 gap-2 max-[520px]:grid-cols-2">
-          <StatTile label="Connected" value={summary?.activeClients ?? 0} help="Devices seen in the last 2 minutes" />
+          <StatTile label="Connected" value={activeClients} help="Devices seen in the last 2 minutes" />
           <StatTile label="Views" value={totals?.view ?? 0} />
           <StatTile label="Requests" value={(totals?.browse ?? 0) + (totals?.edit ?? 0) + (totals?.view ?? 0) + (totals?.auth ?? 0)} />
           <StatTile label="Failed sign-ins" value={totals?.authFailures ?? 0} />
@@ -99,15 +154,17 @@ export function AccessLogPanel({ expanded, range, summary, onClear, onExport, on
 
         <div className="grid gap-1.5">
           <span className={fieldLabelClassName}>Devices</span>
-          <ClientTable summary={summary} />
+          <ClientTable blocked={blocked} summary={summary} onBlock={onBlock} />
         </div>
+
+        <BlockedAddressList blockedAddresses={blockedAddresses} onBlock={onBlock} onUnblock={onUnblock} />
 
         <div className="grid gap-1.5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className={fieldLabelClassName}>Recent events</span>
             <div className="inline-flex rounded-full bg-[#f1f1f3] p-0.5" role="group" aria-label="Event type">
               {EVENT_FILTERS.map((option) => (
-                <PillButton key={option.value || "all"} small active={eventFilter === option.value} onClick={() => setEventFilter(option.value)}>{option.label}</PillButton>
+                <PillButton key={option.value || "all"} small active={eventFilter === option.value} onClick={() => onEventFilterChange(option.value)}>{option.label}</PillButton>
               ))}
             </div>
           </div>
@@ -121,6 +178,61 @@ export function AccessLogPanel({ expanded, range, summary, onClear, onExport, on
         </p>
       </div>
     </section>
+  );
+}
+
+function BlockedAddressList({ blockedAddresses, onBlock, onUnblock }: { blockedAddresses: BlockedAddress[]; onBlock: (address: string) => Promise<boolean>; onUnblock: (address: string) => void }) {
+  const [draft, setDraft] = useState("");
+  const submit = () => {
+    if (!draft.trim()) return;
+    void onBlock(draft).then((added) => {
+      if (added) setDraft("");
+    });
+  };
+  return (
+    <div className="grid gap-1.5">
+      <span className={fieldLabelClassName}>Blocked addresses</span>
+      {/* Not a <form>: the Settings card below owns the window's only form. */}
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+        <input
+          className="h-8 min-w-0 rounded-lg border border-[#e6e6e9] bg-white px-2.5 text-[12px] text-[#171717] outline-0 placeholder:text-[#9a9ea6] focus:border-[#9aa2ae]"
+          type="text"
+          aria-label="Address to block"
+          autoCapitalize="none"
+          autoComplete="off"
+          spellCheck={false}
+          placeholder="192.168.1.50 or 192.168.1.0/24"
+          value={draft}
+          onChange={(event) => setDraft(event.currentTarget.value)}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter") return;
+            event.preventDefault();
+            submit();
+          }}
+        />
+        <button className="h-8 rounded-lg border border-[#e6e6e9] bg-white px-3 text-[11.5px] font-medium text-[#3a3f47] transition-colors hover:bg-[#f4f4f6] disabled:cursor-not-allowed disabled:opacity-50" type="button" disabled={!draft.trim()} onClick={submit}>
+          Block
+        </button>
+      </div>
+      {blockedAddresses.length ? (
+        <ul className="m-0 grid list-none overflow-hidden rounded-xl border border-[#e6e6e9] p-0" aria-label="Blocked addresses">
+          {blockedAddresses.map((entry) => (
+            <li key={entry.address} className="flex items-center justify-between gap-2 border-b border-[#f3f3f5] px-2.5 py-1.5 text-[11.5px] text-[#3a3f47] last:border-b-0">
+              <span className="inline-flex min-w-0 items-center gap-1.5">
+                <BanIcon className="h-3.5 w-3.5 shrink-0 text-[#b42318]" />
+                <span className="truncate font-medium text-[#171717]">{entry.address}</span>
+                {entry.addedAt ? <span className="text-[10.5px] text-[#9a9ea6]">since {formatDateTime(entry.addedAt)}</span> : null}
+              </span>
+              <button className="border-0 bg-transparent p-0 text-[11px] font-medium text-[#1463e8] underline underline-offset-2" type="button" onClick={() => onUnblock(entry.address)}>
+                Unblock
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="m-0 text-[10.5px] leading-snug text-[#9a9ea6]">Blocked addresses cannot open the viewer or sign in. Changes apply right away, also while the server is running.</p>
+      )}
+    </div>
   );
 }
 
@@ -207,8 +319,9 @@ function ActivityChart({ buckets, range }: { buckets: AccessLogBucket[]; range: 
   );
 }
 
-function ClientTable({ summary }: { summary: AccessLogSummary | null }) {
+function ClientTable({ blocked, summary, onBlock }: { blocked: Set<string>; summary: AccessLogSummary | null; onBlock: (address: string) => Promise<boolean> }) {
   const clients = summary?.clients || [];
+  const hidden = Math.max(0, (summary?.clientCount ?? clients.length) - clients.length);
   if (!clients.length) return <EmptyRow>No devices have connected yet.</EmptyRow>;
   return (
     <div className="max-h-[180px] overflow-auto rounded-xl border border-[#e6e6e9]" role="table" aria-label="Devices">
@@ -219,6 +332,7 @@ function ClientTable({ summary }: { summary: AccessLogSummary | null }) {
         <span className="text-right" role="columnheader">Views</span>
         <span className="text-right" role="columnheader">Requests</span>
         <span className="text-right" role="columnheader">Failed</span>
+        <span role="columnheader"><span className="sr-only">Actions</span></span>
       </div>
       {clients.map((client) => (
         <div key={client.ip} className={`${clientGridClassName} border-b border-[#f3f3f5] text-[11.5px] text-[#3a3f47] last:border-b-0`} role="row">
@@ -232,8 +346,18 @@ function ClientTable({ summary }: { summary: AccessLogSummary | null }) {
           <span className="text-right tabular-nums" role="cell">{client.views}</span>
           <span className="text-right tabular-nums" role="cell">{client.requests}</span>
           <span className={`text-right tabular-nums ${client.authFailures ? "font-semibold text-[#b42318]" : ""}`} role="cell">{client.authFailures}</span>
+          <span className="grid place-items-center" role="cell">
+            {blocked.has(client.ip) ? (
+              <span title="Blocked"><BanIcon className="h-3.5 w-3.5 text-[#b42318]" /><span className="sr-only">Blocked</span></span>
+            ) : isLoopback(client.ip) ? null : (
+              <button className="grid h-6 w-6 place-items-center rounded-md border-0 bg-transparent p-0 text-[#8a8f99] transition-colors hover:bg-[#fef2f2] hover:text-[#b42318]" type="button" aria-label={`Block ${client.ip}`} title={`Block ${client.ip}`} onClick={() => void onBlock(client.ip)}>
+                <BanIcon className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </span>
         </div>
       ))}
+      {hidden ? <p className="m-0 px-2.5 py-1.5 text-[10.5px] text-[#9a9ea6]">{hidden.toLocaleString()} more device{hidden === 1 ? "" : "s"} in the log. Export it to see all.</p> : null}
     </div>
   );
 }
@@ -250,7 +374,7 @@ function EventTable({ entries }: { entries: AccessLogEntry[] }) {
         <span role="columnheader">Detail</span>
       </div>
       {entries.map((entry, index) => {
-        const failed = entry.type === "auth" ? entry.event === "login_failure" || entry.event === "login_locked" : (entry.status ?? 0) >= 400;
+        const failed = entry.type === "auth" ? FAILED_EVENTS.has(entry.event) : (entry.status ?? 0) >= 400;
         return (
           <div key={`${entry.at}-${index}`} className={`${eventGridClassName} border-b border-[#f3f3f5] text-[11.5px] text-[#3a3f47] last:border-b-0`} role="row">
             <span className="whitespace-nowrap tabular-nums" role="cell" title={new Date(entry.at).toLocaleString()}>{formatTime(entry.at)}</span>
@@ -265,6 +389,15 @@ function EventTable({ entries }: { entries: AccessLogEntry[] }) {
         );
       })}
     </div>
+  );
+}
+
+function SmallSwitch({ checked, label, onChange }: { checked: boolean; label: string; onChange: (checked: boolean) => void }) {
+  return (
+    <span className="relative inline-flex h-[18px] w-[30px] shrink-0">
+      <input className="peer absolute inset-0 z-[1] m-0 h-full w-full cursor-pointer opacity-0" type="checkbox" aria-label={label} checked={checked} onChange={(event) => onChange(event.currentTarget.checked)} />
+      <span className={`pointer-events-none absolute inset-0 rounded-full transition-colors peer-focus-visible:shadow-[0_0_0_3px_rgba(23,23,23,0.18)] after:absolute after:left-[2px] after:top-[2px] after:h-[14px] after:w-[14px] after:rounded-full after:bg-white after:shadow-[0_1px_2px_rgba(0,0,0,0.25)] after:transition-transform ${checked ? "bg-[#2563eb] after:translate-x-3" : "bg-[#d9dadd]"}`} aria-hidden="true" />
+    </span>
   );
 }
 
@@ -304,8 +437,12 @@ function EmptyRow({ children }: { children: ReactNode }) {
 
 const fieldLabelClassName = "text-[10.5px] font-semibold uppercase leading-tight tracking-[0.06em] text-[#7a7f88]";
 const tableHeaderClassName = "text-[10px] font-semibold uppercase leading-none tracking-[0.06em] text-[#8a8f99]";
-const clientGridClassName = "grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_72px_44px_60px_48px] items-center gap-2 px-2.5 py-1.5";
+const clientGridClassName = "grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_72px_44px_60px_48px_24px] items-center gap-2 px-2.5 py-1.5";
 const eventGridClassName = "grid grid-cols-[76px_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.2fr)] items-center gap-2 px-2.5 py-1.5";
+
+function isLoopback(address: string) {
+  return address === "::1" || address.startsWith("127.");
+}
 
 function niceMax(value: number) {
   if (value <= 4) return 4;

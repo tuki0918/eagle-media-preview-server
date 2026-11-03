@@ -1035,3 +1035,38 @@ test("generated server manager still lists saved libraries without Eagle setting
     items: [{ path: "/Users/me/Work.library", name: "Work", current: false, shared: false }],
   });
 });
+
+test("server manager blocks addresses live without a restart and keeps the access log after stop", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-block-manager-"));
+  const store = createSettingsStore({ filePath: join(dir, "settings.json") });
+  const { createAccessLog } = require("../../dist/.generated/plugin-service/accessLog.cjs");
+  const accessLog = createAccessLog({ filePath: join(dir, "access-log.jsonl") });
+  const calls: unknown[] = [];
+  const manager = createServerManager({
+    accessLog,
+    settingsStore: store,
+    lanAddressProvider: () => [],
+    viewerServerFactory(options: { blockedAddresses: Array<{ address: string }>; host: string; port: number }) {
+      calls.push(["create", options.blockedAddresses.map((entry) => entry.address)]);
+      return {
+        async start() {},
+        async stop() { calls.push(["stop"]); },
+        setBlockedAddresses(next: Array<{ address: string }>) { calls.push(["live", next.map((entry) => entry.address)]); },
+        status: () => ({ state: "running", host: options.host, port: options.port }),
+      };
+    },
+  });
+  await manager.start();
+  const blocked = await manager.blockAddress("192.168.1.50");
+  assert.deepEqual(blocked.settings.blockedAddresses.map((entry: { address: string }) => entry.address), ["192.168.1.50"]);
+  await assert.rejects(manager.blockAddress("127.0.0.1"), /Loopback/);
+  const unblocked = await manager.unblockAddress("192.168.1.50");
+  assert.deepEqual(unblocked.settings.blockedAddresses, []);
+  assert.deepEqual(calls, [["create", []], ["live", ["192.168.1.50"]], ["live", []]]);
+
+  accessLog.record({ type: "view", event: "view", ip: "192.168.1.20" });
+  await manager.stop();
+  const summary = await manager.accessLogSummary({ range: "1h" });
+  assert.equal(summary.recent.length, 1);
+  assert.equal(manager.accessLogConnectedCount(), 1);
+});

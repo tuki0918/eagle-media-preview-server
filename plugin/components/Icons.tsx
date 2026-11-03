@@ -1,5 +1,6 @@
 import {
   Activity,
+  Ban,
   Check,
   ChevronDown,
   Copy,
@@ -31,6 +32,7 @@ function iconComponent(Icon: LucideIcon, defaultClassName = "h-6 w-6") {
 }
 
 export const ActivityIcon = iconComponent(Activity);
+export const BanIcon = iconComponent(Ban);
 export const CloseIcon = iconComponent(X);
 export const DownloadIcon = iconComponent(Download);
 export const TrashIcon = iconComponent(Trash2);

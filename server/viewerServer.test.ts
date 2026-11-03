@@ -3473,3 +3473,29 @@ test("createViewerServer trusts X-Forwarded-For only from loopback for the acces
     await viewer.stop();
   }
 });
+
+test("createViewerServer refuses blocked addresses, including behind a local proxy, and applies changes live", async () => {
+  const entries: Array<Record<string, unknown>> = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    accessLog: { record: (entry: Record<string, unknown>) => entries.push(entry), touch() {} },
+    blockedAddresses: ["192.168.1.0/24"],
+  });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const blocked = await fetch(`${origin}/api/auth/status`, { headers: { "X-Forwarded-For": "192.168.1.50" } });
+    assert.equal(blocked.status, 403);
+    assert.deepEqual(await blocked.json(), { error: "Access from this address is blocked" });
+    await fetch(`${origin}/api/auth/status`, { headers: { "X-Forwarded-For": "192.168.1.50" } });
+    assert.deepEqual(entries.map((entry) => [entry.event, entry.ip]), [["blocked", "192.168.1.50"]]);
+
+    assert.equal((await fetch(`${origin}/api/auth/status`, { headers: { "X-Forwarded-For": "10.0.0.2" } })).status, 200);
+    viewer.setBlockedAddresses(["10.0.0.2"]);
+    assert.equal((await fetch(`${origin}/api/auth/status`, { headers: { "X-Forwarded-For": "10.0.0.2" } })).status, 403);
+    assert.equal((await fetch(`${origin}/api/auth/status`, { headers: { "X-Forwarded-For": "192.168.1.50" } })).status, 200);
+  } finally {
+    await viewer.stop();
+  }
+});

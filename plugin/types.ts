@@ -24,7 +24,13 @@ export interface LibraryList {
   items: LibraryCandidate[];
 }
 
+export interface BlockedAddress {
+  address: string;
+  addedAt: number;
+}
+
 export interface PluginSettings {
+  blockedAddresses?: BlockedAddress[];
   customDomain?: string;
   allowMetadataEditing?: boolean;
   authUsers?: AuthUser[];
@@ -51,6 +57,7 @@ export interface PluginStatus {
 
 export type AccessLogRange = "1h" | "24h" | "7d";
 export type AccessLogType = "auth" | "browse" | "edit" | "view";
+export type AccessLogEventFilter = "" | AccessLogType;
 
 export interface AccessLogEntry {
   at: number;
@@ -88,8 +95,12 @@ export interface AccessLogSummary {
   activeClients: number;
   bucketMs: number;
   buckets: AccessLogBucket[];
+  /** Every device in the log; `clients` holds only the most recently seen ones. */
+  clientCount: number;
   clients: AccessLogClient[];
   filePath: string;
+  /** When the manager built this summary. */
+  generatedAt?: number;
   oldestAt: number | null;
   range: AccessLogRange;
   recent: AccessLogEntry[];

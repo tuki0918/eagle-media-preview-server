@@ -52,6 +52,9 @@ const DEFAULT_MAX_ENTRIES = 20000;
 const DEFAULT_MAX_FILE_BYTES = 8 * 1024 * 1024;
 const DEFAULT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const DEFAULT_FLUSH_DELAY_MS = 500;
+const MAX_PRESENCE_ENTRIES = 2000;
+// The panel lists the most recently seen devices; the total is reported separately.
+const MAX_SUMMARY_CLIENTS = 100;
 const RANGE_BUCKETS: Record<AccessLogRange, { bucketMs: number; count: number }> = {
   "1h": { bucketMs: 5 * 60 * 1000, count: 12 },
   "24h": { bucketMs: 60 * 60 * 1000, count: 24 },
@@ -183,13 +186,27 @@ function createAccessLog({
       await enqueueWrite(() => rm(filePath, { force: true }));
     },
 
+    // Walks back from the newest entry, so a short page costs the same however large the log is.
     entries({ limit = 200, type = "" }: { limit?: number; type?: string } = {}) {
       prune();
-      const matching = type ? entries.filter((entry) => entry.type === type) : entries;
-      return matching.slice(-limit).reverse();
+      const output: AccessLogEntry[] = [];
+      for (let index = entries.length - 1; index >= 0 && output.length < limit; index -= 1) {
+        if (!type || entries[index].type === type) output.push(entries[index]);
+      }
+      return output;
     },
 
-    summary({ range = "24h" }: { range?: AccessLogRange } = {}) {
+    // Cheap enough to poll every few seconds: it only reads the per-address heartbeat table.
+    activeClients() {
+      const cutoff = now() - ACTIVE_CLIENT_WINDOW_MS;
+      let count = 0;
+      for (const seen of presence.values()) {
+        if (seen.lastSeen >= cutoff) count += 1;
+      }
+      return count;
+    },
+
+    summary({ clientLimit = MAX_SUMMARY_CLIENTS, range = "24h" }: { clientLimit?: number; range?: AccessLogRange } = {}) {
       prune();
       const at = now();
       const { bucketMs, count } = RANGE_BUCKETS[range] || RANGE_BUCKETS["24h"];
@@ -237,7 +254,8 @@ function createAccessLog({
         activeClients: clientList.filter((client) => client.active).length,
         bucketMs,
         buckets,
-        clients: clientList,
+        clientCount: clientList.length,
+        clients: clientList.slice(0, clientLimit),
         filePath,
         oldestAt: entries[0]?.at ?? null,
         range,
@@ -251,6 +269,11 @@ function createAccessLog({
     if (!ip) return;
     const previous = presence.get(ip);
     presence.set(ip, { lastSeen: Math.max(previous?.lastSeen || 0, at), user: user || previous?.user || "" });
+    if (presence.size > MAX_PRESENCE_ENTRIES) {
+      // Forget the addresses seen longest ago; their entries still carry their history.
+      const oldest = [...presence.entries()].sort((a, b) => a[1].lastSeen - b[1].lastSeen);
+      for (const [address] of oldest.slice(0, presence.size - MAX_PRESENCE_ENTRIES)) presence.delete(address);
+    }
   }
 }
 

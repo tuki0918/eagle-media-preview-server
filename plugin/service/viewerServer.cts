@@ -2,6 +2,7 @@ const { readFileSync } = require("fs");
 const { createServer: createHttpServer } = require("http");
 const { createServer: createHttpsServer } = require("https");
 const { createHmac, randomBytes } = require("crypto");
+const { createAddressBlockList } = require("./addressBlockList.cjs");
 const { normalizeCustomDomain } = require("./customDomain.cjs");
 const { EagleRequestError, createEagleClient, normalizeStringArray } = require("./eagleClient.cjs");
 const { createConnectionContext } = require("./connection.cjs");
@@ -39,6 +40,7 @@ interface AccessLogRecorder {
 
 interface ViewerServerOptions {
   accessLog?: AccessLogRecorder | null;
+  blockedAddresses?: Array<string | { address: string; addedAt?: number }>;
   customDomain?: string;
   allowMetadataEditing?: boolean;
   authUsers?: AuthUser[];
@@ -188,6 +190,7 @@ const LOGIN_FAILURE_LIMIT = 5;
 const LOGIN_FAILURE_MAX_ENTRIES = 500;
 const LOGIN_FAILURE_WINDOW_MS = 10 * 60 * 1000;
 const LOGIN_LOCK_MS = 5 * 60 * 1000;
+const BLOCKED_LOG_INTERVAL_MS = 60 * 1000;
 
 class HttpError extends Error {
   code: string;
@@ -211,6 +214,7 @@ const libraryGuards = new WeakMap<ServerResponse, LibraryGuard>();
 
 function createViewerServer({
   accessLog = null,
+  blockedAddresses = [],
   customDomain = "",
   host = "0.0.0.0",
   allowMetadataEditing = false,
@@ -240,6 +244,17 @@ function createViewerServer({
   const authSessions = new Map<string, AuthSession>();
   const revokedAuthSessions = new Set<string>();
   const loginFailures = new Map<string, LoginFailure>();
+  const blockList = createAddressBlockList(blockedAddresses);
+  // A blocked client usually retries in a loop, so each address is logged at most once a minute.
+  const blockedLoggedAt = new Map<string, number>();
+  const logBlocked = (ip: string, path = "") => {
+    if (!accessLog) return;
+    const at = Date.now();
+    if (at - (blockedLoggedAt.get(ip) || 0) < BLOCKED_LOG_INTERVAL_MS) return;
+    if (blockedLoggedAt.size > LOGIN_FAILURE_MAX_ENTRIES) blockedLoggedAt.clear();
+    blockedLoggedAt.set(ip, at);
+    accessLog.record({ type: "auth", event: "blocked", ip, path, status: 403 });
+  };
   const libraryAccess: LibraryAccessPolicy = createLibraryAccessPolicy(sharedLibraries);
   // An opaque, per-install id lets viewers notice a library switch without learning the path.
   const libraryId = (libraryPath: unknown) => {
@@ -322,6 +337,14 @@ function createViewerServer({
   const server = createProtocolServer({ httpsCertPath, httpsEnabled, httpsKeyPath }, async (req: IncomingMessage, res: ServerResponse) => {
     try {
       const url = new URL(req.url || "/", `${httpsEnabled ? "https" : "http"}://${req.headers.host}`);
+      // Direct clients are dropped when they connect; this also catches clients behind a local proxy.
+      const requestAddress = displayClientAddress(req);
+      if (blockList.isBlocked(requestAddress)) {
+        logBlocked(requestAddress, url.pathname);
+        res.writeHead(403, { ...securityHeaders, "Connection": "close", "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ error: "Access from this address is blocked" }));
+        return;
+      }
       const recordAuth: AuthContext["recordAuth"] = (event, username, status) => {
         accessLog?.record({ type: "auth", event, ip: displayClientAddress(req), method: req.method, path: url.pathname, status, user: username });
       };
@@ -380,6 +403,12 @@ function createViewerServer({
   const openSockets = new Set<Socket>();
   // The raw TCP socket is reported for both HTTP and HTTPS, so destroying it also ends TLS sessions.
   server.on("connection", (socket: Socket) => {
+    const remote = socket.remoteAddress || "";
+    if (blockList.isBlocked(remote)) {
+      logBlocked(remote.replace(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/, "$1"));
+      socket.destroy();
+      return;
+    }
     openSockets.add(socket);
     socket.once("close", () => openSockets.delete(socket));
   });
@@ -453,6 +482,14 @@ function createViewerServer({
         activeSessions: authSessions.size,
         requestCount,
       };
+    },
+
+    // Takes effect for the next request; open connections from a newly blocked address are closed.
+    setBlockedAddresses(next: Array<string | { address: string; addedAt?: number }>) {
+      blockList.replace(next);
+      for (const socket of openSockets) {
+        if (blockList.isBlocked(socket.remoteAddress || "")) socket.destroy();
+      }
     },
 
     // Called when Eagle reports a library switch so no request is answered from stale library info,

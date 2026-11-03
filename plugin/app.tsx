@@ -6,11 +6,13 @@ import { CloseIcon } from "./components/Icons";
 import { ServerStatusPanel } from "./components/ServerStatusPanel";
 import { SettingsForm, type HttpsFileField } from "./components/SettingsForm";
 import { serverRestartSettingsChanged, settingsPayloadChanged } from "./settingsChange";
-import type { AccessLogRange, AccessLogSummary, AuthUser, LibraryCandidate, LibraryList, PluginSettings, PluginStatus, ServerState, SettingsTab, SharedLibrary, UserRole } from "./types";
+import type { AccessLogEventFilter, AccessLogRange, AccessLogSummary, AuthUser, LibraryCandidate, LibraryList, PluginSettings, PluginStatus, ServerState, SettingsTab, SharedLibrary, UserRole } from "./types";
 
 interface ServerManager {
+  accessLogConnectedCount?(): number;
   accessLogPath?(): string;
-  accessLogSummary?(input: { range: AccessLogRange }): Promise<AccessLogSummary>;
+  accessLogSummary?(input: { range: AccessLogRange; type?: string }): Promise<AccessLogSummary>;
+  blockAddress?(address: string): Promise<PluginStatus>;
   clearAccessLog?(): Promise<void>;
   exportAccessLog?(filePath: string, format: "csv" | "jsonl"): Promise<{ count: number; filePath: string }>;
   init(): Promise<PluginStatus>;
@@ -20,6 +22,7 @@ interface ServerManager {
   start(): Promise<PluginStatus>;
   status(): Promise<PluginStatus>;
   stop(): Promise<PluginStatus>;
+  unblockAddress?(address: string): Promise<PluginStatus>;
 }
 
 interface EagleRuntime {
@@ -68,8 +71,9 @@ const AUTH_PASSWORD_REQUIRED_MESSAGE = "Enter a password for every user before e
 const HTTPS_CERTIFICATE_REQUIRED_MESSAGE = "Enter certificate and key paths before enabling HTTPS.";
 const PUBLIC_NETWORK_WITHOUT_PASSWORD_MESSAGE = "Public Network is enabled and password protection is off. Anyone on this network may be able to access the viewer. Start the server anyway?";
 const PUBLIC_NETWORK_HTTP_WITH_PASSWORD_MESSAGE = "HTTPS is disabled, so the connection is not protected. Start the server?";
-// The Activity panel refreshes this often while the window is visible.
-const ACCESS_LOG_REFRESH_MS = 5000;
+// Only the connected-device count is live; the detailed view reloads on demand or with Auto refresh.
+const CONNECTED_COUNT_REFRESH_MS = 3000;
+const ACCESS_LOG_AUTO_REFRESH_MS = 10000;
 const HTTPS_DOCS_URL = "https://github.com/tuki0918/eagle-media-preview-server/blob/main/docs/https-mkcert.md";
 
 function App() {
@@ -88,6 +92,10 @@ function App() {
   const [accessLog, setAccessLog] = useState<AccessLogSummary | null>(null);
   const [accessLogRange, setAccessLogRange] = useState<AccessLogRange>("24h");
   const [activityExpanded, setActivityExpanded] = useState(false);
+  const [connectedCount, setConnectedCount] = useState(0);
+  const [accessLogEventFilter, setAccessLogEventFilter] = useState<AccessLogEventFilter>("");
+  const [accessLogAutoRefresh, setAccessLogAutoRefresh] = useState(false);
+  const [accessLogLoading, setAccessLogLoading] = useState(false);
   const [status, setStatus] = useState<PluginStatus>(() => ({
     settings: {
       customDomain: "",
@@ -152,12 +160,31 @@ function App() {
 
   // Polls even while collapsed, so the header can show how many devices are connected.
   useEffect(() => {
+    const refresh = () => {
+      try {
+        const count = managerRef.current?.accessLogConnectedCount?.();
+        if (typeof count === "number") setConnectedCount(count);
+      } catch {
+        // The count keeps its last value.
+      }
+    };
+    refresh();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") refresh();
+    }, CONNECTED_COUNT_REFRESH_MS);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  // Details load when the panel opens or the view changes, then only on request.
+  useEffect(() => {
+    if (!activityExpanded) return;
     void refreshAccessLog();
+    if (!accessLogAutoRefresh) return;
     const timer = window.setInterval(() => {
       if (document.visibilityState === "visible") void refreshAccessLog();
-    }, ACCESS_LOG_REFRESH_MS);
+    }, ACCESS_LOG_AUTO_REFRESH_MS);
     return () => window.clearInterval(timer);
-  }, [accessLogRange]);
+  }, [activityExpanded, accessLogAutoRefresh, accessLogRange, accessLogEventFilter]);
 
   useEffect(() => {
     if (!message || messageIsError) return;
@@ -277,12 +304,47 @@ function App() {
     }
   }
 
-  async function refreshAccessLog(range = accessLogRange) {
+  async function refreshAccessLog() {
+    setAccessLogLoading(true);
     try {
-      const next = await managerRef.current?.accessLogSummary?.({ range });
-      if (next) setAccessLog(next);
+      const next = await managerRef.current?.accessLogSummary?.({ range: accessLogRange, type: accessLogEventFilter });
+      if (next) {
+        setAccessLog(next);
+        setConnectedCount(next.activeClients);
+      }
     } catch {
       // The panel keeps the last summary; logging never blocks the server controls.
+    } finally {
+      setAccessLogLoading(false);
+    }
+  }
+
+  async function blockAddress(address: string) {
+    const trimmed = address.trim();
+    if (!trimmed) return false;
+    const confirmMessage = `Block ${trimmed}?`;
+    const detail = "Requests from this address are refused right away, including signed-in devices.";
+    const showMessageBox = globalThis.eagle?.dialog?.showMessageBox;
+    try {
+      const confirmed = showMessageBox
+        ? (await showMessageBox({ type: "warning", message: confirmMessage, detail, buttons: ["Cancel", "Block"] })).response === 1
+        : typeof window.confirm !== "function" || window.confirm(`${confirmMessage}\n${detail}`);
+      if (!confirmed) return false;
+      const nextStatus = await managerRef.current?.blockAddress?.(trimmed);
+      if (nextStatus) setStatus(nextStatus);
+      return true;
+    } catch (error) {
+      setErrorMessage(error);
+      return false;
+    }
+  }
+
+  async function unblockAddress(address: string) {
+    try {
+      const nextStatus = await managerRef.current?.unblockAddress?.(address);
+      if (nextStatus) setStatus(nextStatus);
+    } catch (error) {
+      setErrorMessage(error);
     }
   }
 
@@ -608,10 +670,20 @@ function App() {
         />
 
         <AccessLogPanel
+          activeClients={connectedCount}
+          autoRefresh={accessLogAutoRefresh}
+          blockedAddresses={settings.blockedAddresses || []}
+          eventFilter={accessLogEventFilter}
           expanded={activityExpanded}
+          loading={accessLogLoading}
           range={accessLogRange}
           summary={accessLog}
+          onAutoRefreshChange={setAccessLogAutoRefresh}
+          onBlock={blockAddress}
           onClear={() => void clearAccessLog()}
+          onEventFilterChange={setAccessLogEventFilter}
+          onRefresh={() => void refreshAccessLog()}
+          onUnblock={(address) => void unblockAddress(address)}
           onExpandedChange={setActivityExpanded}
           onExport={() => void exportAccessLog()}
           onRangeChange={setAccessLogRange}

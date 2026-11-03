@@ -4,6 +4,7 @@ const { dirname, join } = require("path");
 const { homedir, networkInterfaces } = require("os");
 const { createViewerServer } = require("./viewerServer.cjs");
 const { accessLogCsv, createAccessLog } = require("./accessLog.cjs");
+const { normalizeBlockedAddress, normalizeBlockedAddresses } = require("./addressBlockList.cjs");
 const { serverRestartSettingsChanged } = require("./settingsChange.cjs");
 const { normalizeCustomDomain } = require("./customDomain.cjs");
 const { libraryNameFromPath, libraryPathKey, normalizeSharedLibraries } = require("./libraryAccess.cjs");
@@ -22,7 +23,13 @@ interface SharedLibrary {
   path: string;
 }
 
+interface BlockedAddress {
+  address: string;
+  addedAt: number;
+}
+
 interface PluginSettings {
+  blockedAddresses: BlockedAddress[];
   customDomain: string;
   allowMetadataEditing: boolean;
   authUsers: AuthUser[];
@@ -68,6 +75,7 @@ interface ViewerStatus {
 
 interface ManagedViewer {
   notifyLibraryChanged?(): void;
+  setBlockedAddresses?(addresses: BlockedAddress[]): void;
   start(): Promise<unknown>;
   stop(): Promise<unknown>;
   status(): ViewerStatus;
@@ -104,6 +112,7 @@ interface ServerManagerOptions {
     sessionSecret: string;
     sharedLibraries: string[] | null;
     accessLog?: AccessLog;
+    blockedAddresses?: BlockedAddress[];
   }) => ManagedViewer;
 }
 
@@ -114,6 +123,7 @@ interface NetworkEntry {
 }
 
 const DEFAULT_SETTINGS: PluginSettings = {
+  blockedAddresses: [],
   customDomain: "",
   allowMetadataEditing: false,
   authUsers: [],
@@ -243,6 +253,7 @@ function normalizeSettings(input: SettingsInput = {}): PluginSettings {
   const firstAuthUser = authUsers[0];
   const sessionDurationDays = normalizeSessionDurationDays(input.sessionDurationDays);
   return {
+    blockedAddresses: normalizeBlockedAddresses(input.blockedAddresses),
     customDomain: normalizeCustomDomain(input.customDomain),
     autoStart: Boolean(input.autoStart ?? DEFAULT_SETTINGS.autoStart),
     allowMetadataEditing: authEnabled && authUsersCanEditMetadata(authUsers),
@@ -269,6 +280,7 @@ function normalizeSettings(input: SettingsInput = {}): PluginSettings {
 function canonicalSettings(settings: PluginSettings) {
   return {
     settingsVersion: CURRENT_SETTINGS_VERSION,
+    blockedAddresses: settings.blockedAddresses,
     customDomain: settings.customDomain,
     authUsers: settings.authUsers,
     autoStart: settings.autoStart,
@@ -558,6 +570,12 @@ function createServerManager({
     };
   }
 
+  async function applyBlockedAddresses(blockedAddresses: BlockedAddress[]) {
+    const settings = await settingsStore.save({ blockedAddresses });
+    viewer?.setBlockedAddresses?.(settings.blockedAddresses);
+    return snapshot(settings);
+  }
+
   async function createViewer(settings: PluginSettings) {
     return viewerServerFactory({
       customDomain: settings.customDomain,
@@ -571,6 +589,7 @@ function createServerManager({
       sharedLibraries: sharedLibraryPaths(settings),
       authUsers: settings.authEnabled ? settings.authUsers : [],
       accessLog,
+      blockedAddresses: settings.blockedAddresses,
     });
   }
 
@@ -664,7 +683,24 @@ function createServerManager({
     // The log belongs to the manager, not the viewer, so it stays readable after the server stops.
     async accessLogSummary({ limit = 200, range = "24h", type = "" }: { limit?: number; range?: "1h" | "24h" | "7d"; type?: string } = {}) {
       await accessLog.load();
-      return { ...accessLog.summary({ range }), recent: accessLog.entries({ limit, type }) };
+      return { ...accessLog.summary({ range }), generatedAt: Date.now(), recent: accessLog.entries({ limit, type }) };
+    },
+
+    accessLogConnectedCount() {
+      return accessLog.activeClients();
+    },
+
+    // Blocking applies to the running server right away and is saved for the next start.
+    async blockAddress(address: string) {
+      const normalized = normalizeBlockedAddress(address);
+      const settings = await settingsStore.load();
+      if (settings.blockedAddresses.some((entry) => entry.address === normalized)) return snapshot(settings);
+      return applyBlockedAddresses([...settings.blockedAddresses, { address: normalized, addedAt: Date.now() }]);
+    },
+
+    async unblockAddress(address: string) {
+      const settings = await settingsStore.load();
+      return applyBlockedAddresses(settings.blockedAddresses.filter((entry) => entry.address !== address));
     },
 
     async exportAccessLog(filePath: string, format: "csv" | "jsonl" = "csv") {
