@@ -111,7 +111,7 @@ export function SettingsForm({
         </span>
         <ChevronIcon className={`h-[14px] w-[14px] text-[#555c66] transition-transform ${settingsExpanded ? "rotate-180" : ""}`} />
       </button>
-      <div id="settingsPanel" className="mt-2.5 grid gap-2.5" hidden={!settingsExpanded}>
+      <div id="settingsPanel" className="mt-4 grid gap-2.5" hidden={!settingsExpanded}>
         <div className="grid grid-cols-4 rounded-full bg-[#f1f1f3] p-1" role="tablist" aria-label="Settings sections">
           <SettingsTabButton active={settingsTab === "general"} controls="generalSettingsPanel" id="generalSettingsTab" onClick={() => onSettingsTabChange("general")}>General</SettingsTabButton>
           <SettingsTabButton active={settingsTab === "access"} controls="accessSettingsPanel" id="accessSettingsTab" onClick={() => onSettingsTabChange("access")}>Access</SettingsTabButton>

@@ -116,7 +116,7 @@ export function AccessLogPanel({
         <ChevronIcon className={`h-[14px] w-[14px] text-[#555c66] transition-transform ${expanded ? "rotate-180" : ""}`} />
       </button>
 
-      <div id="activityPanel" className="mt-2.5 grid gap-3" hidden={!expanded}>
+      <div id="activityPanel" className="mt-4 grid gap-3" hidden={!expanded}>
         <div className="grid grid-cols-2 rounded-full bg-[#f1f1f3] p-1" role="tablist" aria-label="Activity sections">
           <TabButton active={tab === "overview"} controls="activityOverviewPanel" id="activityOverviewTab" onClick={() => setTab("overview")}>Overview</TabButton>
           <TabButton active={tab === "blocked"} controls="activityBlockedPanel" id="activityBlockedTab" onClick={() => setTab("blocked")}>
