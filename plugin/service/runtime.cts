@@ -3,6 +3,7 @@ const { createPrivateKey, createPublicKey, pbkdf2Sync, randomBytes, X509Certific
 const { dirname, join } = require("path");
 const { homedir, networkInterfaces } = require("os");
 const { createViewerServer } = require("./viewerServer.cjs");
+const { accessLogCsv, createAccessLog } = require("./accessLog.cjs");
 const { serverRestartSettingsChanged } = require("./settingsChange.cjs");
 const { normalizeCustomDomain } = require("./customDomain.cjs");
 const { libraryNameFromPath, libraryPathKey, normalizeSharedLibraries } = require("./libraryAccess.cjs");
@@ -84,7 +85,10 @@ interface LibraryCandidate extends SharedLibrary {
   shared: boolean;
 }
 
+type AccessLog = ReturnType<typeof createAccessLog>;
+
 interface ServerManagerOptions {
+  accessLog?: AccessLog;
   lanAddressProvider?: () => LanAddress[];
   defaultEagleUserDataPath?: () => string;
   settingsStore?: SettingsStore;
@@ -99,6 +103,7 @@ interface ServerManagerOptions {
     sessionMaxAgeSeconds: number;
     sessionSecret: string;
     sharedLibraries: string[] | null;
+    accessLog?: AccessLog;
   }) => ManagedViewer;
 }
 
@@ -519,6 +524,7 @@ function selectLanAddress({ lanAddresses = [], host = "0.0.0.0" }: {
 }
 
 function createServerManager({
+  accessLog = createAccessLog(),
   settingsStore = createSettingsStore(),
   viewerServerFactory = createViewerServer,
   lanAddressProvider = getLanAddresses,
@@ -564,11 +570,13 @@ function createServerManager({
       sessionSecret: settings.sessionSecret,
       sharedLibraries: sharedLibraryPaths(settings),
       authUsers: settings.authEnabled ? settings.authUsers : [],
+      accessLog,
     });
   }
 
   return {
     async init() {
+      await accessLog.load();
       const settings = await settingsStore.load();
       if (settings.autoStart) return this.start();
       return snapshot(settings);
@@ -651,6 +659,28 @@ function createServerManager({
 
     async status() {
       return snapshot();
+    },
+
+    // The log belongs to the manager, not the viewer, so it stays readable after the server stops.
+    async accessLogSummary({ limit = 200, range = "24h", type = "" }: { limit?: number; range?: "1h" | "24h" | "7d"; type?: string } = {}) {
+      await accessLog.load();
+      return { ...accessLog.summary({ range }), recent: accessLog.entries({ limit, type }) };
+    },
+
+    async exportAccessLog(filePath: string, format: "csv" | "jsonl" = "csv") {
+      await accessLog.load();
+      const entries = accessLog.entries({ limit: Number.MAX_SAFE_INTEGER }).reverse();
+      const body = format === "jsonl" ? entries.map((entry: object) => `${JSON.stringify(entry)}\n`).join("") : accessLogCsv(entries);
+      await writeFile(filePath, body, "utf8");
+      return { count: entries.length, filePath };
+    },
+
+    async clearAccessLog() {
+      await accessLog.clear();
+    },
+
+    accessLogPath() {
+      return accessLog.filePath;
     },
   };
 }

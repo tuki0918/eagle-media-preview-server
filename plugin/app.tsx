@@ -1,13 +1,18 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import qrcodeFactory from "qrcode-generator";
+import { AccessLogPanel } from "./components/AccessLogPanel";
 import { CloseIcon } from "./components/Icons";
 import { ServerStatusPanel } from "./components/ServerStatusPanel";
 import { SettingsForm, type HttpsFileField } from "./components/SettingsForm";
 import { serverRestartSettingsChanged, settingsPayloadChanged } from "./settingsChange";
-import type { AuthUser, LibraryCandidate, LibraryList, PluginSettings, PluginStatus, ServerState, SettingsTab, SharedLibrary, UserRole } from "./types";
+import type { AccessLogRange, AccessLogSummary, AuthUser, LibraryCandidate, LibraryList, PluginSettings, PluginStatus, ServerState, SettingsTab, SharedLibrary, UserRole } from "./types";
 
 interface ServerManager {
+  accessLogPath?(): string;
+  accessLogSummary?(input: { range: AccessLogRange }): Promise<AccessLogSummary>;
+  clearAccessLog?(): Promise<void>;
+  exportAccessLog?(filePath: string, format: "csv" | "jsonl"): Promise<{ count: number; filePath: string }>;
   init(): Promise<PluginStatus>;
   libraries?(input: { current: SharedLibrary | null; userDataPath: string }): Promise<LibraryList>;
   libraryChanged?(): void;
@@ -28,6 +33,11 @@ interface EagleRuntime {
       properties?: string[];
       title?: string;
     }) => Promise<{ canceled: boolean; filePaths: string[] }>;
+    showSaveDialog?: (options: {
+      defaultPath?: string;
+      filters?: Array<{ extensions: string[]; name: string }>;
+      title?: string;
+    }) => Promise<{ canceled: boolean; filePath?: string }>;
     showMessageBox?: (options: {
       buttons?: string[];
       detail?: string;
@@ -39,7 +49,7 @@ interface EagleRuntime {
   onLibraryChanged?: (callback: (libraryPath: string) => void) => void;
   onPluginCreate?: (callback: () => void) => void;
   onPluginShow?: (callback: () => void) => void;
-  shell?: { openExternal?: (value: string) => Promise<void> };
+  shell?: { openExternal?: (value: string) => Promise<void>; showItemInFolder?: (value: string) => Promise<void> | void };
   window?: { close?: () => void; hide?: () => void };
 }
 
@@ -58,6 +68,8 @@ const AUTH_PASSWORD_REQUIRED_MESSAGE = "Enter a password for every user before e
 const HTTPS_CERTIFICATE_REQUIRED_MESSAGE = "Enter certificate and key paths before enabling HTTPS.";
 const PUBLIC_NETWORK_WITHOUT_PASSWORD_MESSAGE = "Public Network is enabled and password protection is off. Anyone on this network may be able to access the viewer. Start the server anyway?";
 const PUBLIC_NETWORK_HTTP_WITH_PASSWORD_MESSAGE = "HTTPS is disabled, so the connection is not protected. Start the server?";
+// The Activity panel refreshes this often while the window is visible.
+const ACCESS_LOG_REFRESH_MS = 5000;
 const HTTPS_DOCS_URL = "https://github.com/tuki0918/eagle-media-preview-server/blob/main/docs/https-mkcert.md";
 
 function App() {
@@ -73,6 +85,9 @@ function App() {
   const [passwordDraftRevision, setPasswordDraftRevision] = useState(0);
   const userPasswordsRef = useRef<Record<string, string>>({});
   const [libraries, setLibraries] = useState<LibraryList | null>(null);
+  const [accessLog, setAccessLog] = useState<AccessLogSummary | null>(null);
+  const [accessLogRange, setAccessLogRange] = useState<AccessLogRange>("24h");
+  const [activityExpanded, setActivityExpanded] = useState(false);
   const [status, setStatus] = useState<PluginStatus>(() => ({
     settings: {
       customDomain: "",
@@ -134,6 +149,15 @@ function App() {
       setErrorMessage(error);
     }
   }, []);
+
+  // Polls even while collapsed, so the header can show how many devices are connected.
+  useEffect(() => {
+    void refreshAccessLog();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refreshAccessLog();
+    }, ACCESS_LOG_REFRESH_MS);
+    return () => window.clearInterval(timer);
+  }, [accessLogRange]);
 
   useEffect(() => {
     if (!message || messageIsError) return;
@@ -250,6 +274,64 @@ function App() {
     } catch (error) {
       // The picker keeps the last list; sharing itself is enforced by the server.
       if (reportErrors) setErrorMessage(error);
+    }
+  }
+
+  async function refreshAccessLog(range = accessLogRange) {
+    try {
+      const next = await managerRef.current?.accessLogSummary?.({ range });
+      if (next) setAccessLog(next);
+    } catch {
+      // The panel keeps the last summary; logging never blocks the server controls.
+    }
+  }
+
+  async function exportAccessLog() {
+    const showSaveDialog = globalThis.eagle?.dialog?.showSaveDialog;
+    const manager = managerRef.current;
+    if (!showSaveDialog || !manager?.exportAccessLog) {
+      setMessage("Exporting is unavailable in this Eagle window.", true);
+      return;
+    }
+    try {
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+      const result = await showSaveDialog({
+        title: "Export access log",
+        defaultPath: `access-log-${stamp}.csv`,
+        filters: [{ name: "CSV", extensions: ["csv"] }, { name: "JSON Lines", extensions: ["jsonl"] }],
+      });
+      if (result.canceled || !result.filePath) return;
+      const exported = await manager.exportAccessLog(result.filePath, result.filePath.endsWith(".jsonl") ? "jsonl" : "csv");
+      setMessage(`Exported ${exported.count} entries.`);
+    } catch (error) {
+      setErrorMessage(error);
+    }
+  }
+
+  async function revealAccessLogFile() {
+    const filePath = managerRef.current?.accessLogPath?.();
+    if (!filePath) return;
+    try {
+      await globalThis.eagle?.shell?.showItemInFolder?.(filePath);
+    } catch (error) {
+      setErrorMessage(error);
+    }
+  }
+
+  async function clearAccessLog() {
+    const message = "Clear the access log?";
+    const detail = "All recorded events are deleted. This cannot be undone.";
+    const showMessageBox = globalThis.eagle?.dialog?.showMessageBox;
+    let confirmed = false;
+    try {
+      confirmed = showMessageBox
+        ? (await showMessageBox({ type: "warning", message, detail, buttons: ["Cancel", "Clear"] })).response === 1
+        : typeof window.confirm === "function" && window.confirm(`${message}\n${detail}`);
+      if (!confirmed) return;
+      await managerRef.current?.clearAccessLog?.();
+      await refreshAccessLog();
+    } catch (error) {
+      setErrorMessage(error);
     }
   }
 
@@ -523,6 +605,17 @@ function App() {
             saveSettings({ patch: { host } });
           }}
           onServerPowerChange={startOrStopServer}
+        />
+
+        <AccessLogPanel
+          expanded={activityExpanded}
+          range={accessLogRange}
+          summary={accessLog}
+          onClear={() => void clearAccessLog()}
+          onExpandedChange={setActivityExpanded}
+          onExport={() => void exportAccessLog()}
+          onRangeChange={setAccessLogRange}
+          onRevealFile={globalThis.eagle?.shell?.showItemInFolder ? () => void revealAccessLogFile() : undefined}
         />
 
         <SettingsForm

@@ -48,3 +48,51 @@ export interface PluginStatus {
   state?: ServerState | string;
   url?: string;
 }
+
+export type AccessLogRange = "1h" | "24h" | "7d";
+export type AccessLogType = "auth" | "browse" | "edit" | "view";
+
+export interface AccessLogEntry {
+  at: number;
+  event: string;
+  ip: string;
+  itemId?: string;
+  method?: string;
+  path?: string;
+  status?: number;
+  type: AccessLogType;
+  user?: string;
+}
+
+export interface AccessLogBucket {
+  auth: number;
+  authFailures: number;
+  browse: number;
+  edit: number;
+  end: number;
+  start: number;
+  view: number;
+}
+
+export interface AccessLogClient {
+  active: boolean;
+  authFailures: number;
+  ip: string;
+  lastSeen: number;
+  requests: number;
+  users: string[];
+  views: number;
+}
+
+export interface AccessLogSummary {
+  activeClients: number;
+  bucketMs: number;
+  buckets: AccessLogBucket[];
+  clients: AccessLogClient[];
+  filePath: string;
+  oldestAt: number | null;
+  range: AccessLogRange;
+  recent: AccessLogEntry[];
+  retainedEntries: number;
+  totals: { auth: number; authFailures: number; browse: number; edit: number; view: number };
+}

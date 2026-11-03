@@ -3390,3 +3390,86 @@ test("createViewerServer serves tag autocomplete suggestions", async () => {
     await viewer.stop();
   }
 });
+
+test("createViewerServer writes auth, browse, and view events to the access log", async () => {
+  const entries: Array<Record<string, unknown>> = [];
+  const touched: string[] = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    passwordHash: sha256("secret"),
+    basicAuthUsername: "eagle",
+    accessLog: {
+      record(entry: Record<string, unknown>) {
+        entries.push(entry);
+      },
+      touch(ip: string, user = "") {
+        touched.push(`${ip}:${user}`);
+      },
+    },
+    eagleClient: {
+      async appInfo() {
+        return { version: "4.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/tmp/Test.library", name: "Test Library" };
+      },
+      async folders() {
+        return [];
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const failed = await fetch(`${origin}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: origin },
+      body: JSON.stringify({ username: "eagle", password: "wrong" }),
+    });
+    assert.equal(failed.status, 401);
+    const cookie = await loginCookie(origin, "eagle", "secret");
+    const sessionCookie = cookie.split(/,\s*/).map((part) => part.split(";")[0]).join("; ");
+    assert.equal((await fetch(`${origin}/api/folders`, { headers: { Cookie: sessionCookie } })).status, 200);
+    assert.equal((await fetch(`${origin}/api/health`, { headers: { Cookie: sessionCookie } })).status, 200);
+    // A later range request of the same file is not counted as another view.
+    await fetch(`${origin}/file/ITEM%201`, { headers: { Cookie: sessionCookie } });
+    await fetch(`${origin}/file/ITEM%201`, { headers: { Cookie: sessionCookie, Range: "bytes=100-" } });
+    await new Promise((resolveWait) => setTimeout(resolveWait, 20));
+
+    assert.deepEqual(entries.map((entry) => [entry.type, entry.event, entry.user || "", entry.ip]), [
+      ["auth", "login_failure", "eagle", "127.0.0.1"],
+      ["auth", "login_success", "eagle", "127.0.0.1"],
+      ["browse", "folders", "eagle", "127.0.0.1"],
+      ["view", "view", "eagle", "127.0.0.1"],
+    ]);
+    assert.equal(entries[3].itemId, "ITEM 1");
+    assert.ok(touched.includes("127.0.0.1:eagle"));
+    assert.ok(entries.every((entry) => !JSON.stringify(entry).includes("wrong")));
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer trusts X-Forwarded-For only from loopback for the access log", async () => {
+  const entries: Array<Record<string, unknown>> = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    passwordHash: sha256("secret"),
+    accessLog: { record: (entry: Record<string, unknown>) => entries.push(entry), touch() {} },
+  });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    await fetch(`${origin}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: origin, "X-Forwarded-For": "192.168.1.50, 10.0.0.1" },
+      body: JSON.stringify({ username: "eagle", password: "wrong" }),
+    });
+    assert.equal(entries[0]?.ip, "192.168.1.50");
+  } finally {
+    await viewer.stop();
+  }
+});

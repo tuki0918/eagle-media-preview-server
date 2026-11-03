@@ -7,6 +7,11 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Added
+
+- Added an Activity panel to the server window: connected devices, views and failed sign-ins, a requests-over-time chart (1 hour, 24 hours, 7 days), a device list, and recent events.
+- The server now keeps an access log of sign-ins (success, failure, lock, sign-out), content views, edits, and browsing, with the client address and user. It is kept in the temporary folder for up to 7 days, stays readable after the server stops, and can be exported as CSV or JSON Lines.
+
 ## [0.6.3] - 2026-11-01
 
 ### Added
