@@ -677,8 +677,9 @@ function App() {
     window.close();
   }
 
+  // `main` is the one scroller, and `relative` so absolutely positioned children (sr-only text) scroll inside it.
   return (
-    <main className="h-screen min-h-screen w-full overflow-auto bg-[#f5f5f7] text-[#171717]">
+    <main className="relative h-screen min-h-screen w-full overflow-auto bg-[#f5f5f7] text-[#171717]">
       <header className="[-webkit-app-region:drag] sticky top-0 z-10 flex h-[46px] items-center justify-between gap-2.5 border-b border-[#e6e6e9] bg-[rgba(255,255,255,0.86)] px-3.5 backdrop-blur-xl">
         <div className="inline-flex min-w-0 items-center gap-2.5">
           <img className="block h-6 w-6 rounded-md object-cover" src={serverState === "running" ? "./assets/icon_on.svg" : "./assets/icon_off.svg"} alt="" aria-hidden="true" />

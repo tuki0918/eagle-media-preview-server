@@ -1401,6 +1401,13 @@ test("plugin component styles are embedded as Tailwind classes", async () => {
   assert.match(css, /button:disabled,\s*input:disabled,\s*select:disabled\s*\{[^}]*cursor: not-allowed;/s);
 });
 
+test("plugin panel keeps absolutely positioned content inside its scroller", async () => {
+  // Without `relative`, sr-only text escapes <main> and makes the page itself scrollable, which slides
+  // the whole panel out of the window. Layout can't be measured here, so this guards the class.
+  const app = await readPluginAppSource();
+  assert.match(app, /<main className="relative [^"]*overflow-auto/);
+});
+
 test("plugin app no longer wires the UI with id-based DOM queries", async () => {
   const app = await readPluginAppSource();
 
