@@ -7,7 +7,7 @@ const { accessLogCsv, createAccessLog } = require("./accessLog.cjs");
 const { normalizeBlockedAddress, normalizeBlockedAddresses } = require("./addressBlockList.cjs");
 const { serverRestartSettingsChanged } = require("./settingsChange.cjs");
 const { normalizeCustomDomain } = require("./customDomain.cjs");
-const { libraryNameFromPath, libraryPathKey, normalizeSharedLibraries } = require("./libraryAccess.cjs");
+const { libraryIdFor, libraryNameFromPath, libraryPathKey, normalizeSharedLibraries } = require("./libraryAccess.cjs");
 
 type ServerStatus = "error" | "running" | "stopped";
 type UserRole = "admin" | "editor" | "viewer";
@@ -79,6 +79,7 @@ interface ViewerStatus {
 
 interface ManagedViewer {
   notifyLibraryChanged?(): void;
+  openLibraryId?(): Promise<string>;
   setBlockedAddresses?(addresses: BlockedAddress[]): void;
   start(): Promise<unknown>;
   stop(): Promise<unknown>;
@@ -329,6 +330,14 @@ function canonicalSettings(settings: PluginSettings) {
     sharedLibraries: settings.sharedLibraries,
     trustForwardedFor: settings.trustForwardedFor,
   };
+}
+
+// Settings whose changes go in the access log, by name only. Passwords, secrets, and bookkeeping stay
+// out, and blocked addresses have their own events.
+const LOGGED_SETTING_FIELDS = ["authEnabled", "authUsers", "autoStart", "customDomain", "host", "httpsCertPath", "httpsEnabled", "httpsKeyPath", "libraryProtectionEnabled", "port", "sessionDurationDays", "sharedLibraries", "trustForwardedFor"] as const;
+
+function changedSettingFields(before: PluginSettings, after: PluginSettings) {
+  return LOGGED_SETTING_FIELDS.filter((field) => JSON.stringify(before[field]) !== JSON.stringify(after[field]));
 }
 
 function needsSettingsMigration(input: unknown, settings: PluginSettings) {
@@ -611,6 +620,26 @@ function createServerManager({
     };
   }
 
+  // What the admin or the server did. It happens on this computer, so there is no device or user.
+  function logSystemEvent(event: string, details: { fields?: string[]; libraryId?: string; path?: string } = {}) {
+    try {
+      accessLog.record({ type: "system", event, ip: "this computer", ...details });
+    } catch {
+      // Starting the server or saving settings never depends on its log entry.
+    }
+  }
+
+  // A switch while the plugin was closed sends no event, so each start also notes what is open. It
+  // is its own entry so that a slow or unavailable Eagle never holds up the start; without an answer
+  // nothing is logged.
+  function logOpenLibrary(startedViewer: ManagedViewer) {
+    return Promise.resolve(startedViewer.openLibraryId?.())
+      .then((libraryId) => {
+        if (libraryId) logSystemEvent("library_open", { libraryId });
+      })
+      .catch(() => {});
+  }
+
   // Settings saves and block-list changes each read the settings, change them and save them; one
   // at a time, so two quick changes don't both start from the same settings and drop one.
   let settingsChain: Promise<unknown> = Promise.resolve();
@@ -620,13 +649,14 @@ function createServerManager({
     return run;
   }
 
-  function updateBlockedAddresses(change: (current: BlockedAddress[]) => BlockedAddress[] | null) {
+  function updateBlockedAddresses(event: string, address: string, change: (current: BlockedAddress[]) => BlockedAddress[] | null) {
     return queueSettingsChange(async () => {
       const current = await settingsStore.load();
       const next = change(current.blockedAddresses);
       if (!next) return snapshot(current);
       const settings = await settingsStore.save({ blockedAddresses: next });
       viewer?.setBlockedAddresses?.(settings.blockedAddresses);
+      logSystemEvent(event, { path: address });
       return snapshot(settings);
     });
   }
@@ -660,14 +690,20 @@ function createServerManager({
 
     async start() {
       const settings = await settingsStore.load();
+      const wasRunning = viewer?.status().state === "running";
       try {
         if (!viewer) viewer = await createViewer(settings);
         await viewer.start();
         stateOverride = "running";
         lastError = "";
+        if (!wasRunning) {
+          logSystemEvent("server_start");
+          logOpenLibrary(viewer);
+        }
       } catch (error) {
         stateOverride = "error";
         lastError = errorMessage(error);
+        logSystemEvent("server_start_failed", { path: lastError });
       }
       return snapshot(settings);
     },
@@ -681,6 +717,9 @@ function createServerManager({
           await stopping.stop();
         } finally {
           stateOverride = "stopped";
+          logSystemEvent("server_stop");
+          // Eagle may be closing the plugin; the batched write might not get another chance.
+          await accessLog.flush();
         }
       }
       stateOverride = "stopped";
@@ -698,6 +737,8 @@ function createServerManager({
         const wasRunning = viewer?.status().state === "running";
         const current = await settingsStore.load();
         const settings = await settingsStore.save(input);
+        const changedFields = changedSettingFields(current, settings);
+        if (changedFields.length) logSystemEvent("settings_changed", { fields: changedFields });
         const restartRequired = serverRestartSettingsChanged(current, settings);
         if (viewer && restartRequired) {
           await this.stop();
@@ -707,8 +748,11 @@ function createServerManager({
       });
     },
 
-    libraryChanged() {
+    // Logged with or without the server running; the settings hold the secret behind the library id.
+    async libraryChanged(libraryPath = "") {
       viewer?.notifyLibraryChanged?.();
+      const settings = await settingsStore.load().catch(() => null);
+      logSystemEvent("library_changed", { libraryId: settings ? libraryIdFor(libraryPath, settings.sessionSecret) : "" });
     },
 
     // Candidates for the shared-library picker on the admin's own machine: anything already
@@ -752,13 +796,13 @@ function createServerManager({
     // Blocking applies to the running server right away and is saved for the next start.
     async blockAddress(address: string) {
       const normalized = normalizeBlockedAddress(address);
-      return updateBlockedAddresses((current) => current.some((entry) => entry.address === normalized)
+      return updateBlockedAddresses("address_blocked", normalized, (current) => current.some((entry) => entry.address === normalized)
         ? null
         : [...current, { address: normalized, addedAt: Date.now() }]);
     },
 
     async unblockAddress(address: string) {
-      return updateBlockedAddresses((current) => current.filter((entry) => entry.address !== address));
+      return updateBlockedAddresses("address_unblocked", address, (current) => current.filter((entry) => entry.address !== address));
     },
 
     async exportAccessLog(filePath: string, format: "csv" | "jsonl" = "csv") {
@@ -771,6 +815,8 @@ function createServerManager({
 
     async clearAccessLog() {
       await accessLog.clear();
+      // Stays behind as the first entry, so a cleared log shows that it was cleared.
+      logSystemEvent("log_cleared");
     },
 
     accessLogPath() {

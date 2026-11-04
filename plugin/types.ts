@@ -69,7 +69,7 @@ export interface PluginStatus {
 }
 
 export type AccessLogRange = "1h" | "24h" | "7d";
-export type AccessLogType = "auth" | "browse" | "edit" | "view";
+export type AccessLogType = "auth" | "browse" | "edit" | "system" | "view";
 export type AccessLogEventFilter = "" | AccessLogType;
 
 export interface AccessLogEntry {
@@ -77,8 +77,12 @@ export interface AccessLogEntry {
   event: string;
   /** File type and size of the original a view served. */
   ext?: string;
+  /** Which fields an edit or settings change touched; never their values. */
+  fields?: string[];
   ip: string;
   itemId?: string;
+  /** The library open in Eagle at the time, as an opaque id. */
+  libraryId?: string;
   method?: string;
   path?: string;
   size?: number;
@@ -95,7 +99,11 @@ export interface AccessLogBucket {
   end: number;
   start: number;
   view: number;
-  /** Failed media fetches: requests, but not views. */
+  /** Edits that were refused or failed: nothing changed. */
+  editFailures?: number;
+  /** Server and settings events. */
+  system?: number;
+  /** Failed media fetches: not views. */
   viewFailures?: number;
 }
 
@@ -105,7 +113,8 @@ export interface AccessLogClient {
   authFailures: number;
   ip: string;
   lastSeen: number;
-  requests: number;
+  editFailures?: number;
+  edits: number;
   user: string;
   views: number;
 }
@@ -123,5 +132,5 @@ export interface AccessLogSummary {
   recent: AccessLogEntry[];
   retainedEntries: number;
   /** viewFailures: failed media fetches, listed under Views but not counted as views. */
-  totals: { auth: number; authFailures: number; browse: number; edit: number; view: number; viewFailures?: number };
+  totals: { auth: number; authFailures: number; browse: number; edit: number; editFailures?: number; system?: number; view: number; viewFailures?: number };
 }

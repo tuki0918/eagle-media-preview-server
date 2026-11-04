@@ -809,7 +809,7 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(html, /function PreviewMetadataEditor\(\{/);
   assert.match(html, /<EditableMetadataRow[\s\S]*label="Tags"/);
   assert.match(html, /<EditableMetadataRow[\s\S]*label="Folders"/);
-  assert.match(html, /const saved = await onSaveMetadata\(item, \{ tags: nextTags, folders: nextCategories \}\);/);
+  assert.match(html, /const saved = await onSaveMetadata\(item, \{ tags: nextTags, folders: nextCategories \}, field\);/);
   assert.match(html, /setTags\(saved\.tags\);/);
   assert.match(html, /setCategories\(saved\.folders\);/);
   assert.match(html, /showSuccessToast\(successToast\.title/);
@@ -817,7 +817,7 @@ test("public preview info uses chip lists and a full-width open file CTA", async
   assert.match(html, /const applyValues = async \(kind: "tags" \| "folders", nextValues: string\[\]\) => \{/);
   assert.match(html, /function sameStringValues\(left: readonly string\[\], right: readonly string\[\]\) \{/);
   assert.match(html, /onApply=\{\(values\) => applyValues\("tags", values\)\}/);
-  assert.match(app, /postJson<\{[\s\S]*folders\?: unknown;[\s\S]*\}>\(`\/api\/items\/\$\{encodeURIComponent\(String\(item\.id \|\| ""\)\)\}\/metadata`, \{ tags, folders \}\)/);
+  assert.match(app, /postJson<\{[\s\S]*folders\?: unknown;[\s\S]*\}>\(`\/api\/items\/\$\{encodeURIComponent\(String\(item\.id \|\| ""\)\)\}\/metadata`, field === "tags" \? \{ tags \} : \{ folders \}\)/);
   assert.match(app, /rememberRecentValues\(RECENT_TAGS_STORAGE_KEY, patch\.tags\);/);
   assert.match(app, /rememberRecentValues\(RECENT_FOLDERS_STORAGE_KEY, patch\.folders\);/);
   assert.match(app, /await loadFolders\(\);[\s\S]*if \(isCurrentPreviewItem\(itemId\)\) renderPreviewDetails\(item\);/);

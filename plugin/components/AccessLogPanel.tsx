@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { formatBytes } from "../../src/viewer/format";
-import type { AccessLogBucket, AccessLogEntry, AccessLogEventFilter, AccessLogRange, AccessLogSummary, BlockedAddress } from "../types";
+import type { AccessLogBucket, AccessLogClient, AccessLogEntry, AccessLogEventFilter, AccessLogRange, AccessLogSummary, BlockedAddress } from "../types";
 import { ActivityIcon, BanIcon, ChevronIcon, CloseIcon, DownloadIcon, FolderOpenIcon, SelectItemIcon, RefreshIcon, TrashIcon } from "./Icons";
 
 interface AccessLogPanelProps {
@@ -32,12 +32,13 @@ interface AccessLogPanelProps {
 }
 
 // Categorical slots 1–4 of the reference palette, in fixed order (validated as adjacent stack
-// pairs): views, browsing, sign-ins, failed views. Together they add up to every logged request.
+// pairs): views, edits, sign-ins, failed requests. Server and settings events aren't device traffic,
+// so they are left out of the chart.
 const SERIES = [
   { key: "view", label: "Views", color: "#2a78d6" },
-  { key: "browse", label: "Browsing", color: "#eb6834" },
+  { key: "edit", label: "Edits", color: "#eb6834" },
   { key: "auth", label: "Sign-ins", color: "#1baf7a" },
-  { key: "failed", label: "Failed views", color: "#eda100" },
+  { key: "failed", label: "Failed", color: "#eda100" },
 ] as const;
 
 const RANGE_OPTIONS: Array<{ label: string; value: AccessLogRange }> = [
@@ -51,18 +52,28 @@ const EVENT_FILTERS: Array<{ label: string; value: AccessLogEventFilter }> = [
   { label: "Views", value: "view" },
   { label: "Sign-ins", value: "auth" },
   { label: "Edits", value: "edit" },
-  { label: "Browsing", value: "browse" },
+  { label: "Server", value: "system" },
 ];
 
 const EVENT_LABELS: Record<string, string> = {
+  address_blocked: "Blocked address",
+  address_unblocked: "Unblocked address",
   blocked: "Blocked",
+  connect: "Connect failed",
   library_denied: "Library access denied",
   login_failure: "Sign-in failed",
   login_locked: "Sign-in locked",
   login_success: "Signed in",
+  library_changed: "Switched library",
+  library_open: "Library open",
+  log_cleared: "Cleared log",
   logout: "Signed out",
   metadata: "Edited metadata",
-  search: "Searched",
+  restore: "Restored from trash",
+  server_start: "Server started",
+  server_start_failed: "Server failed to start",
+  server_stop: "Server stopped",
+  settings_changed: "Changed settings",
   star: "Changed rating",
   trash: "Moved to trash",
   url_preview: "Opened URL",
@@ -70,7 +81,23 @@ const EVENT_LABELS: Record<string, string> = {
   view_failed: "View failed",
 };
 
-const FAILED_EVENTS = new Set(["blocked", "library_denied", "login_failure", "login_locked"]);
+const FAILED_EVENTS = new Set(["blocked", "library_denied", "login_failure", "login_locked", "server_start_failed"]);
+
+// Saved setting names as the panel calls them; other logged fields (tags, folders, rating) read as they are.
+const FIELD_LABELS: Record<string, string> = {
+  authEnabled: "password protection",
+  authUsers: "users",
+  autoStart: "auto start",
+  customDomain: "hostname",
+  host: "public network",
+  httpsCertPath: "TLS cert",
+  httpsEnabled: "HTTPS",
+  httpsKeyPath: "TLS key",
+  libraryProtectionEnabled: "library protection",
+  sessionDurationDays: "session duration",
+  sharedLibraries: "shared libraries",
+  trustForwardedFor: "X-Forwarded-For",
+};
 // How many recent events the panel lists; the app asks the manager for exactly this many.
 export const RECENT_EVENT_LIMIT = 100;
 
@@ -163,7 +190,7 @@ export function AccessLogPanel({
           <div className="grid grid-cols-4 gap-2 max-[520px]:grid-cols-2">
             <StatTile label="Connected" value={activeClients} help="Devices seen in the last 2 minutes" />
             <StatTile label="Views" value={totals?.view ?? 0} />
-            <StatTile label="Requests" value={(totals?.browse ?? 0) + (totals?.edit ?? 0) + (totals?.view ?? 0) + (totals?.viewFailures ?? 0) + (totals?.auth ?? 0)} />
+            <StatTile label="Edits" value={totals?.edit ?? 0} />
             <StatTile label="Failed sign-ins" value={totals?.authFailures ?? 0} />
           </div>
 
@@ -258,12 +285,12 @@ function BlockedAddressList({ blockedAddresses, onBlock, onUnblock }: { blockedA
 
 function ActivityChart({ buckets, range }: { buckets: AccessLogBucket[]; range: AccessLogRange }) {
   const [hovered, setHovered] = useState<number | null>(null);
-  const stacks = buckets.map((bucket) => ({ view: bucket.view, browse: bucket.browse + bucket.edit, auth: bucket.auth, failed: bucket.viewFailures ?? 0 }));
-  const max = niceMax(Math.max(0, ...stacks.map((stack) => stack.view + stack.browse + stack.auth + stack.failed)));
+  const stacks = buckets.map((bucket) => ({ view: bucket.view, edit: bucket.edit, auth: bucket.auth, failed: (bucket.viewFailures ?? 0) + (bucket.editFailures ?? 0) + bucket.browse }));
+  const max = niceMax(Math.max(0, ...stacks.map((stack) => stack.view + stack.edit + stack.auth + stack.failed)));
   const labelEvery = range === "24h" ? 6 : range === "1h" ? 3 : 1;
   const hoveredBucket = hovered === null ? null : buckets[hovered];
   return (
-    <figure className="m-0 grid gap-2" aria-label="Requests over time">
+    <figure className="m-0 grid gap-2" aria-label="Activity over time">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1" aria-hidden="true">
         {SERIES.map((series) => (
           <span key={series.key} className="inline-flex items-center gap-1.5 text-[11px] text-[#52514e]">
@@ -339,6 +366,10 @@ function ActivityChart({ buckets, range }: { buckets: AccessLogBucket[]; range: 
   );
 }
 
+function clientFailures(client: AccessLogClient) {
+  return client.authFailures + (client.editFailures ?? 0);
+}
+
 function ClientTable({ blocked, summary, onBlock }: { blocked: Set<string>; summary: AccessLogSummary | null; onBlock: (address: string) => Promise<boolean> }) {
   const clients = summary?.clients || [];
   const hidden = Math.max(0, (summary?.clientCount ?? clients.length) - clients.length);
@@ -350,7 +381,7 @@ function ClientTable({ blocked, summary, onBlock }: { blocked: Set<string>; summ
         <span role="columnheader">User</span>
         <span role="columnheader">Last seen</span>
         <span className="text-right" role="columnheader">Views</span>
-        <span className="text-right" role="columnheader">Requests</span>
+        <span className="text-right" role="columnheader">Edits</span>
         <span className="text-right" role="columnheader">Failed</span>
         <span role="columnheader"><span className="sr-only">Actions</span></span>
       </div>
@@ -367,8 +398,8 @@ function ClientTable({ blocked, summary, onBlock }: { blocked: Set<string>; summ
           <span className="truncate" role="cell" title={client.user ? client.user : "Not signed in"}>{client.user || "—"}</span>
           <span className="tabular-nums" role="cell">{formatRelative(client.lastSeen)}</span>
           <span className="text-right tabular-nums" role="cell">{client.views}</span>
-          <span className="text-right tabular-nums" role="cell">{client.requests}</span>
-          <span className={`text-right tabular-nums ${client.authFailures ? "font-semibold text-[#b42318]" : ""}`} role="cell">{client.authFailures}</span>
+          <span className="text-right tabular-nums" role="cell">{client.edits}</span>
+          <span className={`text-right tabular-nums ${clientFailures(client) ? "font-semibold text-[#b42318]" : ""}`} role="cell">{clientFailures(client)}</span>
           <span className="grid place-items-center" role="cell">
             {blocked.has(client.ip) ? (
               <span title="Blocked"><BanIcon className="h-3.5 w-3.5 text-[#b42318]" /><span className="sr-only">Blocked</span></span>
@@ -399,21 +430,20 @@ function EventTable({ entries, onSelectItem }: { entries: AccessLogEntry[]; onSe
         <span role="columnheader"><span className="sr-only">Actions</span></span>
       </div>
       {entries.map((entry, index) => {
-        const failed = entry.type === "auth" ? FAILED_EVENTS.has(entry.event) : (entry.status ?? 0) >= 400;
+        const failed = FAILED_EVENTS.has(entry.event) || (entry.status ?? 0) >= 400;
+        const details = [entry.ext?.toUpperCase(), formatBytes(entry.size), entry.fields?.map((field) => FIELD_LABELS[field] || field).join(", ")].filter(Boolean).join(" · ");
         return (
           <div key={`${entry.at}-${index}`} className={`${eventGridClassName} border-b border-[#f3f3f5] text-[11.5px] text-[#3a3f47] last:border-b-0`} role="row">
             <span className="whitespace-nowrap tabular-nums" role="cell" title={new Date(entry.at).toLocaleString()}>{formatTime(entry.at)}</span>
             <span className="truncate" role="cell">{entry.ip}</span>
             <span className="truncate" role="cell">{entry.user || "—"}</span>
-            <span className={`truncate ${failed ? "font-semibold text-[#b42318]" : "text-[#171717]"}`} role="cell">
+            <span className={`truncate ${failed ? "font-semibold text-[#b42318]" : "text-[#171717]"}`} role="cell" title={EVENT_LABELS[entry.event] || entry.event}>
               {EVENT_LABELS[entry.event] || entry.event}
-              {failed && entry.type !== "auth" && entry.status ? ` (${entry.status})` : ""}
+              {failed && entry.type !== "auth" && entry.type !== "system" && entry.status ? ` (${entry.status})` : ""}
             </span>
             <span className="grid min-w-0" role="cell" title={entry.path}>
               <span className="truncate font-mono text-[10.5px] text-[#6b7079]">{entry.itemId || entry.path || ""}</span>
-              {entry.ext || entry.size ? (
-                <span className="truncate text-[10px] leading-tight text-[#9a9ea6]">{[entry.ext?.toUpperCase(), formatBytes(entry.size)].filter(Boolean).join(" · ")}</span>
-              ) : null}
+              {details ? <span className="truncate text-[10px] leading-tight text-[#9a9ea6]">{details}</span> : null}
             </span>
             <span className="grid place-items-center" role="cell">
               {entry.itemId && onSelectItem ? (

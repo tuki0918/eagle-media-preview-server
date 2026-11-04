@@ -1356,7 +1356,7 @@ async function setItemTrash(item: EagleItem, isDeleted: boolean) {
   }
 }
 
-async function savePreviewMetadata(item: EagleItem, { tags, folders }: { tags: string[]; folders: string[] }) {
+async function savePreviewMetadata(item: EagleItem, { tags, folders }: { tags: string[]; folders: string[] }, field: "tags" | "folders") {
   if (!state.permissions.writeMetadata) {
     throw new Error("Metadata editing is not allowed for this viewer");
   }
@@ -1367,7 +1367,7 @@ async function savePreviewMetadata(item: EagleItem, { tags, folders }: { tags: s
     const data = await postJson<{
       tags?: unknown;
       folders?: unknown;
-    }>(`/api/items/${encodeURIComponent(String(item.id || ""))}/metadata`, { tags, folders });
+    }>(`/api/items/${encodeURIComponent(String(item.id || ""))}/metadata`, field === "tags" ? { tags } : { folders });
     const patch = {
       tags: Array.isArray(data.tags) ? data.tags : tags,
       folders: Array.isArray(data.folders) ? data.folders : folders,

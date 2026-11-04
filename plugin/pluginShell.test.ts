@@ -1617,6 +1617,7 @@ test("plugin saves shared libraries with the settings and reacts to Eagle librar
   };
   const saves: Record<string, unknown>[] = [];
   let libraryChangedCalls = 0;
+  const libraryChangedPaths: string[] = [];
   let libraryListCalls = 0;
   const libraryListInputs: unknown[] = [];
   let onLibraryChanged: ((libraryPath: string) => void) | null = null;
@@ -1643,7 +1644,7 @@ test("plugin saves shared libraries with the settings and reacts to Eagle librar
       },
       async start() { status = { ...status, state: "running" }; return status; },
       async stop() { status = { ...status, state: "stopped" }; return status; },
-      libraryChanged() { libraryChangedCalls += 1; },
+      libraryChanged(libraryPath: string) { libraryChangedCalls += 1; libraryChangedPaths.push(libraryPath); },
       async libraries(input: { current: { path: string } | null }) {
         libraryListCalls += 1;
         libraryListInputs.push(JSON.parse(JSON.stringify(input)));
@@ -1714,6 +1715,7 @@ test("plugin saves shared libraries with the settings and reacts to Eagle librar
     (onLibraryChanged as (libraryPath: string) => void)(eagleLibrary.path);
     await waitFor(() => /The library open in Eagle is not shared/.test(doc.body.textContent || ""));
     assert.equal(libraryChangedCalls, 1);
+    assert.deepEqual(libraryChangedPaths, ["/Users/me/Private.library"]);
     // The shared library is no longer the open one, so it goes offline.
     await waitFor(() => /Offline/.test(doc.body.textContent || "") && !/Online/.test(doc.body.textContent || ""));
   } finally {

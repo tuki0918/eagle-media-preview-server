@@ -27,7 +27,7 @@ export interface PreviewInfoProps {
   folders: readonly EagleFolder[];
   item: EagleItem;
   onFolderSuggestions: (query: string, selectedValues: string[]) => Promise<MetadataSuggestion[]> | MetadataSuggestion[];
-  onSaveMetadata: (item: EagleItem, patch: { tags: string[]; folders: string[] }) => Promise<{ tags: string[]; folders: string[] }>;
+  onSaveMetadata: (item: EagleItem, patch: { tags: string[]; folders: string[] }, field: "tags" | "folders") => Promise<{ tags: string[]; folders: string[] }>;
   onTagSuggestions: (query: string, selectedValues: string[]) => Promise<MetadataSuggestion[]> | MetadataSuggestion[];
   onToggleTrash?: (item: EagleItem, isDeleted: boolean) => Promise<void>;
 }
@@ -379,7 +379,7 @@ function PreviewMetadataEditor({
     setActiveInput(null);
   };
 
-  const saveMetadata = async (nextTags: string[], nextCategories: string[], successToast?: { description: string; title: string }) => {
+  const saveMetadata = async (field: "tags" | "folders", nextTags: string[], nextCategories: string[], successToast?: { description: string; title: string }) => {
     if (saving) return;
     const previousTags = tags;
     const previousCategories = categories;
@@ -387,7 +387,7 @@ function PreviewMetadataEditor({
     setCategories(nextCategories);
     setSaving(true);
     try {
-      const saved = await onSaveMetadata(item, { tags: nextTags, folders: nextCategories });
+      const saved = await onSaveMetadata(item, { tags: nextTags, folders: nextCategories }, field);
       setTags(saved.tags);
       setCategories(saved.folders);
       closeInput();
@@ -416,7 +416,7 @@ function PreviewMetadataEditor({
     const labelFor = (value: string) => kind === "tags" ? value : folderLabel(value, folders);
     const added = nextValues.filter((value) => !currentValues.includes(value));
     const removed = currentValues.filter((value) => !nextValues.includes(value));
-    await saveMetadata(kind === "tags" ? nextValues : tags, kind === "folders" ? nextValues : categories, {
+    await saveMetadata(kind, kind === "tags" ? nextValues : tags, kind === "folders" ? nextValues : categories, {
       title: kind === "tags" ? "Tags saved" : "Folders saved",
       description: metadataChangeSummary(added, removed, labelFor, kind === "tags" ? "tag" : "folder"),
     });
@@ -435,7 +435,7 @@ function PreviewMetadataEditor({
         values={tags.map((value) => ({ label: value, value }))}
         disabled={saving}
         onEdit={() => openInput("tags")}
-        onRemove={(value) => saveMetadata(tags.filter((entry) => entry !== value), categories, {
+        onRemove={(value) => saveMetadata("tags", tags.filter((entry) => entry !== value), categories, {
           title: "Tags saved",
           description: `"${value}" was removed.`,
         })}
@@ -446,7 +446,7 @@ function PreviewMetadataEditor({
         values={categories.map((value) => ({ label: folderLabel(value, folders), value }))}
         disabled={saving}
         onEdit={() => openInput("folders")}
-        onRemove={(value) => saveMetadata(tags, categories.filter((entry) => entry !== value), {
+        onRemove={(value) => saveMetadata("folders", tags, categories.filter((entry) => entry !== value), {
           title: "Folders saved",
           description: `"${folderLabel(value, folders)}" was removed.`,
         })}

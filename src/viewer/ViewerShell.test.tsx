@@ -2088,6 +2088,76 @@ describe("ViewerAppShell", () => {
     }
   });
 
+  test("saves only the field being edited, whatever the other field's display values look like", async () => {
+    const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
+    const testGlobal = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+    const previousWindow = globalThis.window;
+    const previousDocument = globalThis.document;
+    const previousNode = globalThis.Node;
+    const previousHTMLElement = globalThis.HTMLElement;
+    const previousIS_REACT_ACT_ENVIRONMENT = testGlobal.IS_REACT_ACT_ENVIRONMENT;
+    globalThis.window = dom.window as unknown as Window & typeof globalThis;
+    globalThis.document = dom.window.document;
+    globalThis.Node = dom.window.Node;
+    globalThis.HTMLElement = dom.window.HTMLElement;
+    testGlobal.IS_REACT_ACT_ENVIRONMENT = true;
+
+    const { createRoot } = await import("react-dom/client");
+    let root: import("react-dom/client").Root | null = null;
+    const savedFields: string[] = [];
+    try {
+      const container = dom.window.document.querySelector("#root");
+      if (!(container instanceof dom.window.HTMLElement)) throw new Error("Missing test root");
+      root = createRoot(container);
+      await act(async () => {
+        root?.render(
+          <PreviewDetailsPanel
+            canEditMetadata
+            // The editor shows "旅行" for this tag, which differs from what is stored.
+            item={{ id: "item-1", tags: ["旅行 "], folders: ["folder-1", "folder-2"] }}
+            folders={[{ id: "folder-1", name: "Folder 1" }, { id: "folder-2", name: "Folder 2" }]}
+            detailRows={[{ label: "Type", value: "Image" }]}
+            onTagSuggestions={() => []}
+            onFolderSuggestions={() => []}
+            onSaveMetadata={async (_item, patch, field) => {
+              savedFields.push(field);
+              return patch;
+            }}
+          />,
+        );
+      });
+      const removeButton = (value: string) => {
+        const button = Array.from(container.querySelectorAll("button")).find((candidate) => {
+          const label = candidate.getAttribute("aria-label") || "";
+          return label.startsWith("Remove") && label.includes(value);
+        });
+        if (!(button instanceof dom.window.HTMLButtonElement)) throw new Error(`Missing remove button: ${value}`);
+        return button;
+      };
+      await act(async () => {
+        removeButton("Folder 2").click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(savedFields).toEqual(["folders"]);
+      await act(async () => {
+        removeButton("旅行").click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(savedFields).toEqual(["folders", "tags"]);
+    } finally {
+      if (root) {
+        await act(async () => {
+          root?.unmount();
+        });
+      }
+      globalThis.window = previousWindow;
+      globalThis.document = previousDocument;
+      globalThis.Node = previousNode;
+      globalThis.HTMLElement = previousHTMLElement;
+      testGlobal.IS_REACT_ACT_ENVIRONMENT = previousIS_REACT_ACT_ENVIRONMENT;
+    }
+  });
+
   test("shows tag picker suggestions under their group headings", async () => {
     const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost/" });
     const testGlobal = globalThis as typeof globalThis & {

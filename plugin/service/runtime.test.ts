@@ -1145,6 +1145,138 @@ test("generated server manager still lists saved libraries without Eagle setting
   });
 });
 
+test("server manager starts and saves normally when the access log fails", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-broken-log-"));
+  const { createAccessLog } = require("../../dist/.generated/plugin-service/accessLog.cjs");
+  const accessLog = createAccessLog({ filePath: join(dir, "access-log.jsonl") });
+  accessLog.record = () => {
+    throw new Error("log is broken");
+  };
+  const manager = createServerManager({
+    accessLog,
+    settingsStore: createSettingsStore({ filePath: join(dir, "settings.json") }),
+    lanAddressProvider: () => [],
+    viewerServerFactory: (options: { host: string; port: number }) => ({
+      async start() {},
+      async stop() {},
+      status: () => ({ state: "running", host: options.host, port: options.port }),
+    }),
+  });
+  const started = await manager.start();
+  assert.equal(started.state, "running");
+  assert.equal(started.lastError, "");
+  assert.equal((await manager.saveSettings({ autoStart: true })).settings.autoStart, true);
+});
+
+test("server manager logs a library switch with the new library's id, running or not", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-switch-log-"));
+  const { createAccessLog } = require("../../dist/.generated/plugin-service/accessLog.cjs");
+  const { libraryIdFor } = require("../../dist/.generated/plugin-service/libraryAccess.cjs");
+  const { createViewerServer } = require("../../dist/.generated/plugin-service/viewerServer.cjs");
+  const store = createSettingsStore({ filePath: join(dir, "settings.json") });
+  const manager = createServerManager({
+    accessLog: createAccessLog({ filePath: join(dir, "access-log.jsonl") }),
+    settingsStore: store,
+    lanAddressProvider: () => [],
+  });
+  const switches = async () => (await manager.accessLogSummary({ range: "1h" })).recent
+    .filter((entry: { event: string }) => entry.event === "library_changed")
+    .map((entry: { libraryId?: string }) => entry.libraryId);
+  const { sessionSecret } = await store.load();
+  const idOf = (path: string) => libraryIdFor(path, sessionSecret);
+
+  await manager.libraryChanged("/Users/me/B.library");
+  assert.deepEqual(await switches(), [idOf("/Users/me/B.library")]);
+
+  // The same id the viewer gets for that library, so the log lines up with what it reports.
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    sessionSecret,
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/Users/me/B.library", name: "B" };
+      },
+    },
+  });
+  await viewer.start();
+  try {
+    const health = await (await fetch(`http://127.0.0.1:${viewer.status().port}/api/health`)).json();
+    assert.equal(health.library.id, idOf("/Users/me/B.library"));
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("server manager logs which library is open when the server starts", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-open-log-"));
+  const { createAccessLog } = require("../../dist/.generated/plugin-service/accessLog.cjs");
+  const { libraryIdFor } = require("../../dist/.generated/plugin-service/libraryAccess.cjs");
+  const { createViewerServer } = require("../../dist/.generated/plugin-service/viewerServer.cjs");
+  const store = createSettingsStore({ filePath: join(dir, "settings.json") });
+  let eagleUp = true;
+  const manager = createServerManager({
+    accessLog: createAccessLog({ filePath: join(dir, "access-log.jsonl") }),
+    settingsStore: store,
+    lanAddressProvider: () => [],
+    viewerServerFactory: (options: Record<string, unknown>) => createViewerServer({
+      ...options,
+      host: "127.0.0.1",
+      port: 0,
+      eagleClient: {
+        async appInfo() {
+          return { version: "1.0.0" };
+        },
+        async libraryInfo() {
+          if (!eagleUp) throw new Error("Eagle is not running");
+          return { path: "/Users/me/Work.library", name: "Work" };
+        },
+      },
+    }),
+  });
+  const events = async () => (await manager.accessLogSummary({ range: "1h" })).recent
+    .filter((entry: { type: string }) => entry.type === "system")
+    .reverse()
+    .map((entry: { event: string; libraryId?: string }) => [entry.event, entry.libraryId]);
+  const { sessionSecret } = await store.load();
+  try {
+    assert.equal((await manager.start()).state, "running");
+    const expected = [["server_start", undefined], ["library_open", libraryIdFor("/Users/me/Work.library", sessionSecret)]];
+    await new Promise((resolveWait) => setTimeout(resolveWait, 20));
+    assert.deepEqual(await events(), expected);
+
+    // Eagle not answering holds nothing up and logs no library.
+    await manager.stop();
+    eagleUp = false;
+    assert.equal((await manager.start()).state, "running");
+    await new Promise((resolveWait) => setTimeout(resolveWait, 20));
+    assert.deepEqual(await events(), [...expected, ["server_stop", undefined], ["server_start", undefined]]);
+  } finally {
+    await manager.stop();
+  }
+});
+
+test("server manager logs a failed start with its reason", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-start-log-"));
+  const { createAccessLog } = require("../../dist/.generated/plugin-service/accessLog.cjs");
+  const manager = createServerManager({
+    accessLog: createAccessLog({ filePath: join(dir, "access-log.jsonl") }),
+    settingsStore: createSettingsStore({ filePath: join(dir, "settings.json") }),
+    lanAddressProvider: () => [],
+    viewerServerFactory: () => ({
+      async start() { throw new Error("port in use"); },
+      async stop() {},
+      status: () => ({ state: "stopped" }),
+    }),
+  });
+  await manager.start();
+  const { recent } = await manager.accessLogSummary({ range: "1h" });
+  assert.deepEqual(recent.map((entry: { event: string; path?: string }) => [entry.event, entry.path]), [["server_start_failed", "port in use"]]);
+});
+
 test("server manager blocks addresses live without a restart and keeps the access log after stop", async () => {
   const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-block-manager-"));
   const store = createSettingsStore({ filePath: join(dir, "settings.json") });
@@ -1188,6 +1320,24 @@ test("server manager blocks addresses live without a restart and keeps the acces
   accessLog.record({ type: "view", event: "view", ip: "192.168.1.20" });
   await manager.stop();
   const summary = await manager.accessLogSummary({ range: "1h" });
-  assert.equal(summary.recent.length, 1);
+  assert.equal(summary.recent.filter((entry: { type: string }) => entry.type === "view").length, 1);
   assert.equal(manager.accessLogConnectedCount(), 1);
+  // Oldest first: what the admin did to the server, by field name and never by value.
+  const events = summary.recent.filter((entry: { type: string }) => entry.type === "system").reverse();
+  assert.deepEqual(events.map((entry: { event: string; path?: string; fields?: string[] }) => [entry.event, entry.path ?? entry.fields?.join(" ")]), [
+    ["server_start", undefined],
+    ["address_blocked", "192.168.1.50"],
+    ["address_unblocked", "192.168.1.50"],
+    ["address_blocked", "192.168.1.70"],
+    ["settings_changed", "autoStart"],
+    ["address_unblocked", "192.168.1.70"],
+    ["settings_changed", "autoStart"],
+    ["address_blocked", "192.168.1.60"],
+    ["address_blocked", "192.168.1.61"],
+    ["address_unblocked", "192.168.1.60"],
+    ["address_unblocked", "192.168.1.61"],
+    ["server_stop", undefined],
+  ]);
+  await manager.clearAccessLog();
+  assert.deepEqual((await manager.accessLogSummary({ range: "1h" })).recent.map((entry: { event: string }) => entry.event), ["log_cleared"]);
 });

@@ -49,7 +49,7 @@ test("access log summary buckets by hour and tracks connected clients", async ()
   let now = Date.UTC(2026, 10, 3, 12, 30);
   const log = createAccessLog({ filePath, now: () => now });
   log.record({ type: "view", event: "view", ip: "192.168.1.20", user: "alice", at: now - 3 * HOUR });
-  log.record({ type: "browse", event: "items", ip: "192.168.1.20", user: "alice", at: now - 3 * HOUR });
+  log.record({ type: "browse", event: "items", ip: "192.168.1.20", user: "alice", status: 502, at: now - 3 * HOUR });
   log.record({ type: "auth", event: "login_failure", ip: "192.168.1.30", at: now - 10 * 60 * 1000 });
   log.touch("192.168.1.40", "bob");
 
@@ -92,7 +92,7 @@ test("access log clear removes memory and file", async () => {
 
 test("access log CSV quotes cells that need it", () => {
   const csv = accessLogCsv([{ at: Date.UTC(2026, 0, 1), type: "browse", event: "search", ip: "10.0.0.1", path: "/api/items?q=a,\"b\"" }]);
-  assert.equal(csv, "at,type,event,ip,user,method,path,itemId,ext,size,status\n2026-01-01T00:00:00.000Z,browse,search,10.0.0.1,,,\"/api/items?q=a,\"\"b\"\"\",,,,\n");
+  assert.equal(csv, "at,type,event,ip,user,method,path,libraryId,itemId,fields,ext,size,status\n2026-01-01T00:00:00.000Z,browse,search,10.0.0.1,,,\"/api/items?q=a,\"\"b\"\"\",,,,,,\n");
 });
 
 test("access log reads recent entries from the newest end and counts active clients cheaply", async () => {
@@ -121,12 +121,12 @@ test("access log summary splits a shared address into one row per user", async (
   log.record({ type: "browse", event: "items", ip: "10.0.0.9", at: now - 90 * 1000 });
 
   const summary = log.summary();
-  const rows = summary.clients.map((client: { ip: string; user: string; requests: number; authFailures: number; views: number }) => [client.ip, client.user, client.requests, client.views, client.authFailures]);
+  const rows = summary.clients.map((client: { ip: string; user: string; edits: number; authFailures: number; views: number }) => [client.ip, client.user, client.edits, client.views, client.authFailures]);
   // The pre-sign-in poll on 10.0.0.5 adds no "no user" row; rows of one address stay together.
   assert.deepEqual(rows, [
-    ["10.0.0.5", "alice", 2, 1, 0],
-    ["10.0.0.5", "bob", 1, 0, 1],
-    ["10.0.0.9", "", 1, 0, 0],
+    ["10.0.0.5", "alice", 0, 1, 0],
+    ["10.0.0.5", "bob", 0, 0, 1],
+    ["10.0.0.9", "", 0, 0, 0],
   ]);
   assert.equal(summary.clientCount, 3);
   assert.equal(summary.activeClients, 2);
@@ -135,7 +135,7 @@ test("access log summary splits a shared address into one row per user", async (
 
 test("access log CSV keeps client-supplied cells from running as spreadsheet formulas", () => {
   const csv = accessLogCsv([{ at: Date.UTC(2026, 0, 1), type: "auth", event: "login_failure", ip: "10.0.0.1", user: "=1+1", path: "@SUM(A1)" }]);
-  assert.equal(csv.split("\n")[1], "2026-01-01T00:00:00.000Z,auth,login_failure,10.0.0.1,'=1+1,,'@SUM(A1),,,,");
+  assert.equal(csv.split("\n")[1], "2026-01-01T00:00:00.000Z,auth,login_failure,10.0.0.1,'=1+1,,'@SUM(A1),,,,,,");
 });
 
 test("access log rotation does not write a pending entry twice", async () => {
@@ -290,7 +290,6 @@ test("access log summary lists failed views without counting them as views", asy
   // The chart's buckets still add up to every request: the failure is kept in its own count.
   assert.equal(summary.buckets.reduce((sum: number, bucket: { viewFailures: number }) => sum + bucket.viewFailures, 0), 1);
   assert.equal(summary.clients[0].views, 1);
-  assert.equal(summary.clients[0].requests, 2);
   assert.equal(log.entries({ type: "view" }).length, 2);
 });
 
@@ -361,4 +360,53 @@ test("access log shows the unsigned row when only it is connected on an address"
   const summary = log.summary();
   assert.equal(summary.activeClients, 1);
   assert.deepEqual(summary.clients.map((client: { user: string; active: boolean }) => [client.user, client.active]).sort(), [["", true], ["alice", false]]);
+});
+
+test("access log keeps server events out of devices and connected counts", async () => {
+  const filePath = await tempLogPath();
+  const now = Date.UTC(2026, 10, 3, 12);
+  const log = createAccessLog({ filePath, now: () => now });
+  log.record({ type: "system", event: "server_start", ip: "this computer" });
+  log.record({ type: "system", event: "settings_changed", ip: "this computer", fields: ["port", "authUsers"] });
+  log.record({ type: "edit", event: "star", ip: "10.0.0.1", user: "alice", itemId: "I1", libraryId: "lib-a", fields: ["rating"], status: 200 });
+  const summary = log.summary();
+  assert.equal(log.activeClients(), 1);
+  assert.deepEqual(summary.clients.map((client: { ip: string; edits: number }) => [client.ip, client.edits]), [["10.0.0.1", 1]]);
+  assert.equal(summary.totals.system, 2);
+  assert.equal(summary.totals.edit, 1);
+  await log.flush();
+  const restored = createAccessLog({ filePath, now: () => now });
+  await restored.load();
+  const recent = restored.entries({ limit: 2 });
+  assert.deepEqual(recent[0].fields, ["rating"]);
+  assert.equal(recent[0].libraryId, "lib-a");
+  assert.deepEqual(restored.entries({ type: "system" })[0].fields, ["port", "authUsers"]);
+  const csv = accessLogCsv([recent[1]]);
+  assert.match(csv.split("\n")[1], /settings_changed,this computer,,,,,,port authUsers,/);
+});
+
+test("access log summary ignores successful browsing left over from older logs", async () => {
+  const filePath = await tempLogPath();
+  const now = Date.UTC(2026, 10, 3, 12);
+  const log = createAccessLog({ filePath, now: () => now });
+  log.record({ type: "browse", event: "search", ip: "10.0.0.7", status: 200, at: now - 1000 });
+  log.record({ type: "browse", event: "folders", ip: "10.0.0.8", status: 502, at: now - 1000 });
+  const summary = log.summary();
+  assert.equal(summary.totals.browse, 1);
+  assert.equal(summary.buckets.reduce((sum: number, bucket: { browse: number }) => sum + bucket.browse, 0), 1);
+});
+
+test("access log counts a refused edit as failed, not as an edit", async () => {
+  const filePath = await tempLogPath();
+  const now = Date.UTC(2026, 10, 3, 12);
+  const log = createAccessLog({ filePath, now: () => now });
+  log.record({ type: "edit", event: "star", ip: "10.0.0.1", user: "alice", status: 200, at: now - 1000 });
+  log.record({ type: "edit", event: "trash", ip: "10.0.0.1", user: "alice", status: 403, at: now - 500 });
+  const summary = log.summary();
+  assert.equal(summary.totals.edit, 1);
+  assert.equal(summary.totals.editFailures, 1);
+  assert.equal(summary.buckets.reduce((sum: number, bucket: { edit: number }) => sum + bucket.edit, 0), 1);
+  assert.equal(summary.buckets.reduce((sum: number, bucket: { editFailures: number }) => sum + bucket.editFailures, 0), 1);
+  assert.deepEqual([summary.clients[0].edits, summary.clients[0].editFailures], [1, 1]);
+  assert.equal(log.entries({ type: "edit" }).length, 2);
 });

@@ -1,3 +1,4 @@
+const { createHmac } = require("crypto");
 const { basename } = require("path");
 
 interface SharedLibrary {
@@ -29,6 +30,12 @@ function libraryPathKey(path: unknown, platform: string = process.platform) {
   if (!trimmed) return "";
   const separators = platform === "win32" ? trimmed.replace(/\//g, "\\") : trimmed;
   return platform === "darwin" || platform === "win32" ? separators.toLowerCase() : separators;
+}
+
+// An opaque, per-install id lets viewers and the access log tell libraries apart without the path.
+function libraryIdFor(libraryPath: unknown, secret: string, platform: string = process.platform) {
+  const key = libraryPathKey(libraryPath, platform);
+  return key ? createHmac("sha256", secret).update(key).digest("base64url").slice(0, 16) : "";
 }
 
 function libraryNameFromPath(path: string) {
@@ -91,4 +98,4 @@ function createLibraryAccessPolicy(sharedLibraryPaths: string[] | null = null, u
   };
 }
 
-module.exports = { createLibraryAccessPolicy, libraryNameFromPath, libraryPathKey, normalizeSharedLibraries };
+module.exports = { createLibraryAccessPolicy, libraryIdFor, libraryNameFromPath, libraryPathKey, normalizeSharedLibraries };

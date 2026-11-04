@@ -2,12 +2,12 @@ const { readFileSync } = require("fs");
 const { createServer: createHttpServer } = require("http");
 const { createServer: createHttpsServer } = require("https");
 const { isIP } = require("net");
-const { createHmac, randomBytes } = require("crypto");
+const { randomBytes } = require("crypto");
 const { createAddressBlockList, normalizeClientAddress } = require("./addressBlockList.cjs");
 const { normalizeCustomDomain } = require("./customDomain.cjs");
 const { EagleRequestError, createEagleClient, normalizeStringArray } = require("./eagleClient.cjs");
 const { createConnectionContext } = require("./connection.cjs");
-const { createLibraryAccessPolicy, libraryPathKey } = require("./libraryAccess.cjs");
+const { createLibraryAccessPolicy, libraryIdFor } = require("./libraryAccess.cjs");
 const { readInternetShortcutUrl, servedMediaInfo, streamItemMedia } = require("./media.cjs");
 const { resolveDefaultPublicDir, securityHeaders, serveStatic } = require("./static.cjs");
 const {
@@ -35,7 +35,7 @@ import type { IncomingMessage, RequestListener, ServerResponse } from "http";
 import type { Server as NetServer, Socket } from "net";
 
 interface AccessLogRecorder {
-  record(entry: { event: string; ext?: string; ip: string; itemId?: string; method?: string; path?: string; size?: number; status?: number; type: "auth" | "browse" | "edit" | "view"; user?: string }): unknown;
+  record(entry: { event: string; ext?: string; fields?: string[]; ip: string; itemId?: string; libraryId?: string; method?: string; path?: string; size?: number; status?: number; type: "auth" | "browse" | "edit" | "view"; user?: string }): unknown;
   touch(ip: string, user?: string): void;
 }
 
@@ -203,6 +203,9 @@ const LOGIN_FAILURE_MAX_ENTRIES = 500;
 const LOGIN_FAILURE_WINDOW_MS = 10 * 60 * 1000;
 const LOGIN_LOCK_MS = 5 * 60 * 1000;
 const BLOCKED_LOG_INTERVAL_MS = 60 * 1000;
+// Refused or failing requests tend to repeat, so the same one is logged at most this often.
+const REPEATED_FAILURE_LOG_INTERVAL_MS = 60 * 1000;
+const MAX_RECENT_FAILURES = 1000;
 
 class HttpError extends Error {
   code: string;
@@ -225,7 +228,7 @@ interface LibraryGuard {
 const libraryGuards = new WeakMap<ServerResponse, LibraryGuard>();
 
 function createViewerServer({
-  accessLog = null,
+  accessLog: requestedAccessLog = null,
   blockedAddresses = [],
   customDomain = "",
   host = "0.0.0.0",
@@ -258,6 +261,23 @@ function createViewerServer({
   const authSessions = new Map<string, AuthSession>();
   const revokedAuthSessions = new Set<string>();
   const loginFailures = new Map<string, LoginFailure>();
+  // Logging is never allowed to affect a request: a failure here only loses the log entry.
+  const accessLog: AccessLogRecorder | null = requestedAccessLog && {
+    record(entry) {
+      try {
+        return requestedAccessLog.record(entry);
+      } catch {
+        return undefined;
+      }
+    },
+    touch(ip, user) {
+      try {
+        requestedAccessLog.touch(ip, user);
+      } catch {
+        // Only the connected count misses it.
+      }
+    },
+  };
   const blockList = createAddressBlockList(blockedAddresses);
   // A blocked client usually retries in a loop, so each address is logged at most once a minute.
   const blockedLoggedAt = new Map<string, number>();
@@ -271,14 +291,12 @@ function createViewerServer({
   };
   // Per-library users need a signed-in user to check; without password protection they are not applied.
   const libraryAccess: LibraryAccessPolicy = createLibraryAccessPolicy(sharedLibraries, resolvedAuthUsers.length ? libraryUserRules : []);
-  // An opaque, per-install id lets viewers notice a library switch without learning the path.
-  const libraryId = (libraryPath: unknown) => {
-    const key = libraryPathKey(libraryPath);
-    return key ? createHmac("sha256", resolvedSessionSecret).update(key).digest("base64url").slice(0, 16) : "";
-  };
+  const libraryId = (libraryPath: unknown) => libraryIdFor(libraryPath, resolvedSessionSecret);
   const currentSession: EagleSession = createConnectionContext({ client: eagleClient });
   // Bumped whenever the plugin reports a library switch.
   let libraryGeneration = 0;
+  // What was known when Eagle reported a switch; it stays readable until Eagle is asked again.
+  let libraryInfoBeforeSwitch: unknown = null;
   const trackLibrary = (res: ServerResponse, admittedLibraryId: string, admittedGeneration: number, user: LibraryUser | null) => {
     // Only the id of a library this user may open is ever reported, even when a request is refused mid-way.
     const currentLibraryId = () => {
@@ -371,8 +389,18 @@ function createViewerServer({
         res.end(JSON.stringify({ error: "Access from this address is blocked" }));
         return;
       }
+      // Stays on this computer, so it names the open library even when it isn't shared with this visitor.
+      // No extra Eagle lookup for this: left empty when the last known library may no longer be open.
+      const logLibraryId = () => {
+        const library = currentSession.lastLibraryInfo?.() as EagleLibraryInfo | null | undefined;
+        return library && library !== libraryInfoBeforeSwitch ? libraryId(library.path) : "";
+      };
       const recordAuth: AuthContext["recordAuth"] = (event, username, status) => {
-        accessLog?.record({ type: "auth", event, ip: requestAddress, method: req.method, path: url.pathname, status, user: username });
+        try {
+          accessLog?.record({ type: "auth", event, ip: requestAddress, libraryId: logLibraryId(), method: req.method, path: url.pathname, status, user: username });
+        } catch {
+          // A sign-in never depends on its log entry.
+        }
       };
       const auth = { authSessions, clientAddress: requestAddress, loginFailures, recordAuth, revokedAuthSessions, secureCookies: httpsEnabled, sessionMaxAgeSeconds, sessionSecret: resolvedSessionSecret, users: resolvedAuthUsers };
       if (!isTrustedUnsafeRequest(req, url, trustedCustomDomain)) {
@@ -381,7 +409,7 @@ function createViewerServer({
       }
       const countRequest = () => attachRequestCounter(res, ({ status }) => {
         requestCount += 1;
-        if (accessLog) logAccess(accessLog, req, res, url, status, authenticatedUser(req, auth)?.username || "", requestAddress);
+        if (accessLog) logAccess(accessLog, req, res, url, status, authenticatedUser(req, auth)?.username || "", requestAddress, logLibraryId());
       });
       if (url.pathname.startsWith("/api/")) {
         countRequest();
@@ -516,10 +544,17 @@ function createViewerServer({
       }
     },
 
+    // Asks Eagle which library is open, for the access log when the server starts.
+    async openLibraryId() {
+      const library = await currentSession.libraryInfo();
+      return libraryId(library?.path);
+    },
+
     // Called when Eagle reports a library switch so no request is answered from stale library info,
     // including requests that are already in progress.
     notifyLibraryChanged() {
       libraryGeneration += 1;
+      libraryInfoBeforeSwitch = currentSession.lastLibraryInfo?.();
       currentSession.clearLibraryInfo?.();
     },
 
@@ -759,6 +794,7 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
     const itemId = decodeURIComponent(starMatch[1]);
     const body = await readJson(req);
     const star = normalizeStar(body.star);
+    editedItems.set(res, { fields: ["rating"] });
     await confirmLibraryBeforeWrite(res);
     const item = await session.client.updateItemStar(itemId, star);
     sendJson(res, 200, { id: item.id || itemId, star: item.star ?? star });
@@ -778,6 +814,8 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
     const itemId = decodeURIComponent(metadataMatch[1]);
     const body = await readJson(req);
     const metadataPatch = normalizeMetadataPatch(body);
+    // Named from the request: no await may separate the library check below from the write.
+    editedItems.set(res, { fields: (["tags", "folders"] as const).filter((field) => metadataPatch[field] !== undefined) });
     await confirmLibraryBeforeWrite(res);
     const item = await session.client.updateItemMetadata(itemId, metadataPatch);
     sendJson(res, 200, {
@@ -803,6 +841,7 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
     if (typeof body.isDeleted !== "boolean") {
       throw new HttpError(400, "isDeleted must be a boolean");
     }
+    editedItems.set(res, { event: body.isDeleted ? "trash" : "restore" });
     await confirmLibraryBeforeWrite(res);
     const item = await session.client.updateItemTrash(itemId, body.isDeleted);
     sendJson(res, 200, {
@@ -955,25 +994,57 @@ function clientAddress(req: IncomingMessage) {
 // Status polls and thumbnails only mark the client as connected; everything else becomes an entry.
 const PRESENCE_ONLY_PATHS = new Set(["/api/auth/status", "/api/connect", "/api/health", "/api/library-status"]);
 
-function logAccess(accessLog: AccessLogRecorder, req: IncomingMessage, res: ServerResponse, url: URL, status: number, user: string, ip: string) {
+const recentFailures = new WeakMap<AccessLogRecorder, Map<string, number>>();
+
+function isRepeatedFailure(accessLog: AccessLogRecorder, key: string) {
+  let failures = recentFailures.get(accessLog);
+  if (!failures) {
+    failures = new Map();
+    recentFailures.set(accessLog, failures);
+  }
+  const now = Date.now();
+  const last = failures.get(key);
+  if (last !== undefined && now - last < REPEATED_FAILURE_LOG_INTERVAL_MS) return true;
+  // Re-inserted so the Map stays oldest first; past the cap, the oldest failure is forgotten.
+  failures.delete(key);
+  failures.set(key, now);
+  if (failures.size > MAX_RECENT_FAILURES) {
+    const oldest = failures.keys().next().value;
+    if (oldest !== undefined) failures.delete(oldest);
+  }
+  return false;
+}
+
+function logAccess(accessLog: AccessLogRecorder, req: IncomingMessage, res: ServerResponse, url: URL, status: number, user: string, ip: string, libraryId: string) {
   const pathname = url.pathname;
   // Login and logout write their own entries with the outcome.
   if (pathname.startsWith("/api/auth/") && pathname !== "/api/auth/status") return;
   if (libraryForbiddenResponses.has(res)) {
     // Signed in, but not one of the users the open library is limited to (Connect included).
-    accessLog.record({ type: "auth", event: "library_denied", ip, method: req.method, path: pathname, status: 403, user });
+    if (!isRepeatedFailure(accessLog, `library_denied\u0000${ip}\u0000${user}\u0000${libraryId}`)) {
+      accessLog.record({ type: "auth", event: "library_denied", ip, libraryId, method: req.method, path: pathname, status: 403, user });
+    }
     return;
   }
   if (PRESENCE_ONLY_PATHS.has(pathname) || /^\/api\/items\/[^/]+\/thumb$/.test(pathname)) {
-    if (status < 400) accessLog.touch(ip, user);
+    if (status < 400) {
+      accessLog.touch(ip, user);
+      return;
+    }
+    // Only a failed Connect is worth keeping: it is why someone can't get into the viewer.
+    if (pathname !== "/api/connect" || isRepeatedFailure(accessLog, `${ip}\u0000${pathname}\u0000${status}`)) return;
+    accessLog.record({ ip, libraryId, method: req.method, status, user, type: "browse", event: "connect", path: pathname });
     return;
   }
-  const base = { ip, method: req.method, status, user };
+  const base = { ip, libraryId, method: req.method, status, user };
   const media = pathname.match(/^\/file\/([^/]+)/) || pathname.match(/^\/api\/items\/([^/]+)\/file$/);
   if (media) {
     // A failed fetch stays in the history (under Views); the summary leaves it out of the view counts.
     if (status >= 400) {
-      accessLog.record({ ...base, type: "view", event: "view_failed", itemId: safeDecode(media[1]), path: pathname });
+      // A player may keep retrying a file it can't get.
+      if (!isRepeatedFailure(accessLog, `${ip}\u0000${pathname}\u0000${status}`)) {
+        accessLog.record({ ...base, type: "view", event: "view_failed", itemId: safeDecode(media[1]), path: pathname });
+      }
       return;
     }
     // A video plays as many range requests, and players probe first: HEAD, or Safari's
@@ -989,16 +1060,25 @@ function logAccess(accessLog: AccessLogRecorder, req: IncomingMessage, res: Serv
   }
   const urlPreview = pathname.match(/^\/api\/items\/([^/]+)\/url-preview$/);
   if (urlPreview) {
-    accessLog.record({ ...base, type: "view", event: status >= 400 ? "view_failed" : "url_preview", itemId: safeDecode(urlPreview[1]), path: pathname });
+    if (status < 400 || !isRepeatedFailure(accessLog, `${ip}\u0000${pathname}\u0000${status}`)) {
+      accessLog.record({ ...base, type: "view", event: status >= 400 ? "view_failed" : "url_preview", itemId: safeDecode(urlPreview[1]), path: pathname });
+    }
     return;
   }
   const edit = pathname.match(/^\/api\/items\/([^/]+)\/(star|metadata|trash)$/);
   if (edit) {
-    accessLog.record({ ...base, type: "edit", event: edit[2], itemId: safeDecode(edit[1]), path: pathname });
+    const noted = editedItems.get(res);
+    accessLog.record({ ...base, type: "edit", event: noted?.event || edit[2], fields: noted?.fields, itemId: safeDecode(edit[1]), path: pathname });
     return;
   }
-  const event = pathname === "/api/items" && url.searchParams.get("q") ? "search" : pathname.replace(/^\/api\//, "") || "api";
-  accessLog.record({ ...base, type: "browse", event, path: `${pathname}${url.search}` });
+  // Browsing itself isn't kept, only that this device is connected. A failure is kept for working
+  // out why something didn't load, such as Eagle not answering.
+  if (status < 400) {
+    accessLog.touch(ip, user);
+    return;
+  }
+  if (isRepeatedFailure(accessLog, `${ip}\u0000${pathname}\u0000${status}`)) return;
+  accessLog.record({ ...base, type: "browse", event: pathname.replace(/^\/api\//, "") || "api", path: pathname });
 }
 
 // Requests relayed by a proxy on this machine (a tunnel for the custom domain) carry the real
@@ -1167,6 +1247,9 @@ function normalizeStar(value: unknown) {
   return star;
 }
 
+// What an edit request changed, for the access log: the field names, never their values.
+const editedItems = new WeakMap<ServerResponse, { event?: string; fields?: string[] }>();
+
 function sendLibraryNotShared(res: ServerResponse) {
   sendJson(res, 503, { error: LIBRARY_NOT_SHARED_MESSAGE, code: "LIBRARY_NOT_SHARED" });
 }
@@ -1195,7 +1278,11 @@ function attachRequestCounter(res: ServerResponse, onStart: (stats: { status: nu
   res.writeHead = function reportingWriteHead(this: ServerResponse, ...args: Parameters<ServerResponse["writeHead"]>) {
     const result = writeHead.apply(this, args);
     res.writeHead = writeHead;
-    onStart({ status: res.statusCode });
+    try {
+      onStart({ status: res.statusCode });
+    } catch {
+      // The response is already on its way; a counting or logging failure stays out of it.
+    }
     return result;
   } as ServerResponse["writeHead"];
 }

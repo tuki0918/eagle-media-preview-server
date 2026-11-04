@@ -17,7 +17,7 @@ interface ServerManager {
   exportAccessLog?(filePath: string, format: "csv" | "jsonl"): Promise<{ count: number; filePath: string }>;
   init(): Promise<PluginStatus>;
   libraries?(input: { current: SharedLibrary | null; userDataPath: string }): Promise<LibraryList>;
-  libraryChanged?(): void;
+  libraryChanged?(libraryPath?: string): unknown;
   saveSettings(payload: Record<string, unknown>): Promise<PluginStatus>;
   start(): Promise<PluginStatus>;
   status(): Promise<PluginStatus>;
@@ -149,8 +149,8 @@ function App() {
         void runCommand(() => managerRef.current?.init(), { quiet: true }).then(() => refreshLibraries());
       };
       // The viewer server must stop answering from the previous library the moment Eagle switches.
-      globalThis.eagle?.onLibraryChanged?.(() => {
-        managerRef.current?.libraryChanged?.();
+      globalThis.eagle?.onLibraryChanged?.((libraryPath) => {
+        void managerRef.current?.libraryChanged?.(libraryPath || globalThis.eagle?.library?.path);
         void refreshLibraries();
       });
       if (globalThis.eagle?.onPluginCreate) {

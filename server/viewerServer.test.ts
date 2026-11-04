@@ -2161,7 +2161,8 @@ test("createViewerServer limits a shared library to its users on every request",
     assert.equal((await (await fetch(`${origin}/api/library-status`, { headers: { Cookie: bob } })).json()).libraryStatus, "forbidden");
 
     await new Promise((resolveWait) => setTimeout(resolveWait, 20));
-    assert.ok(entries.some((entry) => entry.event === "library_denied" && entry.user === "bob" && entry.status === 403));
+    // bob was refused several times above; the same refusal is logged once per interval.
+    assert.deepEqual(entries.filter((entry) => entry.event === "library_denied").map((entry) => [entry.user, entry.status]), [["bob", 403]]);
 
     // A session outlives a library switch, so the check follows the library open now.
     openLibrary = "/Users/me/Work.library";
@@ -3481,7 +3482,7 @@ test("createViewerServer serves tag autocomplete suggestions", async () => {
   }
 });
 
-test("createViewerServer writes auth, browse, and view events to the access log", async () => {
+test("createViewerServer writes auth and view events to the access log, and only failures of other requests", async () => {
   const entries: Array<Record<string, unknown>> = [];
   const touched: string[] = [];
   const viewer = createViewerServer({
@@ -3523,7 +3524,7 @@ test("createViewerServer writes auth, browse, and view events to the access log"
     const sessionCookie = cookie.split(/,\s*/).map((part) => part.split(";")[0]).join("; ");
     assert.equal((await fetch(`${origin}/api/folders`, { headers: { Cookie: sessionCookie } })).status, 200);
     assert.equal((await fetch(`${origin}/api/health`, { headers: { Cookie: sessionCookie } })).status, 200);
-    // ITEM 1 has no file behind it, so both fetches fail; the later part is recorded as well.
+    // ITEM 1 has no file behind it, so both fetches fail; the same failure is logged once.
     await fetch(`${origin}/file/ITEM%201`, { headers: { Cookie: sessionCookie } });
     await fetch(`${origin}/file/ITEM%201`, { headers: { Cookie: sessionCookie, Range: "bytes=100-" } });
     await new Promise((resolveWait) => setTimeout(resolveWait, 20));
@@ -3533,9 +3534,8 @@ test("createViewerServer writes auth, browse, and view events to the access log"
     // A later part of a video that fails is recorded too.
     assert.equal((await fetch(`${origin}/file/ITEM%204`, { headers: { Range: "bytes=100-" } })).status, 401);
     await new Promise((resolveWait) => setTimeout(resolveWait, 20));
-    const failedViews = entries.splice(4);
+    const failedViews = entries.splice(3);
     assert.deepEqual(failedViews.map((entry) => [entry.type, entry.event, entry.status, entry.itemId]), [
-      ["view", "view_failed", 404, "ITEM 1"],
       ["view", "view_failed", 401, "ITEM 2"],
       ["view", "view_failed", 401, "ITEM 3"],
       ["view", "view_failed", 401, "ITEM 4"],
@@ -3544,13 +3544,244 @@ test("createViewerServer writes auth, browse, and view events to the access log"
     assert.deepEqual(entries.map((entry) => [entry.type, entry.event, entry.user || "", entry.ip]), [
       ["auth", "login_failure", "eagle", "127.0.0.1"],
       ["auth", "login_success", "eagle", "127.0.0.1"],
-      ["browse", "folders", "eagle", "127.0.0.1"],
       // ITEM 1 has no file behind it, so the fetch fails and is not a view.
       ["view", "view_failed", "eagle", "127.0.0.1"],
     ]);
-    assert.equal(entries[3].itemId, "ITEM 1");
+    assert.equal(entries[2].itemId, "ITEM 1");
     assert.ok(touched.includes("127.0.0.1:eagle"));
     assert.ok(entries.every((entry) => !JSON.stringify(entry).includes("wrong")));
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer logs which fields an edit touched and the library, without their values", async () => {
+  const entries: Array<Record<string, unknown>> = [];
+  let tags = ["a"];
+  let folderFailure = false;
+  let itemLookups = 0;
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    allowMetadataEditing: true,
+    authUsers: [{ username: "owner", passwordHash: sha256("own"), role: "admin" }],
+    accessLog: { record: (entry: Record<string, unknown>) => entries.push(entry), touch() {} },
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/Users/me/Work.library", name: "Work" };
+      },
+      async itemById() {
+        itemLookups += 1;
+        return { data: [{ id: "ITEM1", tags, folders: ["F1"] }] };
+      },
+      async updateItemStar() {
+        return { id: "ITEM1", star: 3 };
+      },
+      async updateItemMetadata(_id: string, patch: { tags: string[] }) {
+        tags = patch.tags;
+        return { id: "ITEM1", ...patch };
+      },
+      async updateItemTrash(_id: string, isDeleted: boolean) {
+        return { id: "ITEM1", isDeleted };
+      },
+      async folders() {
+        if (folderFailure) throw new Error("Eagle is not answering");
+        return [];
+      },
+    },
+  });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const cookie = (await loginCookie(origin, "owner", "own")).split(";")[0];
+    const health = await (await fetch(`${origin}/api/health`, { headers: { Cookie: cookie } })).json();
+    const headers = { "Content-Type": "application/json", Cookie: cookie, Origin: origin, "X-Library-Id": health.library.id };
+    const post = (path: string, body: unknown) => fetch(`${origin}/api/items/ITEM1/${path}`, { method: "POST", headers, body: JSON.stringify(body) });
+    assert.equal((await post("star", { star: 3 })).status, 200);
+    // The fields named by the request, with no extra Eagle lookup between the library check and the write.
+    assert.equal((await post("metadata", { tags: ["a", "secret-tag"] })).status, 200);
+    assert.equal((await post("metadata", { tags: ["b"], folders: ["F2"] })).status, 200);
+    assert.equal(itemLookups, 0);
+    assert.equal((await post("trash", { isDeleted: true })).status, 200);
+    assert.equal((await post("trash", { isDeleted: false })).status, 200);
+    await new Promise((resolveWait) => setTimeout(resolveWait, 20));
+    const edits = entries.filter((entry) => entry.type === "edit");
+    assert.deepEqual(edits.map((entry) => [entry.event, entry.fields]), [
+      ["star", ["rating"]],
+      ["metadata", ["tags"]],
+      ["metadata", ["tags", "folders"]],
+      ["trash", undefined],
+      ["restore", undefined],
+    ]);
+    assert.ok(edits.every((entry) => entry.libraryId === health.library.id && entry.itemId === "ITEM1"));
+    assert.equal(JSON.stringify(edits).includes("secret-tag"), false);
+
+    // Successful browsing isn't kept; a failure is, once per interval.
+    entries.length = 0;
+    assert.equal((await fetch(`${origin}/api/folders`, { headers })).status, 200);
+    folderFailure = true;
+    for (let attempt = 0; attempt < 3; attempt += 1) await (await fetch(`${origin}/api/folders`, { headers })).text();
+    await new Promise((resolveWait) => setTimeout(resolveWait, 20));
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0].type, "browse");
+    assert.equal(entries[0].libraryId, health.library.id);
+    assert.ok(Number(entries[0].status) >= 500);
+
+    // Tracking stays bounded: past the cap the oldest failure is forgotten, so it can be logged again.
+    entries.length = 0;
+    const failingPath = (index: number) => `${origin}/api/missing-${index}`;
+    for (let index = 0; index < 1001; index += 1) await (await fetch(failingPath(index), { headers })).text();
+    assert.equal(entries.length, 1001);
+    await (await fetch(failingPath(1000), { headers })).text();
+    assert.equal(entries.length, 1001, "a recent failure is still grouped");
+    await (await fetch(failingPath(0), { headers })).text();
+    assert.equal(entries.length, 1002, "the oldest failure was forgotten");
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer answers normally when the access log fails", async () => {
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    authUsers: [{ username: "owner", passwordHash: sha256("own"), role: "admin" }],
+    accessLog: {
+      record() {
+        throw new Error("log is broken");
+      },
+      touch() {
+        throw new Error("log is broken");
+      },
+    },
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/Users/me/Work.library", name: "Work" };
+      },
+      async folders() {
+        return [];
+      },
+    },
+  });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const failed = await fetch(`${origin}/api/auth/login`, { method: "POST", headers: { "Content-Type": "application/json", Origin: origin }, body: JSON.stringify({ username: "owner", password: "wrong" }) });
+    assert.equal(failed.status, 401);
+    const cookie = (await loginCookie(origin, "owner", "own")).split(";")[0];
+    const folders = await fetch(`${origin}/api/folders`, { headers: { Cookie: cookie } });
+    assert.equal(folders.status, 200);
+    assert.deepEqual(await folders.json(), []);
+    assert.equal((await fetch(`${origin}/api/health`, { headers: { Cookie: cookie } })).status, 200);
+    assert.equal((await fetch(`${origin}/api/missing`, { headers: { Cookie: cookie } })).status, 404);
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer logs a file that keeps failing once per interval", async () => {
+  const entries: Array<Record<string, unknown>> = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    accessLog: { record: (entry: Record<string, unknown>) => entries.push(entry), touch() {} },
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/Users/me/Work.library", name: "Work" };
+      },
+    },
+  });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const query = await libraryQuery(origin);
+    for (let attempt = 0; attempt < 3; attempt += 1) await (await fetch(`${origin}/file/ITEM1${query}`)).text();
+    await (await fetch(`${origin}/file/ITEM2${query}`)).text();
+    await new Promise((resolveWait) => setTimeout(resolveWait, 20));
+    assert.deepEqual(entries.filter((entry) => entry.event === "view_failed").map((entry) => entry.itemId), ["ITEM1", "ITEM2"]);
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer leaves the library id empty until a switched library is confirmed", async () => {
+  const entries: Array<Record<string, unknown>> = [];
+  let openLibrary = "/Users/me/A.library";
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    authUsers: [{ username: "owner", passwordHash: sha256("own"), role: "admin" }],
+    accessLog: { record: (entry: Record<string, unknown>) => entries.push(entry), touch() {} },
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: openLibrary, name: "Library" };
+      },
+    },
+  });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const cookie = (await loginCookie(origin, "owner", "own")).split(";")[0];
+    const health = (path: string) => fetch(`${origin}${path}`, { headers: { Cookie: cookie } }).then((response) => response.json());
+    const libraryA = (await health("/api/health")).library.id;
+    const logInAgain = async () => {
+      entries.length = 0;
+      await loginCookie(origin, "owner", "own");
+      return entries.find((entry) => entry.event === "login_success")?.libraryId;
+    };
+    assert.equal(await logInAgain(), libraryA);
+
+    openLibrary = "/Users/me/B.library";
+    viewer.notifyLibraryChanged();
+    assert.equal(await logInAgain(), "");
+
+    const libraryB = (await health("/api/health")).library.id;
+    assert.notEqual(libraryB, libraryA);
+    assert.equal(await logInAgain(), libraryB);
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer logs a failed Connect once per interval, and not a successful one", async () => {
+  const entries: Array<Record<string, unknown>> = [];
+  let eagleUp = true;
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    accessLog: { record: (entry: Record<string, unknown>) => entries.push(entry), touch() {} },
+    eagleClient: {
+      async appInfo() {
+        if (!eagleUp) throw new Error("Eagle is not answering");
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/Users/me/Work.library", name: "Work" };
+      },
+    },
+  });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const connect = () => fetch(`${origin}/api/connect`, { method: "POST", headers: { "Content-Type": "application/json", Origin: origin }, body: "{}" });
+    assert.equal((await connect()).status, 200);
+    assert.equal(entries.length, 0);
+    eagleUp = false;
+    assert.equal((await connect()).status, 502);
+    assert.equal((await connect()).status, 502);
+    assert.deepEqual(entries.map((entry) => [entry.type, entry.event, entry.status]), [["browse", "connect", 502]]);
   } finally {
     await viewer.stop();
   }

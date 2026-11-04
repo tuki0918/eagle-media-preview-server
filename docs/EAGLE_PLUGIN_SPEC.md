@@ -88,6 +88,19 @@ To check your tunnel after turning it on:
 
    Make sure it prints `200`. With any other code, such as `403` when the address is blocked, this check cannot tell you anything. Then press **Refresh** in **Activity**. **Devices** should show your real public address, not `203.0.113.99`. If `203.0.113.99` appears, the tunnel passes the header through unchanged: set the value back to `false`.
 
+### Access log
+
+The log answers where access came from, who signed in, and what was changed; view counts are only a rough guide. Each entry notes the client address and user where there is one, and, for requests, the id of the library last confirmed open in Eagle (the same opaque id the viewer uses). The id is left empty after a library switch until Eagle has been asked again; logging never asks Eagle itself. It is kept in the log file and exports, and isn't shown in the Activity panel.
+
+- Sign-ins: success, failure, lock, and sign-out. Requests refused by the block list or by a library's user limit are kept once a minute per client
+- Item edits: the action and which fields changed (`rating`, `tags`, `folders`), never their values
+- Server and settings, as "this computer": server start, stop, and failed start with the reason; the id of the library open when the server starts, as its own entry, and of the new library on a switch in Eagle (a switch while the plugin is closed sends no event); which settings changed, by name only; blocked and unblocked addresses; clearing the log
+- Views: requests for original files. Media the browser shows from its own cache sends no request, so it isn't logged
+- Failed requests, such as Eagle not answering, a Connect that fails, or a file that can't be read: kept once a minute per client, path, and status. A refused or failed edit is always kept and counts as failed, not as an edit
+
+A failure while logging only loses that entry; it never affects the request.
+- Not kept: successful browsing and searching, status polls, thumbnails, and later parts of a file. These only mark the device as connected
+
 ## Codebase Model
 
 The source is managed as a TypeScript / React / Vite / Tailwind CSS / Vitest project.

@@ -2,7 +2,8 @@ const { appendFile, mkdir, readFile, rm, writeFile } = require("fs/promises");
 const { tmpdir } = require("os");
 const { join } = require("path");
 
-type AccessLogType = "auth" | "browse" | "edit" | "view";
+// "browse" holds only failed requests; "system" is what the admin or the server itself did.
+type AccessLogType = "auth" | "browse" | "edit" | "system" | "view";
 type AccessLogRange = "1h" | "24h" | "7d";
 
 interface AccessLogEntry {
@@ -10,8 +11,12 @@ interface AccessLogEntry {
   event: string;
   /** File type and size of the original a view served. */
   ext?: string;
+  /** Which fields an edit or settings change touched; never their values. */
+  fields?: string[];
   ip: string;
   itemId?: string;
+  /** The library open in Eagle at the time, as the opaque id the viewer also uses. */
+  libraryId?: string;
   method?: string;
   path?: string;
   size?: number;
@@ -25,8 +30,10 @@ interface AccessLogBucket {
   authFailures: number;
   browse: number;
   edit: number;
+  editFailures: number;
   end: number;
   start: number;
+  system: number;
   view: number;
   viewFailures: number;
 }
@@ -34,9 +41,10 @@ interface AccessLogBucket {
 // One row per address and signed-in user, so a shared address still shows who did what.
 interface AccessLogClient {
   authFailures: number;
+  editFailures: number;
+  edits: number;
   ip: string;
   lastSeen: number;
-  requests: number;
   user: string;
   views: number;
 }
@@ -50,7 +58,7 @@ interface AccessLogOptions {
   now?: () => number;
 }
 
-const ACCESS_LOG_TYPES: AccessLogType[] = ["auth", "browse", "edit", "view"];
+const ACCESS_LOG_TYPES: AccessLogType[] = ["auth", "browse", "edit", "system", "view"];
 // Viewers poll /api/health every few seconds, so anyone seen this recently is still connected.
 const ACTIVE_CLIENT_WINDOW_MS = 2 * 60 * 1000;
 const DEFAULT_MAX_ENTRIES = 20000;
@@ -199,7 +207,7 @@ function createAccessLog({
       entries.push(entry);
       if (entries.length > maxEntries + 1000) prune();
       // A refused request (blocked, failed sign-in, 4xx) is history, not proof the device is connected.
-      if ((entry.status ?? 0) < 400) touch(entry.ip, entry.user || "", entry.at);
+      if (entry.type !== "system" && (entry.status ?? 0) < 400) touch(entry.ip, entry.user || "", entry.at);
       pendingLines.push(`${JSON.stringify(entry)}\n`);
       scheduleFlush();
       return entry;
@@ -247,6 +255,8 @@ function createAccessLog({
         authFailures: 0,
         browse: 0,
         edit: 0,
+        editFailures: 0,
+        system: 0,
         view: 0,
         viewFailures: 0,
       }));
@@ -255,27 +265,43 @@ function createAccessLog({
         const key = clientKey(ip, user);
         let client = clients.get(key);
         if (!client) {
-          client = { authFailures: 0, ip, lastSeen: 0, requests: 0, user, views: 0 };
+          client = { authFailures: 0, editFailures: 0, edits: 0, ip, lastSeen: 0, user, views: 0 };
           clients.set(key, client);
         }
         return client;
       };
-      const totals = { auth: 0, authFailures: 0, browse: 0, edit: 0, view: 0, viewFailures: 0 };
+      const totals = { auth: 0, authFailures: 0, browse: 0, edit: 0, editFailures: 0, system: 0, view: 0, viewFailures: 0 };
       for (const entry of entries) {
         // Devices, tiles and chart all count the selected range only.
         if (entry.at < firstStart) continue;
         const bucket = buckets[Math.floor((entry.at - firstStart) / bucketMs)];
         if (!bucket) continue;
+        // Logs from before browsing stopped being kept also hold successful requests.
+        if (entry.type === "browse" && (entry.status ?? 0) < 400) continue;
+        // Server and settings events come from this computer's panel, not from a device.
+        if (entry.type === "system") {
+          bucket.system += 1;
+          totals.system += 1;
+          continue;
+        }
         const client = clientFor(entry.ip, entry.user || "");
-        // A failed fetch is listed under Views but is not a view; it still counts as a request.
-        const failedView = entry.type === "view" && (entry.status ?? 0) >= 400;
-        client.requests += 1;
+        // A failed fetch is listed under Views but is not a view; a refused edit changed nothing.
+        const failed = (entry.status ?? 0) >= 400;
+        const failedView = entry.type === "view" && failed;
+        const failedEdit = entry.type === "edit" && failed;
         client.lastSeen = Math.max(client.lastSeen, entry.at);
         if (entry.type === "view" && !failedView) client.views += 1;
+        if (entry.type === "edit" && !failedEdit) client.edits += 1;
+        if (failedEdit) client.editFailures += 1;
         if (isAuthFailure(entry)) client.authFailures += 1;
         if (failedView) {
           bucket.viewFailures += 1;
           totals.viewFailures += 1;
+          continue;
+        }
+        if (failedEdit) {
+          bucket.editFailures += 1;
+          totals.editFailures += 1;
           continue;
         }
         bucket[entry.type] += 1;
@@ -360,6 +386,8 @@ function compactEntry(entry: AccessLogEntry): AccessLogEntry {
   if (entry.method) output.method = String(entry.method);
   if (entry.path) output.path = String(entry.path).slice(0, 512);
   if (entry.itemId) output.itemId = String(entry.itemId);
+  if (entry.libraryId) output.libraryId = String(entry.libraryId).slice(0, 64);
+  if (Array.isArray(entry.fields) && entry.fields.length) output.fields = entry.fields.map((field) => String(field).slice(0, 64)).slice(0, 32);
   if (entry.ext) output.ext = String(entry.ext).slice(0, 16);
   if (typeof entry.size === "number" && Number.isFinite(entry.size) && entry.size >= 0) output.size = entry.size;
   if (typeof entry.status === "number") output.status = entry.status;
@@ -378,14 +406,18 @@ function parseEntry(line: string): AccessLogEntry | null {
 }
 
 function accessLogCsv(entries: AccessLogEntry[]) {
-  const columns: Array<keyof AccessLogEntry> = ["at", "type", "event", "ip", "user", "method", "path", "itemId", "ext", "size", "status"];
+  const columns: Array<keyof AccessLogEntry> = ["at", "type", "event", "ip", "user", "method", "path", "libraryId", "itemId", "fields", "ext", "size", "status"];
   const cell = (value: unknown) => {
     let text = String(value ?? "");
     // User names and paths come from clients; a leading quote keeps a spreadsheet from running them as formulas.
     if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
     return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, "\"\"")}"` : text;
   };
-  const rows = entries.map((entry) => columns.map((column) => cell(column === "at" ? new Date(entry.at).toISOString() : entry[column])).join(","));
+  const value = (entry: AccessLogEntry, column: keyof AccessLogEntry) => {
+    if (column === "at") return new Date(entry.at).toISOString();
+    return column === "fields" ? entry.fields?.join(" ") : entry[column];
+  };
+  const rows = entries.map((entry) => columns.map((column) => cell(value(entry, column))).join(","));
   return `${columns.join(",")}\n${rows.join("\n")}${rows.length ? "\n" : ""}`;
 }
 
