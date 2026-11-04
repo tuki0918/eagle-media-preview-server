@@ -1705,8 +1705,11 @@ test("plugin saves shared libraries with the settings and reacts to Eagle librar
     assert.equal(doc.querySelector<HTMLInputElement>('[aria-label="Share Work"]')?.disabled, true);
 
     const listCallsBeforeReload = libraryListCalls;
-    const reload = [...doc.querySelectorAll("button")].find((button) => button.textContent?.includes("Reload libraries"));
+    const reload = doc.querySelector<HTMLButtonElement>('button[aria-label="Reload libraries"]');
     assert.ok(reload);
+    // It sits in the list's header row, which must stay exposed for the button to be reachable.
+    assert.equal(reload.closest('[aria-hidden="true"]'), null);
+    assert.equal(reload.closest(".rounded-xl")?.querySelector("ul[aria-label='Libraries']") != null, true);
     reload.click();
     await waitFor(() => libraryListCalls === listCallsBeforeReload + 1);
 

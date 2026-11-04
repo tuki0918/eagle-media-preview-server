@@ -281,13 +281,26 @@ export function SettingsForm({
               ) : null}
               {/* Not overflow-hidden: the "Who can open" popover extends past the list. */}
               <div className="rounded-xl border border-[#e6e6e9]">
-                {/* Visual only: each checkbox is already named "Share <library>", so the list stays a plain list. */}
-                <div className={`${libraryGridClassName} rounded-t-xl border-b border-[#efeff1] bg-[#f7f7f8] py-2 text-[10px] font-semibold uppercase leading-none tracking-[0.06em] text-[#8a8f99]`} aria-hidden="true">
-                  {/* Starts where the library name starts, after the 16px checkbox and its gap. */}
-                  <span className="pl-[26px]">Library</span>
+                <div className={`${libraryGridClassName} rounded-t-xl border-b border-[#efeff1] bg-[#f7f7f8] py-1.5 text-[10px] font-semibold uppercase leading-none tracking-[0.06em] text-[#8a8f99]`}>
+                  {/* The same 16px column and gap as the rows, so the icon sits over the checkboxes and the label over the names. */}
+                  <div className="grid grid-cols-[16px_minmax(0,1fr)] items-center gap-2.5">
+                    {/* Negative margin: a 24px target that doesn't widen the 16px column. */}
+                    <button
+                      className="-m-1 inline-flex h-6 w-6 items-center justify-center rounded-full text-[#5f6670] hover:bg-[#e6e6e9] hover:text-[#171717] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+                      type="button"
+                      aria-label="Reload libraries"
+                      title="Reload libraries"
+                      disabled={busy}
+                      onClick={onReloadLibraries}
+                    >
+                      <RefreshIcon className="h-[12px] w-[12px]" />
+                    </button>
+                    {/* Visual only: each checkbox is already named "Share <library>", so the list stays a plain list. */}
+                    <span aria-hidden="true">Library</span>
+                  </div>
                   {/* Ends where the badge text ends, inside the badges' 8px side padding. */}
-                  <span className="pr-2 text-right">Status</span>
-                  <span className="text-center">Users</span>
+                  <span className="pr-2 text-right" aria-hidden="true">Status</span>
+                  <span className="text-center" aria-hidden="true">Users</span>
                 </div>
                 <ul className="m-0 grid list-none gap-0 p-0" aria-label="Libraries">
                   {libraries?.items.length ? libraries.items.map((library) => {
@@ -335,12 +348,6 @@ export function SettingsForm({
                     <li className="px-3 py-2 text-[11.5px] text-[#7a808a]">No libraries found.</li>
                   )}
                 </ul>
-              </div>
-              <div className="flex items-center justify-start gap-2">
-                <button className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] font-medium text-[#171717] ${authActionButtonClassName}`} type="button" disabled={busy} onClick={onReloadLibraries}>
-                  <RefreshIcon className="h-[12px] w-[12px]" />
-                  <span>Reload libraries</span>
-                </button>
               </div>
             </div>
           </SettingRow>

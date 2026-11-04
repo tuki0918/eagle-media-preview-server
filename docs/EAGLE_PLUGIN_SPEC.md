@@ -184,7 +184,7 @@ Build output is created under `dist`:
   - Users
   - Per-user role and password
   - Session duration
-  - Libraries: protection toggle, shared-library checklist with each library's status (Online when the server is running and it is the library open in Eagle, Offline for other shared libraries, none until sharing is saved), and a Reload libraries button; like other settings, they are locked while the server runs and take effect when it starts
+  - Libraries: protection toggle, shared-library checklist with each library's status (Online when the server is running and it is the library open in Eagle, Offline for other shared libraries, none until sharing is saved), and a reload icon in the list header, above the checkboxes; like other settings, they are locked while the server runs and take effect when it starts
   - The checklist is built on the admin's machine, without the Eagle HTTP API: saved entries, the open library from `eagle.library`, and `libraryHistory` from Eagle's `Settings` file in `eagle.app.getPath("userData")` (only that key is read; libraries that no longer exist are skipped)
 
 ### Persisted Settings
