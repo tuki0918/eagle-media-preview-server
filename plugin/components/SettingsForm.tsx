@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { AuthUser, LibraryCandidate, LibraryList, PluginSettings, SettingsTab, SharedLibrary, UserRole } from "../types";
-import { CheckIcon, ChevronIcon, EyeIcon, EyeOffIcon, FolderOpenIcon, MinusIcon, PlusIcon, RefreshIcon, SettingsIcon, UsersIcon } from "./Icons";
+import { ChevronIcon, EyeIcon, EyeOffIcon, FolderOpenIcon, MinusIcon, PlusIcon, RefreshIcon, SettingsIcon, UsersIcon } from "./Icons";
 
 interface SettingsFormProps {
   authEnabled: boolean;
@@ -312,15 +312,10 @@ export function SettingsForm({
                             <small className={`block truncate text-[10.5px] ${shared ? "text-[#5f6670]" : "text-[#a3a7ae]"}`} title={library.path}>{library.path}</small>
                           </span>
                         </div>
-                        {/* Two fixed slots, so the folder icons line up whether or not the row has a Shared badge. */}
+                        {/* Two fixed slots, so the folder icons line up whether or not the row has a status badge. */}
                         <span className="grid grid-cols-[24px_minmax(0,1fr)] items-center gap-1 py-2">
                           <LibraryOpenIcon open={library.current} />
-                          {library.shared ? (
-                            <span className="inline-flex items-center gap-1 justify-self-end whitespace-nowrap rounded-full bg-[#e3f6e8] px-2 py-0.5 text-[10px] font-semibold text-[#16803a]">
-                              <CheckIcon className="h-[10px] w-[10px]" />
-                              Shared
-                            </span>
-                          ) : null}
+                          {library.shared ? <LibraryStatusBadge online={serverRunning && library.current} /> : null}
                         </span>
                         <span className="flex justify-center py-2">
                           {shared ? (
@@ -453,6 +448,17 @@ function FilePathInput({
 // of people) that opens the picker. Every button looks the same and has one width, so the column
 // lines up; the picker's note says when only admins, or nobody, can open the library. Admins are listed as always allowed, so limiting a
 // library never locks out the people who manage the server.
+// For a library shared by the saved settings. Online means viewers can open it right now: the server
+// is running and this is the library open in Eagle. Otherwise viewers see it as offline.
+function LibraryStatusBadge({ online }: { online: boolean }) {
+  return (
+    <span className={`inline-flex items-center gap-1 justify-self-end whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-semibold ${online ? "bg-[#e3f6e8] text-[#16803a]" : "bg-[#f1f1f3] text-[#737373]"}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${online ? "bg-[#16803a]" : "bg-[#a3a7ae]"}`} aria-hidden="true" />
+      {online ? "Online" : "Offline"}
+    </span>
+  );
+}
+
 // Blue on the library open in Eagle, gray on the others; the name is for hover and screen readers.
 function LibraryOpenIcon({ open }: { open: boolean }) {
   const label = open ? "Open in Eagle" : "Not open in Eagle";

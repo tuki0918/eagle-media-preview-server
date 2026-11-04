@@ -1680,16 +1680,19 @@ test("plugin saves shared libraries with the settings and reacts to Eagle librar
     await waitFor(() => doc.querySelector<HTMLInputElement>('[aria-label="Share Work"]')?.checked === true);
     assert.doesNotMatch(doc.body.textContent || "", /The library open in Eagle is not shared/);
     assert.equal(saves.length, 0, "library changes are drafts until settings are saved");
-    assert.doesNotMatch(doc.body.textContent || "", /Shared/, "the Shared badge waits for the saved settings");
+    assert.doesNotMatch(doc.body.textContent || "", /Online|Offline/, "the status badge waits for the saved settings");
 
     doc.querySelector("form")?.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }));
     await waitFor(() => saves.length === 1 && /Saved/.test(doc.querySelector("[aria-live]")?.textContent || "") && doc.querySelector<HTMLInputElement>('label[aria-label="Start or stop server"] input')?.disabled === false);
     assert.equal(saves[0].libraryProtectionEnabled, true);
     assert.equal(JSON.stringify(saves[0].sharedLibraries), JSON.stringify([{ name: "Work", path: "/Users/me/Work.library" }]));
-    await waitFor(() => /Shared/.test(doc.body.textContent || ""));
+    // Saved and open in Eagle, but viewers can't reach it until the server runs.
+    await waitFor(() => /Offline/.test(doc.body.textContent || ""));
+    assert.doesNotMatch(doc.body.textContent || "", /Online/);
 
     doc.querySelector<HTMLInputElement>('label[aria-label="Start or stop server"] input')?.click();
     await waitFor(() => /Stop the server before changing shared libraries/.test(doc.body.textContent || ""));
+    await waitFor(() => /Online/.test(doc.body.textContent || ""));
     assert.equal(doc.querySelector<HTMLInputElement>('[aria-label="Share only selected libraries"]')?.disabled, true);
     assert.equal(doc.querySelector<HTMLInputElement>('[aria-label="Share Work"]')?.disabled, true);
 
@@ -1704,6 +1707,8 @@ test("plugin saves shared libraries with the settings and reacts to Eagle librar
     (onLibraryChanged as (libraryPath: string) => void)(eagleLibrary.path);
     await waitFor(() => /The library open in Eagle is not shared/.test(doc.body.textContent || ""));
     assert.equal(libraryChangedCalls, 1);
+    // The shared library is no longer the open one, so it goes offline.
+    await waitFor(() => /Offline/.test(doc.body.textContent || "") && !/Online/.test(doc.body.textContent || ""));
   } finally {
     dom.window.close();
   }

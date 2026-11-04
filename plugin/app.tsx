@@ -289,7 +289,7 @@ function App() {
       if (saved) unsharedLibrariesRef.current.clear();
       if (saved && hasUserPasswords) clearUserPasswordDrafts();
       if (saved) setMessage(successMessage);
-      // The Shared badges follow the saved settings, so refresh them after every save.
+      // The status badges follow the saved settings, so refresh them after every save.
       if (saved) void refreshLibraries();
       return saved;
     }
