@@ -126,11 +126,8 @@ export interface AccessLogSummary {
   clientCount: number;
   clients: AccessLogClient[];
   /** When the manager built this summary. */
-  generatedAt?: number;
-  oldestAt: number | null;
   range: AccessLogRange;
   recent: AccessLogEntry[];
-  retainedEntries: number;
   /** viewFailures: failed media fetches, listed under Views but not counted as views. */
   totals: { auth: number; authFailures: number; browse: number; edit: number; editFailures?: number; system?: number; view: number; viewFailures?: number };
 }

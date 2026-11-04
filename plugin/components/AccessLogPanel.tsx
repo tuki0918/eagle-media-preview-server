@@ -214,9 +214,7 @@ export function AccessLogPanel({
           </div>
 
           <p className="m-0 text-[10.5px] leading-snug text-[#9a9ea6]">
-            {summary
-              ? `Updated ${formatTime(summary.generatedAt ?? Date.now())} · ${summary.retainedEntries.toLocaleString()} entries kept${summary.oldestAt ? ` since ${formatDateTime(summary.oldestAt)}` : ""}. Saved in the temporary folder for up to 7 days; it is readable after the server stops and may be removed on restart.`
-              : "Loading activity…"}
+            Kept in your computer's temporary folder for up to 7 days. Still available after the server stops, but may be cleared sooner.
           </p>
         </div>
 

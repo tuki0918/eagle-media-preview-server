@@ -339,9 +339,7 @@ function createAccessLog({
         buckets,
         clientCount: clientList.length,
         clients: clientList.slice(0, clientLimit),
-        oldestAt: entries[0]?.at ?? null,
         range,
-        retainedEntries: entries.length,
         totals,
       };
     },
