@@ -1187,14 +1187,17 @@ function sendAuthRequired(res: ServerResponse) {
   res.end(JSON.stringify({ error: "Authentication required" }));
 }
 
-function attachRequestCounter(res: ServerResponse, onFinish: (stats: { durationMs: number; status: number }) => void) {
-  const startedAt = Date.now();
-  res.on("finish", () => {
-    onFinish?.({
-      status: res.statusCode,
-      durationMs: Date.now() - startedAt,
-    });
-  });
+// Reports when the response starts, because many never finish: a video or audio player drops its
+// connection partway through, and a long stream would otherwise show up only once it ended.
+// `res.end()` and `res.write()` go through writeHead too, so every response is seen once.
+function attachRequestCounter(res: ServerResponse, onStart: (stats: { status: number }) => void) {
+  const writeHead = res.writeHead;
+  res.writeHead = function reportingWriteHead(this: ServerResponse, ...args: Parameters<ServerResponse["writeHead"]>) {
+    const result = writeHead.apply(this, args);
+    res.writeHead = writeHead;
+    onStart({ status: res.statusCode });
+    return result;
+  } as ServerResponse["writeHead"];
 }
 
 async function readJson(req: IncomingMessage): Promise<JsonObject> {

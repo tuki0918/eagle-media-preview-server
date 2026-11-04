@@ -2,7 +2,7 @@ import { test } from "vitest";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { createReadStream } from "node:fs";
-import { mkdir, writeFile, utimes, rm } from "node:fs/promises";
+import { mkdir, truncate, writeFile, utimes, rm } from "node:fs/promises";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { createRequire } from "node:module";
@@ -3551,6 +3551,53 @@ test("createViewerServer writes auth, browse, and view events to the access log"
     assert.equal(entries[3].itemId, "ITEM 1");
     assert.ok(touched.includes("127.0.0.1:eagle"));
     assert.ok(entries.every((entry) => !JSON.stringify(entry).includes("wrong")));
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer logs a video view even when the player disconnects partway", async () => {
+  const root = join(tmpdir(), `eagle-media-preview-server-log-abort-${Date.now()}`);
+  const itemId = "ML3OU9S3PAJRO";
+  const itemDir = join(root, "images", `${itemId}.info`);
+  await mkdir(itemDir, { recursive: true });
+  await writeFile(join(itemDir, "metadata.json"), "{}");
+  const filePath = join(itemDir, "clip.mp4");
+  // Sparse and far larger than socket buffers, so the response can't finish before the disconnect.
+  await writeFile(filePath, "");
+  await truncate(filePath, 512 * 1024 * 1024);
+  const entries: Array<Record<string, unknown>> = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    accessLog: { record: (entry: Record<string, unknown>) => entries.push(entry), touch() {} },
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: root, name: "Test Library" };
+      },
+      async itemById() {
+        return { data: [{ id: itemId, name: "clip", ext: "mp4", filePath }] };
+      },
+    },
+  });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const url = `${origin}/file/${itemId}${await libraryQuery(origin)}`;
+    const abort = new AbortController();
+    const response = await fetch(url, { headers: { Range: "bytes=0-" }, signal: abort.signal });
+    assert.equal(response.status, 206);
+    // Logged as soon as the response starts, while it is still being sent.
+    await new Promise((resolveWait) => setTimeout(resolveWait, 50));
+    const views = () => entries.filter((entry) => entry.type === "view");
+    assert.equal(views().length, 1);
+    assert.deepEqual([views()[0].ext, views()[0].size, views()[0].status], ["mp4", 512 * 1024 * 1024, 206]);
+    abort.abort();
+    await new Promise((resolveWait) => setTimeout(resolveWait, 50));
+    assert.equal(views().length, 1);
   } finally {
     await viewer.stop();
   }
