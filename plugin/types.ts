@@ -3,14 +3,25 @@ export type SettingsTab = "access" | "general" | "libraries" | "security";
 export type UserRole = "admin" | "editor" | "viewer";
 
 export interface AuthUser {
+  /**
+   * Panel-only, never saved: identifies this row while it is being edited, so per-library access
+   * follows the row rather than whatever name is typed. Defaults to the saved username.
+   */
+  rowKey?: string;
   passwordHash?: string;
   role?: UserRole;
   username?: string;
 }
 
 export interface SharedLibrary {
+  /**
+   * "selected" limits the library to `users` (an empty list means only admins); absent means every
+   * user. While settings are being edited, `users` holds row keys; they become usernames on save.
+   */
+  access?: "selected";
   name: string;
   path: string;
+  users?: string[];
 }
 
 export interface LibraryCandidate extends SharedLibrary {

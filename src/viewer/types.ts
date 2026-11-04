@@ -71,7 +71,7 @@ export interface ConnectResponse {
 }
 
 export interface HealthResponse extends ConnectResponse {
-  libraryStatus?: "not_shared" | "shared" | null;
+  libraryStatus?: "forbidden" | "not_shared" | "shared" | null;
 }
 
 export interface ViewerPermissions {

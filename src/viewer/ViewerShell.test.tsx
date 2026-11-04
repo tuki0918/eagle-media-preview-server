@@ -160,6 +160,19 @@ describe("ViewerAppShell", () => {
     expect(html).toContain("text-muted-foreground");
   });
 
+  test("login view offers switching users only while signed in", () => {
+    setLoginConnectState({ authenticated: false, authRequired: true, disabled: false, isError: false, message: "", user: null });
+    expect(renderToStaticMarkup(<LoginView />)).not.toContain('id="switchUserButton"');
+    setLoginConnectState({ authenticated: true, authRequired: true, disabled: false, isError: true, message: "No access", user: { role: "viewer", username: "bob" } });
+    const html = renderToStaticMarkup(<LoginView />);
+    expect(html).toContain('id="switchUserButton"');
+    expect(html).toContain("Sign in as another user");
+    expect(html).toContain("Signed in as bob");
+    // Without password protection there is no account to switch from.
+    setLoginConnectState({ authenticated: true, authRequired: false, disabled: false, isError: false, message: "", user: null });
+    expect(renderToStaticMarkup(<LoginView />)).not.toContain('id="switchUserButton"');
+  });
+
   test("renders login connection controls as reusable components", () => {
     const button = renderToStaticMarkup(<ConnectButton disabled />);
     const message = renderToStaticMarkup(<ConnectMessage isError message="No Eagle" />);

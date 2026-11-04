@@ -4,7 +4,7 @@ import qrcodeFactory from "qrcode-generator";
 import { AccessLogPanel, RECENT_EVENT_LIMIT } from "./components/AccessLogPanel";
 import { CloseIcon } from "./components/Icons";
 import { ServerStatusPanel } from "./components/ServerStatusPanel";
-import { SettingsForm, type HttpsFileField } from "./components/SettingsForm";
+import { authUserKey, SettingsForm, type HttpsFileField } from "./components/SettingsForm";
 import { serverRestartSettingsChanged, settingsPayloadChanged } from "./settingsChange";
 import type { AccessLogEventFilter, AccessLogRange, AccessLogSummary, AuthUser, LibraryCandidate, LibraryList, PluginSettings, PluginStatus, ServerState, SettingsTab, SharedLibrary, UserRole } from "./types";
 
@@ -101,6 +101,8 @@ function App() {
   const [accessLogEventFilter, setAccessLogEventFilter] = useState<AccessLogEventFilter>("");
   const [accessLogAutoRefresh, setAccessLogAutoRefresh] = useState(false);
   const [accessLogLoading, setAccessLogLoading] = useState(false);
+  // Libraries unshared since the last save, with their user limits, in case they are rechecked.
+  const unsharedLibrariesRef = useRef(new Map<string, SharedLibrary>());
   const [activityNotice, setActivityNotice] = useState<{ isError: boolean; text: string } | null>(null);
   const [status, setStatus] = useState<PluginStatus>(() => ({
     settings: {
@@ -260,10 +262,11 @@ function App() {
       port: settings.port || 41532,
       sessionDurationDays: settings.sessionDurationDays || 7,
       libraryProtectionEnabled: Boolean(settings.libraryProtectionEnabled),
-      sharedLibraries: Array.isArray(settings.sharedLibraries) ? settings.sharedLibraries : [],
       ...patch,
+      // Row keys end here: library access is saved by username, and the keys themselves never are.
+      sharedLibraries: resolveLibraryUsers((patch.sharedLibraries ?? settings.sharedLibraries) as SharedLibrary[] | undefined, effectiveAuthUsers),
       authEnabled: nextAuthEnabled,
-      authUsers: effectiveAuthUsers,
+      authUsers: effectiveAuthUsers.map(({ rowKey: _rowKey, ...user }) => user),
     };
     const cleanUserPasswords = collectUserPasswords(effectiveAuthUsers, passwordDrafts);
     const hasUserPasswords = Object.keys(cleanUserPasswords).length > 0;
@@ -283,6 +286,7 @@ function App() {
       }
       const saved = await runCommand(() => managerRef.current?.saveSettings(payload), { action: restarting ? "restarting" : null, quiet: true });
       if (!saved) setStatus(previousStatus);
+      if (saved) unsharedLibrariesRef.current.clear();
       if (saved && hasUserPasswords) clearUserPasswordDrafts();
       if (saved) setMessage(successMessage);
       // The Shared badges follow the saved settings, so refresh them after every save.
@@ -292,6 +296,7 @@ function App() {
     try {
       const nextStatus = await managerRef.current?.saveSettings(payload);
       if (nextStatus) setStatus(nextStatus);
+      unsharedLibrariesRef.current.clear();
       if (hasUserPasswords) clearUserPasswordDrafts();
       setMessage(successMessage);
       void refreshLibraries();
@@ -443,7 +448,16 @@ function App() {
   function changeLibraryShared(library: LibraryCandidate, shared: boolean) {
     const current: SharedLibrary[] = Array.isArray(settings.sharedLibraries) ? settings.sharedLibraries : [];
     const others = current.filter((entry) => entry.path !== library.path);
-    updateSettings({ sharedLibraries: shared ? [...others, { name: library.name, path: library.path }] : others });
+    if (shared) {
+      // Rechecked before saving: back to how it was, so a limited library doesn't open to everyone.
+      const restored = unsharedLibrariesRef.current.get(library.path);
+      unsharedLibrariesRef.current.delete(library.path);
+      updateSettings({ sharedLibraries: [...others, restored ?? { name: library.name, path: library.path }] });
+      return;
+    }
+    const entry = current.find((candidate) => candidate.path === library.path);
+    if (entry) unsharedLibrariesRef.current.set(library.path, entry);
+    updateSettings({ sharedLibraries: others });
   }
 
   function setMessage(value: string, isError = false) {
@@ -499,8 +513,17 @@ function App() {
   }
 
   function updateAuthUsers(nextUsers: AuthUser[]) {
+    updateSettings({ authUsers: nextUsers });
+  }
+
+  function changeLibraryUsers(library: LibraryCandidate, access: "all" | "selected", users: string[]) {
+    const current: SharedLibrary[] = Array.isArray(settings.sharedLibraries) ? settings.sharedLibraries : [];
     updateSettings({
-      authUsers: nextUsers,
+      sharedLibraries: current.map((entry) => {
+        if (entry.path !== library.path) return entry;
+        const { access: _access, users: _users, ...rest } = entry;
+        return access === "selected" ? { ...rest, access, users } : rest;
+      }),
     });
   }
 
@@ -735,6 +758,7 @@ function App() {
           onHttpsKeyPathChange={(value) => updateSettings({ httpsKeyPath: value })}
           onLibraryProtectionChange={(checked) => updateSettings({ libraryProtectionEnabled: checked })}
           onLibrarySharedChange={changeLibraryShared}
+          onLibraryUsersChange={changeLibraryUsers}
           onReloadLibraries={() => void refreshLibraries({ reportErrors: true })}
           onPortChange={(value) => updateSettings({ port: value })}
           onRemoveAuthUser={(index) => void removeAuthUser(index)}
@@ -809,6 +833,7 @@ function normalizeAuthUser(user: AuthUser): AuthUser {
     username: String(user.username || "").trim(),
     passwordHash: String(user.passwordHash || ""),
     role: normalizeRole(user.role),
+    ...(user.rowKey === undefined ? {} : { rowKey: user.rowKey }),
   };
 }
 
@@ -820,8 +845,18 @@ function authUsersMissingPassword(users: AuthUser[], values: Record<string, stri
   return users.some((user, index) => !user.passwordHash && !values[String(index)]?.trim());
 }
 
+// Library access points at account rows until it is saved, then at the names those rows ended up
+// with. A row that was removed drops out, which can leave a library with no users: it then stays
+// limited rather than opening to everyone.
+function resolveLibraryUsers(libraries: SharedLibrary[] | undefined, users: AuthUser[]) {
+  const usernameByKey = new Map(users.map((user) => [authUserKey(user), user.username || ""]));
+  return (Array.isArray(libraries) ? libraries : []).map((library) => library.access === "selected"
+    ? { ...library, users: (library.users || []).flatMap((key) => usernameByKey.get(key) || []) }
+    : library);
+}
+
 function replaceAuthUser(users: AuthUser[], index: number, patch: AuthUser) {
-  return users.map((user, userIndex) => userIndex === index ? normalizeAuthUser({ ...user, ...patch }) : user);
+  return users.map((user, userIndex) => userIndex === index ? normalizeAuthUser({ ...user, ...patch, rowKey: authUserKey(user) }) : user);
 }
 
 function duplicateUsername(users: AuthUser[]) {
@@ -855,14 +890,19 @@ function collectUserPasswords(users: AuthUser[], values: Record<string, string>)
   return output;
 }
 
+let newUserRowCount = 0;
+
 function nextDefaultUser(users: AuthUser[]): AuthUser {
   let index = users.length + 1;
   const names = new Set(users.map((user) => String(user.username || "").toLowerCase()));
   while (names.has(`viewer${index}`)) index += 1;
+  newUserRowCount += 1;
   return {
     username: `viewer${index}`,
     passwordHash: "",
     role: "viewer",
+    // Never reused, so a new row can't inherit a removed row's library access. No username contains NUL.
+    rowKey: `\u0000new-${newUserRowCount}`,
   };
 }
 

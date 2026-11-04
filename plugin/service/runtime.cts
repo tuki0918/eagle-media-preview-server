@@ -19,8 +19,11 @@ interface AuthUser {
 }
 
 interface SharedLibrary {
+  /** "selected" limits the library to `users`; absent means every signed-in user. */
+  access?: "selected";
   name: string;
   path: string;
+  users?: string[];
 }
 
 interface BlockedAddress {
@@ -112,6 +115,7 @@ interface ServerManagerOptions {
     sessionMaxAgeSeconds: number;
     sessionSecret: string;
     sharedLibraries: string[] | null;
+    libraryUserRules?: Array<{ path: string; users: string[] }>;
     accessLog?: AccessLog;
     blockedAddresses?: BlockedAddress[];
     trustForwardedFor?: boolean;
@@ -291,9 +295,18 @@ function normalizeSettings(input: SettingsInput = {}): PluginSettings {
       ? input.lastServerStatus
       : DEFAULT_SETTINGS.lastServerStatus,
     libraryProtectionEnabled: Boolean(input.libraryProtectionEnabled ?? DEFAULT_SETTINGS.libraryProtectionEnabled),
-    sharedLibraries: normalizeSharedLibraries(input.sharedLibraries),
+    sharedLibraries: withKnownLibraryUsers(normalizeSharedLibraries(input.sharedLibraries), authUsers),
     trustForwardedFor: input.trustForwardedFor === true,
   };
+}
+
+// A deleted user is dropped from every library that names them; a library left with no users
+// stays limited (nobody can open it) rather than opening to everyone.
+function withKnownLibraryUsers(libraries: SharedLibrary[], authUsers: AuthUser[]) {
+  const known = new Set(authUsers.map((user) => user.username));
+  return libraries.map((library) => library.access === "selected"
+    ? { ...library, users: (library.users || []).filter((username) => known.has(username)) }
+    : library);
 }
 
 function canonicalSettings(settings: PluginSettings) {
@@ -524,6 +537,14 @@ function sharedLibraryPaths(settings: PluginSettings) {
   return settings.libraryProtectionEnabled ? settings.sharedLibraries.map((library) => library.path) : null;
 }
 
+// Per-library users apply only with both protections on; otherwise they are kept but not used.
+function libraryUserRules(settings: PluginSettings) {
+  if (!settings.libraryProtectionEnabled || !settings.authEnabled) return [];
+  return settings.sharedLibraries
+    .filter((library) => library.access === "selected")
+    .map((library) => ({ path: library.path, users: library.users || [] }));
+}
+
 function getLanAddresses() {
   const output: LanAddress[] = [];
   for (const [label, entries] of Object.entries(networkInterfaces()) as Array<[string, NetworkEntry[]]>) {
@@ -621,6 +642,7 @@ function createServerManager({
       sessionMaxAgeSeconds: settings.sessionDurationDays * 24 * 60 * 60,
       sessionSecret: settings.sessionSecret,
       sharedLibraries: sharedLibraryPaths(settings),
+      libraryUserRules: libraryUserRules(settings),
       authUsers: settings.authEnabled ? settings.authUsers : [],
       accessLog,
       blockedAddresses: settings.blockedAddresses,

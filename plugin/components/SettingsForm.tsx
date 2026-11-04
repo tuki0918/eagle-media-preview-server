@@ -1,6 +1,6 @@
-import type { ReactNode } from "react";
-import type { AuthUser, LibraryCandidate, LibraryList, PluginSettings, SettingsTab, UserRole } from "../types";
-import { CheckIcon, ChevronIcon, EyeIcon, EyeOffIcon, FolderOpenIcon, MinusIcon, PlusIcon, RefreshIcon, SettingsIcon } from "./Icons";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import type { AuthUser, LibraryCandidate, LibraryList, PluginSettings, SettingsTab, SharedLibrary, UserRole } from "../types";
+import { CheckIcon, ChevronIcon, EyeIcon, EyeOffIcon, FolderOpenIcon, MinusIcon, PlusIcon, RefreshIcon, SettingsIcon, UsersIcon } from "./Icons";
 
 interface SettingsFormProps {
   authEnabled: boolean;
@@ -26,6 +26,8 @@ interface SettingsFormProps {
   onHttpsKeyPathChange: (value: string) => void;
   onLibraryProtectionChange: (checked: boolean) => void;
   onLibrarySharedChange: (library: LibraryCandidate, shared: boolean) => void;
+  /** "all" lets every user open the library; "selected" only the given users (admins always can). */
+  onLibraryUsersChange: (library: LibraryCandidate, access: "all" | "selected", users: string[]) => void;
   onPortChange: (value: string) => void;
   onReloadLibraries: () => void;
   onRemoveAuthUser: (index: number) => void;
@@ -48,6 +50,13 @@ const settingInputClassName = "h-8 min-w-0 rounded-lg border border-[#e1e2e6] bg
 const tableInputClassName = "h-8 w-full min-w-0 rounded-lg border border-transparent bg-transparent px-1.5 text-[12px] text-[#171717] outline-0 transition-[background-color,box-shadow] placeholder:text-[#a3a7ae] hover:bg-[#f4f4f6] focus:border-[#171717] focus:bg-white focus:shadow-[0_0_0_3px_rgba(23,23,23,0.08)] disabled:cursor-not-allowed disabled:bg-transparent disabled:text-[#8a8f99]";
 const tableIconButtonClassName = "border-0 bg-transparent p-0 text-[#555c66] hover:bg-[#ececef] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent";
 const authActionButtonClassName = "border border-[#e1e2e6] bg-white text-[#555c66] hover:bg-[#f4f4f6] disabled:cursor-not-allowed disabled:opacity-45";
+// Header and rows share one template so the Library, Status, and Users columns line up.
+// How a library's `users` refers to an account row while settings are being edited.
+export function authUserKey(user: AuthUser) {
+  return user.rowKey ?? user.username ?? "";
+}
+
+const libraryGridClassName = "grid grid-cols-[minmax(0,1fr)_96px_52px] items-center gap-2 px-3";
 const primaryButtonClassName = "border border-[#171717] bg-[#171717] text-white hover:bg-[#2b2b2b] disabled:cursor-not-allowed disabled:opacity-35";
 
 export function SettingsForm({
@@ -73,6 +82,7 @@ export function SettingsForm({
   onHttpsKeyPathChange,
   onLibraryProtectionChange,
   onLibrarySharedChange,
+  onLibraryUsersChange,
   onPortChange,
   onReloadLibraries,
   onRemoveAuthUser,
@@ -87,6 +97,7 @@ export function SettingsForm({
   const libraryProtectionEnabled = Boolean(settings.libraryProtectionEnabled);
   // Checkboxes reflect the unsaved draft; the running server keeps the list it started with.
   const sharedLibraryPaths = new Set((settings.sharedLibraries || []).map((library) => library.path));
+  const sharedLibraryByPath = new Map((settings.sharedLibraries || []).map((library) => [library.path, library]));
   const currentLibraryUnshared = libraryProtectionEnabled && Boolean(libraries?.items.some((library) => library.current && !sharedLibraryPaths.has(library.path)));
   return (
     <form
@@ -261,20 +272,22 @@ export function SettingsForm({
               <span>Share only selected libraries</span>
             </label>
           </SettingRow>
-          <SettingRow label="Libraries">
+          <SettingRow label="Libraries" help="A shared library can be limited to selected users. Admins can always open shared libraries.">
             <div className="grid gap-2">
               {currentLibraryUnshared ? (
                 <p className="m-0 rounded-lg border border-[#f5dfa8] bg-[#fffaeb] px-2.5 py-1.5 text-[11px] leading-snug text-[#8a5a00]" role="note">
                   The library open in Eagle is not shared. Viewers see the server as offline.
                 </p>
               ) : null}
-              <div className="overflow-hidden rounded-xl border border-[#e6e6e9]">
+              {/* Not overflow-hidden: the "Who can open" popover extends past the list. */}
+              <div className="rounded-xl border border-[#e6e6e9]">
                 {/* Visual only: each checkbox is already named "Share <library>", so the list stays a plain list. */}
-                <div className="grid grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-2.5 border-b border-[#efeff1] bg-[#f7f7f8] px-3 py-2 text-[10px] font-semibold uppercase leading-none tracking-[0.06em] text-[#8a8f99]" aria-hidden="true">
-                  <span />
-                  <span>Library</span>
+                <div className={`${libraryGridClassName} rounded-t-xl border-b border-[#efeff1] bg-[#f7f7f8] py-2 text-[10px] font-semibold uppercase leading-none tracking-[0.06em] text-[#8a8f99]`} aria-hidden="true">
+                  {/* Starts where the library name starts, after the 16px checkbox and its gap. */}
+                  <span className="pl-[26px]">Library</span>
                   {/* Ends where the badge text ends, inside the badges' 8px side padding. */}
-                  <span className="pr-2">Status</span>
+                  <span className="pr-2 text-right">Status</span>
+                  <span className="text-center">Users</span>
                 </div>
                 <ul className="m-0 grid list-none gap-0 p-0" aria-label="Libraries">
                   {libraries?.items.length ? libraries.items.map((library) => {
@@ -283,8 +296,9 @@ export function SettingsForm({
                     // stay distinct while the server runs.
                     const shared = libraryProtectionEnabled && checked;
                     return (
-                      <li key={library.path} className={`border-b border-[#efeff1] last:border-b-0 ${shared ? "bg-white" : "bg-[#f7f7f8]"}`}>
-                        <label className="grid grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-2.5 px-3 py-2">
+                      <li key={library.path} className={`relative ${libraryGridClassName} border-b border-[#efeff1] last:rounded-b-xl last:border-b-0 ${shared ? "bg-white" : "bg-[#f7f7f8]"}`}>
+                        {/* Only the checkbox toggles sharing: a click on the row is often just closing the user picker. */}
+                        <div className="grid min-w-0 grid-cols-[16px_minmax(0,1fr)] items-center gap-2.5 py-2">
                           <input
                             className="disabled:opacity-50"
                             type="checkbox"
@@ -297,18 +311,29 @@ export function SettingsForm({
                             <strong className={`block truncate text-[12.5px] font-semibold ${shared ? "text-[#171717]" : "text-[#8a8f99]"}`}>{library.name}</strong>
                             <small className={`block truncate text-[10.5px] ${shared ? "text-[#5f6670]" : "text-[#a3a7ae]"}`} title={library.path}>{library.path}</small>
                           </span>
-                          <span className="inline-flex items-center gap-1.5">
-                            {library.current ? (
-                              <span className="rounded-full bg-[#eef4ff] px-2 py-0.5 text-[10px] font-semibold text-[#1d4ed8]">Open in Eagle</span>
-                            ) : null}
-                            {library.shared ? (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-[#e3f6e8] px-2 py-0.5 text-[10px] font-semibold text-[#16803a]">
-                                <CheckIcon className="h-[10px] w-[10px]" />
-                                Shared
-                              </span>
-                            ) : null}
-                          </span>
-                        </label>
+                        </div>
+                        {/* Two fixed slots, so the folder icons line up whether or not the row has a Shared badge. */}
+                        <span className="grid grid-cols-[24px_minmax(0,1fr)] items-center gap-1 py-2">
+                          <LibraryOpenIcon open={library.current} />
+                          {library.shared ? (
+                            <span className="inline-flex items-center gap-1 justify-self-end whitespace-nowrap rounded-full bg-[#e3f6e8] px-2 py-0.5 text-[10px] font-semibold text-[#16803a]">
+                              <CheckIcon className="h-[10px] w-[10px]" />
+                              Shared
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className="flex justify-center py-2">
+                          {shared ? (
+                            <LibraryUserAccess
+                              authEnabled={authEnabled}
+                              authUsers={authUsers}
+                              disabled={settingsInputDisabled}
+                              entry={sharedLibraryByPath.get(library.path)}
+                              libraryName={library.name}
+                              onChange={(access, users) => onLibraryUsersChange(library, access, users)}
+                            />
+                          ) : null}
+                        </span>
                       </li>
                     );
                   }) : (
@@ -421,6 +446,136 @@ function FilePathInput({
         </button>
       ) : null}
     </div>
+  );
+}
+
+// Who can open one shared library: a compact button in the row (people icon with "All" or the number
+// of people) that opens the picker. Every button looks the same and has one width, so the column
+// lines up; the picker's note says when only admins, or nobody, can open the library. Admins are listed as always allowed, so limiting a
+// library never locks out the people who manage the server.
+// Blue on the library open in Eagle, gray on the others; the name is for hover and screen readers.
+function LibraryOpenIcon({ open }: { open: boolean }) {
+  const label = open ? "Open in Eagle" : "Not open in Eagle";
+  return (
+    <span className={`grid h-[18px] w-6 place-items-center rounded-full ${open ? "bg-[#eef4ff] text-[#1d4ed8]" : "text-[#b4b8bf]"}`} role="img" aria-label={label} title={label}>
+      <FolderOpenIcon className="h-[12px] w-[12px]" />
+    </span>
+  );
+}
+
+// Keeps the button one width; its label and title still give the exact number.
+export function libraryUserCountLabel(count: number) {
+  return count >= 9 ? "9+" : String(count);
+}
+
+function LibraryUserAccess({
+  authEnabled,
+  authUsers,
+  disabled,
+  entry,
+  libraryName,
+  onChange,
+}: {
+  authEnabled: boolean;
+  authUsers: AuthUser[];
+  disabled: boolean;
+  entry?: SharedLibrary;
+  libraryName: string;
+  onChange: (access: "all" | "selected", users: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLSpanElement>(null);
+  const selected = entry?.access === "selected";
+  const users = entry?.users || [];
+  const named = authUsers.filter((user) => user.username);
+  const selectedCount = named.filter((user) => user.role !== "admin" && users.includes(authUserKey(user))).length;
+  const adminCount = named.filter((user) => user.role === "admin").length;
+  // Everyone who can open the library, the same people as the ticks in the picker: admins always can.
+  const openCount = selectedCount + adminCount;
+  const nobody = selected && selectedCount === 0;
+  const locked = disabled || !authEnabled;
+  const summary = !selected ? "all users" : openCount === 0 ? "nobody" : nobody ? "admins only" : `${openCount} ${openCount === 1 ? "user" : "users"}`;
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: Event) => {
+      if (event instanceof KeyboardEvent ? event.key === "Escape" : !rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, [open]);
+
+  return (
+    <span ref={rootRef} className="relative inline-flex">
+      <button
+        className={`inline-flex h-6 w-12 items-center gap-1 rounded-full border pl-2 pr-1.5 text-[10.5px] font-semibold tabular-nums border-[#e1e2e6] bg-white text-[#5f6670] transition-colors hover:bg-[#f4f4f6] ${authEnabled ? "" : "opacity-60"}`}
+        type="button"
+        aria-label={`Who can open ${libraryName}: ${summary}`}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        title={authEnabled ? `Who can open: ${summary}` : "Applies when password protection is on"}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <UsersIcon className="h-[12px] w-[12px]" />
+        <span className="flex-1 text-center">{selected ? libraryUserCountLabel(openCount) : "All"}</span>
+      </button>
+      {open ? (
+        <div className="absolute right-0 top-full z-20 mt-1.5 grid w-[220px] gap-2 rounded-xl border border-[#e6e6e9] bg-white p-2.5 text-left shadow-[0_8px_24px_rgba(16,24,40,0.14)]" role="dialog" aria-label={`Who can open ${libraryName}`}>
+          <div className="grid gap-1" role="radiogroup" aria-label={`Who can open ${libraryName}`}>
+            {(["all", "selected"] as const).map((access) => (
+              <label key={access} className="inline-flex items-center gap-1.5 text-[11.5px] text-[#171717] has-[:disabled]:opacity-60">
+                <input
+                  type="radio"
+                  name={`libraryAccess-${entry?.path || libraryName}`}
+                  aria-label={access === "all" ? `All users can open ${libraryName}` : `Only selected users can open ${libraryName}`}
+                  disabled={locked}
+                  checked={access === "selected" ? selected : !selected}
+                  onChange={() => onChange(access, access === "selected" ? users : [])}
+                />
+                <span>{access === "all" ? "All users" : "Selected users"}</span>
+              </label>
+            ))}
+          </div>
+          {selected ? (
+            <ul className="m-0 grid max-h-[180px] list-none gap-0.5 overflow-auto border-t border-[#efeff1] p-0 pt-2">
+              {named.map((user) => {
+                const admin = user.role === "admin";
+                const key = authUserKey(user);
+                return (
+                  <li key={key}>
+                    <label className="flex items-center gap-1.5 rounded-md px-1 py-0.5 text-[11.5px] text-[#171717] hover:bg-[#f4f4f6] has-[:disabled]:opacity-70" title={admin ? "Admins can open every shared library" : undefined}>
+                      <input
+                        type="checkbox"
+                        aria-label={`Let ${user.username} open ${libraryName}`}
+                        disabled={locked || admin}
+                        checked={admin || users.includes(key)}
+                        onChange={(event) => {
+                          const next = event.currentTarget.checked
+                            ? [...users, key]
+                            : users.filter((entry) => entry !== key);
+                          onChange("selected", next);
+                        }}
+                      />
+                      <span className="min-w-0 truncate">{user.username}</span>
+                      {admin ? <span className="ml-auto text-[10px] text-[#8a8f99]">admin</span> : null}
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
+          {!authEnabled ? (
+            <small className="text-[10.5px] leading-snug text-[#7a808a]">Applies when password protection is on.</small>
+          ) : nobody ? (
+            <small className={`text-[10.5px] leading-snug ${openCount ? "text-[#b54708]" : "font-semibold text-[#171717]"}`} role="note">{openCount ? "Only admins can open this library." : "Nobody can open this library."} Select users to let them in.</small>
+          ) : null}
+        </div>
+      ) : null}
+    </span>
   );
 }
 

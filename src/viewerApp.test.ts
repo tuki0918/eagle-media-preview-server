@@ -520,6 +520,80 @@ describe("viewer app data refresh", () => {
     expect(getShellView()).toBe("login");
   });
 
+  test("keeps a signed-in user on the connect screen when the open library isn't shared with them", async () => {
+    const forbiddenMessage = "Your account can't open the library that's open right now. Ask the person who set up this media library for access, or sign in as another user.";
+    let health: unknown = { app: { version: "1.0" }, library: { id: "lib-a", name: "A" }, libraryStatus: "shared" };
+    let connectResponse: Response = errorResponse(403, { error: "Your account can't open the library that is open in Eagle", code: "LIBRARY_FORBIDDEN" });
+    let signedIn = true;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/auth/status") return jsonResponse({ authenticated: signedIn, required: true, user: signedIn ? { role: "viewer", username: "bob" } : null });
+      if (url === "/api/library-status") return jsonResponse({ libraryStatus: "shared" });
+      if (url === "/api/auth/logout" && options?.method === "POST") {
+        signedIn = false;
+        return jsonResponse({ authenticated: false, required: true });
+      }
+      if (url === "/api/connect" && options?.method === "POST") return connectResponse;
+      if (url === "/api/health") return jsonResponse(health);
+      if (url === "/api/folders" || url === "/api/smart-folders") return jsonResponse({ items: [] });
+      if (url.startsWith("/api/items?")) return jsonResponse({ items: [], total: 0 });
+      if (url.startsWith("/api/item-types")) return jsonResponse({ items: [] });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: fetchMock });
+
+    const { initViewer } = await import("./viewerApp");
+    const { submitConnection, submitLogout } = await import("./viewer/shellActions");
+    const { getLoginConnectState } = await import("./viewer/loginConnectState");
+    const { getShellView } = await import("./viewer/shellVisibility");
+    const connect = () => submitConnection({ currentTarget: document.querySelector<HTMLFormElement>("#connectForm")!, preventDefault: () => {} });
+    await initViewer();
+    await vi.waitFor(() => expect(getLoginConnectState().authenticated).toBe(true));
+
+    // Connect is refused: the visitor stays signed in on the connect screen with the reason, not the offline page.
+    connect();
+    await vi.waitFor(() => expect(getLoginConnectState().message).toBe(forbiddenMessage));
+    expect(getLoginConnectState()).toMatchObject({ authenticated: true, isError: true });
+    expect(getShellView()).toBe("login");
+    expect(document.body.dataset.appState).not.toBe("failed");
+
+    // Once a library they may open is open, Connect works again.
+    connectResponse = jsonResponse({ app: { version: "1.0" }, library: { id: "lib-a", name: "A" } });
+    connect();
+    await vi.waitFor(() => expect(getShellView()).toBe("viewer"));
+
+    // Eagle switches to a library the user may not open: the next health check sends them back.
+    health = { app: { version: "1.0" }, library: null, libraryStatus: "forbidden" };
+    const { canFallbackMedia } = await import("./viewer/api");
+    expect(await canFallbackMedia()).toBe(false);
+    await vi.waitFor(() => expect(getShellView()).toBe("login"));
+    expect(getLoginConnectState()).toMatchObject({ authenticated: true, isError: true, message: forbiddenMessage });
+    const { getResultSurfaceState } = await import("./viewer/resultSurfaceState");
+    expect(getResultSurfaceState()).toMatchObject({ kind: "message", text: "" });
+
+    // "Sign in as another user" signs out and shows the sign-in form.
+    submitLogout();
+    await vi.waitFor(() => expect(getLoginConnectState().authenticated).toBe(false));
+    expect(fetchMock.mock.calls.some(([url, init]) => url === "/api/auth/logout" && init?.method === "POST")).toBe(true);
+  });
+
+  test("shows the no-access message at startup when a saved session can't open the library", async () => {
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/auth/status") return jsonResponse({ authenticated: true, required: true, user: { role: "viewer", username: "bob" } });
+      if (url === "/api/library-status") return jsonResponse({ libraryStatus: "forbidden" });
+      throw new Error(`Unexpected request: ${url}`);
+    }) });
+    const { initViewer } = await import("./viewerApp");
+    const { getLoginConnectState } = await import("./viewer/loginConnectState");
+    const { getShellView } = await import("./viewer/shellVisibility");
+    await initViewer();
+    expect(getShellView()).toBe("login");
+    expect(document.body.dataset.appState).not.toBe("failed");
+    expect(getLoginConnectState()).toMatchObject({ authenticated: true, isError: true });
+    expect(getLoginConnectState().message).toMatch(/can't open the library/);
+  });
+
   test("decides a media fallback requested while the tab is hidden once it is shown again", async () => {
     const health = { app: { version: "1.0" }, library: { id: "lib-a", name: "A" }, libraryStatus: "shared" };
     const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {

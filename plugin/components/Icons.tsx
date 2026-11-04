@@ -16,6 +16,7 @@ import {
   Plus,
   Power,
   Trash2,
+  UsersRound,
   QrCode,
   RefreshCw,
   Server,
@@ -38,6 +39,7 @@ export const CloseIcon = iconComponent(X);
 export const DownloadIcon = iconComponent(Download);
 export const SelectItemIcon = iconComponent(SquareMousePointer);
 export const TrashIcon = iconComponent(Trash2);
+export const UsersIcon = iconComponent(UsersRound);
 export const CheckIcon = iconComponent(Check);
 export const CopyIcon = iconComponent(Copy);
 export const FolderOpenIcon = iconComponent(FolderOpen);

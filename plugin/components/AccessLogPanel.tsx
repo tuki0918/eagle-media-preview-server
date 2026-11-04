@@ -56,6 +56,7 @@ const EVENT_FILTERS: Array<{ label: string; value: AccessLogEventFilter }> = [
 
 const EVENT_LABELS: Record<string, string> = {
   blocked: "Blocked",
+  library_denied: "Library access denied",
   login_failure: "Sign-in failed",
   login_locked: "Sign-in locked",
   login_success: "Signed in",
@@ -69,7 +70,7 @@ const EVENT_LABELS: Record<string, string> = {
   view_failed: "View failed",
 };
 
-const FAILED_EVENTS = new Set(["blocked", "login_failure", "login_locked"]);
+const FAILED_EVENTS = new Set(["blocked", "library_denied", "login_failure", "login_locked"]);
 // How many recent events the panel lists; the app asks the manager for exactly this many.
 export const RECENT_EVENT_LIMIT = 100;
 

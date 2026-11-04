@@ -2109,6 +2109,72 @@ test("createViewerServer only serves the library when Eagle has a shared library
   }
 });
 
+test("createViewerServer limits a shared library to its users on every request", async () => {
+  let openLibrary = "/Users/me/Family.library";
+  const entries: Array<Record<string, unknown>> = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    authUsers: [
+      { username: "alice", passwordHash: sha256("a"), role: "viewer" },
+      { username: "bob", passwordHash: sha256("b"), role: "viewer" },
+      { username: "owner", passwordHash: sha256("o"), role: "admin" },
+    ],
+    sharedLibraries: ["/Users/me/Family.library", "/Users/me/Work.library"],
+    libraryUserRules: [{ path: "/Users/me/Family.library", users: ["alice"] }],
+    accessLog: { record: (entry: Record<string, unknown>) => entries.push(entry), touch() {} },
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: openLibrary, name: openLibrary.includes("Family") ? "Family" : "Work" };
+      },
+      async folders() {
+        return { items: [{ id: "F1", name: "Folder" }], total: 1, offset: 0, limit: 1 };
+      },
+    },
+  });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const cookieFor = async (username: string, password: string) => (await loginCookie(origin, username, password)).split(";")[0];
+    const alice = await cookieFor("alice", "a");
+    // bob may sign in, but the open library is not shared with him.
+    const bob = await cookieFor("bob", "b");
+    const owner = await cookieFor("owner", "o");
+    const connect = (cookie: string) => fetch(`${origin}/api/connect`, { method: "POST", headers: { "Content-Type": "application/json", Origin: origin, Cookie: cookie }, body: "{}" });
+
+    assert.equal((await connect(alice)).status, 200);
+    assert.equal((await connect(owner)).status, 200);
+    const denied = await connect(bob);
+    assert.equal(denied.status, 403);
+    assert.deepEqual(await denied.json(), { error: "Your account can't open the library that is open in Eagle", code: "LIBRARY_FORBIDDEN" });
+    assert.equal((await fetch(`${origin}/api/folders`, { headers: { Cookie: bob } })).status, 403);
+    assert.equal((await fetch(`${origin}/file/ITEM1`, { headers: { Cookie: bob } })).status, 403);
+    const bobHealth = await (await fetch(`${origin}/api/health`, { headers: { Cookie: bob } })).json();
+    assert.equal(bobHealth.libraryStatus, "forbidden");
+    assert.equal(bobHealth.library, null);
+    assert.equal((await fetch(`${origin}/api/health`, { headers: { Cookie: bob } })).headers.get("x-library-id"), null);
+    // Before sign-in nobody learns who may open the library.
+    assert.equal((await (await fetch(`${origin}/api/library-status`)).json()).libraryStatus, "shared");
+    assert.equal((await (await fetch(`${origin}/api/library-status`, { headers: { Cookie: bob } })).json()).libraryStatus, "forbidden");
+
+    await new Promise((resolveWait) => setTimeout(resolveWait, 20));
+    assert.ok(entries.some((entry) => entry.event === "library_denied" && entry.user === "bob" && entry.status === 403));
+
+    // A session outlives a library switch, so the check follows the library open now.
+    openLibrary = "/Users/me/Work.library";
+    viewer.notifyLibraryChanged();
+    assert.equal((await connect(bob)).status, 200);
+    openLibrary = "/Users/me/Family.library";
+    viewer.notifyLibraryChanged();
+    assert.equal((await connect(bob)).status, 403);
+  } finally {
+    await viewer.stop();
+  }
+});
+
 test("createViewerServer reports library sharing publicly without naming the library", async () => {
   let openLibrary = "/Users/me/Shared.library";
   let libraryInfoCalls = 0;

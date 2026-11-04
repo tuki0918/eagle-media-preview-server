@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import appIconUrl from "../../assets/app_icon.svg";
 import { getLoginConnectState, subscribeLoginConnectState } from "../loginConnectState";
-import { submitConnection } from "../shellActions";
+import { submitConnection, submitLogout } from "../shellActions";
 
 interface ConnectButtonProps {
   disabled?: boolean;
@@ -23,6 +23,8 @@ export function LoginView({ hidden = false }: LoginViewProps) {
   const state = useSyncExternalStore(subscribeLoginConnectState, getLoginConnectState, getLoginConnectState);
   const showCredentials = state.authRequired && !state.authenticated;
   const showInlineError = showCredentials && state.isError && Boolean(state.message);
+  // Signed in but held on this screen (e.g. the open library isn't shared with this account): offer a way out.
+  const showSwitchUser = state.authRequired && state.authenticated;
 
   return (
     <section id="loginView" className="login-view grid min-h-dvh place-items-center bg-[radial-gradient(ellipse_at_top,var(--muted),var(--background)_70%)] px-4 py-9 text-foreground" hidden={hidden}>
@@ -44,6 +46,7 @@ export function LoginView({ hidden = false }: LoginViewProps) {
             {showCredentials ? <LoginCredentials disabled={state.disabled} /> : null}
             {showInlineError ? <ConnectMessage /> : null}
             <ConnectButton />
+            {showSwitchUser ? <SwitchUser disabled={state.disabled} username={state.user?.username} /> : null}
             {showCredentials ? <SessionDuration seconds={state.sessionMaxAgeSeconds} /> : null}
           </div>
           {showInlineError ? null : <ConnectMessage />}
@@ -109,6 +112,17 @@ function LoginCredentials({ disabled }: { disabled: boolean }) {
           {passwordVisible ? <EyeOffIcon className="size-4" aria-hidden="true" /> : <EyeIcon className="size-4" aria-hidden="true" />}
         </button>
       </div>
+    </div>
+  );
+}
+
+function SwitchUser({ disabled, username }: { disabled: boolean; username?: string }) {
+  return (
+    <div className="grid justify-items-center gap-1 text-center">
+      {username ? <p className="m-0 text-[12px] leading-[1.45] text-muted-foreground">Signed in as {username}</p> : null}
+      <Button id="switchUserButton" type="button" variant="ghost" size="sm" className="rounded-full text-[13px]" disabled={disabled} onClick={submitLogout}>
+        Sign in as another user
+      </Button>
     </div>
   );
 }

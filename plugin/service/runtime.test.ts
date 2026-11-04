@@ -981,6 +981,50 @@ test("generated settings normalize shared libraries and keep protection off by d
   ]);
 });
 
+test("generated settings store keeps per-library users, dropping deleted users", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-runtime-"));
+  const store = createSettingsStore({ filePath: join(dir, "settings.json") });
+  const users = [
+    { username: "alice", role: "viewer", passwordHash: hashPassword("a") },
+    { username: "bob", role: "viewer", passwordHash: hashPassword("b") },
+  ];
+  await store.save({ authUsers: users, sharedLibraries: [{ path: "/L/Family.library", access: "selected", users: ["alice", "bob", "ghost"] }] });
+  assert.deepEqual((await store.load()).sharedLibraries[0].users, ["alice", "bob"]);
+  // Removing the last allowed users leaves the library limited to nobody, not open to everyone.
+  const saved = await store.save({ authUsers: [{ username: "carol", role: "viewer", passwordHash: hashPassword("c") }] });
+  assert.deepEqual(saved.sharedLibraries, [{ path: "/L/Family.library", name: "Family", access: "selected", users: [] }]);
+});
+
+test("generated server manager passes per-library users only with both protections on", async () => {
+  const calls: unknown[] = [];
+  let settings = {
+    ...DEFAULT_SETTINGS,
+    authEnabled: false,
+    authUsers: [{ username: "alice", role: "viewer", passwordHash: hashPassword("a") }],
+    libraryProtectionEnabled: true,
+    sharedLibraries: [{ path: "/L/Family.library", name: "Family", access: "selected", users: ["alice"] }],
+  };
+  const manager = createServerManager({
+    settingsStore: {
+      async load() {
+        return settings;
+      },
+      async save(input: Record<string, unknown>) {
+        settings = { ...settings, ...input };
+        return settings;
+      },
+    },
+    viewerServerFactory(options: { libraryUserRules?: unknown }) {
+      calls.push(options.libraryUserRules);
+      return { async start() {}, async stop() {}, status: () => ({ state: "running", host: "127.0.0.1", port: 41532 }) };
+    },
+    lanAddressProvider: () => [],
+  });
+  await manager.start();
+  await manager.saveSettings({ authEnabled: true });
+  assert.deepEqual(calls, [[], [{ path: "/L/Family.library", users: ["alice"] }]]);
+});
+
 test("generated server manager passes shared libraries to the viewer when it starts", async () => {
   const calls: unknown[] = [];
   let settings = {

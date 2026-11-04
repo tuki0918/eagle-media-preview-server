@@ -109,7 +109,7 @@ Use this tab to choose which users can sign in to the viewer. To let other devic
 Authentication is optional. When password protection is enabled, browser access uses the built-in login screen and cookie-based sessions. Sessions expire after the configured session duration, 7 days by default.
 
 > [!IMPORTANT]
-> Media is stored in the browser's normal cache and may be reused for up to one hour after it is fetched, without asking the server. Signing out or switching libraries does not immediately remove media that is already cached. On a shared device, use a private window.
+> Media is stored in the browser's normal cache and may be reused for up to one hour after it is fetched, without asking the server. Signing out, switching accounts, or switching libraries does not immediately remove media that is already cached, even if the account can't open that library. On a shared device, use a private window.
 
 #### Libraries
 
@@ -118,6 +118,10 @@ Choose which Eagle libraries the viewer may serve.
 ![](docs/server_panel_libraries.png)
 
 Eagle can only have one library open, and the viewer serves whichever library that is. Turn on **Share only selected libraries**, check the libraries to share, and save. If you open a different library in Eagle, viewers see the "Media Library is offline" page as soon as the viewer opens, before signing in, until a shared library is open again. The list shows the library open in Eagle and Eagle's recent libraries; use **Reload libraries** to refresh it. Checked libraries are saved by path.
+
+**Who can open a library.** With **Password protection** on, each shared library can be limited to selected users. The people button at the end of the library's row shows **All** (the default: everyone with an account) or how many users can open it, counting admins; click it, choose **Selected users**, and tick the users who may open the library. Admins can always open every shared library. A user who signs in while a library they may not open is open sees a message saying so, stays signed in, and can connect again once a library they may open is open, or sign in as another user. The check applies to every request, not only at sign-in, so an existing session loses access as soon as Eagle switches to a library that user may not open.
+
+If every selected user is deleted, the library stays limited and only admins can open it (nobody, if there are no admins); it never opens to everyone. Renaming a user in **Access** keeps their libraries. With password protection off, the selections are kept but not applied.
 
 Like other settings, these are locked while the server is running and take effect when the server starts. Viewers can never switch the library open in Eagle.
 

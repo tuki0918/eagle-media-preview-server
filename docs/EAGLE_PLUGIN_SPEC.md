@@ -197,12 +197,14 @@ type Settings = {
   lastServerStatus: "running" | "stopped" | "error";
   libraryProtectionEnabled: boolean;
   sessionDurationDays: number;
-  sharedLibraries: Array<{ name: string; path: string }>;
+  sharedLibraries: Array<{ name: string; path: string; access?: "selected"; users?: string[] }>;
   trustForwardedFor: boolean;
 };
 ```
 
 `libraryProtectionEnabled` defaults to `false`, so the library open in Eagle is shared as before. When it is `true`, the viewer serves only libraries listed in `sharedLibraries`; an empty list shares nothing. Paths are compared after removing trailing separators, case-insensitively on macOS and Windows.
+
+A `sharedLibraries` entry with `access: "selected"` can be opened only by the usernames in `users` and by admins; without `access`, every user can open it. An empty `users` list means only admins (nobody, if there are no admins), never everyone, and saving drops usernames that are no longer in `authUsers`. The rule applies only while both `authEnabled` and `libraryProtectionEnabled` are `true`. The server checks it on every library request against the library open in Eagle at that moment: `/api/connect` and library routes answer `403` with code `LIBRARY_FORBIDDEN`, `/api/health` reports `libraryStatus: "forbidden"`, and `/api/library-status` reports `"forbidden"` only to a signed-in user, so a visitor who is not signed in never learns who may open the library. Sign-in itself is not refused. Refused requests are logged as `library_denied`.
 
 `blockedAddresses` holds single addresses or CIDR ranges, managed from **Activity → Blocked addresses**; changes apply to the running server without a restart. Entries that overlap loopback (`127.0.0.0/8`, `::1`) are rejected.
 
@@ -398,7 +400,7 @@ The viewer server calls Eagle's local Web API at `http://localhost:41595/api/v2/
 - Allows only `GET` and `HEAD`
 - Supports HTTP Range requests
 - Sends `Content-Disposition: inline`
-- Sends `Cache-Control: private, max-age=3600`, so a browser may reuse a media response for up to an hour without asking the server, including after sign-out or a library switch
+- Sends `Cache-Control: private, max-age=3600`, so a browser may reuse a media response for up to an hour without asking the server, including after sign-out, an account switch, or a library switch
 - Sends `Last-Modified` (the file's modification time) and a weak `ETag` built from the file size and its millisecond modification time
 - Answers conditional requests with `304 Not Modified` and no body:
   - `If-None-Match` matches when any listed tag equals the ETag (weak comparison) or is `*`; when present, `If-Modified-Since` is ignored

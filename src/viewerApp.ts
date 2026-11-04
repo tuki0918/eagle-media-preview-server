@@ -142,6 +142,7 @@ const DEFAULT_DOCUMENT_TITLE = "Media Library";
 const OFFLINE_PAGE_TITLE = "Media Library is offline";
 const LIBRARY_NOT_SHARED_MESSAGE = "This library isn't shared right now. Please try again later.";
 const LIBRARY_CHANGED_MESSAGE = "The media server switched to a different library.";
+const LIBRARY_FORBIDDEN_MESSAGE = "Your account can't open the library that's open right now. Ask the person who set up this media library for access, or sign in as another user.";
 const changeSearch = debounce((query: string) => {
   applyFilterChange({ query: query.trim() });
   loadTagSuggestions();
@@ -252,6 +253,7 @@ async function showOfflinePageIfLibraryNotShared() {
   try {
     const data = await getJson<{ libraryStatus?: string | null }>("/api/library-status");
     if (data.libraryStatus === "not_shared") handleLibraryNotShared();
+    else if (data.libraryStatus === "forbidden") handleLibraryForbidden();
   } catch {
     // Older servers lack this route; Connect still reports an unshared library.
   }
@@ -294,6 +296,10 @@ async function connect(credentials?: { password: string; username: string }) {
     if (handleAuthError(error)) return;
     if (isLibraryNotSharedError(error)) {
       handleLibraryNotShared();
+      return;
+    }
+    if (isLibraryForbiddenError(error)) {
+      handleLibraryForbidden();
       return;
     }
     if (isEagleConnectionError(error)) serverReachable = false;
@@ -399,6 +405,18 @@ function isLibraryNotSharedError(error: unknown) {
   return error instanceof ApiError && error.code === "LIBRARY_NOT_SHARED";
 }
 
+function isLibraryForbiddenError(error: unknown) {
+  return error instanceof ApiError && error.code === "LIBRARY_FORBIDDEN";
+}
+
+// The open library is shared, but not with this account. The visitor stays signed in on the
+// connect screen, so Connect works again once a library they may open is open, or they can switch users.
+function handleLibraryForbidden() {
+  clearViewerSessionState();
+  showLogin();
+  setConnectMessage(LIBRARY_FORBIDDEN_MESSAGE, true);
+}
+
 // The host opened a library that is not shared: drop what was loaded and show the offline page.
 function handleLibraryNotShared() {
   clearViewerSessionState();
@@ -420,6 +438,7 @@ function libraryChangedSinceConnect(libraryId: string) {
 
 function connectErrorMessage(error: unknown) {
   if (isLibraryNotSharedError(error)) return LIBRARY_NOT_SHARED_MESSAGE;
+  if (isLibraryForbiddenError(error)) return LIBRARY_FORBIDDEN_MESSAGE;
   const message = errorMessage(error);
   if (isEagleConnectionError(error, message)) {
     return "Can't reach the media server right now. Please try again in a bit.";
@@ -630,8 +649,9 @@ function recheckEagleStatusAfterRequest({ libraryId, ok, status, url }: RequestO
     return;
   }
   if (url.startsWith("/api/health")) return;
-  // 409 means the server refused an answer because Eagle switched libraries mid-request.
-  if (status === 409) {
+  // 409 means the server refused an answer because Eagle switched libraries mid-request; 403 may
+  // mean the library open now is not shared with this account.
+  if (status === 409 || status === 403) {
     void checkEagleStatus();
     return;
   }
@@ -670,6 +690,10 @@ async function performEagleStatusCheck() {
     if (requestId !== eagleStatusRequestId) return;
     if (data.libraryStatus === "not_shared") {
       handleLibraryNotShared();
+      return;
+    }
+    if (data.libraryStatus === "forbidden") {
+      handleLibraryForbidden();
       return;
     }
     if (libraryChangedSinceConnect(data.library?.id || "")) {

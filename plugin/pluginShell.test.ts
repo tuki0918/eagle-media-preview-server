@@ -1421,6 +1421,178 @@ function createPluginRequirePath(pathname: string): PluginRequirePath {
   };
 }
 
+test("library user count stays short at nine users or more", async () => {
+  const { libraryUserCountLabel } = await import("./components/SettingsForm");
+  assert.deepEqual([0, 1, 8, 9, 10, 120].map(libraryUserCountLabel), ["0", "1", "8", "9+", "9+", "9+"]);
+});
+
+test("plugin limits a shared library to selected users and follows user renames", async () => {
+  const bundle = await esbuild({
+    bundle: true,
+    define: { "process.env.NODE_ENV": JSON.stringify("test") },
+    entryPoints: [new URL("./app.tsx", import.meta.url).pathname],
+    format: "iife", platform: "browser", write: false,
+  });
+  const dom = new JSDOM('<!doctype html><div id="root"></div>', {
+    runScripts: "outside-only", url: "file:///tmp/eagle-plugin/plugin/index.html",
+  } as unknown as ConstructorParameters<typeof JSDOM>[1]);
+  const pluginWindow = dom.window as unknown as Window & { eval: (source: string) => unknown; require: (id: string) => unknown; eagle: unknown };
+  const saves: Record<string, unknown>[] = [];
+  let status: { settings: Record<string, unknown>; state: string; url: string } = {
+    settings: {
+      host: "127.0.0.1", port: 41532, authEnabled: true, libraryProtectionEnabled: true,
+      authUsers: [
+        { username: "alice", role: "viewer", passwordHash: "x" },
+        { username: "bob", role: "viewer", passwordHash: "x" },
+        { username: "owner", role: "admin", passwordHash: "x" },
+      ],
+      sharedLibraries: [{ name: "Work", path: "/Users/me/Work.library" }],
+    },
+    state: "stopped", url: "http://localhost:41532",
+  };
+  pluginWindow.eagle = { library: { name: "Work", path: "/Users/me/Work.library" } };
+  pluginWindow.require = (id: string) => id === "path" ? path : {
+    createServerManager: () => ({
+      async init() { return status; },
+      async status() { return status; },
+      async saveSettings(payload: Record<string, unknown>) {
+        saves.push(payload);
+        status = { ...status, settings: { ...status.settings, ...payload } };
+        return status;
+      },
+      async start() { return status; },
+      async stop() { return status; },
+      async libraries() {
+        return { current: { name: "Work", path: "/Users/me/Work.library" }, items: [{ name: "Work", path: "/Users/me/Work.library", current: true, shared: true }] };
+      },
+    }),
+  };
+  try {
+    pluginWindow.eval(bundle.outputFiles[0].text);
+    const doc = dom.window.document;
+    const input = (label: string) => doc.querySelector<HTMLInputElement>(`[aria-label="${label}"]`);
+    // The row shows a compact button; the choices open in a popover.
+    const trigger = () => doc.querySelector<HTMLButtonElement>('button[aria-label^="Who can open Work:"]');
+    await waitFor(() => trigger()?.getAttribute("aria-label") === "Who can open Work: all users");
+    assert.equal(trigger()?.textContent, "All");
+    assert.equal(input("Only selected users can open Work"), null);
+    trigger()?.click();
+    await waitFor(() => input("Only selected users can open Work")?.disabled === false);
+    input("Only selected users can open Work")?.click();
+    await waitFor(() => Boolean(input("Let alice open Work")));
+    // Admins are always allowed and cannot be unticked.
+    assert.equal(input("Let owner open Work")?.checked, true);
+    assert.equal(input("Let owner open Work")?.disabled, true);
+    assert.match(doc.body.textContent || "", /Only admins can open this library/);
+    // The number counts everyone who can open it, so the admin counts from the start.
+    await waitFor(() => trigger()?.getAttribute("aria-label") === "Who can open Work: admins only");
+    assert.equal(trigger()?.textContent, "1");
+    input("Let alice open Work")?.click();
+    await waitFor(() => input("Let alice open Work")?.checked === true);
+    await waitFor(() => trigger()?.getAttribute("aria-label") === "Who can open Work: 2 users");
+    assert.equal(trigger()?.textContent, "2");
+
+    // Unsharing and resharing before saving keeps the limit instead of opening the library to everyone.
+    input("Share Work")?.click();
+    await waitFor(() => trigger() === null);
+    input("Share Work")?.click();
+    await waitFor(() => trigger()?.getAttribute("aria-label") === "Who can open Work: 2 users");
+    trigger()?.click();
+    await waitFor(() => input("Let alice open Work")?.checked === true);
+
+    // Renaming alice in the Access tab carries over to the library.
+    const username = input("Username for user 1");
+    assert.ok(username);
+    const valueSetter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")?.set;
+    valueSetter?.call(username, "alicia");
+    username.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+    await waitFor(() => input("Let alicia open Work")?.checked === true);
+
+    doc.querySelector("form")?.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }));
+    await waitFor(() => saves.length === 1);
+    assert.deepEqual(JSON.parse(JSON.stringify(saves[0].sharedLibraries)), [{ name: "Work", path: "/Users/me/Work.library", access: "selected", users: ["alicia"] }]);
+    // Row keys are for the panel only and never reach the saved settings.
+    assert.equal(JSON.stringify(saves[0].authUsers).includes("rowKey"), false);
+
+    // With no admin left, the count no longer includes one, and an empty selection means nobody.
+    const role = doc.querySelector<HTMLSelectElement>('[aria-label="Role for owner"]');
+    assert.ok(role);
+    await waitFor(() => !role.disabled);
+    Object.getOwnPropertyDescriptor(dom.window.HTMLSelectElement.prototype, "value")?.set?.call(role, "viewer");
+    role.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    await waitFor(() => trigger()?.getAttribute("aria-label") === "Who can open Work: 1 user");
+    input("Let alicia open Work")?.click();
+    await waitFor(() => trigger()?.getAttribute("aria-label") === "Who can open Work: nobody");
+    assert.equal(trigger()?.textContent, "0");
+    assert.match(doc.body.textContent || "", /Nobody can open this library/);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test("plugin keeps library access with the account while another account's name is edited", async () => {
+  const bundle = await esbuild({
+    bundle: true,
+    define: { "process.env.NODE_ENV": JSON.stringify("test") },
+    entryPoints: [new URL("./app.tsx", import.meta.url).pathname],
+    format: "iife", platform: "browser", write: false,
+  });
+  const dom = new JSDOM('<!doctype html><div id="root"></div>', {
+    runScripts: "outside-only", url: "file:///tmp/eagle-plugin/plugin/index.html",
+  } as unknown as ConstructorParameters<typeof JSDOM>[1]);
+  const pluginWindow = dom.window as unknown as Window & { eval: (source: string) => unknown; require: (id: string) => unknown; eagle: unknown };
+  const saves: Record<string, unknown>[] = [];
+  const status: { settings: Record<string, unknown>; state: string; url: string } = {
+    settings: {
+      host: "127.0.0.1", port: 41532, authEnabled: true, libraryProtectionEnabled: true,
+      authUsers: [
+        { username: "alice", role: "viewer", passwordHash: "x" },
+        { username: "bob", role: "viewer", passwordHash: "x" },
+      ],
+      sharedLibraries: [
+        { name: "Bob", path: "/Users/me/Bob.library", access: "selected", users: ["bob"] },
+        { name: "Alice", path: "/Users/me/Alice.library", access: "selected", users: ["alice"] },
+      ],
+    },
+    state: "stopped", url: "http://localhost:41532",
+  };
+  pluginWindow.eagle = { library: { name: "Bob", path: "/Users/me/Bob.library" } };
+  pluginWindow.require = (id: string) => id === "path" ? path : {
+    createServerManager: () => ({
+      async init() { return status; },
+      async status() { return status; },
+      async saveSettings(payload: Record<string, unknown>) {
+        saves.push(payload);
+        return status;
+      },
+      async start() { return status; },
+      async stop() { return status; },
+      async libraries() { return { current: null, items: [] }; },
+    }),
+  };
+  try {
+    pluginWindow.eval(bundle.outputFiles[0].text);
+    const doc = dom.window.document;
+    const username = () => doc.querySelector<HTMLInputElement>('[aria-label="Username for user 1"]');
+    await waitFor(() => username()?.disabled === false);
+    const valueSetter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")?.set;
+    // The first row passes through the second account's name on its way to a new one.
+    for (const name of ["bob", "carol"]) {
+      const input = username();
+      assert.ok(input);
+      valueSetter?.call(input, name);
+      input.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+      await waitFor(() => username()?.getAttribute("value") === name);
+    }
+    doc.querySelector("form")?.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }));
+    await waitFor(() => saves.length === 1);
+    const saved = JSON.parse(JSON.stringify(saves[0].sharedLibraries)) as Array<{ name: string; users: string[] }>;
+    assert.deepEqual(saved.map((library) => [library.name, library.users]), [["Bob", ["bob"]], ["Alice", ["carol"]]]);
+  } finally {
+    dom.window.close();
+  }
+});
+
 test("plugin saves shared libraries with the settings and reacts to Eagle library switches", async () => {
   const bundle = await esbuild({
     bundle: true,
@@ -1494,11 +1666,16 @@ test("plugin saves shared libraries with the settings and reacts to Eagle librar
       userDataPath: "/Users/me/Library/Application Support/Eagle",
     });
 
+    // Every row has the folder icon; only the library open in Eagle is marked as open.
+    assert.deepEqual([...doc.querySelectorAll('ul[aria-label="Libraries"] [role="img"]')].map((icon) => icon.getAttribute("aria-label")), ["Open in Eagle", "Not open in Eagle"]);
+
     const protection = doc.querySelector<HTMLInputElement>('[aria-label="Share only selected libraries"]');
     assert.ok(protection);
     protection.click();
     await waitFor(() => doc.querySelector<HTMLInputElement>('[aria-label="Share Work"]')?.disabled === false);
     assert.match(doc.body.textContent || "", /The library open in Eagle is not shared/);
+    // Only the checkbox toggles sharing: no label wraps it, so a click on the row's text does nothing.
+    assert.equal(doc.querySelector<HTMLInputElement>('[aria-label="Share Work"]')?.closest("label"), null);
     doc.querySelector<HTMLInputElement>('[aria-label="Share Work"]')?.click();
     await waitFor(() => doc.querySelector<HTMLInputElement>('[aria-label="Share Work"]')?.checked === true);
     assert.doesNotMatch(doc.body.textContent || "", /The library open in Eagle is not shared/);
