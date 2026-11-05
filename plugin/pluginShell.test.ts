@@ -1600,6 +1600,134 @@ test("plugin keeps library access with the account while another account's name 
   }
 });
 
+test("activity search asks the log once typing pauses and ignores an older answer", async () => {
+  const bundle = await esbuild({
+    bundle: true,
+    define: { "process.env.NODE_ENV": JSON.stringify("test") },
+    entryPoints: [new URL("./app.tsx", import.meta.url).pathname],
+    format: "iife", platform: "browser", write: false,
+  });
+  const dom = new JSDOM('<!doctype html><div id="root"></div>', {
+    runScripts: "outside-only", url: "file:///tmp/eagle-plugin/plugin/index.html",
+  } as unknown as ConstructorParameters<typeof JSDOM>[1]);
+  const pluginWindow = dom.window as unknown as Window & {
+    eval: (source: string) => unknown;
+    require: (id: string) => unknown;
+    eagle: unknown;
+  };
+  const status = { settings: { host: "127.0.0.1", port: 41532 }, state: "stopped", url: "http://localhost:41532" };
+  const searches: string[] = [];
+  const addressFilters: Array<Array<{ field: string; value: string }>> = [];
+  const searchKeys: Array<{ events: string[] }> = [];
+  const held = new Map<string, () => void>();
+  const summaryFor = (search: string) => ({
+    activeClients: 0, buckets: [], clientCount: 1,
+    clients: ["192.168.1.7", "192.168.1.77"].map((ip, index) => ({ active: false, authFailures: 0, edits: 0, ip, lastSeen: Date.now(), user: index ? "carol" : "", views: 0 })),
+    range: "24h",
+    recent: search === "none" ? [] : [{ at: Date.now(), event: "login_failure", ip: search ? `address-${search}` : "address-all", type: "auth", user: "bob" }],
+    totals: { auth: 0, authFailures: 0, browse: 0, edit: 0, view: 0 },
+  });
+  pluginWindow.eagle = {};
+  pluginWindow.require = (id: string) => id === "path" ? path : {
+    createServerManager: () => ({
+      async init() { return status; },
+      async status() { return status; },
+      async accessLogSummary({ filters = [], search = "", searchKeys: keys }: { filters?: Array<{ field: string; value: string }>; search?: string; searchKeys?: { events: string[] } }) {
+        searches.push(search);
+        addressFilters.push(filters);
+        if (keys) searchKeys.push(keys);
+        if (search === "slow") await new Promise<void>((resolve) => held.set(search, resolve));
+        return summaryFor(search);
+      },
+    }),
+  };
+  try {
+    pluginWindow.eval(bundle.outputFiles[0].text);
+    const doc = dom.window.document;
+    await waitFor(() => Boolean(doc.querySelector('[aria-label="Show activity"]')));
+    doc.querySelector<HTMLButtonElement>('[aria-label="Show activity"]')?.click();
+    await waitFor(() => /address-all/.test(doc.body.textContent || ""));
+    const input = doc.querySelector<HTMLInputElement>('input[aria-label="Search recent events"]');
+    assert.ok(input);
+    const type = (value: string) => {
+      Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")?.set?.call(input, value);
+      input.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+    };
+
+    // Keys in quick succession ask once, for the final text.
+    const before = searches.length;
+    type("s");
+    type("sl");
+    type("slow");
+    await waitFor(() => searches.includes("slow"));
+    assert.deepEqual(searches.slice(before), ["slow"]);
+    // Matches turn blue only once the events for that search are listed.
+    const marks = () => Array.from(doc.querySelectorAll('[aria-label="Recent events"] mark')).map((mark) => mark.textContent).join(",");
+    assert.equal(marks(), "");
+
+    // A newer search wins even though the older answer arrives last.
+    type("fast");
+    await waitFor(() => /address-fast/.test(doc.body.textContent || ""));
+    held.get("slow")?.();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.doesNotMatch(doc.body.textContent || "", /address-slow/);
+    assert.match(doc.body.textContent || "", /address-fast/);
+    assert.equal(marks(), "fast");
+
+    type("none");
+    await waitFor(() => /No matching events\./.test(doc.body.textContent || ""));
+
+    type("");
+    await waitFor(() => searches.at(-1) === "");
+    assert.equal(doc.querySelector('button[aria-label="Clear search"]'), null);
+    const button = (label: string) => doc.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+    const lastFilter = () => (addressFilters.at(-1) || []).map((filter) => `${filter.field}:${filter.value}`).join(",");
+
+    // Clicking devices adds exact-address chips; the search text stays as typed.
+    button("Filter events by 192.168.1.7")?.click();
+    await waitFor(() => lastFilter() === "address:192.168.1.7");
+    button("Filter events by 192.168.1.77")?.click();
+    await waitFor(() => lastFilter() === "address:192.168.1.7,address:192.168.1.77");
+    assert.equal(input.value, "");
+    assert.equal(button("Stop filtering events by 192.168.1.7")?.getAttribute("aria-pressed"), "true");
+
+    // A chip's x removes that address, and so does clicking the device again.
+    button("Remove 192.168.1.7 from the filter")?.click();
+    await waitFor(() => lastFilter() === "address:192.168.1.77");
+    assert.equal(button("Remove 192.168.1.7 from the filter"), null);
+    button("Stop filtering events by 192.168.1.77")?.click();
+    await waitFor(() => lastFilter() === "");
+
+    // Recent events' address, user, and event add chips too, named so each reads on its own.
+    button("Filter events by address-all")?.click();
+    await waitFor(() => lastFilter() === "address:address-all");
+    button("Filter events by User: bob")?.click();
+    await waitFor(() => lastFilter() === "address:address-all,user:bob");
+    button("Filter events by Event: Sign-in failed")?.click();
+    await waitFor(() => lastFilter() === "address:address-all,user:bob,event:login_failure");
+    assert.ok(button("Remove User: bob from the filter"));
+    assert.ok(button("Remove Event: Sign-in failed from the filter"));
+
+    // A device's user does the same; a device nobody signed in on has nothing to click.
+    button("Filter events by User: carol")?.click();
+    await waitFor(() => lastFilter() === "address:address-all,user:bob,event:login_failure,user:carol");
+    assert.equal(doc.querySelectorAll('[aria-label="Devices"] button[aria-label*="User:"]').length, 1);
+
+    // The panel's wording reaches the log as keys.
+    type("sign-in failed");
+    await waitFor(() => searches.at(-1) === "sign-in failed");
+    assert.equal(JSON.stringify(searchKeys.at(-1)?.events), '["login_failure"]');
+
+    // The box's x clears the chips and the text together.
+    type("bob");
+    await waitFor(() => searches.at(-1) === "bob");
+    button("Clear search")?.click();
+    await waitFor(() => input.value === "" && lastFilter() === "" && searches.at(-1) === "");
+  } finally {
+    dom.window.close();
+  }
+});
+
 test("plugin saves shared libraries with the settings and reacts to Eagle library switches", async () => {
   const bundle = await esbuild({
     bundle: true,

@@ -1,6 +1,7 @@
-import { useState, type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
+import { HighlightedText } from "../../src/viewer/components/HighlightedText";
 import { formatBytes } from "../../src/viewer/format";
-import type { AccessLogBucket, AccessLogClient, AccessLogEntry, AccessLogEventFilter, AccessLogRange, AccessLogSummary, BlockedAddress } from "../types";
+import type { AccessLogBucket, AccessLogClient, AccessLogEntry, AccessLogEventFilter, AccessLogFilter, AccessLogRange, AccessLogSearchKeys, AccessLogSummary, BlockedAddress } from "../types";
 import { ActivityIcon, BanIcon, ChevronIcon, CloseIcon, DownloadIcon, FolderOpenIcon, SelectItemIcon, RefreshIcon, TrashIcon } from "./Icons";
 
 interface AccessLogPanelProps {
@@ -9,12 +10,19 @@ interface AccessLogPanelProps {
   autoRefresh: boolean;
   blockedAddresses: BlockedAddress[];
   eventFilter: AccessLogEventFilter;
+  /** Chips in the search box: Recent events shows only entries with these exact values. */
+  filters: AccessLogFilter[];
   expanded: boolean;
   loading?: boolean;
   /** Result of the last Activity action (export, block, select); errors stay until the next one. */
   notice?: { isError: boolean; text: string } | null;
   range: AccessLogRange;
+  /** Text in the Recent events search box. */
+  search: string;
+  /** The search the listed events were loaded for, so the marks never run ahead of the results. */
+  searchedText?: string;
   summary: AccessLogSummary | null;
+  onFiltersChange: (filters: AccessLogFilter[]) => void;
   onAutoRefreshChange: (checked: boolean) => void;
   /** Resolves true once the address is blocked (the admin may cancel the confirmation). */
   onBlock: (address: string) => Promise<boolean>;
@@ -24,6 +32,7 @@ interface AccessLogPanelProps {
   onExpandedChange: (updater: (current: boolean) => boolean) => void;
   onRangeChange: (range: AccessLogRange) => void;
   onRefresh: () => void;
+  onSearchChange: (search: string) => void;
   /** Reveals the log file in Finder/Explorer; omitted when Eagle has no shell API for it. */
   onRevealFile?: () => void;
   /** Selects the item in Eagle's main window; omitted when Eagle has no item selection API. */
@@ -98,6 +107,18 @@ const FIELD_LABELS: Record<string, string> = {
   sharedLibraries: "shared libraries",
   trustForwardedFor: "X-Forwarded-For",
 };
+// The log holds keys like login_failure, but people search for what the panel shows.
+export function accessLogSearchKeys(search: string): AccessLogSearchKeys {
+  const term = search.trim().toLowerCase();
+  const matching = (labels: Record<string, string>) => term ? Object.keys(labels).filter((key) => labels[key].toLowerCase().includes(term)) : [];
+  return { events: matching(EVENT_LABELS), fields: matching(FIELD_LABELS) };
+}
+
+function filterLabel({ field, value }: AccessLogFilter) {
+  if (field === "user") return `User: ${value}`;
+  return field === "event" ? `Event: ${EVENT_LABELS[value] || value}` : value;
+}
+
 // How many recent events the panel lists; the app asks the manager for exactly this many.
 export const RECENT_EVENT_LIMIT = 100;
 
@@ -106,11 +127,15 @@ export function AccessLogPanel({
   autoRefresh,
   blockedAddresses,
   eventFilter,
+  filters,
   expanded,
   loading = false,
   notice = null,
   range,
+  search,
+  searchedText = "",
   summary,
+  onFiltersChange,
   onAutoRefreshChange,
   onBlock,
   onClear,
@@ -119,6 +144,7 @@ export function AccessLogPanel({
   onExpandedChange,
   onRangeChange,
   onRefresh,
+  onSearchChange,
   onRevealFile,
   onSelectItem,
   onUnblock,
@@ -198,7 +224,7 @@ export function AccessLogPanel({
 
           <div className="grid gap-1.5">
             <span className={fieldLabelClassName}>Devices</span>
-            <ClientTable blocked={blocked} summary={summary} onBlock={onBlock} />
+            <ClientTable blocked={blocked} filters={filters} summary={summary} onBlock={onBlock} onFiltersChange={onFiltersChange} />
           </div>
 
           <div className="grid gap-1.5">
@@ -210,7 +236,48 @@ export function AccessLogPanel({
                 ))}
               </div>
             </div>
-            <EventTable entries={recent} onSelectItem={onSelectItem} />
+            <div className="relative flex min-h-8 flex-wrap items-center gap-1 rounded-lg border border-[#e6e6e9] bg-white py-[3px] pl-1 pr-8 focus-within:border-[#9aa2ae]">
+              {filters.map((filter) => (
+                <span key={`${filter.field}\u0000${filter.value}`} className="inline-flex h-6 min-w-0 max-w-full items-center gap-0.5 rounded-md bg-[#f1f1f3] pl-1.5 pr-0.5 text-[11.5px] font-medium tabular-nums text-[#171717]">
+                  <span className="truncate">{filterLabel(filter)}</span>
+                  <button
+                    className="grid h-5 w-5 shrink-0 place-items-center rounded border-0 bg-transparent p-0 text-[#8a8f99] transition-colors hover:bg-[#e6e6e9] hover:text-[#171717]"
+                    type="button"
+                    aria-label={`Remove ${filterLabel(filter)} from the filter`}
+                    title={`Remove ${filterLabel(filter)} from the filter`}
+                    onClick={() => onFiltersChange(toggleFilter(filters, filter))}
+                  >
+                    <CloseIcon className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+              <input
+                className="h-6 min-w-[120px] flex-1 border-0 bg-transparent px-1.5 text-[12px] text-[#171717] outline-0 placeholder:text-[#9a9ea6]"
+                type="text"
+                aria-label="Search recent events"
+                autoCapitalize="none"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder={filters.length ? "" : "Search events"}
+                value={search}
+                onChange={(event) => onSearchChange(event.currentTarget.value)}
+              />
+              {search || filters.length ? (
+                <button
+                  className="absolute right-1 top-[3px] grid h-6 w-6 place-items-center rounded-md border-0 bg-transparent p-0 text-[#8a8f99] transition-colors hover:bg-[#f4f4f6] hover:text-[#171717]"
+                  type="button"
+                  aria-label="Clear search"
+                  title="Clear search"
+                  onClick={() => {
+                    onSearchChange("");
+                    onFiltersChange([]);
+                  }}
+                >
+                  <CloseIcon className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
+            </div>
+            <EventTable emptyText={search.trim() || filters.length || eventFilter ? "No matching events." : "No events in the log."} entries={recent} filters={filters} searchedText={searchedText} onFiltersChange={onFiltersChange} onSelectItem={onSelectItem} />
           </div>
 
           <p className="m-0 text-[10.5px] leading-snug text-[#9a9ea6]">
@@ -368,7 +435,7 @@ function clientFailures(client: AccessLogClient) {
   return client.authFailures + (client.editFailures ?? 0);
 }
 
-function ClientTable({ blocked, summary, onBlock }: { blocked: Set<string>; summary: AccessLogSummary | null; onBlock: (address: string) => Promise<boolean> }) {
+function ClientTable({ blocked, filters, summary, onBlock, onFiltersChange }: { blocked: Set<string>; filters: AccessLogFilter[]; summary: AccessLogSummary | null; onBlock: (address: string) => Promise<boolean>; onFiltersChange: (filters: AccessLogFilter[]) => void }) {
   const clients = summary?.clients || [];
   const hidden = Math.max(0, (summary?.clientCount ?? clients.length) - clients.length);
   if (!clients.length) return <EmptyRow>No devices have connected yet.</EmptyRow>;
@@ -390,10 +457,14 @@ function ClientTable({ blocked, summary, onBlock }: { blocked: Set<string>; summ
         <div key={`${client.ip}\u0000${client.user}`} className={`${clientGridClassName} border-b border-[#f3f3f5] text-[11.5px] text-[#3a3f47] last:border-b-0`} role="row">
           <span className={`inline-flex min-w-0 items-center gap-1.5 font-medium ${sameAddress ? "text-[#a3a7ae]" : "text-[#171717]"}`} role="cell">
             <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${client.active ? "bg-[#34c759]" : "bg-[#c8ccd4]"}`} title={client.active ? "Connected" : "Not connected"} />
-            <span className="truncate">{client.ip}</span>
+            <FilterButton className="font-medium" filter={{ field: "address", value: client.ip }} filters={filters} onFiltersChange={onFiltersChange}>{client.ip}</FilterButton>
             <span className="sr-only">{client.active ? "(connected)" : ""}</span>
           </span>
-          <span className="truncate" role="cell" title={client.user ? client.user : "Not signed in"}>{client.user || "—"}</span>
+          {client.user ? (
+            <span className="flex min-w-0" role="cell">
+              <FilterButton filter={{ field: "user", value: client.user }} filters={filters} onFiltersChange={onFiltersChange}>{client.user}</FilterButton>
+            </span>
+          ) : <span role="cell" title="Not signed in">—</span>}
           <span className="tabular-nums" role="cell">{formatRelative(client.lastSeen)}</span>
           <span className="text-right tabular-nums" role="cell">{client.views}</span>
           <span className="text-right tabular-nums" role="cell">{client.edits}</span>
@@ -415,8 +486,35 @@ function ClientTable({ blocked, summary, onBlock }: { blocked: Set<string>; summ
   );
 }
 
-function EventTable({ entries, onSelectItem }: { entries: AccessLogEntry[]; onSelectItem?: (itemId: string) => void }) {
-  if (!entries.length) return <EmptyRow>No events in the log.</EmptyRow>;
+function toggleFilter(filters: AccessLogFilter[], filter: AccessLogFilter) {
+  const others = filters.filter((other) => other.field !== filter.field || other.value !== filter.value);
+  return others.length === filters.length ? [...filters, filter] : others;
+}
+
+function FilterButton({ children, className = "", filter, filters, onFiltersChange }: { children: ReactNode; className?: string; filter: AccessLogFilter; filters: AccessLogFilter[]; onFiltersChange: (filters: AccessLogFilter[]) => void }) {
+  const picked = filters.some((other) => other.field === filter.field && other.value === filter.value);
+  const label = `${picked ? "Stop filtering" : "Filter"} events by ${filterLabel(filter)}`;
+  return (
+    <button
+      className={`-mx-1 min-w-0 truncate rounded border-0 bg-transparent px-1 text-left transition-colors hover:bg-[#ececef] active:bg-[#e2e2e6] active:shadow-[inset_0_1px_2px_rgba(16,24,40,0.18)] ${picked ? "text-[#1d4ed8]" : ""} ${className}`}
+      type="button"
+      aria-label={label}
+      aria-pressed={picked}
+      title={label}
+      onClick={() => onFiltersChange(toggleFilter(filters, filter))}
+    >
+      {children}
+    </button>
+  );
+}
+
+// The panel stays light in a dark OS, so it can't use the viewer's dark mode blue.
+function Match({ query, text }: { query: string; text: string }) {
+  return <HighlightedText className="text-[#1d4ed8]" query={query} text={text} />;
+}
+
+function EventTable({ emptyText, entries, filters, searchedText, onFiltersChange, onSelectItem }: { emptyText: string; entries: AccessLogEntry[]; filters: AccessLogFilter[]; searchedText: string; onFiltersChange: (filters: AccessLogFilter[]) => void; onSelectItem?: (itemId: string) => void }) {
+  if (!entries.length) return <EmptyRow>{emptyText}</EmptyRow>;
   return (
     <div className="max-h-[240px] overflow-auto rounded-xl border border-[#e6e6e9]" role="table" aria-label="Recent events">
       <div className={`${eventGridClassName} sticky top-0 border-b border-[#efeff1] bg-[#f7f7f8] ${tableHeaderClassName}`} role="row">
@@ -429,19 +527,30 @@ function EventTable({ entries, onSelectItem }: { entries: AccessLogEntry[]; onSe
       </div>
       {entries.map((entry, index) => {
         const failed = FAILED_EVENTS.has(entry.event) || (entry.status ?? 0) >= 400;
-        const details = [entry.ext?.toUpperCase(), formatBytes(entry.size), entry.fields?.map((field) => FIELD_LABELS[field] || field).join(", ")].filter(Boolean).join(" · ");
+        const fields = entry.fields?.map((field) => FIELD_LABELS[field] || field).join(", ");
+        // The size isn't searched, so it never gets a mark.
+        const details = [
+          entry.ext ? <Match query={searchedText} text={entry.ext.toUpperCase()} /> : null,
+          formatBytes(entry.size) || null,
+          fields ? <Match query={searchedText} text={fields} /> : null,
+        ].filter(Boolean);
         return (
           <div key={`${entry.at}-${index}`} className={`${eventGridClassName} border-b border-[#f3f3f5] text-[11.5px] text-[#3a3f47] last:border-b-0`} role="row">
             <span className="whitespace-nowrap tabular-nums" role="cell" title={new Date(entry.at).toLocaleString()}>{formatTime(entry.at)}</span>
-            <span className="truncate" role="cell">{entry.ip}</span>
-            <span className="truncate" role="cell">{entry.user || "—"}</span>
-            <span className={`truncate ${failed ? "font-semibold text-[#b42318]" : "text-[#171717]"}`} role="cell" title={EVENT_LABELS[entry.event] || entry.event}>
-              {EVENT_LABELS[entry.event] || entry.event}
-              {failed && entry.type !== "auth" && entry.type !== "system" && entry.status ? ` (${entry.status})` : ""}
+            <span className="flex min-w-0" role="cell">
+              <FilterButton filter={{ field: "address", value: entry.ip }} filters={filters} onFiltersChange={onFiltersChange}><Match query={searchedText} text={entry.ip} /></FilterButton>
+            </span>
+            <span className="flex min-w-0" role="cell">
+              {entry.user ? <FilterButton filter={{ field: "user", value: entry.user }} filters={filters} onFiltersChange={onFiltersChange}><Match query={searchedText} text={entry.user} /></FilterButton> : "—"}
+            </span>
+            <span className={`flex min-w-0 ${failed ? "font-semibold text-[#b42318]" : "text-[#171717]"}`} role="cell">
+              <FilterButton filter={{ field: "event", value: entry.event }} filters={filters} onFiltersChange={onFiltersChange}>
+                <Match query={searchedText} text={`${EVENT_LABELS[entry.event] || entry.event}${failed && entry.type !== "auth" && entry.type !== "system" && entry.status ? ` (${entry.status})` : ""}`} />
+              </FilterButton>
             </span>
             <span className="grid min-w-0" role="cell" title={entry.path}>
-              <span className="truncate font-mono text-[10.5px] text-[#6b7079]">{entry.itemId || entry.path || ""}</span>
-              {details ? <span className="truncate text-[10px] leading-tight text-[#9a9ea6]">{details}</span> : null}
+              <span className="truncate font-mono text-[10.5px] text-[#6b7079]"><Match query={searchedText} text={entry.itemId || entry.path || ""} /></span>
+              {details.length ? <span className="truncate text-[10px] leading-tight text-[#9a9ea6]">{details.map((detail, detailIndex) => <Fragment key={detailIndex}>{detailIndex ? " · " : ""}{detail}</Fragment>)}</span> : null}
             </span>
             <span className="grid place-items-center" role="cell">
               {entry.itemId && onSelectItem ? (

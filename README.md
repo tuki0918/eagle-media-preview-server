@@ -144,7 +144,7 @@ See [HTTPS and mkcert CA Operations](docs/https-mkcert.md) for setup, plugin HTT
 
 #### Activity
 
-See which devices connected and what they did: sign-ins, views, edits, failed requests, and server events. Successful browsing isn't listed.
+See which devices connected and what they did: sign-ins, views, edits, failed requests, and server events. Successful browsing isn't listed. Recent events can be filtered by type and searched by any text they show. Click an address, user, or event to filter by exactly that value.
 
 ![](docs/server_panel_activity.png)
 

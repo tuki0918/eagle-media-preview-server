@@ -793,9 +793,9 @@ function createServerManager({
     },
 
     // The log belongs to the manager, not the viewer, so it stays readable after the server stops.
-    async accessLogSummary({ limit = 200, range = "24h", type = "" }: { limit?: number; range?: "1h" | "24h" | "7d"; type?: string } = {}) {
+    async accessLogSummary({ range = "24h", limit = 200, ...query }: { filters?: Array<{ field: "address" | "event" | "user"; value: string }>; limit?: number; range?: "1h" | "24h" | "7d"; search?: string; searchKeys?: { events: string[]; fields: string[] }; type?: string } = {}) {
       await accessLog.load();
-      return { ...accessLog.summary({ range }), recent: accessLog.entries({ limit, type }) };
+      return { ...accessLog.summary({ range }), recent: accessLog.entries({ ...query, limit }) };
     },
 
     accessLogConnectedCount() {

@@ -1,17 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import qrcodeFactory from "qrcode-generator";
-import { AccessLogPanel, RECENT_EVENT_LIMIT } from "./components/AccessLogPanel";
+import { AccessLogPanel, accessLogSearchKeys, RECENT_EVENT_LIMIT } from "./components/AccessLogPanel";
 import { CloseIcon } from "./components/Icons";
 import { ServerStatusPanel } from "./components/ServerStatusPanel";
 import { authUserKey, SettingsForm, type HttpsFileField } from "./components/SettingsForm";
 import { serverRestartSettingsChanged, settingsPayloadChanged } from "./settingsChange";
-import type { AccessLogEventFilter, AccessLogRange, AccessLogSummary, AuthUser, LibraryCandidate, LibraryList, PluginSettings, PluginStatus, ServerState, SettingsTab, SharedLibrary, UserRole } from "./types";
+import type { AccessLogEventFilter, AccessLogFilter, AccessLogRange, AccessLogSearchKeys, AccessLogSummary, AuthUser, LibraryCandidate, LibraryList, PluginSettings, PluginStatus, ServerState, SettingsTab, SharedLibrary, UserRole } from "./types";
 
 interface ServerManager {
   accessLogConnectedCount?(): number;
   accessLogPath?(): string;
-  accessLogSummary?(input: { limit?: number; range: AccessLogRange; type?: string }): Promise<AccessLogSummary>;
+  accessLogSummary?(input: { filters?: AccessLogFilter[]; limit?: number; range: AccessLogRange; search?: string; searchKeys?: AccessLogSearchKeys; type?: string }): Promise<AccessLogSummary>;
   blockAddress?(address: string): Promise<PluginStatus>;
   clearAccessLog?(): Promise<void>;
   switchLibrary?(libraryPath: string): Promise<void>;
@@ -80,6 +80,7 @@ const PUBLIC_NETWORK_HTTP_WITH_PASSWORD_MESSAGE = "HTTPS is disabled, so the con
 // Only the connected-device count is live; the detailed view reloads on demand or with Auto refresh.
 const CONNECTED_COUNT_REFRESH_MS = 3000;
 const ACCESS_LOG_AUTO_REFRESH_MS = 10000;
+const ACCESS_LOG_SEARCH_DELAY_MS = 250;
 const HTTPS_DOCS_URL = "https://github.com/tuki0918/eagle-media-preview-server/blob/main/docs/https-mkcert.md";
 
 function App() {
@@ -100,6 +101,13 @@ function App() {
   const [activityExpanded, setActivityExpanded] = useState(false);
   const [connectedCount, setConnectedCount] = useState(0);
   const [accessLogEventFilter, setAccessLogEventFilter] = useState<AccessLogEventFilter>("");
+  const [accessLogFilters, setAccessLogFilters] = useState<AccessLogFilter[]>([]);
+  const [accessLogSearch, setAccessLogSearch] = useState("");
+  // What the log is asked for: follows the search box once typing pauses.
+  const [accessLogSearchQuery, setAccessLogSearchQuery] = useState("");
+  // The search the listed events came back for; set together with them.
+  const [accessLogSearchedText, setAccessLogSearchedText] = useState("");
+  const accessLogRequestRef = useRef(0);
   const [accessLogAutoRefresh, setAccessLogAutoRefresh] = useState(false);
   const [accessLogLoading, setAccessLogLoading] = useState(false);
   // Libraries unshared since the last save, with their user limits, in case they are rechecked.
@@ -184,6 +192,11 @@ function App() {
     return () => window.clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => setAccessLogSearchQuery(accessLogSearch.trim()), ACCESS_LOG_SEARCH_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [accessLogSearch]);
+
   // Details load when the panel opens or the view changes, then only on request.
   useEffect(() => {
     if (!activityExpanded) return;
@@ -193,7 +206,7 @@ function App() {
       if (document.visibilityState === "visible") void refreshAccessLog();
     }, ACCESS_LOG_AUTO_REFRESH_MS);
     return () => window.clearInterval(timer);
-  }, [activityExpanded, accessLogAutoRefresh, accessLogRange, accessLogEventFilter]);
+  }, [activityExpanded, accessLogAutoRefresh, accessLogRange, accessLogEventFilter, accessLogFilters, accessLogSearchQuery]);
 
   useEffect(() => {
     if (!activityNotice || activityNotice.isError) return;
@@ -323,17 +336,20 @@ function App() {
   }
 
   async function refreshAccessLog() {
+    // Only the latest request counts, so an older search can't replace the results of a newer one.
+    const request = ++accessLogRequestRef.current;
     setAccessLogLoading(true);
     try {
-      const next = await managerRef.current?.accessLogSummary?.({ limit: RECENT_EVENT_LIMIT, range: accessLogRange, type: accessLogEventFilter });
-      if (next) {
+      const next = await managerRef.current?.accessLogSummary?.({ filters: accessLogFilters, limit: RECENT_EVENT_LIMIT, range: accessLogRange, search: accessLogSearchQuery, searchKeys: accessLogSearchKeys(accessLogSearchQuery), type: accessLogEventFilter });
+      if (next && request === accessLogRequestRef.current) {
         setAccessLog(next);
+        setAccessLogSearchedText(accessLogSearchQuery);
         setConnectedCount(next.activeClients);
       }
     } catch {
       // The panel keeps the last summary; logging never blocks the server controls.
     } finally {
-      setAccessLogLoading(false);
+      if (request === accessLogRequestRef.current) setAccessLogLoading(false);
     }
   }
 
@@ -797,12 +813,17 @@ function App() {
           autoRefresh={accessLogAutoRefresh}
           blockedAddresses={settings.blockedAddresses || []}
           eventFilter={accessLogEventFilter}
+          filters={accessLogFilters}
           expanded={activityExpanded}
           loading={accessLogLoading}
           notice={activityNotice}
           range={accessLogRange}
+          search={accessLogSearch}
+          searchedText={accessLogSearchedText}
           summary={accessLog}
+          onFiltersChange={setAccessLogFilters}
           onAutoRefreshChange={setAccessLogAutoRefresh}
+          onSearchChange={setAccessLogSearch}
           onBlock={blockAddress}
           onClear={() => void clearAccessLog()}
           onEventFilterChange={setAccessLogEventFilter}

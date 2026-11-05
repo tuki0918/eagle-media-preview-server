@@ -61,6 +61,19 @@ interface AccessLogOptions {
 const ACCESS_LOG_TYPES: AccessLogType[] = ["auth", "browse", "edit", "system", "view"];
 // Viewers poll /api/health every few seconds, so anyone seen this recently is still connected.
 const ACTIVE_CLIENT_WINDOW_MS = 2 * 60 * 1000;
+interface AccessLogFilter {
+  field: "address" | "event" | "user";
+  value: string;
+}
+
+interface EntriesOptions {
+  filters?: AccessLogFilter[];
+  limit?: number;
+  search?: string;
+  searchKeys?: { events: string[]; fields: string[] };
+  type?: string;
+}
+
 const DEFAULT_MAX_ENTRIES = 20000;
 const DEFAULT_MAX_FILE_BYTES = 8 * 1024 * 1024;
 const DEFAULT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -76,6 +89,12 @@ const RANGE_BUCKETS: Record<AccessLogRange, { bucketMs: number; count: number }>
 
 // The log lives in the OS temp directory: it outlives a server stop or an Eagle restart for
 // investigation, but is not meant to be kept, so a reboot (or the age limit) may drop it.
+function entryMatchesSearch(entry: AccessLogEntry, term: string, eventKeys: Set<string>, fieldKeys: Set<string>) {
+  if (eventKeys.has(entry.event) || entry.fields?.some((field) => fieldKeys.has(field))) return true;
+  const texts = [entry.ip, entry.user, entry.event, entry.itemId, entry.path, entry.ext, entry.status, ...(entry.fields || [])];
+  return texts.some((text) => text !== undefined && String(text).toLowerCase().includes(term));
+}
+
 function defaultAccessLogPath() {
   return join(tmpdir(), "eagle-media-preview-server", "access-log.jsonl");
 }
@@ -230,11 +249,27 @@ function createAccessLog({
     },
 
     // Walks back from the newest entry, so a short page costs the same however large the log is.
-    entries({ limit = 200, type = "" }: { limit?: number; type?: string } = {}) {
+    // Filters are exact: an entry needs one of the values given for each column, so values of a
+    // column widen the result and different columns narrow it. `search` matches part of any text
+    // the panel shows for the entry, ignoring case; `searchKeys` covers the panel's own wording.
+    entries({ filters = [], limit = 200, search = "", searchKeys = { events: [], fields: [] }, type = "" }: EntriesOptions = {}) {
       prune();
+      const values = (field: AccessLogFilter["field"]) => new Set(filters.filter((filter) => filter.field === field).map((filter) => filter.value));
+      const addresses = values("address");
+      const events = values("event");
+      const users = values("user");
+      const term = search.trim().toLowerCase();
+      const eventKeys = new Set(searchKeys.events);
+      const fieldKeys = new Set(searchKeys.fields);
       const output: AccessLogEntry[] = [];
       for (let index = entries.length - 1; index >= 0 && output.length < limit; index -= 1) {
-        if (!type || entries[index].type === type) output.push(entries[index]);
+        const entry = entries[index];
+        if (type && entry.type !== type) continue;
+        if (addresses.size && !addresses.has(entry.ip)) continue;
+        if (events.size && !events.has(entry.event)) continue;
+        if (users.size && !users.has(entry.user || "")) continue;
+        if (term && !entryMatchesSearch(entry, term, eventKeys, fieldKeys)) continue;
+        output.push(entry);
       }
       return output;
     },

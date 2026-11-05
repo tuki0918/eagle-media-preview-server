@@ -62,9 +62,12 @@ flushSync(() => {
       autoRefresh={false}
       blockedAddresses={blockedAddresses}
       eventFilter=""
+      filters={[]}
       expanded
       range="24h"
+      search=""
       summary={summary}
+      onFiltersChange={noop}
       onAutoRefreshChange={noop}
       onBlock={async () => false}
       onClear={noop}
@@ -73,6 +76,7 @@ flushSync(() => {
       onExpandedChange={noop}
       onRangeChange={noop}
       onRefresh={noop}
+      onSearchChange={noop}
       onRevealFile={noop}
       onSelectItem={noop}
       onUnblock={noop}

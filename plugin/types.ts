@@ -72,6 +72,18 @@ export type AccessLogRange = "1h" | "24h" | "7d";
 export type AccessLogType = "auth" | "browse" | "edit" | "system" | "view";
 export type AccessLogEventFilter = "" | AccessLogType;
 
+/** A chip in Recent events: an exact value of one column. */
+export interface AccessLogFilter {
+  field: "address" | "event" | "user";
+  value: string;
+}
+
+/** Log keys whose panel wording matches the search text, since the log itself holds only the keys. */
+export interface AccessLogSearchKeys {
+  events: string[];
+  fields: string[];
+}
+
 export interface AccessLogEntry {
   at: number;
   event: string;

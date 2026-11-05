@@ -30,6 +30,66 @@ test("access log persists entries and restores them in a new instance", async ()
   assert.equal(restored.entries({ type: "auth" }).length, 1);
 });
 
+test("access log search matches part of the address or user across every kept entry", async () => {
+  const log = createAccessLog({ filePath: await tempLogPath() });
+  log.record({ type: "view", event: "view", ip: "192.168.1.77", user: "Alice" });
+  for (let index = 0; index < 5; index += 1) log.record({ type: "view", event: "view", ip: "192.168.1.24", user: "bob" });
+  log.record({ type: "auth", event: "login_failure", ip: "192.168.1.77" });
+
+  const events = (input: Record<string, unknown>) => log.entries(input).map((entry: { event: string }) => entry.event);
+  // The older entry is found although newer ones would fill the limit.
+  assert.deepEqual(events({ limit: 2, search: "1.77" }), ["login_failure", "view"]);
+  assert.deepEqual(events({ search: " aLiCe " }), ["view"]);
+  assert.deepEqual(events({ search: "1.77", type: "auth" }), ["login_failure"]);
+  assert.deepEqual(events({ search: "nobody" }), []);
+  assert.equal(log.entries({ search: "  " }).length, 7);
+});
+
+test("access log filters are exact: values of a column widen, different columns narrow", async () => {
+  const log = createAccessLog({ filePath: await tempLogPath() });
+  log.record({ type: "view", event: "view", ip: "192.168.1.2", user: "alice" });
+  log.record({ type: "view", event: "view", ip: "192.168.1.24", user: "bob" });
+  log.record({ type: "auth", event: "login_success", ip: "192.168.1.3", user: "bob" });
+
+  const addresses = (input: Record<string, unknown>) => log.entries(input).map((entry: { ip: string }) => entry.ip);
+  const address = (value: string) => ({ field: "address", value });
+  // Exact: 192.168.1.24 doesn't come along with 192.168.1.2.
+  assert.deepEqual(addresses({ filters: [address("192.168.1.2")] }), ["192.168.1.2"]);
+  // Any value of one column.
+  const two = [address("192.168.1.2"), address("192.168.1.3")];
+  assert.deepEqual(addresses({ filters: two }), ["192.168.1.3", "192.168.1.2"]);
+  assert.deepEqual(addresses({ filters: [{ field: "user", value: "alice" }, { field: "user", value: "bob" }] }), ["192.168.1.3", "192.168.1.24", "192.168.1.2"]);
+  // Every column and other filter must match.
+  assert.deepEqual(addresses({ filters: [...two, { field: "user", value: "bob" }] }), ["192.168.1.3"]);
+  assert.deepEqual(addresses({ filters: [...two, { field: "event", value: "view" }] }), ["192.168.1.2"]);
+  assert.deepEqual(addresses({ filters: two, type: "view" }), ["192.168.1.2"]);
+  // A user chip never matches entries without a user, or part of a name.
+  assert.deepEqual(addresses({ filters: [{ field: "user", value: "bo" }] }), []);
+  assert.equal(log.entries({ filters: [] }).length, 3);
+});
+
+test("access log search covers the text the panel shows, including its own wording", async () => {
+  const log = createAccessLog({ filePath: await tempLogPath() });
+  log.record({ type: "view", event: "view", ext: "mp4", ip: "10.0.0.1", itemId: "ITEMABC", libraryId: "HIDDENLIB", path: "/file/ITEMABC", size: 48234567, status: 200 });
+  log.record({ type: "edit", event: "star", fields: ["rating"], ip: "10.0.0.2", itemId: "ITEMDEF", status: 200 });
+  log.record({ type: "auth", event: "login_failure", ip: "10.0.0.3", status: 401, user: "bob" });
+
+  const found = (search: string, searchKeys?: { events: string[]; fields: string[] }) => log.entries({ search, searchKeys }).map((entry: { ip: string }) => entry.ip);
+  assert.deepEqual(found("itemdef"), ["10.0.0.2"]);
+  assert.deepEqual(found("/file/"), ["10.0.0.1"]);
+  assert.deepEqual(found("MP4"), ["10.0.0.1"]);
+  assert.deepEqual(found("rating"), ["10.0.0.2"]);
+  assert.deepEqual(found("401"), ["10.0.0.3"]);
+  assert.deepEqual(found("login_fail"), ["10.0.0.3"]);
+  // Not shown in the panel, so a search doesn't find it.
+  assert.deepEqual(found("hiddenlib"), []);
+  assert.deepEqual(found("48234567"), []);
+  // The panel's wording arrives as keys.
+  assert.deepEqual(found("sign-in failed"), []);
+  assert.deepEqual(found("sign-in failed", { events: ["login_failure"], fields: [] }), ["10.0.0.3"]);
+  assert.deepEqual(found("changed", { events: [], fields: ["rating"] }), ["10.0.0.2"]);
+});
+
 test("access log drops entries past the age limit when loading", async () => {
   const filePath = await tempLogPath();
   const now = Date.now();
