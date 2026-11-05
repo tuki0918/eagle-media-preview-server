@@ -123,7 +123,11 @@ The source is managed as a TypeScript / React / Vite / Tailwind CSS / Vitest pro
 - `scripts/diagram-images.mjs`
   - Captures those diagrams as dark-mode PNGs in `docs/` for `npm run diagram:images`
 - `scripts/settings-screenshots.mjs`, `scripts/settings-screenshots.entry.tsx`
-  - Captures the Settings tabs as the `docs/server_panel_*.png` README images for `npm run screenshot:settings`
+  - Captures the Settings tabs as README images for `npm run screenshot:settings`
+- `scripts/activity-screenshots.mjs`, `scripts/activity-screenshots.entry.tsx`
+  - Captures the Activity tabs as README images for `npm run screenshot:activity`
+- `scripts/capture-panel.mjs`
+  - Bundles and captures those pages for both commands
 - `scripts/find-chrome.mjs`
   - Finds Chrome or Chromium for the capture scripts
 - `scripts/frame-ipad.swift`
@@ -559,10 +563,11 @@ Screenshot commands:
 
 ```sh
 npm run screenshot:settings
+npm run screenshot:activity
 npm run screenshot:frame -- <screenshot> docs/screenshot.png
 ```
 
-`npm run screenshot:settings` builds, then captures the General, Access, Libraries, and Security tabs into `docs/server_panel_general.png`, `docs/server_panel_access.png`, `docs/server_panel_libraries.png`, and `docs/server_panel_security.png` with headless Chrome. It renders the real settings form with the sample data in `scripts/settings-screenshots.entry.tsx`, so it needs neither Eagle nor a running server. Run it after changing the settings form. `docs/server_panel.png` shows the real plugin window and is still taken by hand. Set `CHROME_PATH` when Chrome or Chromium is not in a standard location.
+`npm run screenshot:settings` builds, then captures the General, Access, Libraries, and Security tabs into `docs/server_panel_general.png`, `docs/server_panel_access.png`, `docs/server_panel_libraries.png`, and `docs/server_panel_security.png` with headless Chrome. It renders the real settings form with the sample data in `scripts/settings-screenshots.entry.tsx`, so it needs neither Eagle nor a running server. Run it after changing the settings form. `npm run screenshot:activity` does the same for the Activity tabs, with `scripts/activity-screenshots.entry.tsx`, into `docs/server_panel_activity.png` and `docs/server_panel_activity_blocked.png`. `docs/server_panel.png` shows the real plugin window and is still taken by hand. Set `CHROME_PATH` when Chrome or Chromium is not in a standard location.
 
 `npm run screenshot:frame` places a landscape iPad Pro 13" screenshot (4:3, such as 2752x2064 from the device or the simulator) inside the iPad bezel and writes a transparent PNG. It needs macOS with Xcode, because the bezel comes from `/Library/Developer/DeviceKit/Chrome/tablet5.devicechrome`. Screenshots with another aspect ratio are refused.
 

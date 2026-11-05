@@ -17,6 +17,7 @@
     "diagram": "node scripts/diagram.mjs",
     "diagram:images": "node scripts/diagram-images.mjs",
     "screenshot:settings": "npm run build && node scripts/settings-screenshots.mjs",
+    "screenshot:activity": "npm run build && node scripts/activity-screenshots.mjs",
     "screenshot:frame": "swift scripts/frame-ipad.swift",
     "screenshot:frame:iphone": "swift scripts/frame-iphone.swift"
   },

@@ -125,7 +125,6 @@ export interface AccessLogSummary {
   /** Every device seen in the selected range; `clients` holds only the most recently seen ones. */
   clientCount: number;
   clients: AccessLogClient[];
-  /** When the manager built this summary. */
   range: AccessLogRange;
   recent: AccessLogEntry[];
   /** viewFailures: failed media fetches, listed under Views but not counted as views. */

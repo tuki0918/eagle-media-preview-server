@@ -140,6 +140,18 @@ See [HTTPS and mkcert CA Operations](docs/https-mkcert.md) for setup, plugin HTT
 - `TLS Cert`: the certificate file
 - `TLS Key`: the matching private key file
 
+#### Activity
+
+See which devices connected and what they did: sign-ins, views, edits, failed requests, and server events. Successful browsing isn't listed.
+
+![](docs/server_panel_activity.png)
+
+Block a device from its row or by entering an address or CIDR range under **Blocked addresses**. Blocks apply right away, also while the server is running.
+
+![](docs/server_panel_activity_blocked.png)
+
+The log is kept in your computer's temporary folder for up to 7 days and can be exported as CSV.
+
 </details>
 
 ## Use Cases
