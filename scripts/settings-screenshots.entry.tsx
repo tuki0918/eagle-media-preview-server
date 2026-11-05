@@ -6,11 +6,11 @@ import type { AuthUser, LibraryList, PluginSettings, SettingsTab } from "../plug
 
 const authUsers: AuthUser[] = [
   { passwordHash: "sample", role: "admin", username: "admin" },
-  { passwordHash: "sample", role: "viewer", username: "eagle" },
+  { passwordHash: "sample", role: "viewer", username: "guest@example.com" },
 ];
 const sharedLibraries = [
   { name: "MY", path: "/Users/xxx/MY.library" },
-  { access: "selected" as const, name: "ICON", path: "/Users/xxx/ICON.library", users: ["eagle"] },
+  { access: "selected" as const, name: "ICON", path: "/Users/xxx/ICON.library", users: ["guest@example.com"] },
 ];
 const libraries: LibraryList = {
   current: sharedLibraries[1],
