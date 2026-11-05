@@ -2,6 +2,8 @@ import type { EagleFolder, EagleSmartFolder, ViewerSection } from "./types";
 
 export interface SearchControlsState {
   allFoldersTotal: number;
+  /** Admins may add files to the library. */
+  canUpload?: boolean;
   /** File extensions present in the current library; empty until loaded. */
   availableExts?: readonly string[];
   /** True while the library's extensions are being fetched. */

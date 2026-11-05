@@ -25,6 +25,7 @@ import {
 import { TagList } from "./TagList";
 import { SubfolderList } from "./SubfolderList";
 import { TilesSentinel } from "./TilesSentinel";
+import { UploadButton } from "./UploadDialog";
 import { ViewerDock } from "./ViewerDock";
 
 interface ViewerShellLayoutProps {
@@ -121,7 +122,8 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
                   {headerCount.toLocaleString()}
                 </span>
               </button>
-              <div className="flex min-w-0 items-center justify-end">
+              <div className="flex min-w-0 items-center justify-end gap-1">
+                <UploadButton />
                 {/* Kept in place (disabled) where filters don't apply, so the header layout never shifts. */}
                 <SearchFiltersButton
                   activeFilters={showingTags ? tagSearchFilters : activeFilters}

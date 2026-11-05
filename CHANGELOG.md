@@ -7,6 +7,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Added
+
+- Admins can upload files to the open library from the viewer, with an optional folder and tags. Each upload appears in the Activity panel with its file type and size, not its name.
+
 ## [0.7.0] - 2026-11-05
 
 ### Added

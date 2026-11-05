@@ -10,6 +10,7 @@ const { createConnectionContext } = require("./connection.cjs");
 const { createLibraryAccessPolicy, libraryIdFor } = require("./libraryAccess.cjs");
 const { readInternetShortcutUrl, servedMediaInfo, streamItemMedia } = require("./media.cjs");
 const { resolveDefaultPublicDir, securityHeaders, serveStatic } = require("./static.cjs");
+const { UPLOAD_PATH, UPLOAD_REQUEST_TIMEOUT_MS, UploadError, discardUpload, parseUploadRequest, receiveUpload, sweepUploads } = require("./upload.cjs");
 const {
   AUTH_SESSION_MAX_AGE_SECONDS,
   authRequired,
@@ -136,6 +137,7 @@ interface ItemTypesScan {
 interface EagleClient {
   appInfo(): Promise<unknown>;
   folders(): Promise<unknown>;
+  addItemFromPath(input: { folderId?: string; name: string; path: string; tags?: string[] }): Promise<unknown>;
   itemById(id: string): Promise<EagleItem>;
   itemExtensions(options?: { onProgress?: (extensions: ItemExtension[]) => void }): Promise<ItemExtension[]>;
   legacyThumbnailPath(id: string): Promise<unknown>;
@@ -403,6 +405,8 @@ function createViewerServer({
         }
       };
       const auth = { authSessions, clientAddress: requestAddress, loginFailures, recordAuth, revokedAuthSessions, secureCookies: httpsEnabled, sessionMaxAgeSeconds, sessionSecret: resolvedSessionSecret, users: resolvedAuthUsers };
+      // A refused upload must not make this server read the rest of a large body before moving on.
+      if (url.pathname === UPLOAD_PATH) res.setHeader("Connection", "close");
       if (!isTrustedUnsafeRequest(req, url, trustedCustomDomain)) {
         sendJson(res, 403, { error: "Cross-origin writes are not allowed" });
         return;
@@ -445,13 +449,14 @@ function createViewerServer({
       }
       await serveStatic(url.pathname, res, publicDir);
     } catch (error) {
-      const status = error instanceof HttpError || error instanceof EagleRequestError
+      const status = error instanceof HttpError || error instanceof EagleRequestError || error instanceof UploadError
         ? (error as { status: number }).status
         : 500;
       const code = error instanceof HttpError && error.code ? { code: error.code } : {};
       sendJson(res, status, { error: errorMessage(error) || "Internal server error", ...code });
     }
   });
+  (server as NetServer & { requestTimeout?: number }).requestTimeout = UPLOAD_REQUEST_TIMEOUT_MS;
   const openSockets = new Set<Socket>();
   // The raw TCP socket is reported for both HTTP and HTTPS, so destroying it also ends TLS sessions.
   server.on("connection", (socket: Socket) => {
@@ -469,6 +474,7 @@ function createViewerServer({
     async start() {
       if (state === "running") return this.status();
       state = "starting";
+      void sweepUploads();
       lastError = "";
       try {
         await new Promise<void>((resolveStart, rejectStart) => {
@@ -851,6 +857,31 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
     return;
   }
 
+  if (url.pathname === UPLOAD_PATH) {
+    if (req.method !== "POST") {
+      sendMethodNotAllowed(res, ["POST"]);
+      return;
+    }
+    if (!hasAdminAccess(req, auth)) {
+      sendJson(res, 403, { error: ADMIN_WRITE_FORBIDDEN_MESSAGE });
+      return;
+    }
+    const upload = parseUploadRequest(req, url);
+    editedItems.set(res, { ext: upload.extension.slice(1), size: upload.size });
+    void sweepUploads();
+    const filePath = await receiveUpload(req, { extension: upload.extension });
+    try {
+      // A library switch during a long upload must not put the file in the other library.
+      await confirmLibraryBeforeWrite(res);
+      await session.client.addItemFromPath({ path: filePath, name: upload.name, folderId: upload.folderId, tags: upload.tags });
+    } catch (error) {
+      await discardUpload(filePath);
+      throw error;
+    }
+    sendJson(res, 201, { name: upload.name });
+    return;
+  }
+
   const urlPreviewMatch = url.pathname.match(/^\/api\/items\/([^/]+)\/url-preview$/);
   if (urlPreviewMatch) {
     if (req.method !== "GET") {
@@ -1065,6 +1096,11 @@ function logAccess(accessLog: AccessLogRecorder, req: IncomingMessage, res: Serv
     }
     return;
   }
+  if (pathname === UPLOAD_PATH) {
+    const noted = editedItems.get(res);
+    accessLog.record({ ...base, type: "edit", event: "upload", ext: noted?.ext || undefined, path: pathname, size: noted?.size });
+    return;
+  }
   const edit = pathname.match(/^\/api\/items\/([^/]+)\/(star|metadata|trash)$/);
   if (edit) {
     const noted = editedItems.get(res);
@@ -1248,7 +1284,7 @@ function normalizeStar(value: unknown) {
 }
 
 // What an edit request changed, for the access log: the field names, never their values.
-const editedItems = new WeakMap<ServerResponse, { event?: string; fields?: string[] }>();
+const editedItems = new WeakMap<ServerResponse, { event?: string; ext?: string; fields?: string[]; size?: number }>();
 
 function sendLibraryNotShared(res: ServerResponse) {
   sendJson(res, 503, { error: LIBRARY_NOT_SHARED_MESSAGE, code: "LIBRARY_NOT_SHARED" });

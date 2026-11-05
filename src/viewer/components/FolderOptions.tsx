@@ -16,7 +16,7 @@ export function FolderOptions({ folders }: FolderOptionsProps) {
   );
 }
 
-function FolderOptionItems({ folders }: { folders: readonly EagleFolder[] }) {
+export function FolderOptionItems({ folders }: { folders: readonly EagleFolder[] }) {
   return (
     <>
       {folders.map((folder) => (

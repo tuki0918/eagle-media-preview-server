@@ -44,7 +44,7 @@ The preview server, plugin window, and settings file are provided by this plugin
 - The background service starts, stops, and restarts the preview server, loads and saves `~/.eagle-media-preview-server/settings.json`, and relays Eagle's library-switch events
 - The preview server calls Eagle's Web API (`/api/v2/*`) for metadata and file paths, and reads originals and thumbnails from `<name>.library/images/<item id>.info/` directly
 - The library folder may be on an internal disk, an external HDD / SSD, or a NAS / network drive mounted on the computer running Eagle; the plugin never shares the folder itself
-- Media files are read-only to the preview server; rating, tags, folders, and trash changes go through Eagle's API
+- Media files are read-only to the preview server; rating, tags, folders, trash changes, and uploads go through Eagle's API
 
 `npm run diagram` prints these diagrams in the terminal (`overview` or `architecture` prints one). The images above are its colored output on a dark background, captured by `npm run diagram:images`. The routes are listed under HTTP/HTTPS Server.
 
@@ -389,6 +389,10 @@ Media URLs carry the library id as the `library` query parameter, since media el
   - Updates tags and folders/categories from the preview panel
 - `POST /api/items/:id/trash` — Admin
   - Moves an item to Eagle's trash or restores it; requires `isDeleted` as a boolean
+- `POST /api/uploads` — Admin
+  - Adds one file to the open library; the raw request body is the file, up to 20 GB, and `Content-Length` is required
+  - Query: `name` (required), `folderId`, and `tag` (repeatable)
+  - The file is streamed to the system temp folder under a random name and passed to Eagle's `/api/item/addFromPath`; it is removed right away if that fails, and otherwise about an hour later
 
 #### Eagle Web API — called by the viewer server only
 
@@ -412,7 +416,7 @@ The viewer server calls Eagle's local Web API at `http://localhost:41595/api/v2/
 - Every route that reads or changes library data (`/api/*` except auth routes, `/api/library-status`, `/api/connect`, and `/api/health`, plus `/file/:id`) requires the id; without it they return `400 { "error": "A library id is required for library requests", "code": "LIBRARY_REQUIRED" }`. The library is checked before an item id is looked up, so an item id alone never returns a file. The "Open file" link that opens the original in a new tab carries the id too; older bookmarks without it no longer work
 - A request whose id differs from the open library returns `409 { "error": "The library open in Eagle has changed", "code": "LIBRARY_CHANGED" }`, and one made while Eagle cannot report the open library returns `502`, in both cases before any library data is read
 - The check is repeated within the request, without extra Eagle calls for reads: each request remembers the library it was admitted for and a switch counter bumped by `eagle.onLibraryChanged`. Right before a JSON answer or a media stream is sent, the cached library info and the counter must still match; otherwise the answer is replaced with `409 LIBRARY_CHANGED` and `X-Library-Id` reports the new library
-- Writes (rating, tags, categories, trash) re-read the open library from Eagle right after the request body arrives and right before calling Eagle, so holding back the body cannot redirect a write to another library
+- Writes (rating, tags, categories, trash, uploads) re-read the open library from Eagle right after the request body arrives and right before calling Eagle, so holding back the body cannot redirect a write to another library
 - A media stream that has already started is sent to the end
 - The viewer server never calls Eagle's library switch API. Only the server window does: the folder icon on a library's row asks for confirmation, then the manager posts to Eagle's `POST /api/library/switch`. Eagle's plugin API documents no switch method. The switch then follows the same `eagle.onLibraryChanged` path as a switch made in Eagle
 
@@ -466,6 +470,7 @@ Authorization:
 - Browsing is read-only by default
 - `POST /api/items/:id/star` and `POST /api/items/:id/metadata` require an Editor or Admin user
 - `POST /api/items/:id/trash` requires an Admin user
+- `POST /api/uploads` requires an Admin user, so uploads aren't available with password protection off
 - The viewer server never calls Eagle's library switch API; switching libraries is only possible from the Eagle app
 - Unsafe methods reject mismatched `Origin` or `Referer` headers before API handlers run
 - JSON request bodies are capped at 1 MiB; malformed bodies return `400` and oversized bodies return `413`

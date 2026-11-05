@@ -107,6 +107,7 @@ Use this tab to choose which users can sign in to the viewer. To let other devic
 - Editor: edit rating, tags, and categories from the preview panel
 - Admin: everything an Editor can do, plus:
   - Move items to Eagle's trash and restore them. Files are not permanently deleted.
+  - Upload files to the open library, up to 20 GB each, with an optional folder and tags. Uploads are kept in this computer's temp folder for up to an hour after they finish.
   - Open every shared library, including libraries limited to selected users
 
 Authentication is optional. When password protection is enabled, browser access uses the built-in login screen and cookie-based sessions. Sessions expire after the configured session duration, 7 days by default.

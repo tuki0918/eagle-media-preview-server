@@ -231,6 +231,11 @@ async function init() {
     stepPreview,
     togglePreviewInfo,
     previewPointerDown: closePreviewInfoFromOutside,
+    uploadError: handleAuthError,
+    uploadsFinished: () => {
+      void loadFolders();
+      void loadItems();
+    },
     previewClosed: () => {
       if (isPreviewDialogOpen()) {
         closePreview();
@@ -1119,6 +1124,7 @@ function syncResetFiltersButton() {
 function renderSearchControlButtons() {
   setSearchControlsState({
     allFoldersTotal,
+    canUpload: state.permissions.manageLibrary,
     availableExts,
     availableExtsLoading: itemTypesState === "loading",
     tagsTotal,

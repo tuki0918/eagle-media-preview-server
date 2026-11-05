@@ -2,7 +2,7 @@ import { test } from "vitest";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { createReadStream } from "node:fs";
-import { mkdir, truncate, writeFile, utimes, rm } from "node:fs/promises";
+import { mkdir, readFile, truncate, writeFile, utimes, rm } from "node:fs/promises";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { createRequire } from "node:module";
@@ -3946,6 +3946,196 @@ test("createViewerServer refuses blocked addresses, including behind a local pro
     viewer.setBlockedAddresses(["10.0.0.2"]);
     assert.equal((await fetch(`${origin}/api/auth/status`, { headers: { "X-Forwarded-For": "10.0.0.2" } })).status, 403);
     assert.equal((await fetch(`${origin}/api/auth/status`, { headers: { "X-Forwarded-For": "192.168.1.50" } })).status, 200);
+  } finally {
+    await viewer.stop();
+  }
+});
+
+function uploadViewer(addItemFromPath: (input: { folderId?: string; name: string; path: string; tags?: string[] }) => Promise<unknown>, overrides: Record<string, unknown> = {}) {
+  return createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    authUsers: [
+      { username: "ed", passwordHash: sha256("edit"), role: "editor" },
+      { username: "admin", passwordHash: sha256("admin"), role: "admin" },
+    ],
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/tmp/Test.library", name: "Test Library" };
+      },
+      addItemFromPath,
+    },
+    ...overrides,
+  });
+}
+
+test("uploads stream the file to disk and hand its path to Eagle", async () => {
+  const added: Array<{ content: string; input: Record<string, unknown> }> = [];
+  const viewer = uploadViewer(async (input) => {
+    added.push({ content: await readFile(input.path, "utf8"), input });
+    return undefined;
+  });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const cookie = await loginCookie(origin, "admin", "admin");
+    const query = new URLSearchParams({ name: "写真.PNG", folderId: "F1" });
+    query.append("tag", "travel");
+    query.append("tag", "family");
+    const response = await fetch(`${origin}/api/uploads?${query}`, {
+      method: "POST",
+      headers: { Cookie: cookie, Origin: origin, "Content-Type": "application/octet-stream" },
+      body: "image-bytes",
+    });
+
+    assert.equal(response.status, 201);
+    assert.equal(added.length, 1);
+    assert.equal(added[0].content, "image-bytes");
+    assert.equal(added[0].input.name, "写真");
+    assert.equal(added[0].input.folderId, "F1");
+    assert.deepEqual(added[0].input.tags, ["travel", "family"]);
+    assert.match(String(added[0].input.path), /[0-9a-f]{32}\.png$/);
+    await rm(String(added[0].input.path), { force: true });
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("uploads are refused for everyone but admins, before reaching Eagle", async () => {
+  let calls = 0;
+  const add = async () => {
+    calls += 1;
+  };
+  const viewer = uploadViewer(add);
+  const openViewer = uploadViewer(add, { authUsers: [] });
+  await viewer.start();
+  await openViewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const upload = (headers: Record<string, string>, target = origin) => fetch(`${target}/api/uploads?name=a.png`, {
+      method: "POST",
+      headers: { Origin: target, ...headers },
+      body: "x",
+    });
+
+    assert.equal((await upload({})).status, 401);
+    assert.equal((await upload({ Cookie: await loginCookie(origin, "ed", "edit") })).status, 403);
+    // Without password protection nobody has the Admin role.
+    assert.equal((await upload({}, `http://127.0.0.1:${openViewer.status().port}`)).status, 403);
+    const adminCookie = await loginCookie(origin, "admin", "admin");
+    assert.equal((await upload({ Cookie: adminCookie, Origin: "http://evil.example" })).status, 403);
+    assert.equal(calls, 0);
+  } finally {
+    await viewer.stop();
+    await openViewer.stop();
+  }
+});
+
+test("a failed upload removes its temp file and reports Eagle's error", async () => {
+  let tempPath = "";
+  const viewer = uploadViewer(async (input) => {
+    tempPath = input.path;
+    throw new EagleRequestError(502, "Unable to reach Eagle API");
+  });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const cookie = await loginCookie(origin, "admin", "admin");
+    const response = await fetch(`${origin}/api/uploads?name=a.png`, {
+      method: "POST",
+      headers: { Cookie: cookie, Origin: origin },
+      body: "x",
+    });
+
+    assert.equal(response.status, 502);
+    assert.ok(tempPath);
+    await assert.rejects(() => readFile(tempPath), { code: "ENOENT" });
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("an upload is not added when Eagle has switched libraries while it was sent", async () => {
+  let calls = 0;
+  let libraryPath = "/tmp/Test.library";
+  const viewer = uploadViewer(async () => {
+    calls += 1;
+  }, {
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: libraryPath, name: "Library" };
+      },
+      async addItemFromPath() {
+        calls += 1;
+      },
+    },
+  });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const cookie = await loginCookie(origin, "admin", "admin");
+    const health = await (await globalThis.fetch(`${origin}/api/health`, { headers: { Cookie: cookie } })).json();
+    const { port } = viewer.status();
+    const status = await new Promise<number>((resolve, reject) => {
+      const client = httpRequest({
+        host: "127.0.0.1",
+        port,
+        method: "POST",
+        path: "/api/uploads?name=a.png",
+        headers: { Cookie: cookie, Origin: origin, "X-Library-Id": health.library.id, "Content-Length": 1 },
+      }, (response) => {
+        response.resume();
+        resolve(response.statusCode || 0);
+      });
+      client.on("error", reject);
+      client.flushHeaders();
+      setTimeout(() => {
+        libraryPath = "/tmp/Other.library";
+        viewer.notifyLibraryChanged();
+        client.end("x");
+      }, 50);
+    });
+
+    assert.equal(status, 409);
+    assert.equal(calls, 0);
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("uploads are logged with their type and size, not their name", async () => {
+  const entries: Array<Record<string, unknown>> = [];
+  const viewer = uploadViewer(async (input) => {
+    await rm(input.path, { force: true });
+  }, {
+    accessLog: {
+      record: (entry: Record<string, unknown>) => entries.push(entry),
+      touch() {},
+    },
+  });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const cookie = await loginCookie(origin, "admin", "admin");
+    const response = await fetch(`${origin}/api/uploads?name=secret-name.png`, {
+      method: "POST",
+      headers: { Cookie: cookie, Origin: origin },
+      body: "12345",
+    });
+    assert.equal(response.status, 201);
+
+    const entry = entries.find((candidate) => candidate.event === "upload");
+    assert.equal(entry?.type, "edit");
+    assert.equal(entry?.ext, "png");
+    assert.equal(entry?.size, 5);
+    assert.equal(entry?.status, 201);
+    assert.ok(!JSON.stringify(entries).includes("secret-name"));
   } finally {
     await viewer.stop();
   }
