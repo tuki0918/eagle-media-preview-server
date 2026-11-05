@@ -14,6 +14,7 @@ interface ServerManager {
   accessLogSummary?(input: { limit?: number; range: AccessLogRange; type?: string }): Promise<AccessLogSummary>;
   blockAddress?(address: string): Promise<PluginStatus>;
   clearAccessLog?(): Promise<void>;
+  switchLibrary?(libraryPath: string): Promise<void>;
   exportAccessLog?(filePath: string, format: "csv" | "jsonl"): Promise<{ count: number; filePath: string }>;
   init(): Promise<PluginStatus>;
   libraries?(input: { current: SharedLibrary | null; userDataPath: string }): Promise<LibraryList>;
@@ -445,6 +446,24 @@ function App() {
     }
   }
 
+  async function switchLibrary(library: LibraryCandidate) {
+    const message = `Switch Eagle to ${library.name}?`;
+    const detail = status.state === "running"
+      ? "Eagle opens this library. Connected viewers return to the connect screen."
+      : "Eagle opens this library.";
+    const showMessageBox = globalThis.eagle?.dialog?.showMessageBox;
+    try {
+      const confirmed = showMessageBox
+        ? (await showMessageBox({ type: "question", message, detail, buttons: ["Cancel", "Switch"] })).response === 1
+        : typeof window.confirm === "function" && window.confirm(`${message}\n${detail}`);
+      if (!confirmed) return;
+      // The list updates when Eagle reports the switch through onLibraryChanged.
+      await managerRef.current?.switchLibrary?.(library.path);
+    } catch (error) {
+      setErrorMessage(error);
+    }
+  }
+
   function changeLibraryShared(library: LibraryCandidate, shared: boolean) {
     const current: SharedLibrary[] = Array.isArray(settings.sharedLibraries) ? settings.sharedLibraries : [];
     const others = current.filter((entry) => entry.path !== library.path);
@@ -760,6 +779,7 @@ function App() {
           onLibraryProtectionChange={(checked) => updateSettings({ libraryProtectionEnabled: checked })}
           onLibrarySharedChange={changeLibraryShared}
           onLibraryUsersChange={changeLibraryUsers}
+          onSwitchLibrary={(library) => void switchLibrary(library)}
           onReloadLibraries={() => void refreshLibraries({ reportErrors: true })}
           onPortChange={(value) => updateSettings({ port: value })}
           onRemoveAuthUser={(index) => void removeAuthUser(index)}

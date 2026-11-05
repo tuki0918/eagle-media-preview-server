@@ -125,7 +125,9 @@ The list's status shows **Online** for the shared library viewers can open right
 
 If every selected user is deleted, the library stays limited and only admins can open it (nobody, if there are no admins); it never opens to everyone. Renaming a user in **Access** keeps their libraries. With password protection off, the selections are kept but not applied.
 
-Like other settings, these are locked while the server is running and take effect when the server starts. Viewers can never switch the library open in Eagle.
+Like other settings, these are locked while the server is running and take effect when the server starts.
+
+**Switching libraries.** Click the folder icon on a library's row and confirm to open that library in Eagle. This also works while the server is running; connected viewers return to the connect screen. Only this panel can switch libraries: viewers can never switch the library open in Eagle.
 
 #### Security
 

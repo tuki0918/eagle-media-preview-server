@@ -11,6 +11,7 @@ const require = createRequire(import.meta.url);
 const {
   clampLimit,
   createEagleClient,
+  createEagleLibrarySwitcher,
   normalizePaginatedResponse,
   parseRatingFilter,
   pathFromFileValue,
@@ -23,6 +24,26 @@ test("clampLimit keeps page sizes bounded for large libraries", () => {
   assert.equal(clampLimit(30), 30);
   assert.equal(clampLimit(120), 120);
   assert.equal(clampLimit(5000), 1000);
+});
+
+test("the library switcher posts the path and reports Eagle's refusal", async () => {
+  const calls: RequestCall[] = [];
+  let payload: Record<string, unknown> = { status: "success" };
+  const switcher = createEagleLibrarySwitcher({
+    baseUrl: "http://eagle.local:41595",
+    fetchImpl: async (url: string, init: { method?: string; body: string }) => {
+      calls.push({ url, init });
+      return jsonResponse(payload);
+    },
+  });
+
+  await switcher.switchLibrary("/Users/me/B.library");
+  assert.equal(calls[0].url, "http://eagle.local:41595/api/library/switch");
+  assert.equal(calls[0].init.method, "POST");
+  assert.deepEqual(JSON.parse(calls[0].init.body), { libraryPath: "/Users/me/B.library" });
+
+  payload = { status: "error", message: "No such library" };
+  await assert.rejects(switcher.switchLibrary("/Users/me/Missing.library"), /No such library/);
 });
 
 test("listItems uses V2 item/get with limited fields and offset", async () => {

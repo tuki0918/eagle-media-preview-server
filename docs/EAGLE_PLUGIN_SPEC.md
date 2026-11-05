@@ -192,7 +192,7 @@ Build output is created under `dist`:
   - Users
   - Per-user role and password
   - Session duration
-  - Libraries: protection toggle, shared-library checklist with each library's status (Online when the server is running and it is the library open in Eagle, Offline for other shared libraries, none until sharing is saved), and a reload icon in the list header, above the checkboxes; like other settings, they are locked while the server runs and take effect when it starts
+  - Libraries: protection toggle, shared-library checklist with a folder icon that switches Eagle to that library, and each library's status (Online when the server is running and it is the library open in Eagle, Offline for other shared libraries, none until sharing is saved), and a reload icon in the list header, above the checkboxes; like other settings, they are locked while the server runs and take effect when it starts
   - The checklist is built on the admin's machine, without the Eagle HTTP API: saved entries, the open library from `eagle.library`, and `libraryHistory` from Eagle's `Settings` file in `eagle.app.getPath("userData")` (only that key is read; libraries that no longer exist are skipped)
 
 ### Persisted Settings
@@ -414,7 +414,7 @@ The viewer server calls Eagle's local Web API at `http://localhost:41595/api/v2/
 - The check is repeated within the request, without extra Eagle calls for reads: each request remembers the library it was admitted for and a switch counter bumped by `eagle.onLibraryChanged`. Right before a JSON answer or a media stream is sent, the cached library info and the counter must still match; otherwise the answer is replaced with `409 LIBRARY_CHANGED` and `X-Library-Id` reports the new library
 - Writes (rating, tags, categories, trash) re-read the open library from Eagle right after the request body arrives and right before calling Eagle, so holding back the body cannot redirect a write to another library
 - A media stream that has already started is sent to the end
-- The viewer server never calls Eagle's library switch API
+- The viewer server never calls Eagle's library switch API. Only the server window does: the folder icon on a library's row asks for confirmation, then the manager posts to Eagle's `POST /api/library/switch`. Eagle's plugin API documents no switch method. The switch then follows the same `eagle.onLibraryChanged` path as a switch made in Eagle
 
 ### Media Streaming
 

@@ -59,6 +59,7 @@ createRoot(root).render(
     onLibraryProtectionChange={noop}
     onLibrarySharedChange={noop}
     onLibraryUsersChange={noop}
+    onSwitchLibrary={noop}
     onPortChange={noop}
     onReloadLibraries={noop}
     onRemoveAuthUser={noop}

@@ -1626,8 +1626,18 @@ test("plugin saves shared libraries with the settings and reacts to Eagle librar
     state: "stopped", url: "http://localhost:41532",
   };
   const eagleLibrary = { name: "Work", path: "/Users/me/Work.library" };
+  const switchedPaths: string[] = [];
+  let switchDialogResponse = 0;
+  let switchError = "";
+  const switchDialogs: Array<{ detail?: string; message: string }> = [];
   pluginWindow.eagle = {
     app: { async getPath(name: string) { return name === "userData" ? "/Users/me/Library/Application Support/Eagle" : ""; } },
+    dialog: {
+      async showMessageBox(options: { detail?: string; message: string }) {
+        switchDialogs.push(options);
+        return { response: switchDialogResponse };
+      },
+    },
     library: eagleLibrary,
     onLibraryChanged(callback: (libraryPath: string) => void) {
       onLibraryChanged = callback;
@@ -1645,6 +1655,10 @@ test("plugin saves shared libraries with the settings and reacts to Eagle librar
       async start() { status = { ...status, state: "running" }; return status; },
       async stop() { status = { ...status, state: "stopped" }; return status; },
       libraryChanged(libraryPath: string) { libraryChangedCalls += 1; libraryChangedPaths.push(libraryPath); },
+      async switchLibrary(libraryPath: string) {
+        if (switchError) throw new Error(switchError);
+        switchedPaths.push(libraryPath);
+      },
       async libraries(input: { current: { path: string } | null }) {
         libraryListCalls += 1;
         libraryListInputs.push(JSON.parse(JSON.stringify(input)));
@@ -1674,8 +1688,29 @@ test("plugin saves shared libraries with the settings and reacts to Eagle librar
       userDataPath: "/Users/me/Library/Application Support/Eagle",
     });
 
-    // Every row has the folder icon; only the library open in Eagle is marked as open.
-    assert.deepEqual([...doc.querySelectorAll('ul[aria-label="Libraries"] [role="img"]')].map((icon) => icon.getAttribute("aria-label")), ["Open in Eagle", "Not open in Eagle"]);
+    // Every row has the folder icon: a mark on the library open in Eagle, a switch button on the others.
+    assert.deepEqual([...doc.querySelectorAll('ul[aria-label="Libraries"] [role="img"]')].map((icon) => icon.getAttribute("aria-label")), ["Open in Eagle"]);
+    assert.equal(doc.querySelector('button[aria-label="Switch Eagle to Work"]'), null);
+    const switchButton = () => doc.querySelector<HTMLButtonElement>('button[aria-label="Switch Eagle to Private"]');
+    assert.ok(switchButton());
+
+    // Nothing is asked of Eagle until the dialog is confirmed.
+    switchButton()?.click();
+    await waitFor(() => switchDialogs.length === 1);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.deepEqual(switchedPaths, []);
+    assert.equal(switchDialogs[0].message, "Switch Eagle to Private?");
+    assert.doesNotMatch(switchDialogs[0].detail || "", /viewers/);
+    switchDialogResponse = 1;
+    switchButton()?.click();
+    await waitFor(() => switchedPaths.length === 1);
+    assert.deepEqual(switchedPaths, ["/Users/me/Private.library"]);
+    // Eagle reports the switch by event; until then the row still shows what is open.
+    assert.ok(switchButton());
+    switchError = "Eagle refused the switch";
+    switchButton()?.click();
+    await waitFor(() => /Eagle refused the switch/.test(doc.body.textContent || ""));
+    switchError = "";
 
     const protection = doc.querySelector<HTMLInputElement>('[aria-label="Share only selected libraries"]');
     assert.ok(protection);
@@ -1703,6 +1738,13 @@ test("plugin saves shared libraries with the settings and reacts to Eagle librar
     await waitFor(() => /Online/.test(doc.body.textContent || ""));
     assert.equal(doc.querySelector<HTMLInputElement>('[aria-label="Share only selected libraries"]')?.disabled, true);
     assert.equal(doc.querySelector<HTMLInputElement>('[aria-label="Share Work"]')?.disabled, true);
+
+    // Switching isn't a setting: it stays available while the server runs, and warns about viewers.
+    assert.equal(switchButton()?.disabled, false);
+    switchDialogResponse = 0;
+    switchButton()?.click();
+    await waitFor(() => switchDialogs.length === 4);
+    assert.match(switchDialogs[3].detail || "", /Connected viewers return to the connect screen/);
 
     const listCallsBeforeReload = libraryListCalls;
     const reload = doc.querySelector<HTMLButtonElement>('button[aria-label="Reload libraries"]');

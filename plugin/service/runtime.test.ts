@@ -1211,6 +1211,28 @@ test("server manager logs a library switch with the new library's id, running or
   }
 });
 
+test("server manager asks Eagle to switch libraries and passes on a refusal", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-switch-library-"));
+  const { createAccessLog } = require("../../dist/.generated/plugin-service/accessLog.cjs");
+  const paths: string[] = [];
+  let refusal = "";
+  const manager = createServerManager({
+    accessLog: createAccessLog({ filePath: join(dir, "access-log.jsonl") }),
+    librarySwitcher: {
+      async switchLibrary(libraryPath: string) {
+        if (refusal) throw new Error(refusal);
+        paths.push(libraryPath);
+      },
+    },
+    settingsStore: createSettingsStore({ filePath: join(dir, "settings.json") }),
+  });
+
+  await manager.switchLibrary("/Users/me/B.library");
+  assert.deepEqual(paths, ["/Users/me/B.library"]);
+  refusal = "No such library";
+  await assert.rejects(manager.switchLibrary("/Users/me/Missing.library"), /No such library/);
+});
+
 test("server manager logs which library is open when the server starts", async () => {
   const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-open-log-"));
   const { createAccessLog } = require("../../dist/.generated/plugin-service/accessLog.cjs");

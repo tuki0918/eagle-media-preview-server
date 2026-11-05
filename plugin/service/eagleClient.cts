@@ -222,7 +222,7 @@ function responseTooLargeError(maxResponseBytes: number) {
   );
 }
 
-function createEagleClient({
+function createEagleRequest({
   baseUrl = process.env.EAGLE_BASE_URL || "http://localhost:41595",
   token = process.env.EAGLE_TOKEN || "",
   fetchImpl = globalThis.fetch,
@@ -282,6 +282,23 @@ function createEagleClient({
 
     return parsed.payload;
   }
+
+  return request;
+}
+
+// Apart from createEagleClient so that the viewer server, which is handed that client, has no way
+// to switch libraries. Only the server window uses this.
+function createEagleLibrarySwitcher(options: EagleClientOptions = {}) {
+  const request = createEagleRequest(options);
+  return {
+    async switchLibrary(libraryPath: string) {
+      return unwrapData(await request("/api/library/switch", { method: "POST", body: { libraryPath } }));
+    },
+  };
+}
+
+function createEagleClient(options: EagleClientOptions = {}) {
+  const request = createEagleRequest(options);
 
   async function allPages(pathname: string) {
     const items: unknown[] = [];
@@ -745,4 +762,4 @@ function resolveLibraryItemDir(libraryPath: string, itemId: unknown) {
   if (relativePath.startsWith("..") || isAbsolute(relativePath)) return "";
   return itemDir;
 }
-module.exports = { EagleRequestError, ITEM_FIELDS, clampLimit, normalizeOffset, normalizeStringArray, createEagleClient, normalizePaginatedResponse, parseRatingFilter, unwrapData, pathFromFileValue, resolveLibraryItemFile };
+module.exports = { EagleRequestError, ITEM_FIELDS, clampLimit, normalizeOffset, normalizeStringArray, createEagleClient, createEagleLibrarySwitcher, normalizePaginatedResponse, parseRatingFilter, unwrapData, pathFromFileValue, resolveLibraryItemFile };

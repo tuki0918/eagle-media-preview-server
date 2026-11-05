@@ -28,6 +28,8 @@ interface SettingsFormProps {
   onLibrarySharedChange: (library: LibraryCandidate, shared: boolean) => void;
   /** "all" lets every user open the library; "selected" only the given users (admins always can). */
   onLibraryUsersChange: (library: LibraryCandidate, access: "all" | "selected", users: string[]) => void;
+  /** Asks Eagle to open the library. Not a setting, so it stays available while the server runs. */
+  onSwitchLibrary: (library: LibraryCandidate) => void;
   onPortChange: (value: string) => void;
   onReloadLibraries: () => void;
   onRemoveAuthUser: (index: number) => void;
@@ -83,6 +85,7 @@ export function SettingsForm({
   onLibraryProtectionChange,
   onLibrarySharedChange,
   onLibraryUsersChange,
+  onSwitchLibrary,
   onPortChange,
   onReloadLibraries,
   onRemoveAuthUser,
@@ -327,7 +330,7 @@ export function SettingsForm({
                         </div>
                         {/* Two fixed slots, so the folder icons line up whether or not the row has a status badge. */}
                         <span className="grid grid-cols-[24px_minmax(0,1fr)] items-center gap-1 py-2">
-                          <LibraryOpenIcon open={library.current} />
+                          {library.current ? <LibraryOpenIcon /> : <LibrarySwitchButton disabled={busy} libraryName={library.name} onClick={() => onSwitchLibrary(library)} />}
                           {library.shared ? <LibraryStatusBadge online={serverRunning && library.current} /> : null}
                         </span>
                         <span className="flex justify-center py-2">
@@ -467,12 +470,27 @@ function LibraryStatusBadge({ online }: { online: boolean }) {
 }
 
 // Blue on the library open in Eagle, gray on the others; the name is for hover and screen readers.
-function LibraryOpenIcon({ open }: { open: boolean }) {
-  const label = open ? "Open in Eagle" : "Not open in Eagle";
+function LibraryOpenIcon() {
   return (
-    <span className={`grid h-[18px] w-6 place-items-center rounded-full ${open ? "bg-[#eef4ff] text-[#1d4ed8]" : "text-[#b4b8bf]"}`} role="img" aria-label={label} title={label}>
+    <span className="grid h-[18px] w-6 place-items-center rounded-full bg-[#eef4ff] text-[#1d4ed8]" role="img" aria-label="Open in Eagle" title="Open in Eagle">
       <FolderOpenIcon className="h-[12px] w-[12px]" />
     </span>
+  );
+}
+
+function LibrarySwitchButton({ disabled, libraryName, onClick }: { disabled: boolean; libraryName: string; onClick: () => void }) {
+  const label = `Switch Eagle to ${libraryName}`;
+  return (
+    <button
+      className="grid h-6 w-6 place-items-center rounded-full text-[#8a8f99] hover:bg-[#e6e6e9] hover:text-[#171717] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+      type="button"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      <FolderOpenIcon className="h-[12px] w-[12px]" />
+    </button>
   );
 }
 

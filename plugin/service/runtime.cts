@@ -2,6 +2,7 @@ const { chmod, mkdir, readFile, stat, writeFile } = require("fs").promises;
 const { createPrivateKey, createPublicKey, pbkdf2Sync, randomBytes, X509Certificate } = require("crypto");
 const { dirname, join } = require("path");
 const { homedir, networkInterfaces } = require("os");
+const { createEagleLibrarySwitcher } = require("./eagleClient.cjs");
 const { createViewerServer } = require("./viewerServer.cjs");
 const { accessLogCsv, createAccessLog } = require("./accessLog.cjs");
 const { normalizeBlockedAddress, normalizeBlockedAddresses } = require("./addressBlockList.cjs");
@@ -102,6 +103,7 @@ type AccessLog = ReturnType<typeof createAccessLog>;
 
 interface ServerManagerOptions {
   accessLog?: AccessLog;
+  librarySwitcher?: { switchLibrary(libraryPath: string): Promise<unknown> };
   lanAddressProvider?: () => LanAddress[];
   defaultEagleUserDataPath?: () => string;
   settingsStore?: SettingsStore;
@@ -587,6 +589,7 @@ function selectLanAddress({ lanAddresses = [], host = "0.0.0.0" }: {
 
 function createServerManager({
   accessLog = createAccessLog(),
+  librarySwitcher = createEagleLibrarySwitcher(),
   settingsStore = createSettingsStore(),
   viewerServerFactory = createViewerServer,
   lanAddressProvider = getLanAddresses,
@@ -753,6 +756,12 @@ function createServerManager({
       viewer?.notifyLibraryChanged?.();
       const settings = await settingsStore.load().catch(() => null);
       logSystemEvent("library_changed", { libraryId: settings ? libraryIdFor(libraryPath, settings.sessionSecret) : "" });
+    },
+
+    // Asks Eagle to open another library. Eagle reports the switch through onLibraryChanged, which
+    // updates the viewer, the log, and the panel the same as a switch made in Eagle itself.
+    async switchLibrary(libraryPath: string) {
+      await librarySwitcher.switchLibrary(libraryPath);
     },
 
     // Candidates for the shared-library picker on the admin's own machine: anything already
