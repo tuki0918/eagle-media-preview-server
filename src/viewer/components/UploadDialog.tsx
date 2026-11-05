@@ -319,7 +319,7 @@ function UploadRow({ entry, onRemove }: { entry: UploadEntry; onRemove?: () => v
         <div className="flex min-w-0 items-center gap-2">
           <span className="min-w-0 flex-1 truncate text-foreground" title={entry.file.name}>{entry.file.name}</span>
           <span className="shrink-0 text-muted-foreground [font-variant-numeric:tabular-nums]" role={entry.status === "failed" || entry.status === "unknown" ? "alert" : undefined}>
-            {entry.status === "uploading" ? `${percent}%` : entry.status === "adding" ? "Adding…" : entry.status === "done" ? "Added" : entry.status === "failed" ? "Failed" : entry.status === "unknown" ? "Unknown" : formatFileSize(entry.file.size)}
+            {entry.status === "uploading" ? `${percent}%` : entry.status === "adding" ? "Processing…" : entry.status === "done" ? "Success" : entry.status === "failed" ? "Failed" : entry.status === "unknown" ? "Unknown" : formatFileSize(entry.file.size)}
           </span>
           {onRemove && entry.status !== "done" ? (
             <Button variant="ghost" size="icon-sm" className="size-6 shrink-0 rounded-full text-muted-foreground" aria-label={`Remove ${entry.file.name}`} onClick={onRemove}>
@@ -330,6 +330,12 @@ function UploadRow({ entry, onRemove }: { entry: UploadEntry; onRemove?: () => v
         {entry.status === "uploading" ? (
           <div className="h-1 overflow-hidden rounded-full bg-muted" role="progressbar" aria-label={`Uploading ${entry.file.name}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
             <div className="h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
+          </div>
+        ) : null}
+        {/* Eagle doesn't report how far along it is, so this bar has no value: it only shows work going on. */}
+        {entry.status === "adding" ? (
+          <div className="h-1 overflow-hidden rounded-full bg-muted" role="progressbar" aria-label={`Adding ${entry.file.name} to Eagle`}>
+            <div className="h-full w-full animate-pulse rounded-full bg-primary motion-reduce:animate-none" />
           </div>
         ) : null}
         {entry.error ? <p className={`m-0 ${entry.status === "unknown" ? "text-amber-700" : "text-destructive"}`}>{entry.error}</p> : null}

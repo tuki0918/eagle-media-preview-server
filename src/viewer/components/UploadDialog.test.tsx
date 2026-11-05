@@ -257,7 +257,8 @@ test("a file already sent isn't aborted or put back: cancel only keeps the rest 
   await ui.choose("a.png", "b.png");
   await ui.start();
   expect(ui.statuses()).toEqual(["adding", "pending"]);
-  expect(ui.query("#uploadList li")!.textContent).toContain("Adding");
+  expect(ui.query("#uploadList li")!.textContent).toContain("Processing");
+  expect(ui.query("#uploadList li [role=progressbar]")!.hasAttribute("aria-valuenow")).toBe(false);
 
   await act(async () => ui.query("#uploadCancelButton")!.click());
   expect(signal!.aborted).toBe(false);
