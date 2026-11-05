@@ -192,6 +192,8 @@ See [EAGLE_PLUGIN_SPEC.md](docs/EAGLE_PLUGIN_SPEC.md) for plugin behavior, setti
 
 See [DEVELOPMENT.md](docs/DEVELOPMENT.md) for requirements, development, build, and verification.
 
+See [store_description.md](docs/promo/store_description.md) for the Eagle plugin store listing text.
+
 ## Future Plans
 
 <details>
