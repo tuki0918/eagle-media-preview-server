@@ -1,10 +1,11 @@
 // Captures the colored `npm run diagram` output as dark-mode PNGs for docs/ using headless Chrome.
 // Set CHROME_PATH when Chrome or Chromium is not installed in a standard location.
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { findChrome } from "./find-chrome.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const IMAGES = [
@@ -18,26 +19,6 @@ const LINE_HEIGHT = 17;
 const PAD_X = 28;
 const PAD_Y = 24;
 const BACKGROUND = "#0d1117";
-
-function findChrome() {
-  const candidates = [
-    process.env.CHROME_PATH,
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    "/Applications/Chromium.app/Contents/MacOS/Chromium",
-    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-    "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
-  ].filter(Boolean);
-  const found = candidates.find((path) => existsSync(path));
-  if (found) return found;
-  for (const name of ["google-chrome", "chromium", "chromium-browser"]) {
-    try {
-      return execFileSync("which", [name]).toString().trim();
-    } catch {
-      // Try the next name.
-    }
-  }
-  throw new Error("Chrome or Chromium was not found. Set CHROME_PATH to its executable.");
-}
 
 const escapeHtml = (text) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 // Menlo lacks these glyphs; pinning them to one cell keeps the fallback font from shifting the columns.

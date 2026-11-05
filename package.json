@@ -16,6 +16,7 @@
     "verify": "npm run build && tsc --noEmit && npm run test:run && npm run build-storybook",
     "diagram": "node scripts/diagram.mjs",
     "diagram:images": "node scripts/diagram-images.mjs",
+    "screenshot:settings": "npm run build && node scripts/settings-screenshots.mjs",
     "screenshot:frame": "swift scripts/frame-ipad.swift",
     "screenshot:frame:iphone": "swift scripts/frame-iphone.swift"
   },
