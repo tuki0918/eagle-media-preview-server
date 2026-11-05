@@ -7,14 +7,16 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-05
+
 ### Added
 
 - Added library switching to **Settings → Libraries**: click a library's folder icon to open it in Eagle. Viewers still can't switch libraries.
-- With password protection on, each shared library can be limited to selected users under **Settings → Libraries**. Admins can always open shared libraries, and a library whose selected users are all deleted is limited to admins rather than opened to everyone. Signed-in users who may not open the library that is open in Eagle see a message and can sign in as another user.
-- Added an Activity panel to the server window: connected devices, views, edits and failed sign-ins, an activity-over-time chart (1 hour, 24 hours, 7 days), a device list, and recent events you can filter and search. Only the connected-device count updates live; the details refresh on demand or with Auto refresh.
-- The server now keeps an access log of sign-ins (success, failure, lock, sign-out), refused requests, item edits (which fields, not their values), content views, failed requests, server start and stop, and settings changes, with the client address, user, and library id. Successful browsing isn't kept. It is kept in the temporary folder for up to 7 days, stays readable after the server stops, and can be exported as CSV or JSON Lines.
-- Added a blocked address list (single addresses or CIDR ranges) to the Activity panel. Blocking takes effect immediately, even while the server is running, and loopback addresses cannot be blocked.
-- The server identifies visitors by their connection address and ignores X-Forwarded-For, so visitors through a tunnel on this computer appear as this computer. For a tunnel that adds the visitor's address itself, set `"trustForwardedFor": true` in `settings.json`; [docs/EAGLE_PLUGIN_SPEC.md](docs/EAGLE_PLUGIN_SPEC.md#tunnels-and-reverse-proxies) explains how and how to check.
+- With password protection on, each shared library can be limited to selected users under **Settings → Libraries**. Admins can always open shared libraries. Users who may not open the library that is open in Eagle see a message and can sign in as another user.
+- Added an Activity panel to the server window, with connected devices, activity over time, and recent events you can filter and search.
+- The server now keeps an access log of sign-ins, refused requests, item edits (which fields, not their values), content views, failed requests, server start and stop, and settings changes, with the client address, user, and library id. Successful browsing isn't kept. The log can be exported as CSV or JSON Lines.
+- Added a blocked address list (single addresses or CIDR ranges) to the Activity panel. Blocks apply immediately, even while the server is running; loopback addresses cannot be blocked.
+- When visitors connect through a tunnel on this computer (such as Cloudflare Tunnel or ngrok), the Activity panel shows this computer's IP instead of theirs. If your tunnel sends the visitor's IP, set `"trustForwardedFor": true` in `settings.json` to show it; see [how to set it up](docs/EAGLE_PLUGIN_SPEC.md#tunnels-and-reverse-proxies).
 
 ## [0.6.3] - 2026-11-01
 
@@ -368,7 +370,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 - Initial release of Eagle Media Preview Server.
 
-[Unreleased]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.6.3...HEAD
+[Unreleased]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.6.3...v0.7.0
 [0.6.3]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.6.0...v0.6.1
