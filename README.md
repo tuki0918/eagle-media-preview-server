@@ -18,6 +18,7 @@ Start it with one click, then browse your library (**Media Library**) from phone
 ![](docs/screenshot_all_tags.png)
 ![](docs/screenshot_tiles.png)
 ![](docs/screenshot_list.png)
+![](docs/screenshot_slideshow_iphone_frame.png)
 
 ## Features
 
