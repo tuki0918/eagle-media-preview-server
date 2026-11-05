@@ -273,6 +273,55 @@ test("a file already sent isn't aborted or put back: cancel only keeps the rest 
   await ui.unmount();
 });
 
+test.each([
+  ["no answer", new Error("The connection to the server was lost")],
+  ["a timeout from Eagle", new api.ApiError(504, "Eagle request timed out")],
+  ["a library switch", new api.ApiError(409, "The library changed", "LIBRARY_CHANGED")],
+])("after the file is sent, %s leaves the result unknown and the file isn't sent again", async (_name, failure) => {
+  vi.spyOn(actions, "uploadsFinished").mockImplementation(() => {});
+  const upload = vi.spyOn(api, "uploadFile").mockImplementation(async (_file, options = {}) => {
+    options.onSent?.();
+    throw failure;
+  });
+  const ui = await renderButton(true);
+  await ui.open();
+  await ui.choose("a.png");
+  await ui.start();
+
+  expect(ui.statuses()).toEqual(["unknown"]);
+  expect(ui.query("#uploadList li")!.textContent).toContain("Check the library");
+  expect(ui.query("#uploadStartButton")).toBeNull();
+  expect(ui.query("#uploadClearButton")).not.toBeNull();
+  expect(upload).toHaveBeenCalledTimes(1);
+  expect(actions.uploadsFinished).toHaveBeenCalledTimes(1);
+
+  await act(async () => ui.query('button[aria-label="Remove a.png"]')!.click());
+  expect(ui.statuses()).toEqual([]);
+  await ui.unmount();
+});
+
+test.each([
+  ["a connection lost while sending", new Error("The connection to the server was lost"), false],
+  ["a refusal after sending", new api.ApiError(403, "Uploading is not allowed for this viewer"), true],
+  ["a library switch while sending", new api.ApiError(409, "The library changed", "LIBRARY_CHANGED"), false],
+  ["a full disk after sending", new api.ApiError(507, "There isn't enough disk space"), true],
+])("%s can be sent again", async (_name, failure, sent) => {
+  vi.spyOn(actions, "uploadsFinished").mockImplementation(() => {});
+  vi.spyOn(api, "uploadFile").mockImplementation(async (_file, options = {}) => {
+    if (sent) options.onSent?.();
+    throw failure;
+  });
+  const ui = await renderButton(true);
+  await ui.open();
+  await ui.choose("a.png");
+  await ui.start();
+
+  expect(ui.statuses()).toEqual(["failed"]);
+  expect(ui.query("#uploadStartButton")).not.toBeNull();
+  expect(actions.uploadsFinished).not.toHaveBeenCalled();
+  await ui.unmount();
+});
+
 test("clicking outside the dialog doesn't close it", async () => {
   const ui = await renderButton(true);
   await ui.open();

@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { CheckIcon, ChevronDownIcon, CircleAlertIcon, FileIcon, UploadIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { errorMessage, uploadFile } from "../api";
+import { ApiError, errorMessage, uploadFile } from "../api";
 import { UNCATEGORIZED_FOLDER_ID, UNTAGGED_FOLDER_ID } from "../constants";
 import { getSearchControlsState, subscribeSearchControlsState } from "../searchControlsState";
 import { uploadError, uploadsFinished } from "../shellActions";
@@ -14,10 +14,11 @@ import { settingsDialogClassName, settingsDialogCloseClassName, settingsDialogFi
 // Matches the server's limit, so a file that can't be accepted isn't sent at all.
 const MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024;
 const TOO_LARGE_MESSAGE = "This file is larger than the 2 GB upload limit";
+const RESULT_UNKNOWN_MESSAGE = "Eagle may have added this file. Check the library before choosing it again.";
 
 const secondaryButtonClassName = "h-11 flex-1 touch-manipulation rounded-full transition-colors";
 
-type UploadStatus = "pending" | "uploading" | "adding" | "done" | "failed";
+type UploadStatus = "pending" | "uploading" | "adding" | "done" | "failed" | "unknown";
 
 interface UploadEntry {
   error: string;
@@ -60,6 +61,16 @@ export function UploadButton() {
 
 function defaultFolderId(selectedFolderId: string) {
   return selectedFolderId === UNCATEGORIZED_FOLDER_ID || selectedFolderId === UNTAGGED_FOLDER_ID ? "" : selectedFolderId;
+}
+
+// After the whole file is sent, no answer or a server failure doesn't say whether Eagle added it,
+// and neither does LIBRARY_CHANGED: the server also answers that in place of a success when the
+// library switches just after the file was added. Other refusals (4xx) and a full disk (507) mean
+// it never got that far.
+function isResultUnknown(error: unknown) {
+  if (!(error instanceof ApiError)) return true;
+  if (error.code === "LIBRARY_CHANGED") return true;
+  return error.status >= 500 && error.status !== 507;
 }
 
 function canSend(entry: UploadEntry) {
@@ -128,7 +139,7 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
     abortRef.current = controller;
     setUploading(true);
     setUploadStarted(true);
-    let added = 0;
+    let mayHaveAdded = 0;
     const tagList = parseUploadTags(tags);
     for (const entry of queue) {
       if (controller.signal.aborted || stopAfterCurrentRef.current) break;
@@ -146,11 +157,16 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
           tags: tagList,
         });
         updateEntry(entry.id, { progress: 1, status: "done" });
-        added += 1;
+        mayHaveAdded += 1;
       } catch (error) {
         if (controller.signal.aborted) {
           updateEntry(entry.id, { progress: 0, status: "pending" });
           break;
+        }
+        if (currentFileSentRef.current && isResultUnknown(error)) {
+          updateEntry(entry.id, { error: RESULT_UNKNOWN_MESSAGE, status: "unknown" });
+          mayHaveAdded += 1;
+          continue;
         }
         updateEntry(entry.id, { error: errorMessage(error), status: "failed" });
         if (uploadError(error)) break;
@@ -160,7 +176,7 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
     stopAfterCurrentRef.current = false;
     setStopping(false);
     setUploading(false);
-    if (added) uploadsFinished();
+    if (mayHaveAdded) uploadsFinished();
   };
 
   // Only the list: what was added stays in Eagle, and the folder and tags stay for the next files.
@@ -295,13 +311,15 @@ function UploadRow({ entry, onRemove }: { entry: UploadEntry; onRemove?: () => v
           ? <CheckIcon className="absolute -bottom-1 -right-1 size-4 rounded-full bg-card p-0.5 text-emerald-600" aria-hidden="true" />
           : entry.status === "failed"
             ? <CircleAlertIcon className="absolute -bottom-1 -right-1 size-4 rounded-full bg-card p-0.5 text-destructive" aria-hidden="true" />
-            : null}
+            : entry.status === "unknown"
+              ? <CircleAlertIcon className="absolute -bottom-1 -right-1 size-4 rounded-full bg-card p-0.5 text-amber-600" aria-hidden="true" />
+              : null}
       </div>
       <div className="grid min-w-0 flex-1 gap-1">
         <div className="flex min-w-0 items-center gap-2">
           <span className="min-w-0 flex-1 truncate text-foreground" title={entry.file.name}>{entry.file.name}</span>
-          <span className="shrink-0 text-muted-foreground [font-variant-numeric:tabular-nums]" role={entry.status === "failed" ? "alert" : undefined}>
-            {entry.status === "uploading" ? `${percent}%` : entry.status === "adding" ? "Adding…" : entry.status === "done" ? "Added" : entry.status === "failed" ? "Failed" : formatFileSize(entry.file.size)}
+          <span className="shrink-0 text-muted-foreground [font-variant-numeric:tabular-nums]" role={entry.status === "failed" || entry.status === "unknown" ? "alert" : undefined}>
+            {entry.status === "uploading" ? `${percent}%` : entry.status === "adding" ? "Adding…" : entry.status === "done" ? "Added" : entry.status === "failed" ? "Failed" : entry.status === "unknown" ? "Unknown" : formatFileSize(entry.file.size)}
           </span>
           {onRemove && entry.status !== "done" ? (
             <Button variant="ghost" size="icon-sm" className="size-6 shrink-0 rounded-full text-muted-foreground" aria-label={`Remove ${entry.file.name}`} onClick={onRemove}>
@@ -314,7 +332,7 @@ function UploadRow({ entry, onRemove }: { entry: UploadEntry; onRemove?: () => v
             <div className="h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
           </div>
         ) : null}
-        {entry.error ? <p className="m-0 text-destructive">{entry.error}</p> : null}
+        {entry.error ? <p className={`m-0 ${entry.status === "unknown" ? "text-amber-700" : "text-destructive"}`}>{entry.error}</p> : null}
       </div>
     </li>
   );
