@@ -77,8 +77,8 @@ export function AccountSideMenu() {
   const eagleStatus = useSyncExternalStore(subscribeEagleStatus, getEagleStatus, getEagleStatus);
   const searchState = useSyncExternalStore(subscribeSearchControlsState, getSearchControlsState, getSearchControlsState);
   const username = loginState.user?.username?.trim();
-  const roleLabel = authRoleLabel(loginState.user?.role);
-  const roleDescription = authRoleDescription(loginState.user?.role);
+  const roleLabel = authRoleLabel(loginState.user?.role, searchState.canUpload);
+  const roleDescription = authRoleDescription(loginState.user?.role, searchState.canUpload);
   const accountLabel = [username, roleLabel].filter(Boolean).join(" - ");
   const accountStatusLabel = [accountLabel, roleDescription].filter(Boolean).join(". ");
   const authError = loginState.isError ? loginState.message.trim() : "";
@@ -1172,16 +1172,16 @@ function AccountDropdown({
   );
 }
 
-function authRoleLabel(role: unknown) {
+function authRoleLabel(role: unknown, canUpload?: boolean) {
   if (role === "admin") return "Admin";
-  if (role === "editor") return "Editor";
+  if (role === "editor") return canUpload ? "Editor + Upload" : "Editor";
   if (role === "viewer") return "Viewer";
   return "";
 }
 
-function authRoleDescription(role: unknown) {
+function authRoleDescription(role: unknown, canUpload?: boolean) {
   if (role === "admin") return "Full access to available management actions";
-  if (role === "editor") return "Can edit ratings, tags, and categories";
+  if (role === "editor") return canUpload ? "Can edit ratings, tags, and categories, and upload files" : "Can edit ratings, tags, and categories";
   if (role === "viewer") return "Can browse and preview";
   return "";
 }

@@ -169,7 +169,7 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.doesNotMatch(app, /allowMetadataEditing: authEnabled && authUsersCanEditMetadata\(nextUsers\)/);
   assert.doesNotMatch(app, /function saveAuthUser/);
   assert.doesNotMatch(app, /saveAuthUser\(/);
-  assert.match(uiSource, /onChange=\{\(event\) => onUpdateAuthUser\(index, \{ role: event\.currentTarget\.value as UserRole \}\)\}/);
+  assert.match(uiSource, /onChange=\{\(event\) => onUpdateAuthUser\(index, ROLE_CHOICES\[event\.currentTarget\.value as RoleChoice\]\)\}/);
   assert.doesNotMatch(app, /saveSettings\(\{ patch: \{ authUsers: authUsers\.map/);
   assert.match(app, /const cleanUserPasswords = collectUserPasswords\(effectiveAuthUsers, passwordDrafts\);/);
   assert.match(app, /function collectUserPasswords\(users: AuthUser\[\], values: Record<string, string>\)/);
@@ -1021,6 +1021,82 @@ test("plugin confirms with an Eagle message box before removing a user", async (
   await openRemoveDialog(2);
   await waitFor(() => usernames().join(",") === "admin");
   assert.equal(doc.querySelector<HTMLButtonElement>('button[aria-label="Remove admin"]')?.disabled, true, "the last user cannot be removed");
+});
+
+test("the Role menu offers Editor + Upload, and choosing another role clears the upload permission", async () => {
+  const bundle = await esbuild({
+    bundle: true,
+    define: {
+      "process.env.NODE_ENV": JSON.stringify("test"),
+    },
+    entryPoints: [new URL("./app.tsx", import.meta.url).pathname],
+    format: "iife",
+    platform: "browser",
+    write: false,
+  });
+  const domOptions = {
+    runScripts: "outside-only",
+    url: "file:///tmp/eagle-plugin/plugin/index.html",
+  } as unknown as ConstructorParameters<typeof JSDOM>[1];
+  const dom = new JSDOM("<!doctype html><html><body><div id=\"root\"></div></body></html>", domOptions);
+  const pluginWindow = dom.window as unknown as Window & {
+    eval: (source: string) => unknown;
+    eagle: unknown;
+    require: (id: string) => unknown;
+  };
+  pluginWindow.eagle = {};
+  const status = {
+    settings: {
+      authEnabled: true,
+      authUsers: [
+        { username: "ed", role: "editor", passwordHash: "hash" },
+        { username: "uploader", role: "editor", passwordHash: "hash", canUpload: true },
+        { username: "boss", role: "admin", passwordHash: "hash" },
+        { username: "reader", role: "viewer", passwordHash: "hash" },
+      ],
+      host: "127.0.0.1",
+      port: 41532,
+    },
+    state: "stopped",
+    url: "",
+  };
+  pluginWindow.require = (id: string) => {
+    if (id === "path") return path;
+    return {
+      createServerManager() {
+        return {
+          async init() {
+            return status;
+          },
+          async status() {
+            return status;
+          },
+        };
+      },
+    };
+  };
+
+  pluginWindow.eval(bundle.outputFiles[0].text);
+  const doc = dom.window.document;
+  const role = (username: string) => doc.querySelector<HTMLSelectElement>(`select[aria-label="Role for ${username}"]`);
+  const changeRole = (value: string) => {
+    Object.getOwnPropertyDescriptor(dom.window.HTMLSelectElement.prototype, "value")!.set!.call(role("ed"), value);
+    role("ed")!.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+  };
+  await waitFor(() => role("ed") !== null, { timeoutMs: 5000 });
+
+  assert.deepEqual(Array.from(role("ed")!.options).map((option) => option.text), ["Viewer", "Editor", "Editor + Upload", "Admin"]);
+  assert.equal(role("ed")?.value, "editor");
+  assert.equal(role("uploader")?.value, "editor-upload");
+  assert.equal(role("boss")?.value, "admin");
+  assert.equal(role("reader")?.value, "viewer");
+
+  changeRole("editor-upload");
+  await waitFor(() => role("ed")?.value === "editor-upload");
+  changeRole("viewer");
+  await waitFor(() => role("ed")?.value === "viewer");
+  changeRole("editor");
+  await waitFor(() => role("ed")?.value === "editor");
 });
 
 test("plugin settings inputs are disabled while the server is running", async () => {

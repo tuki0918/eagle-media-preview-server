@@ -58,6 +58,20 @@ export function authUserKey(user: AuthUser) {
   return user.rowKey ?? user.username ?? "";
 }
 
+// One menu for the role and the upload permission, which are saved separately: an "editor-upload"
+// role would change the role that signed sessions depend on, and log the user out.
+const ROLE_CHOICES = {
+  viewer: { role: "viewer", canUpload: undefined },
+  editor: { role: "editor", canUpload: undefined },
+  "editor-upload": { role: "editor", canUpload: true },
+  admin: { role: "admin", canUpload: undefined },
+} as const;
+type RoleChoice = keyof typeof ROLE_CHOICES;
+
+function roleChoiceFor(user: AuthUser): RoleChoice {
+  return user.role === "editor" && user.canUpload === true ? "editor-upload" : user.role ?? "viewer";
+}
+
 const libraryGridClassName = "grid grid-cols-[minmax(0,1fr)_96px_52px] items-center gap-2 px-3";
 const primaryButtonClassName = "border border-[#171717] bg-[#171717] text-white hover:bg-[#2b2b2b] disabled:cursor-not-allowed disabled:opacity-35";
 
@@ -163,9 +177,9 @@ export function SettingsForm({
         </div>
 
         <div id="accessSettingsPanel" role="tabpanel" aria-labelledby="accessSettingsTab" hidden={settingsTab !== "access"}>
-          <SettingRow label="Users" help={authEnabled ? "Viewer can browse. Editor can edit metadata. Admin has all permissions." : "Saved users apply when password protection is enabled."}>
+          <SettingRow label="Users" help={authEnabled ? "Viewer can browse. Editor can edit metadata. Editor + Upload can also upload files. Admin has all permissions." : "Saved users apply when password protection is enabled."}>
             <div className="overflow-hidden rounded-xl border border-[#e6e6e9]" role="table" aria-label="Users">
-              <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)_28px_86px_28px] items-center gap-1 border-b border-[#efeff1] bg-[#f7f7f8] px-1.5 py-1 text-[10px] font-semibold uppercase leading-none tracking-[0.06em] text-[#8a8f99]" role="row">
+              <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)_28px_124px_28px] items-center gap-1 border-b border-[#efeff1] bg-[#f7f7f8] px-1.5 py-1 text-[10px] font-semibold uppercase leading-none tracking-[0.06em] text-[#8a8f99]" role="row">
                 {/* Headers share the rows' grid and start at the controls' text inset (6px padding + 1px border). */}
                 <span className="px-[7px]" role="columnheader">Username</span>
                 <span className="px-[7px]" role="columnheader">Password</span>
@@ -182,7 +196,7 @@ export function SettingsForm({
                 const canTogglePasswordVisible = !user.passwordHash;
                 const passwordVisible = canTogglePasswordVisible && passwordVisibleByIndex[String(index)];
                 return (
-                  <div key={index} className="grid min-h-10 grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)_28px_86px_28px] items-center gap-1 border-b border-[#efeff1] py-1 pl-1.5 pr-1.5 last:border-b-0" role="row">
+                  <div key={index} className="grid min-h-10 grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)_28px_124px_28px] items-center gap-1 border-b border-[#efeff1] py-1 pl-1.5 pr-1.5 last:border-b-0" role="row">
                     <div className="min-w-0" role="cell">
                       <input
                         className={tableInputClassName}
@@ -226,11 +240,12 @@ export function SettingsForm({
                         className={`${tableInputClassName} appearance-none pr-6`}
                         aria-label={`Role for ${user.username || `user ${index + 1}`}`}
                         disabled={settingsInputDisabled}
-                        value={user.role}
-                        onChange={(event) => onUpdateAuthUser(index, { role: event.currentTarget.value as UserRole })}
+                        value={roleChoiceFor(user)}
+                        onChange={(event) => onUpdateAuthUser(index, ROLE_CHOICES[event.currentTarget.value as RoleChoice])}
                       >
                         <option value="viewer">Viewer</option>
                         <option value="editor">Editor</option>
+                        <option value="editor-upload">Editor + Upload</option>
                         <option value="admin">Admin</option>
                       </select>
                       <ChevronIcon className="pointer-events-none absolute right-1.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8a8f99]" />

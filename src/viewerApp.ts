@@ -77,6 +77,7 @@ import {
   clearPreviewRatingState,
   setPreviewRatingState,
 } from "./viewer/previewRatingState";
+import { followUploadedItems } from "./viewer/uploadRefresh";
 import { setViewerShellActions } from "./viewer/shellActions";
 import { getShellView, setShellView } from "./viewer/shellVisibility";
 import { state } from "./viewer/state";
@@ -122,6 +123,7 @@ let availableExts: string[] = [];
 // Scanning a large library for its extensions takes many Eagle requests, so it waits until the
 // type menu is first opened instead of competing with the initial item load.
 let itemTypesRequestId = 0;
+let uploadRefreshRun = 0;
 let itemTypesState: "idle" | "loading" | "loaded" = "idle";
 let allFoldersTotalRequestId = 0;
 let uncategorizedTotal = 0;
@@ -232,10 +234,7 @@ async function init() {
     togglePreviewInfo,
     previewPointerDown: closePreviewInfoFromOutside,
     uploadError: handleAuthError,
-    uploadsFinished: () => {
-      void loadFolders();
-      void loadItems();
-    },
+    uploadsFinished: refreshAfterUploads,
     previewClosed: () => {
       if (isPreviewDialogOpen()) {
         closePreview();
@@ -355,6 +354,7 @@ function defaultPermissions(read = true): ViewerPermissions {
   return {
     manageLibrary: false,
     read,
+    upload: false,
     writeMetadata: false,
     writeRating: false,
   };
@@ -365,6 +365,7 @@ function normalizePermissions(value: AuthStatusResponse["permissions"], readFall
     ...defaultPermissions(readFallback),
     manageLibrary: Boolean(value?.manageLibrary),
     read: Boolean(value?.read ?? readFallback),
+    upload: Boolean(value?.upload),
     writeMetadata: Boolean(value?.writeMetadata),
     writeRating: Boolean(value?.writeRating),
   };
@@ -515,6 +516,7 @@ function showViewer(data: ConnectResponse) {
 function clearViewerSessionState() {
   changeSearch.cancel();
   state.requestId += 1;
+  uploadRefreshRun += 1;
   allFoldersTotalRequestId += 1;
   allFoldersTotal = 0;
   shortcutCountsRequestId += 1;
@@ -873,6 +875,33 @@ async function loadShortcutCounts() {
   renderSearchControlButtons();
 }
 
+function refreshAfterUploads() {
+  // The last upload can answer just after the visitor left the viewer.
+  if (getShellView() !== "viewer") return;
+  const run = ++uploadRefreshRun;
+  followUploadedItems({
+    isCurrent: () => run === uploadRefreshRun,
+    readTotal: async () => {
+      const params = new URLSearchParams({ offset: "0", limit: "1" });
+      const data = await getJson<LoadItemsResponse>(`/api/items?${params.toString()}`);
+      return Number(data.total || 0);
+    },
+    refresh: (total) => {
+      // Set here because loadAllFoldersTotal keeps a total it already has.
+      allFoldersTotal = total;
+      pickerTagOverview = null;
+      renderSearchControlButtons();
+      void loadFolders();
+      void loadSmartFolders();
+      void loadShortcutCounts();
+      // Reloading empties the list, which would close a preview opened in the meantime.
+      if (!isPreviewDialogOpen()) void loadItems();
+    },
+  }).catch((error) => {
+    handleAuthError(error);
+  });
+}
+
 function refreshOpenedFolderCounts() {
   if (state.smartFolderId) {
     void loadSmartFolders();
@@ -1124,7 +1153,7 @@ function syncResetFiltersButton() {
 function renderSearchControlButtons() {
   setSearchControlsState({
     allFoldersTotal,
-    canUpload: state.permissions.manageLibrary,
+    canUpload: state.permissions.upload,
     availableExts,
     availableExtsLoading: itemTypesState === "loading",
     tagsTotal,

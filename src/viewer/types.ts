@@ -77,6 +77,7 @@ export interface HealthResponse extends ConnectResponse {
 export interface ViewerPermissions {
   manageLibrary: boolean;
   read: boolean;
+  upload: boolean;
   writeMetadata: boolean;
   writeRating: boolean;
 }

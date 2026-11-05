@@ -14,6 +14,7 @@ type ServerStatus = "error" | "running" | "stopped";
 type UserRole = "admin" | "editor" | "viewer";
 
 interface AuthUser {
+  canUpload?: boolean;
   passwordHash: string;
   role: UserRole;
   username: string;
@@ -436,13 +437,16 @@ function normalizeAuthUsers(value: unknown, input: SettingsInput = {}) {
 
 function normalizeAuthUser(value: unknown): AuthUser | null {
   if (!value || typeof value !== "object") return null;
-  const input = value as { passwordHash?: unknown; role?: unknown; username?: unknown };
+  const input = value as { canUpload?: unknown; passwordHash?: unknown; role?: unknown; username?: unknown };
   const username = String(input.username || "").trim();
   if (!username) return null;
+  const role = normalizeRole(input.role);
   return {
     username,
     passwordHash: String(input.passwordHash || ""),
-    role: normalizeRole(input.role),
+    role,
+    // Only editors choose this: admins can always upload and viewers never can.
+    ...(role === "editor" && input.canUpload === true ? { canUpload: true } : {}),
   };
 }
 

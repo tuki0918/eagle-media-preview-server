@@ -876,10 +876,12 @@ function normalizedAuthUsers(settings: PluginSettings): AuthUser[] {
 }
 
 function normalizeAuthUser(user: AuthUser): AuthUser {
+  const role = normalizeRole(user.role);
   return {
     username: String(user.username || "").trim(),
     passwordHash: String(user.passwordHash || ""),
-    role: normalizeRole(user.role),
+    role,
+    ...(role === "editor" && user.canUpload === true ? { canUpload: true } : {}),
     ...(user.rowKey === undefined ? {} : { rowKey: user.rowKey }),
   };
 }

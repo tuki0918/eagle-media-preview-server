@@ -8,13 +8,13 @@ const { pipeline } = require("stream/promises");
 import type { IncomingMessage } from "http";
 
 const UPLOAD_PATH = "/api/uploads";
-const MAX_UPLOAD_BYTES = 20 * 1024 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024;
 const MAX_UPLOAD_NAME_LENGTH = 255;
 // A connection that stops sending is dropped after this long, however large the file is.
 const UPLOAD_IDLE_TIMEOUT_MS = 60 * 1000;
 // Node's limit on receiving one whole request, which is 5 minutes by default. It covers the largest
-// upload at about 1 MB/s; UPLOAD_IDLE_TIMEOUT_MS is what catches a stalled upload.
-const UPLOAD_REQUEST_TIMEOUT_MS = 6 * 60 * 60 * 1000;
+// upload at about 0.6 MB/s; UPLOAD_IDLE_TIMEOUT_MS is what catches a stalled upload.
+const UPLOAD_REQUEST_TIMEOUT_MS = 60 * 60 * 1000;
 // Eagle's API doesn't say whether addFromPath has finished reading the file when it answers, so a
 // successful upload stays this long rather than being deleted right away.
 const UPLOAD_RETENTION_MS = 60 * 60 * 1000;
@@ -39,7 +39,7 @@ function parseUploadRequest(req: IncomingMessage, url: URL) {
   if (!/^\d+$/.test(declaredLength)) throw new UploadError(411, "Content-Length is required");
   const size = Number(declaredLength);
   if (size === 0) throw new UploadError(400, "The file is empty");
-  if (size > MAX_UPLOAD_BYTES) throw new UploadError(413, "The file is larger than the 20 GB upload limit");
+  if (size > MAX_UPLOAD_BYTES) throw new UploadError(413, "The file is larger than the 2 GB upload limit");
 
   // The name is a label for Eagle only; the file on disk gets a random one.
   const fileName = String(url.searchParams.get("name") ?? "")

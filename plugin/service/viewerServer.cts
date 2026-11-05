@@ -20,6 +20,7 @@ const {
   expiredAuthSessionCookies,
   findPasswordUser,
   hasAdminAccess,
+  hasUploadAccess,
   hasMetadataWriteAccess,
   hasRatingWriteAccess,
   isAuthorized,
@@ -68,12 +69,14 @@ interface ViewerServerOptions {
 type UserRole = "admin" | "editor" | "viewer";
 
 interface AuthUser {
+  canUpload?: boolean;
   passwordHash: string;
   role: UserRole;
   username: string;
 }
 
 interface AuthSession {
+  canUpload?: boolean;
   expiresAt: number;
   role: UserRole;
   username: string;
@@ -94,6 +97,7 @@ const LOGIN_RATE_LIMIT_MESSAGE = "Too many failed login attempts. Try again late
 const RATING_WRITE_FORBIDDEN_MESSAGE = "Rating editing is not allowed for this viewer";
 const METADATA_WRITE_FORBIDDEN_MESSAGE = "Metadata editing is not allowed for this viewer";
 const ADMIN_WRITE_FORBIDDEN_MESSAGE = "Admin actions are not allowed for this viewer";
+const UPLOAD_FORBIDDEN_MESSAGE = "Uploading is not allowed for this viewer";
 const LIBRARY_NOT_SHARED_MESSAGE = "The library open in Eagle is not shared";
 const LIBRARY_FORBIDDEN_MESSAGE = "Your account can't open the library that is open in Eagle";
 const LIBRARY_CHANGED_MESSAGE = "The library open in Eagle has changed";
@@ -862,8 +866,8 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       sendMethodNotAllowed(res, ["POST"]);
       return;
     }
-    if (!hasAdminAccess(req, auth)) {
-      sendJson(res, 403, { error: ADMIN_WRITE_FORBIDDEN_MESSAGE });
+    if (!hasUploadAccess(req, auth)) {
+      sendJson(res, 403, { error: UPLOAD_FORBIDDEN_MESSAGE });
       return;
     }
     const upload = parseUploadRequest(req, url);

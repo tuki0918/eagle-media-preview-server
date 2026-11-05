@@ -1363,3 +1363,19 @@ test("server manager blocks addresses live without a restart and keeps the acces
   await manager.clearAccessLog();
   assert.deepEqual((await manager.accessLogSummary({ range: "1h" })).recent.map((entry: { event: string }) => entry.event), ["log_cleared"]);
 });
+
+test("settings keep canUpload only on editors, and leave it off users that don't have it", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-runtime-"));
+  const store = createSettingsStore({ filePath: join(dir, "settings.json") });
+  const saved = await store.save({
+    authEnabled: true,
+    authUsers: [
+      { username: "editor", role: "editor", passwordHash: "h", canUpload: true },
+      { username: "plain", role: "editor", passwordHash: "h" },
+      { username: "viewer", role: "viewer", passwordHash: "h", canUpload: true },
+      { username: "admin", role: "admin", passwordHash: "h", canUpload: true },
+    ],
+  });
+  assert.deepEqual(saved.authUsers.map((user: { canUpload?: boolean }) => user.canUpload), [true, undefined, undefined, undefined]);
+  assert.equal("canUpload" in saved.authUsers[1], false);
+});

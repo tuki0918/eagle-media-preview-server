@@ -8,6 +8,8 @@ export interface AuthUser {
    * follows the row rather than whatever name is typed. Defaults to the saved username.
    */
   rowKey?: string;
+  /** Editors only: admins can always upload and viewers never can. */
+  canUpload?: boolean;
   passwordHash?: string;
   role?: UserRole;
   username?: string;

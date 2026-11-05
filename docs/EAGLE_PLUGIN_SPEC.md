@@ -204,6 +204,7 @@ type Settings = {
     username: string;
     role: "viewer" | "editor" | "admin";
     passwordHash: string;
+    canUpload?: true; // Editors only; the settings panel shows it as the "Editor + Upload" role. Absent means no: admins can always upload and viewers never can.
   }>;
   autoStart: boolean;
   blockedAddresses: Array<{ address: string; addedAt: number }>;
@@ -389,8 +390,8 @@ Media URLs carry the library id as the `library` query parameter, since media el
   - Updates tags and folders/categories from the preview panel
 - `POST /api/items/:id/trash` — Admin
   - Moves an item to Eagle's trash or restores it; requires `isDeleted` as a boolean
-- `POST /api/uploads` — Admin
-  - Adds one file to the open library; the raw request body is the file, up to 20 GB, and `Content-Length` is required
+- `POST /api/uploads` — Admin, or Editor with `canUpload`
+  - Adds one file to the open library; the raw request body is the file, up to 2 GB, and `Content-Length` is required
   - Query: `name` (required), `folderId`, and `tag` (repeatable)
   - The file is streamed to the system temp folder under a random name and passed to Eagle's `/api/item/addFromPath`; it is removed right away if that fails, and otherwise about an hour later
 
@@ -470,7 +471,7 @@ Authorization:
 - Browsing is read-only by default
 - `POST /api/items/:id/star` and `POST /api/items/:id/metadata` require an Editor or Admin user
 - `POST /api/items/:id/trash` requires an Admin user
-- `POST /api/uploads` requires an Admin user, so uploads aren't available with password protection off
+- `POST /api/uploads` requires a signed-in Admin, or an Editor with `canUpload`, so uploads aren't available with password protection off
 - The viewer server never calls Eagle's library switch API; switching libraries is only possible from the Eagle app
 - Unsafe methods reject mismatched `Origin` or `Referer` headers before API handlers run
 - JSON request bodies are capped at 1 MiB; malformed bodies return `400` and oversized bodies return `413`

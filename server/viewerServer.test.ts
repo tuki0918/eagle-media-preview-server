@@ -226,6 +226,7 @@ test("createViewerServer starts and stops without the CLI entrypoint", async () 
     user: null,
     permissions: {
       manageLibrary: false,
+      upload: false,
       read: true,
       writeMetadata: false,
       writeRating: false,
@@ -261,6 +262,7 @@ test("createViewerServer starts and stops without the CLI entrypoint", async () 
     user: null,
     permissions: {
       manageLibrary: false,
+      upload: false,
       read: true,
       writeMetadata: false,
       writeRating: false,
@@ -279,6 +281,7 @@ test("createViewerServer starts and stops without the CLI entrypoint", async () 
     user: null,
     permissions: {
       manageLibrary: false,
+      upload: false,
       read: true,
       writeMetadata: false,
       writeRating: false,
@@ -489,6 +492,7 @@ test("createViewerServer allows metadata writes when editing is enabled for an a
       },
       permissions: {
         manageLibrary: false,
+        upload: false,
         read: true,
         writeMetadata: true,
         writeRating: true,
@@ -606,6 +610,7 @@ test("createViewerServer authorizes metadata writes by user role", async () => {
       user: { username: "reader", role: "viewer" },
       permissions: {
         manageLibrary: false,
+        upload: false,
         read: true,
         writeMetadata: false,
         writeRating: false,
@@ -1066,6 +1071,7 @@ test("createViewerServer logs out cookie sessions", async () => {
       },
       permissions: {
         manageLibrary: false,
+        upload: false,
         read: true,
         writeMetadata: false,
         writeRating: false,
@@ -1085,6 +1091,7 @@ test("createViewerServer logs out cookie sessions", async () => {
       },
       permissions: {
         manageLibrary: false,
+        upload: false,
         read: true,
         writeMetadata: false,
         writeRating: false,
@@ -1103,6 +1110,7 @@ test("createViewerServer logs out cookie sessions", async () => {
       user: null,
       permissions: {
         manageLibrary: false,
+        upload: false,
         read: false,
         writeMetadata: false,
         writeRating: false,
@@ -1124,6 +1132,7 @@ test("createViewerServer logs out cookie sessions", async () => {
       user: null,
       permissions: {
         manageLibrary: false,
+        upload: false,
         read: false,
         writeMetadata: false,
         writeRating: false,
@@ -1143,6 +1152,7 @@ test("createViewerServer logs out cookie sessions", async () => {
       user: null,
       permissions: {
         manageLibrary: false,
+        upload: false,
         read: false,
         writeMetadata: false,
         writeRating: false,
@@ -1160,6 +1170,7 @@ test("createViewerServer logs out cookie sessions", async () => {
       user: null,
       permissions: {
         manageLibrary: false,
+        upload: false,
         read: false,
         writeMetadata: false,
         writeRating: false,
@@ -1374,6 +1385,7 @@ test("createViewerServer accepts signed session cookies after restart and invali
       },
       permissions: {
         manageLibrary: false,
+        upload: false,
         read: true,
         writeMetadata: false,
         writeRating: false,
@@ -1621,6 +1633,7 @@ test("createViewerServer expires cookie sessions server side", async () => {
       user: null,
       permissions: {
         manageLibrary: false,
+        upload: false,
         read: false,
         writeMetadata: false,
         writeRating: false,
@@ -4004,7 +4017,7 @@ test("uploads stream the file to disk and hand its path to Eagle", async () => {
   }
 });
 
-test("uploads are refused for everyone but admins, before reaching Eagle", async () => {
+test("uploads are refused for users without the permission, before reaching Eagle", async () => {
   let calls = 0;
   const add = async () => {
     calls += 1;
@@ -4031,6 +4044,83 @@ test("uploads are refused for everyone but admins, before reaching Eagle", async
   } finally {
     await viewer.stop();
     await openViewer.stop();
+  }
+});
+
+test("only an editor given canUpload can upload, and the setting doesn't change their session", async () => {
+  const added: string[] = [];
+  const passwordHash = sha256("pw");
+  const users = (canUpload: boolean) => [
+    { username: "editor", passwordHash, role: "editor" as const, ...(canUpload ? { canUpload: true } : {}) },
+    { username: "plain", passwordHash, role: "editor" as const },
+    // The flag means nothing on a viewer, even if a settings file has it.
+    { username: "viewer", passwordHash, role: "viewer" as const, canUpload: true },
+  ];
+  const add = async (input: { path: string }) => {
+    added.push(input.path);
+    await rm(input.path, { force: true });
+  };
+  const viewer = uploadViewer(add, { authUsers: users(true), sessionSecret: "upload-permission-secret" });
+  const without = uploadViewer(add, { authUsers: users(false), sessionSecret: "upload-permission-secret" });
+  await viewer.start();
+  await without.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const upload = (cookie: string, target = origin) => fetch(`${target}/api/uploads?name=a.png`, {
+      method: "POST",
+      headers: { Cookie: cookie, Origin: target },
+      body: "bytes",
+    });
+    const permissions = async (cookie: string, target = origin) => (await (await fetch(`${target}/api/auth/status`, { headers: { Cookie: cookie } })).json()).permissions;
+
+    const editorCookie = await loginCookie(origin, "editor", "pw");
+    assert.equal((await permissions(editorCookie)).upload, true);
+    assert.equal((await upload(editorCookie)).status, 201);
+    assert.equal(added.length, 1);
+
+    for (const username of ["plain", "viewer"]) {
+      const cookie = await loginCookie(origin, username, "pw");
+      assert.equal((await permissions(cookie)).upload, false);
+      assert.equal((await upload(cookie)).status, 403);
+    }
+    assert.equal(added.length, 1);
+
+    // The same sign-in on a server where the permission was taken away: still signed in, no upload.
+    const withoutOrigin = `http://127.0.0.1:${without.status().port}`;
+    const status = await permissions(editorCookie, withoutOrigin);
+    assert.equal(status.read, true);
+    assert.equal(status.upload, false);
+    assert.equal((await upload(editorCookie, withoutOrigin)).status, 403);
+    assert.equal(added.length, 1);
+  } finally {
+    await viewer.stop();
+    await without.stop();
+  }
+});
+
+test("the upload permission doesn't open a library limited to other users", async () => {
+  let calls = 0;
+  const viewer = uploadViewer(async () => {
+    calls += 1;
+  }, {
+    authUsers: [{ username: "ed", passwordHash: sha256("edit"), role: "editor", canUpload: true }],
+    sharedLibraries: ["/tmp/Test.library"],
+    libraryUserRules: [{ path: "/tmp/Test.library", users: ["someone-else"] }],
+  });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const cookie = await loginCookie(origin, "ed", "edit");
+    const response = await fetch(`${origin}/api/uploads?name=a.png`, {
+      method: "POST",
+      headers: { Cookie: cookie, Origin: origin },
+      body: "bytes",
+    });
+    assert.equal(response.status, 403);
+    assert.equal((await response.json()).code, "LIBRARY_FORBIDDEN");
+    assert.equal(calls, 0);
+  } finally {
+    await viewer.stop();
   }
 });
 
