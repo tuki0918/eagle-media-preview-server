@@ -4,6 +4,11 @@ import { formatBytes } from "../../src/viewer/format";
 import type { AccessLogBucket, AccessLogClient, AccessLogEntry, AccessLogEventFilter, AccessLogFilter, AccessLogRange, AccessLogSearchKeys, AccessLogSummary, BlockedAddress } from "../types";
 import { ActivityIcon, BanIcon, ChevronIcon, CloseIcon, DownloadIcon, FolderOpenIcon, SelectItemIcon, RefreshIcon, TrashIcon } from "./Icons";
 
+interface ActivityNotice {
+  isError: boolean;
+  text: string;
+}
+
 interface AccessLogPanelProps {
   /** Live count, refreshed every few seconds even while the details are not reloaded. */
   activeClients: number;
@@ -14,8 +19,10 @@ interface AccessLogPanelProps {
   filters: AccessLogFilter[];
   expanded: boolean;
   loading?: boolean;
-  /** Result of the last Activity action (export, block, select); errors stay until the next one. */
-  notice?: { isError: boolean; text: string } | null;
+  /** Result of the last Activity action (export, block); errors stay until dismissed or the next one. */
+  notice?: ActivityNotice | null;
+  /** Why the last Select in Eagle failed, shown above the events it came from. */
+  selectNotice?: ActivityNotice | null;
   range: AccessLogRange;
   /** Text in the Recent events search box. */
   search: string;
@@ -27,6 +34,8 @@ interface AccessLogPanelProps {
   /** Resolves true once the address is blocked (the admin may cancel the confirmation). */
   onBlock: (address: string) => Promise<boolean>;
   onClear: () => void;
+  onDismissNotice?: () => void;
+  onDismissSelectNotice?: () => void;
   onEventFilterChange: (filter: AccessLogEventFilter) => void;
   onExport: () => void;
   onExpandedChange: (updater: (current: boolean) => boolean) => void;
@@ -134,11 +143,14 @@ export function AccessLogPanel({
   range,
   search,
   searchedText = "",
+  selectNotice = null,
   summary,
   onFiltersChange,
   onAutoRefreshChange,
   onBlock,
   onClear,
+  onDismissNotice,
+  onDismissSelectNotice,
   onEventFilterChange,
   onExport,
   onExpandedChange,
@@ -187,11 +199,7 @@ export function AccessLogPanel({
           </TabButton>
         </div>
 
-        {notice ? (
-          <p className={`m-0 rounded-lg px-2.5 py-1.5 text-[11px] leading-snug ${notice.isError ? "bg-[#fef2f2] text-[#b42318]" : "bg-[#ecfdf3] text-[#178c35]"}`} role={notice.isError ? "alert" : "status"}>
-            {notice.text}
-          </p>
-        ) : null}
+        {notice ? <NoticeBanner notice={notice} onDismiss={onDismissNotice} /> : null}
 
         <div id="activityOverviewPanel" className="grid gap-3" role="tabpanel" aria-labelledby="activityOverviewTab" hidden={tab !== "overview"}>
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -277,6 +285,7 @@ export function AccessLogPanel({
                 </button>
               ) : null}
             </div>
+            {selectNotice ? <NoticeBanner notice={selectNotice} onDismiss={onDismissSelectNotice} /> : null}
             <EventTable emptyText={search.trim() || filters.length || eventFilter ? "No matching events." : "No events in the log."} entries={recent} filters={filters} searchedText={searchedText} onFiltersChange={onFiltersChange} onSelectItem={onSelectItem} />
           </div>
 
@@ -290,6 +299,19 @@ export function AccessLogPanel({
         </div>
       </div>
     </section>
+  );
+}
+
+function NoticeBanner({ notice, onDismiss }: { notice: ActivityNotice; onDismiss?: () => void }) {
+  return (
+    <div className={`flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-[11px] leading-snug ${notice.isError ? "bg-[#fef2f2] text-[#b42318]" : "bg-[#ecfdf3] text-[#178c35]"}`} role={notice.isError ? "alert" : "status"}>
+      <p className="m-0 min-w-0">{notice.text}</p>
+      {onDismiss ? (
+        <button className="-my-0.5 -mr-1 grid h-5 w-5 shrink-0 place-items-center rounded border-0 bg-transparent p-0 text-current opacity-70 transition-opacity hover:opacity-100" type="button" aria-label="Dismiss" title="Dismiss" onClick={onDismiss}>
+          <CloseIcon className="h-3 w-3" />
+        </button>
+      ) : null}
+    </div>
   );
 }
 

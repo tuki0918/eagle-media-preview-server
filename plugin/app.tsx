@@ -113,6 +113,7 @@ function App() {
   // Libraries unshared since the last save, with their user limits, in case they are rechecked.
   const unsharedLibrariesRef = useRef(new Map<string, SharedLibrary>());
   const [activityNotice, setActivityNotice] = useState<{ isError: boolean; text: string } | null>(null);
+  const [selectNotice, setSelectNotice] = useState<{ isError: boolean; text: string } | null>(null);
   const [status, setStatus] = useState<PluginStatus>(() => ({
     settings: {
       customDomain: "",
@@ -436,12 +437,13 @@ function App() {
     if (!item?.select) return;
     try {
       if (item.getById && !(await item.getById(itemId))) {
-        showActivityNotice("This item is no longer in the library.", true);
+        setSelectNotice({ isError: true, text: "Couldn't find this item in the current library." });
         return;
       }
       await item.select([itemId]);
+      setSelectNotice(null);
     } catch (error) {
-      showActivityError(error);
+      setSelectNotice({ isError: true, text: errorMessage(error) });
     }
   }
 
@@ -817,6 +819,9 @@ function App() {
           expanded={activityExpanded}
           loading={accessLogLoading}
           notice={activityNotice}
+          selectNotice={selectNotice}
+          onDismissNotice={() => setActivityNotice(null)}
+          onDismissSelectNotice={() => setSelectNotice(null)}
           range={accessLogRange}
           search={accessLogSearch}
           searchedText={accessLogSearchedText}
