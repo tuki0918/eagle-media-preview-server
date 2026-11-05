@@ -105,7 +105,9 @@ Use this tab to choose which users can sign in to the viewer. To let other devic
 
 - Viewer: browse and preview media
 - Editor: edit rating, tags, and categories from the preview panel
-- Admin: has all available permissions
+- Admin: everything an Editor can do, plus:
+  - Move items to Eagle's trash and restore them. Files are not permanently deleted.
+  - Open every shared library, including libraries limited to selected users
 
 Authentication is optional. When password protection is enabled, browser access uses the built-in login screen and cookie-based sessions. Sessions expire after the configured session duration, 7 days by default.
 
