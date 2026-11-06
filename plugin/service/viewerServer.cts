@@ -889,9 +889,9 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       await confirmLibraryBeforeWrite(res);
       const added = await session.client.addItemFromPath({ path: filePath, name: upload.name, folderId: upload.folderId, tags: upload.tags });
       editedItems.set(res, { ext: upload.extension.slice(1), itemId: addedItemId(added), size: upload.size });
-    } catch (error) {
+    } finally {
+      // Eagle has its own copy by the time it answers, even when it is still asking about a duplicate.
       await discardUpload(filePath);
-      throw error;
     }
     sendJson(res, 201, { name: upload.name });
     return;

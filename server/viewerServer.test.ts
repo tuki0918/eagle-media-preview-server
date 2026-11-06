@@ -4011,7 +4011,7 @@ test("uploads stream the file to disk and hand its path to Eagle", async () => {
     assert.equal(added[0].input.folderId, "F1");
     assert.deepEqual(added[0].input.tags, ["travel", "family"]);
     assert.match(String(added[0].input.path), /[0-9a-f]{32}\.png$/);
-    await rm(String(added[0].input.path), { force: true });
+    await assert.rejects(readFile(String(added[0].input.path)), "the temp file is gone once Eagle has answered");
   } finally {
     await viewer.stop();
   }
