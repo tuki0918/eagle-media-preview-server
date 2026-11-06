@@ -44,7 +44,7 @@ The preview server, plugin window, and settings file are provided by this plugin
 - The background service starts, stops, and restarts the preview server, loads and saves `~/.eagle-media-preview-server/settings.json`, and relays Eagle's library-switch events
 - The preview server calls Eagle's Web API (`/api/v2/*`) for metadata and file paths, and reads originals and thumbnails from `<name>.library/images/<item id>.info/` directly
 - The library folder may be on an internal disk, an external HDD / SSD, or a NAS / network drive mounted on the computer running Eagle; the plugin never shares the folder itself
-- Media files are read-only to the preview server; rating, tags, folders, and trash changes go through Eagle's API
+- Media files are read-only to the preview server; rating, tags, folders, trash changes, and uploads go through Eagle's API
 
 `npm run diagram` prints these diagrams in the terminal (`overview` or `architecture` prints one). The images above are its colored output on a dark background, captured by `npm run diagram:images`. The routes are listed under HTTP/HTTPS Server.
 
@@ -60,6 +60,8 @@ Defaults and how to change them:
 | Public Network | disabled | **Public Network** toggle |
 | Auto start | disabled | **Auto start** toggle |
 | Trust `X-Forwarded-For` from this computer | disabled | Not in the panel; set `"trustForwardedFor": true` in `settings.json` while the server is stopped (see [Tunnels and reverse proxies](#tunnels-and-reverse-proxies)) |
+| Upload size limit per file | 2048 MB | Not in the panel; `uploadMaxSizeMB` in `settings.json` while the server is stopped |
+| Time allowed to receive one upload | 60 minutes | Not in the panel; `uploadTimeoutMinutes` in `settings.json` while the server is stopped |
 
 All values are saved to `~/.eagle-media-preview-server/settings.json`. Fields under **Settings** are locked while the server runs and take effect at the next start. The toggles in Server Status stay available while it runs, and a change to Password, Public Network, or HTTPS restarts the running server.
 
@@ -204,6 +206,7 @@ type Settings = {
     username: string;
     role: "viewer" | "editor" | "admin";
     passwordHash: string;
+    canUpload?: true; // Editors only; the settings panel shows it as the "Editor + Upload" role. Absent means no: admins can always upload and viewers never can.
   }>;
   autoStart: boolean;
   blockedAddresses: Array<{ address: string; addedAt: number }>;
@@ -220,6 +223,8 @@ type Settings = {
   sessionDurationDays: number;
   sharedLibraries: Array<{ name: string; path: string; access?: "selected"; users?: string[] }>;
   trustForwardedFor: boolean;
+  uploadMaxSizeMB: number;
+  uploadTimeoutMinutes: number;
 };
 ```
 
@@ -230,6 +235,8 @@ A `sharedLibraries` entry with `access: "selected"` can be opened only by the us
 `blockedAddresses` holds single addresses or CIDR ranges, managed from **Activity → Blocked addresses**; changes apply to the running server without a restart. Entries that overlap loopback (`127.0.0.0/8`, `::1`) are rejected.
 
 `trustForwardedFor` defaults to `false` and is not shown in the panel; see [Tunnels and reverse proxies](#tunnels-and-reverse-proxies).
+
+`uploadMaxSizeMB` (a whole number, default `2048`, which is 2 GB) and `uploadTimeoutMinutes` (default `60`, up to 1440) are not shown in the panel either. A value that can't be read falls back to its default, and a timeout above its maximum is lowered to the maximum. `uploadTimeoutMinutes` is the time allowed to receive any whole request, so raise it along with a larger size limit: the default covers 2 GB at about 0.6 MB/s.
 
 Legacy settings with `basicAuthUser`, `passwordHash`, and `allowMetadataEditing` are read for migration, converted into `authUsers`, and rewritten with `settingsVersion: 2`.
 
@@ -389,6 +396,13 @@ Media URLs carry the library id as the `library` query parameter, since media el
   - Updates tags and folders/categories from the preview panel
 - `POST /api/items/:id/trash` — Admin
   - Moves an item to Eagle's trash or restores it; requires `isDeleted` as a boolean
+- `POST /api/uploads` — Admin, or Editor with `canUpload`
+  - Adds one file to the open library; the raw request body is the file, up to `uploadMaxSizeMB` (2 GB by default), and `Content-Length` is required
+  - Query: `name` (required), `folderId`, and `tag` (repeatable)
+  - `POST /api/connect` tells users who may upload the limit as `uploadMaxBytes`, so the viewer can mark a larger file without sending it
+  - The file is streamed to the system temp folder under a random name and passed to Eagle's `/api/v2/item/add`; it is removed right away if that fails. Otherwise it stays for at least an hour, because Eagle can still read it after answering, and the next upload or server start after that removes it
+  - The access log records the new item's id, file type, and size, not the file name
+  - Eagle answers with success and an id before its Duplicate File Alert is resolved, so an uploaded duplicate isn't in the library until someone answers that dialog in Eagle on the host computer
 
 #### Eagle Web API — called by the viewer server only
 
@@ -412,7 +426,7 @@ The viewer server calls Eagle's local Web API at `http://localhost:41595/api/v2/
 - Every route that reads or changes library data (`/api/*` except auth routes, `/api/library-status`, `/api/connect`, and `/api/health`, plus `/file/:id`) requires the id; without it they return `400 { "error": "A library id is required for library requests", "code": "LIBRARY_REQUIRED" }`. The library is checked before an item id is looked up, so an item id alone never returns a file. The "Open file" link that opens the original in a new tab carries the id too; older bookmarks without it no longer work
 - A request whose id differs from the open library returns `409 { "error": "The library open in Eagle has changed", "code": "LIBRARY_CHANGED" }`, and one made while Eagle cannot report the open library returns `502`, in both cases before any library data is read
 - The check is repeated within the request, without extra Eagle calls for reads: each request remembers the library it was admitted for and a switch counter bumped by `eagle.onLibraryChanged`. Right before a JSON answer or a media stream is sent, the cached library info and the counter must still match; otherwise the answer is replaced with `409 LIBRARY_CHANGED` and `X-Library-Id` reports the new library
-- Writes (rating, tags, categories, trash) re-read the open library from Eagle right after the request body arrives and right before calling Eagle, so holding back the body cannot redirect a write to another library
+- Writes (rating, tags, categories, trash, uploads) re-read the open library from Eagle right after the request body arrives and right before calling Eagle, so holding back the body cannot redirect a write to another library
 - A media stream that has already started is sent to the end
 - The viewer server never calls Eagle's library switch API. Only the server window does: the folder icon on a library's row asks for confirmation, then the manager posts to Eagle's `POST /api/library/switch`. Eagle's plugin API documents no switch method. The switch then follows the same `eagle.onLibraryChanged` path as a switch made in Eagle
 
@@ -466,6 +480,7 @@ Authorization:
 - Browsing is read-only by default
 - `POST /api/items/:id/star` and `POST /api/items/:id/metadata` require an Editor or Admin user
 - `POST /api/items/:id/trash` requires an Admin user
+- `POST /api/uploads` requires a signed-in Admin, or an Editor with `canUpload`, so uploads aren't available with password protection off
 - The viewer server never calls Eagle's library switch API; switching libraries is only possible from the Eagle app
 - Unsafe methods reject mismatched `Origin` or `Referer` headers before API handlers run
 - JSON request bodies are capped at 1 MiB; malformed bodies return `400` and oversized bodies return `413`

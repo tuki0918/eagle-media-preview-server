@@ -102,6 +102,13 @@ const ITEM_FIELDS = [
   "thumbnailPath",
 ];
 
+interface AddItemFromPathInput {
+  folderId?: string;
+  name: string;
+  path: string;
+  tags?: string[];
+}
+
 const MAX_ERROR_BODY_LENGTH = 240;
 const MAX_SMART_FOLDER_ITEMS_PAGE_SIZE = 1000;
 const EXTENSION_SCAN_PAGE_SIZE = 1000;
@@ -550,6 +557,22 @@ function createEagleClient(options: EagleClientOptions = {}) {
 
     async legacyThumbnailPath(id: string) {
       return unwrapData(await request("/api/item/thumbnail", { searchParams: { id } }));
+    },
+
+    async addItemFromPath({ path, name, folderId, tags = [] }: AddItemFromPathInput) {
+      if (!path) throw new Error("path is required");
+      if (!name) throw new Error("name is required");
+      return unwrapData(
+        await request("/api/v2/item/add", {
+          method: "POST",
+          body: {
+            path,
+            name,
+            ...(folderId ? { folders: [folderId] } : {}),
+            ...(tags.length ? { tags: normalizeStringArray(tags, "tags") } : {}),
+          },
+        }),
+      );
     },
 
     async updateItemStar(id: string, star: unknown) {

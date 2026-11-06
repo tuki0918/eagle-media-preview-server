@@ -125,6 +125,69 @@ function responseErrorCode(data: unknown) {
   return "";
 }
 
+export interface UploadFileOptions {
+  folderId?: string;
+  /** Share of the file sent so far, from 0 to 1. */
+  onProgress?: (progress: number) => void;
+  /** The whole file has been sent. From here the server adds it to Eagle even if the request is aborted. */
+  onSent?: () => void;
+  signal?: AbortSignal;
+  tags?: readonly string[];
+}
+
+// XMLHttpRequest because fetch can't report upload progress. The file travels as the raw body, so
+// the server can stream it to disk without parsing a multipart form.
+export function uploadFile(file: File, { folderId, onProgress, onSent, signal, tags = [] }: UploadFileOptions = {}) {
+  const params = new URLSearchParams({ name: file.name });
+  if (folderId) params.set("folderId", folderId);
+  for (const tag of tags) params.append("tag", tag);
+  const url = `/api/uploads?${params.toString()}`;
+  return new Promise<void>((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    const abort = () => request.abort();
+    const finish = (settle: () => void) => {
+      signal?.removeEventListener("abort", abort);
+      settle();
+    };
+    request.open("POST", url);
+    request.setRequestHeader("Content-Type", "application/octet-stream");
+    for (const [name, value] of Object.entries(connectedLibraryHeaders())) request.setRequestHeader(name, value);
+    request.upload.onprogress = (event) => {
+      if (event.lengthComputable && event.total > 0) onProgress?.(event.loaded / event.total);
+    };
+    request.upload.onload = () => onSent?.();
+    request.onload = () => finish(() => {
+      const ok = request.status >= 200 && request.status < 300;
+      notifyRequestOutcome({ libraryId: request.getResponseHeader("X-Library-Id") || "", ok, status: request.status, url });
+      if (ok) {
+        resolve();
+        return;
+      }
+      const data = parseJsonText(request.responseText);
+      reject(new ApiError(request.status, responseErrorMessage(data, request.status), responseErrorCode(data)));
+    });
+    request.onerror = () => finish(() => {
+      notifyRequestOutcome({ libraryId: "", ok: false, status: 0, url });
+      reject(new Error("The connection to the server was lost"));
+    });
+    request.onabort = () => finish(() => reject(new DOMException("Upload canceled", "AbortError")));
+    if (signal?.aborted) {
+      reject(new DOMException("Upload canceled", "AbortError"));
+      return;
+    }
+    signal?.addEventListener("abort", abort, { once: true });
+    request.send(file);
+  });
+}
+
+function parseJsonText(text: string) {
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return null;
+  }
+}
+
 export function mediaUrl(id: string, kind: string) {
   const path = kind === "file"
     ? `/file/${encodeURIComponent(id)}`

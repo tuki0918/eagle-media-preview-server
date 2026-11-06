@@ -27,6 +27,9 @@ export interface ViewerShellActions {
   previewPointerDown: (target: EventTarget | null) => void;
   previewClosed: () => void;
   previewDoubleClicked: (target: EventTarget | null, preventDefault: () => void) => void;
+  /** Returns true when the error ended the session, so there's no point trying the next file. */
+  uploadError: (error: unknown) => boolean;
+  uploadsFinished: () => void;
 }
 
 const noop = () => {};
@@ -58,6 +61,8 @@ let actions: ViewerShellActions = {
   previewPointerDown: noop,
   previewClosed: noop,
   previewDoubleClicked: noop,
+  uploadError: () => false,
+  uploadsFinished: noop,
 };
 
 export function setViewerShellActions(nextActions: ViewerShellActions) {
@@ -73,6 +78,14 @@ export function submitConnection(event: { currentTarget: HTMLFormElement; preven
     username: String(data.get("username") || ""),
   });
   if (passwordField instanceof HTMLInputElement) passwordField.value = "";
+}
+
+export function uploadError(error: unknown) {
+  return actions.uploadError(error);
+}
+
+export function uploadsFinished() {
+  actions.uploadsFinished();
 }
 
 export function submitLogout() {

@@ -6,12 +6,15 @@ import type { IncomingHttpHeaders, IncomingMessage } from "http";
 type UserRole = "admin" | "editor" | "viewer";
 
 interface AuthUser {
+  /** Extra permission for editors. Read from the user on each request, so it isn't part of the session. */
+  canUpload?: boolean;
   passwordHash: string;
   role: UserRole;
   username: string;
 }
 
 interface AuthSession {
+  canUpload?: boolean;
   expiresAt: number;
   role: UserRole;
   username: string;
@@ -79,6 +82,10 @@ function hasRatingWriteAccess(req: AuthenticatedRequest, auth: AuthContext) {
 function hasAdminAccess(req: AuthenticatedRequest, auth: AuthContext) {
   const user = authenticatedUser(req, auth);
   return rolePermissions(user?.role).manageLibrary;
+}
+
+function hasUploadAccess(req: AuthenticatedRequest, auth: AuthContext) {
+  return canUserUpload(authenticatedUser(req, auth));
 }
 
 function authenticatedUser(req: AuthenticatedRequest, auth: AuthContext): AuthSession | null {
@@ -149,7 +156,7 @@ function verifyAuthSessionToken(token: string, auth: AuthContext): AuthSession |
     const user = auth.users.find((entry) => entry.username === username && entry.role === role);
     if (!user) return null;
     if (String(session.v || "") !== userAuthVersion(user)) return null;
-    return { expiresAt, role, username };
+    return { canUpload: user.canUpload, expiresAt, role, username };
   } catch {
     return null;
   }
@@ -188,9 +195,14 @@ function permissionsForUser(user: AuthSession | AuthUser | null, { authenticated
   return {
     manageLibrary: roleAccess.manageLibrary,
     read,
+    upload: canUserUpload(user),
     writeMetadata: roleAccess.writeMetadata,
     writeRating: roleAccess.writeRating,
   };
+}
+
+function canUserUpload(user: AuthSession | AuthUser | null) {
+  return user?.role === "admin" || (user?.role === "editor" && user.canUpload === true);
 }
 
 function rolePermissions(role: UserRole | undefined) {
@@ -216,6 +228,7 @@ function resolveAuthUsers({ allowMetadataEditing, authUsers, basicAuthUsername, 
         username: String(user.username || "").trim(),
         passwordHash: String(user.passwordHash || ""),
         role: normalizeRole(user.role),
+        ...(user.canUpload === true ? { canUpload: true } : {}),
       })).filter((user) => user.username && user.passwordHash)
     : [];
   if (users.length) return users;
@@ -304,6 +317,7 @@ function safeDecodeCookieValue(value: string) {
 }
 
 module.exports = {
+  permissionsForUser,
   AUTH_SESSION_MAX_AGE_SECONDS,
   authRequired,
   expiredAuthSessionCookies,
@@ -313,6 +327,7 @@ module.exports = {
   authenticatedUser,
   findPasswordUser,
   hasAdminAccess,
+  hasUploadAccess,
   hasMetadataWriteAccess,
   hasRatingWriteAccess,
   isAuthorized,

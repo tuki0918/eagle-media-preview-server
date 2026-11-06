@@ -42,6 +42,8 @@ describe("settingsChange", () => {
     expect(settingsPayloadChanged(baseSettings, { trustForwardedFor: true })).toBe(true);
     expect(serverRestartSettingsChanged(baseSettings, { trustForwardedFor: true })).toBe(true);
     expect(serverRestartSettingsChanged({ ...baseSettings, trustForwardedFor: true }, { trustForwardedFor: false })).toBe(true);
+    expect(serverRestartSettingsChanged(baseSettings, { uploadMaxSizeMB: 5120 })).toBe(true);
+    expect(serverRestartSettingsChanged(baseSettings, { uploadTimeoutMinutes: 120 })).toBe(true);
   });
 
   test("treats auto start as a persisted setting that does not restart the server", () => {

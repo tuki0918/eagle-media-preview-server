@@ -8,6 +8,8 @@ export interface AuthUser {
    * follows the row rather than whatever name is typed. Defaults to the saved username.
    */
   rowKey?: string;
+  /** Editors only: admins can always upload and viewers never can. */
+  canUpload?: boolean;
   passwordHash?: string;
   role?: UserRole;
   username?: string;
@@ -58,6 +60,9 @@ export interface PluginSettings {
   sessionDurationDays?: number | string;
   /** Believe X-Forwarded-For from a proxy on this machine; off by default. */
   trustForwardedFor?: boolean;
+  /** Only edited by hand in settings.json, like trustForwardedFor. */
+  uploadMaxSizeMB?: number;
+  uploadTimeoutMinutes?: number;
   sharedLibraries?: SharedLibrary[];
 }
 

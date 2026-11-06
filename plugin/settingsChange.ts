@@ -12,6 +12,8 @@ export interface ServerRestartSettings {
   sessionDurationDays?: unknown;
   sharedLibraries?: unknown;
   trustForwardedFor?: unknown;
+  uploadMaxSizeMB?: unknown;
+  uploadTimeoutMinutes?: unknown;
 }
 
 export type SettingsPatch = Record<string, unknown>;
@@ -31,6 +33,7 @@ export function serverSettingsChanged(current: ServerRestartSettings, nextSettin
   if ((nextSettings.httpsKeyPath ?? current.httpsKeyPath ?? "") !== (current.httpsKeyPath ?? "")) return true;
   if (Number(nextSettings.port ?? current.port) !== Number(current.port)) return true;
   if (Number(nextSettings.sessionDurationDays ?? current.sessionDurationDays ?? 7) !== Number(current.sessionDurationDays ?? 7)) return true;
+  if (uploadSettingsChanged(current, nextSettings)) return true;
   if (Boolean(nextSettings.trustForwardedFor ?? current.trustForwardedFor) !== Boolean(current.trustForwardedFor)) return true;
   if (Boolean(nextSettings.authEnabled ?? current.authEnabled) !== Boolean(current.authEnabled)) return true;
   if (JSON.stringify(nextSettings.authUsers ?? current.authUsers ?? []) !== JSON.stringify(current.authUsers ?? [])) return true;
@@ -48,6 +51,7 @@ export function serverRestartSettingsChanged(current: ServerRestartSettings, nex
   if ((nextSettings.httpsKeyPath ?? current.httpsKeyPath ?? "") !== (current.httpsKeyPath ?? "")) return true;
   if (Number(nextSettings.port ?? current.port) !== Number(current.port)) return true;
   if (Number(nextSettings.sessionDurationDays ?? current.sessionDurationDays ?? 7) !== Number(current.sessionDurationDays ?? 7)) return true;
+  if (uploadSettingsChanged(current, nextSettings)) return true;
   if (Boolean(nextSettings.trustForwardedFor ?? current.trustForwardedFor) !== Boolean(current.trustForwardedFor)) return true;
   if (nextAuthEnabled !== currentAuthEnabled) return true;
   if (!currentAuthEnabled && !nextAuthEnabled) return false;
@@ -60,6 +64,11 @@ export function serverRestartSettingsChanged(current: ServerRestartSettings, nex
 function librarySettingsChanged(current: ServerRestartSettings, nextSettings: SettingsPatch) {
   if (Boolean(nextSettings.libraryProtectionEnabled ?? current.libraryProtectionEnabled) !== Boolean(current.libraryProtectionEnabled)) return true;
   return JSON.stringify(nextSettings.sharedLibraries ?? current.sharedLibraries ?? []) !== JSON.stringify(current.sharedLibraries ?? []);
+}
+
+function uploadSettingsChanged(current: ServerRestartSettings, nextSettings: SettingsPatch) {
+  return (["uploadMaxSizeMB", "uploadTimeoutMinutes"] as const)
+    .some((key) => (nextSettings[key] ?? current[key]) !== current[key]);
 }
 
 function hasPasswordUpdates(value: unknown) {

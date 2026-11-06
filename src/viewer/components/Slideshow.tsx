@@ -11,12 +11,11 @@ import { getSearchControlsState } from "../searchControlsState";
 import { getTagChipsState } from "../tagChipsState";
 import { DEFAULT_SLIDESHOW_SETTINGS, readSlideshowSettings, saveSlideshowSettings, SlideshowSource, slideshowMediaKind, type SlideshowQuery, type SlideshowSettings } from "../slideshow";
 import type { EagleItem } from "../types";
-import { settingsDialogClassName, settingsDialogCloseClassName, settingsDialogHeaderClassName, settingsDialogTitleClassName } from "./settingsDialogStyles";
+import { settingsDialogClassName, settingsDialogCloseClassName, settingsDialogFieldClassName, settingsDialogFooterClassName, settingsDialogHeaderClassName, settingsDialogPanelClassName, settingsDialogPrimaryButtonClassName, settingsDialogSelectClassName, settingsDialogTitleClassName } from "./settingsDialogStyles";
 import { dockSurfaceClassName } from "./viewerDockStyles";
 
 const playerButton = "inline-grid size-11 shrink-0 place-items-center rounded-full text-white/80 hover:bg-white/15 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white disabled:pointer-events-none disabled:opacity-30 [&_svg]:size-5";
 const sideNavButton = "pointer-events-auto inline-grid size-12 shrink-0 place-items-center rounded-full border-0 bg-black/35 text-white/85 backdrop-blur-md transition-colors hover:bg-white/15 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white disabled:pointer-events-none disabled:opacity-0 [&_svg]:size-6";
-const selectClass = "h-10 w-full min-w-0 appearance-none rounded-xl border border-input bg-background pl-3 pr-9 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30";
 
 export function SlideshowLauncher() {
   const surface = useSyncExternalStore(subscribeResultSurfaceState, getResultSurfaceState, getResultSurfaceState);
@@ -102,7 +101,7 @@ export function SlideshowDialog({ query, onClose }: { query: SlideshowQuery; onC
         if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) close();
       }}
     >
-      <div ref={screenRef} className={running ? "relative h-full w-full overflow-hidden bg-black text-white [&:fullscreen]:h-screen [&:fullscreen]:w-screen" : "relative flex max-h-[inherit] flex-col bg-card text-card-foreground"}>
+      <div ref={screenRef} className={running ? "relative h-full w-full overflow-hidden bg-black text-white [&:fullscreen]:h-screen [&:fullscreen]:w-screen" : settingsDialogPanelClassName}>
         {running ? <SlideshowPlayer query={query} settings={settings} onClose={close} /> : (
           <>
             <header className={settingsDialogHeaderClassName}>
@@ -110,17 +109,17 @@ export function SlideshowDialog({ query, onClose }: { query: SlideshowQuery; onC
               <Button type="button" variant="ghost" size="icon" className={settingsDialogCloseClassName} aria-label="Close slideshow settings" onClick={close}><X /></Button>
             </header>
             <div className="slideshow-settings-fields grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-auto px-5 py-4 min-[360px]:grid-cols-2">
-              <label className="grid min-w-0 content-start gap-2 text-xs font-medium text-muted-foreground"><span className="uppercase">Image display time</span>
+              <label className={settingsDialogFieldClassName}><span className="uppercase">Image display time</span>
                 <span className="relative block">
-                  <select className={selectClass} value={settings.seconds} onChange={(event) => setSettings({ ...settings, seconds: Number(event.target.value) })}>
+                  <select className={settingsDialogSelectClassName} value={settings.seconds} onChange={(event) => setSettings({ ...settings, seconds: Number(event.target.value) })}>
                     {[3, 5, 10, 15, 30, 60].map((seconds) => <option key={seconds} value={seconds}>{seconds} seconds</option>)}
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
                 </span>
               </label>
-              <label className="grid min-w-0 content-start gap-2 text-xs font-medium text-muted-foreground"><span className="uppercase">Transition</span>
+              <label className={settingsDialogFieldClassName}><span className="uppercase">Transition</span>
                 <span className="relative block">
-                  <select className={selectClass} value={settings.effect} onChange={(event) => setSettings({ ...settings, effect: event.target.value as SlideshowSettings["effect"] })}>
+                  <select className={settingsDialogSelectClassName} value={settings.effect} onChange={(event) => setSettings({ ...settings, effect: event.target.value as SlideshowSettings["effect"] })}>
                     <option value="none">None</option><option value="fade">Fade</option><option value="slide">Slide</option>
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
@@ -130,9 +129,9 @@ export function SlideshowDialog({ query, onClose }: { query: SlideshowQuery; onC
               <SlideshowToggle label="Blur background" checked={settings.blurBackground} onChange={(blurBackground) => setSettings({ ...settings, blurBackground })} />
               <SlideshowToggle label="Loop" checked={settings.loop} onChange={(loop) => setSettings({ ...settings, loop })} />
             </div>
-            <footer className="shrink-0 border-t border-border bg-card px-5 py-4">
+            <footer className={settingsDialogFooterClassName}>
               <p className="mb-3 text-center text-xs leading-relaxed text-muted-foreground">Slideshows start muted. To hear video or audio, turn on sound using the speaker button during playback.</p>
-              <Button type="button" className="primary-action-button h-11 w-full touch-manipulation rounded-full transition-colors active:not-aria-[haspopup]:translate-y-0" onClick={start}><Play className="size-4" />START</Button>
+              <Button type="button" className={settingsDialogPrimaryButtonClassName} onClick={start}><Play className="size-4" />START</Button>
             </footer>
           </>
         )}

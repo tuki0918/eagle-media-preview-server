@@ -94,6 +94,7 @@ const EVENT_LABELS: Record<string, string> = {
   settings_changed: "Changed settings",
   star: "Changed rating",
   trash: "Moved to trash",
+  upload: "Uploaded file",
   url_preview: "Opened URL",
   view: "Viewed",
   view_failed: "View failed",
@@ -115,6 +116,8 @@ const FIELD_LABELS: Record<string, string> = {
   sessionDurationDays: "session duration",
   sharedLibraries: "shared libraries",
   trustForwardedFor: "X-Forwarded-For",
+  uploadMaxSizeMB: "upload size limit",
+  uploadTimeoutMinutes: "upload timeout",
 };
 // The log holds keys like login_failure, but people search for what the panel shows.
 export function accessLogSearchKeys(search: string): AccessLogSearchKeys {

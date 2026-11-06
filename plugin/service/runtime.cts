@@ -3,6 +3,7 @@ const { createPrivateKey, createPublicKey, pbkdf2Sync, randomBytes, X509Certific
 const { dirname, join } = require("path");
 const { homedir, networkInterfaces } = require("os");
 const { createEagleLibrarySwitcher } = require("./eagleClient.cjs");
+const { BYTES_PER_MB } = require("./upload.cjs");
 const { createViewerServer } = require("./viewerServer.cjs");
 const { accessLogCsv, createAccessLog } = require("./accessLog.cjs");
 const { normalizeBlockedAddress, normalizeBlockedAddresses } = require("./addressBlockList.cjs");
@@ -14,6 +15,7 @@ type ServerStatus = "error" | "running" | "stopped";
 type UserRole = "admin" | "editor" | "viewer";
 
 interface AuthUser {
+  canUpload?: boolean;
   passwordHash: string;
   role: UserRole;
   username: string;
@@ -53,6 +55,8 @@ interface PluginSettings {
   settingsVersion: number;
   sharedLibraries: SharedLibrary[];
   trustForwardedFor: boolean;
+  uploadMaxSizeMB: number;
+  uploadTimeoutMinutes: number;
 }
 
 type SettingsInput = Partial<Omit<PluginSettings, "port">> & {
@@ -122,6 +126,8 @@ interface ServerManagerOptions {
     accessLog?: AccessLog;
     blockedAddresses?: BlockedAddress[];
     trustForwardedFor?: boolean;
+    uploadMaxBytes?: number;
+    uploadRequestTimeoutMs?: number;
   }) => ManagedViewer;
 }
 
@@ -152,9 +158,12 @@ const DEFAULT_SETTINGS: PluginSettings = {
   settingsVersion: 2,
   sharedLibraries: [],
   trustForwardedFor: false,
+  uploadMaxSizeMB: 2048,
+  uploadTimeoutMinutes: 60,
 };
 const CURRENT_SETTINGS_VERSION = 2;
 const MIN_SESSION_DURATION_DAYS = 1;
+const MAX_UPLOAD_TIMEOUT_MINUTES = 24 * 60;
 const MAX_SESSION_DURATION_DAYS = 365;
 const PASSWORD_HASH_ALGORITHM = "sha256";
 const PASSWORD_HASH_ITERATIONS = 210000;
@@ -300,7 +309,21 @@ function normalizeSettings(input: SettingsInput = {}): PluginSettings {
     libraryProtectionEnabled: Boolean(input.libraryProtectionEnabled ?? DEFAULT_SETTINGS.libraryProtectionEnabled),
     sharedLibraries: withKnownLibraryUsers(normalizeSharedLibraries(input.sharedLibraries), authUsers),
     trustForwardedFor: input.trustForwardedFor === true,
+    uploadMaxSizeMB: normalizeUploadMaxSizeMB(input.uploadMaxSizeMB),
+    uploadTimeoutMinutes: normalizeUploadTimeoutMinutes(input.uploadTimeoutMinutes),
   };
+}
+
+// These are only edited by hand, to get out of a tight spot, so a typo falls back to the default
+// instead of keeping the settings from loading.
+function normalizeUploadMaxSizeMB(value: unknown) {
+  const megabytes = typeof value === "number" || typeof value === "string" ? Number(value) : NaN;
+  return Number.isInteger(megabytes) && megabytes > 0 && Number.isSafeInteger(megabytes * BYTES_PER_MB) ? megabytes : DEFAULT_SETTINGS.uploadMaxSizeMB;
+}
+
+function normalizeUploadTimeoutMinutes(value: unknown) {
+  const minutes = typeof value === "number" || typeof value === "string" ? Number(value) : NaN;
+  return Number.isFinite(minutes) && minutes > 0 ? Math.min(minutes, MAX_UPLOAD_TIMEOUT_MINUTES) : DEFAULT_SETTINGS.uploadTimeoutMinutes;
 }
 
 // A deleted user is dropped from every library that names them; a library left with no users
@@ -331,12 +354,14 @@ function canonicalSettings(settings: PluginSettings) {
     sessionSecret: settings.sessionSecret,
     sharedLibraries: settings.sharedLibraries,
     trustForwardedFor: settings.trustForwardedFor,
+    uploadMaxSizeMB: settings.uploadMaxSizeMB,
+    uploadTimeoutMinutes: settings.uploadTimeoutMinutes,
   };
 }
 
 // Settings whose changes go in the access log, by name only. Passwords, secrets, and bookkeeping stay
 // out, and blocked addresses have their own events.
-const LOGGED_SETTING_FIELDS = ["authEnabled", "authUsers", "autoStart", "customDomain", "host", "httpsCertPath", "httpsEnabled", "httpsKeyPath", "libraryProtectionEnabled", "port", "sessionDurationDays", "sharedLibraries", "trustForwardedFor"] as const;
+const LOGGED_SETTING_FIELDS = ["authEnabled", "authUsers", "autoStart", "customDomain", "host", "httpsCertPath", "httpsEnabled", "httpsKeyPath", "libraryProtectionEnabled", "port", "sessionDurationDays", "sharedLibraries", "trustForwardedFor", "uploadMaxSizeMB", "uploadTimeoutMinutes"] as const;
 
 function changedSettingFields(before: PluginSettings, after: PluginSettings) {
   return LOGGED_SETTING_FIELDS.filter((field) => JSON.stringify(before[field]) !== JSON.stringify(after[field]));
@@ -436,13 +461,16 @@ function normalizeAuthUsers(value: unknown, input: SettingsInput = {}) {
 
 function normalizeAuthUser(value: unknown): AuthUser | null {
   if (!value || typeof value !== "object") return null;
-  const input = value as { passwordHash?: unknown; role?: unknown; username?: unknown };
+  const input = value as { canUpload?: unknown; passwordHash?: unknown; role?: unknown; username?: unknown };
   const username = String(input.username || "").trim();
   if (!username) return null;
+  const role = normalizeRole(input.role);
   return {
     username,
     passwordHash: String(input.passwordHash || ""),
-    role: normalizeRole(input.role),
+    role,
+    // Only editors choose this: admins can always upload and viewers never can.
+    ...(role === "editor" && input.canUpload === true ? { canUpload: true } : {}),
   };
 }
 
@@ -680,6 +708,8 @@ function createServerManager({
       accessLog,
       blockedAddresses: settings.blockedAddresses,
       trustForwardedFor: settings.trustForwardedFor,
+      uploadMaxBytes: settings.uploadMaxSizeMB * BYTES_PER_MB,
+      uploadRequestTimeoutMs: settings.uploadTimeoutMinutes * 60 * 1000,
     });
   }
 

@@ -27,6 +27,7 @@ export const state: ViewerState = {
   permissions: {
     manageLibrary: false,
     read: true,
+    upload: false,
     writeMetadata: false,
     writeRating: false,
   },

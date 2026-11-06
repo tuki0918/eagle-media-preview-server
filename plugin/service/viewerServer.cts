@@ -10,15 +10,18 @@ const { createConnectionContext } = require("./connection.cjs");
 const { createLibraryAccessPolicy, libraryIdFor } = require("./libraryAccess.cjs");
 const { readInternetShortcutUrl, servedMediaInfo, streamItemMedia } = require("./media.cjs");
 const { resolveDefaultPublicDir, securityHeaders, serveStatic } = require("./static.cjs");
+const { MAX_UPLOAD_BYTES, UPLOAD_PATH, UPLOAD_REQUEST_TIMEOUT_MS, UploadError, discardUpload, parseUploadRequest, receiveUpload, sweepUploads } = require("./upload.cjs");
 const {
   AUTH_SESSION_MAX_AGE_SECONDS,
   authRequired,
+  permissionsForUser,
   authSessionTokenFromRequest,
   authStatusResponse,
   authenticatedUser,
   expiredAuthSessionCookies,
   findPasswordUser,
   hasAdminAccess,
+  hasUploadAccess,
   hasMetadataWriteAccess,
   hasRatingWriteAccess,
   isAuthorized,
@@ -44,6 +47,10 @@ interface ViewerServerOptions {
   blockedAddresses?: Array<string | { address: string; addedAt?: number }>;
   /** Believe X-Forwarded-For from a proxy on this machine. Off unless the admin confirms the proxy sets it. */
   trustForwardedFor?: boolean;
+  uploadMaxBytes?: number;
+  uploadRequestTimeoutMs?: number;
+  /** How long a request other than an upload may take to send its body. */
+  requestBodyTimeoutMs?: number;
   customDomain?: string;
   allowMetadataEditing?: boolean;
   authUsers?: AuthUser[];
@@ -67,12 +74,14 @@ interface ViewerServerOptions {
 type UserRole = "admin" | "editor" | "viewer";
 
 interface AuthUser {
+  canUpload?: boolean;
   passwordHash: string;
   role: UserRole;
   username: string;
 }
 
 interface AuthSession {
+  canUpload?: boolean;
   expiresAt: number;
   role: UserRole;
   username: string;
@@ -93,6 +102,7 @@ const LOGIN_RATE_LIMIT_MESSAGE = "Too many failed login attempts. Try again late
 const RATING_WRITE_FORBIDDEN_MESSAGE = "Rating editing is not allowed for this viewer";
 const METADATA_WRITE_FORBIDDEN_MESSAGE = "Metadata editing is not allowed for this viewer";
 const ADMIN_WRITE_FORBIDDEN_MESSAGE = "Admin actions are not allowed for this viewer";
+const UPLOAD_FORBIDDEN_MESSAGE = "Uploading is not allowed for this viewer";
 const LIBRARY_NOT_SHARED_MESSAGE = "The library open in Eagle is not shared";
 const LIBRARY_FORBIDDEN_MESSAGE = "Your account can't open the library that is open in Eagle";
 const LIBRARY_CHANGED_MESSAGE = "The library open in Eagle has changed";
@@ -136,6 +146,7 @@ interface ItemTypesScan {
 interface EagleClient {
   appInfo(): Promise<unknown>;
   folders(): Promise<unknown>;
+  addItemFromPath(input: { folderId?: string; name: string; path: string; tags?: string[] }): Promise<unknown>;
   itemById(id: string): Promise<EagleItem>;
   itemExtensions(options?: { onProgress?: (extensions: ItemExtension[]) => void }): Promise<ItemExtension[]>;
   legacyThumbnailPath(id: string): Promise<unknown>;
@@ -181,6 +192,7 @@ interface LibraryAccessPolicy {
 interface ApiContext {
   /** Re-reads the open library from Eagle right before a write and throws if it changed. */
   confirmLibraryBeforeWrite: (res: ServerResponse) => Promise<void>;
+  uploadMaxBytes: number;
   getSession: () => EagleSession;
   libraryAccess: LibraryAccessPolicy;
   libraryId: (libraryPath: unknown) => string;
@@ -227,6 +239,26 @@ interface LibraryGuard {
 // consult this right before responding so a switch during the request never leaks the new library.
 const libraryGuards = new WeakMap<ServerResponse, LibraryGuard>();
 
+const REQUEST_BODY_TIMEOUT_MS = 60 * 1000;
+
+// The server's requestTimeout has to cover a whole upload. Everything else sends little or nothing,
+// so it doesn't get that long to hold a connection open. Only the body is timed: a slow download
+// or a paused video is a finished request.
+function dropStalledRequestBody(req: IncomingMessage, res: ServerResponse, timeoutMs: number) {
+  // Kept here because req.socket can be null once the request has closed.
+  const { socket } = req;
+  const timer = setTimeout(() => {
+    // The socket, since answering early closes the request while the body is still outstanding.
+    if (!req.complete) socket.destroy();
+  }, timeoutMs);
+  timer.unref?.();
+  const stopIfDone = () => {
+    if (req.complete || socket.destroyed) clearTimeout(timer);
+  };
+  req.once("close", stopIfDone);
+  res.once("close", stopIfDone);
+}
+
 function createViewerServer({
   accessLog: requestedAccessLog = null,
   blockedAddresses = [],
@@ -247,6 +279,9 @@ function createViewerServer({
   sharedLibraries = null,
   libraryUserRules = [],
   trustForwardedFor = false,
+  uploadMaxBytes = MAX_UPLOAD_BYTES,
+  uploadRequestTimeoutMs = UPLOAD_REQUEST_TIMEOUT_MS,
+  requestBodyTimeoutMs = REQUEST_BODY_TIMEOUT_MS,
   eagleClient = createEagleClient(),
 }: ViewerServerOptions = {}) {
   let serverInstance: NetServer | null = null;
@@ -381,6 +416,7 @@ function createViewerServer({
   const server = createProtocolServer({ httpsCertPath, httpsEnabled, httpsKeyPath }, async (req: IncomingMessage, res: ServerResponse) => {
     try {
       const url = new URL(req.url || "/", `${httpsEnabled ? "https" : "http"}://${req.headers.host}`);
+      if (url.pathname !== UPLOAD_PATH) dropStalledRequestBody(req, res, requestBodyTimeoutMs);
       // Direct clients are dropped when they connect; this also catches clients behind a local proxy.
       const requestAddress = displayClientAddress(req, trustForwardedFor);
       if (blockList.isBlocked(requestAddress)) {
@@ -403,6 +439,8 @@ function createViewerServer({
         }
       };
       const auth = { authSessions, clientAddress: requestAddress, loginFailures, recordAuth, revokedAuthSessions, secureCookies: httpsEnabled, sessionMaxAgeSeconds, sessionSecret: resolvedSessionSecret, users: resolvedAuthUsers };
+      // A refused upload must not make this server read the rest of a large body before moving on.
+      if (url.pathname === UPLOAD_PATH) res.setHeader("Connection", "close");
       if (!isTrustedUnsafeRequest(req, url, trustedCustomDomain)) {
         sendJson(res, 403, { error: "Cross-origin writes are not allowed" });
         return;
@@ -429,6 +467,7 @@ function createViewerServer({
           getSession: () => currentSession,
           libraryAccess,
           libraryId,
+          uploadMaxBytes,
         });
         return;
       }
@@ -445,13 +484,14 @@ function createViewerServer({
       }
       await serveStatic(url.pathname, res, publicDir);
     } catch (error) {
-      const status = error instanceof HttpError || error instanceof EagleRequestError
+      const status = error instanceof HttpError || error instanceof EagleRequestError || error instanceof UploadError
         ? (error as { status: number }).status
         : 500;
       const code = error instanceof HttpError && error.code ? { code: error.code } : {};
       sendJson(res, status, { error: errorMessage(error) || "Internal server error", ...code });
     }
   });
+  (server as NetServer & { requestTimeout?: number }).requestTimeout = uploadRequestTimeoutMs;
   const openSockets = new Set<Socket>();
   // The raw TCP socket is reported for both HTTP and HTTPS, so destroying it also ends TLS sessions.
   server.on("connection", (socket: Socket) => {
@@ -469,6 +509,7 @@ function createViewerServer({
     async start() {
       if (state === "running") return this.status();
       state = "starting";
+      void sweepUploads();
       lastError = "";
       try {
         await new Promise<void>((resolveStart, rejectStart) => {
@@ -651,7 +692,7 @@ async function cachedItemTypes(session: { client: EagleClient; libraryInfo(): Pr
   return { complete: scan.complete, items: scan.items };
 }
 
-async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { auth, confirmLibraryBeforeWrite, getSession, libraryAccess, libraryId }: ApiContext & { auth: AuthContext }) {
+async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { auth, confirmLibraryBeforeWrite, getSession, libraryAccess, libraryId, uploadMaxBytes }: ApiContext & { auth: AuthContext }) {
   const session = getSession();
 
   if (url.pathname === "/api/connect") {
@@ -659,7 +700,7 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       sendMethodNotAllowed(res, ["POST"]);
       return;
     }
-    await handleConnect(req, res, session, libraryId, libraryAccess, authenticatedUser(req, auth));
+    await handleConnect(req, res, session, libraryId, libraryAccess, authenticatedUser(req, auth), hasUploadAccess(req, auth) ? uploadMaxBytes : undefined);
     return;
   }
 
@@ -680,6 +721,9 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       library: libraryStatus === "shared" ? publicLibraryInfo(libraryInfo, libraryId) : null,
       libraryStatus,
       error: app.status === "rejected" ? app.reason.message : null,
+      // Changing the upload permission keeps sessions valid, so open viewers learn about it here.
+      permissions: permissionsForUser(authenticatedUser(req, auth), { authenticated: true }),
+      uploadMaxBytes: hasUploadAccess(req, auth) ? uploadMaxBytes : undefined,
     });
     return;
   }
@@ -848,6 +892,32 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       id: item.id || itemId,
       isDeleted: typeof item.isDeleted === "boolean" ? item.isDeleted : body.isDeleted,
     });
+    return;
+  }
+
+  if (url.pathname === UPLOAD_PATH) {
+    if (req.method !== "POST") {
+      sendMethodNotAllowed(res, ["POST"]);
+      return;
+    }
+    if (!hasUploadAccess(req, auth)) {
+      sendJson(res, 403, { error: UPLOAD_FORBIDDEN_MESSAGE });
+      return;
+    }
+    const upload = parseUploadRequest(req, url, uploadMaxBytes);
+    editedItems.set(res, { ext: upload.extension.slice(1), size: upload.size });
+    void sweepUploads();
+    const filePath = await receiveUpload(req, { extension: upload.extension });
+    try {
+      // A library switch during a long upload must not put the file in the other library.
+      await confirmLibraryBeforeWrite(res);
+      const added = await session.client.addItemFromPath({ path: filePath, name: upload.name, folderId: upload.folderId, tags: upload.tags });
+      editedItems.set(res, { ext: upload.extension.slice(1), itemId: addedItemId(added), size: upload.size });
+    } catch (error) {
+      await discardUpload(filePath);
+      throw error;
+    }
+    sendJson(res, 201, { name: upload.name });
     return;
   }
 
@@ -1065,6 +1135,11 @@ function logAccess(accessLog: AccessLogRecorder, req: IncomingMessage, res: Serv
     }
     return;
   }
+  if (pathname === UPLOAD_PATH) {
+    const noted = editedItems.get(res);
+    accessLog.record({ ...base, type: "edit", event: "upload", ext: noted?.ext || undefined, itemId: noted?.itemId, path: pathname, size: noted?.size });
+    return;
+  }
   const edit = pathname.match(/^\/api\/items\/([^/]+)\/(star|metadata|trash)$/);
   if (edit) {
     const noted = editedItems.get(res);
@@ -1176,7 +1251,7 @@ function sendLoginRateLimited(res: ServerResponse, retryAfterSeconds: number) {
 }
 
 // The Eagle API connection is fixed server-side; viewer clients can only check it, never repoint it.
-async function handleConnect(req: IncomingMessage, res: ServerResponse, session: EagleSession, libraryId: ApiContext["libraryId"], libraryAccess: LibraryAccessPolicy, user: LibraryUser | null) {
+async function handleConnect(req: IncomingMessage, res: ServerResponse, session: EagleSession, libraryId: ApiContext["libraryId"], libraryAccess: LibraryAccessPolicy, user: LibraryUser | null, uploadMaxBytes?: number) {
   await readJson(req);
   try {
     const [app, library] = await Promise.all([
@@ -1193,10 +1268,15 @@ async function handleConnect(req: IncomingMessage, res: ServerResponse, session:
       sendLibraryForbidden(res);
       return;
     }
-    sendJson(res, 200, { app, library: publicLibraryInfo(library, libraryId) });
+    sendJson(res, 200, { app, library: publicLibraryInfo(library, libraryId), uploadMaxBytes });
   } catch (error) {
     sendJson(res, 502, { error: `Unable to connect to Eagle API: ${errorMessage(error)}` });
   }
+}
+
+function addedItemId(added: unknown) {
+  const id = (added as { id?: unknown } | null | undefined)?.id;
+  return typeof id === "string" && id ? id : undefined;
 }
 
 // Library paths reveal the host's directory layout, so clients only get the display name.
@@ -1248,7 +1328,7 @@ function normalizeStar(value: unknown) {
 }
 
 // What an edit request changed, for the access log: the field names, never their values.
-const editedItems = new WeakMap<ServerResponse, { event?: string; fields?: string[] }>();
+const editedItems = new WeakMap<ServerResponse, { event?: string; ext?: string; fields?: string[]; itemId?: string; size?: number }>();
 
 function sendLibraryNotShared(res: ServerResponse) {
   sendJson(res, 503, { error: LIBRARY_NOT_SHARED_MESSAGE, code: "LIBRARY_NOT_SHARED" });

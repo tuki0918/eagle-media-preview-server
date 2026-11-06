@@ -68,15 +68,19 @@ export interface ConnectResponse {
   app?: {
     version?: string;
   };
+  /** Sent only to users who may upload. */
+  uploadMaxBytes?: number;
 }
 
 export interface HealthResponse extends ConnectResponse {
   libraryStatus?: "forbidden" | "not_shared" | "shared" | null;
+  permissions?: AuthStatusPermissions;
 }
 
 export interface ViewerPermissions {
   manageLibrary: boolean;
   read: boolean;
+  upload: boolean;
   writeMetadata: boolean;
   writeRating: boolean;
 }
