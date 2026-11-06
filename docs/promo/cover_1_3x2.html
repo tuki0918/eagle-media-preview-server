@@ -1,0 +1,72 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1920px; height: 1280px; overflow: hidden; }
+  body {
+    font-family: -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif;
+    color: #f5f7fb;
+    background:
+      radial-gradient(900px 600px at 1497.6px 586px, rgba(62, 139, 255, 0.35), transparent 70%),
+      radial-gradient(700px 500px at 192px 1180px, rgba(30, 94, 222, 0.25), transparent 70%),
+      #0d0f14;
+    position: relative;
+  }
+  .left { position: absolute; left: 110px; top: 100px; bottom: 100px; width: 760px; display: flex; flex-direction: column; justify-content: center; }
+  .brand { display: flex; align-items: center; gap: 20px; margin-bottom: 40px; }
+  .brand img { width: 76px; height: 76px; border-radius: 18px; box-shadow: 0 0 0 1px rgba(255,255,255,0.08); }
+  .brand .name { font-size: 28px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand .sub { font-size: 19px; color: #8b93a7; margin-top: 4px; }
+  h1 { font-size: 80px; line-height: 1.04; font-weight: 800; letter-spacing: -0.035em; }
+  h1 span { background: linear-gradient(90deg, #5aa2ff, #3e8bff 60%, #8cc4ff); -webkit-background-clip: text; color: transparent; }
+  .lead { font-size: 24px; white-space: nowrap; line-height: 1.45; color: #b6bdcc; margin-top: 26px; max-width: 720px; }
+  .uses { display: flex; gap: 30px; margin-top: 30px; width: 720px; justify-content: center; }
+  .use { display: flex; align-items: center; gap: 10px; font-size: 23px; font-weight: 600; color: #e6f7ec; }
+  .use svg { width: 26px; height: 26px; }
+  .use svg circle { fill: #22c55e; }
+  .use svg path { fill: none; stroke: #fff; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+  .main { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 36px; width: 720px; }
+  .feat { display: flex; align-items: center; gap: 16px; padding: 16px 20px; border-radius: 16px; background: rgba(62,139,255,0.12); border: 1px solid rgba(62,139,255,0.30); font-size: 23px; font-weight: 650; white-space: nowrap; color: #e3eeff; }
+  .feat svg { width: 30px; height: 30px; flex: none; stroke: #6aaeff; fill: none; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+  .also { margin-top: 24px; font-size: 18px; line-height: 1.6; color: #8b93a7; white-space: nowrap; }
+  .also span { white-space: nowrap; }
+  .also b { color: #c3cad8; font-weight: 600; }
+  .feat sup { font-size: 18px; color: #8cb8ff; margin-left: -14px; align-self: flex-start; margin-top: 4px; }
+  .note { margin-top: 10px; font-size: 15px; color: #6f778a; }
+  .ipad { position: absolute; right: 110px; top: 170px; width: 940px; filter: drop-shadow(0 40px 80px rgba(0,0,0,0.6)); }
+  .panel { position: absolute; right: 30px; top: 580px; width: 520px; filter: drop-shadow(0 30px 60px rgba(0,0,0,0.55)); }
+</style>
+</head>
+<body>
+  <div class="left">
+    <div class="brand">
+      <img src="../../plugin/assets/icon_on.png" />
+      <div>
+        <div class="name">Media Preview Server</div>
+        <div class="sub">Plugin for Eagle</div>
+      </div>
+    </div>
+    <h1>Your Eagle library,<br /><span>on every screen.</span></h1>
+    <p class="lead">Turn the Eagle on your Mac or PC into a self-hosted media server.<br />Browse it from phones, tablets, and PCs on your local network.</p>
+    <div class="uses">
+      <div class="use"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/><path d="M7 12.5l3.2 3.2L17 9"/></svg>Personal</div>
+      <div class="use"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/><path d="M7 12.5l3.2 3.2L17 9"/></svg>Family</div>
+      <div class="use"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/><path d="M7 12.5l3.2 3.2L17 9"/></svg>Small business</div>
+    </div>
+    <div class="main">
+      <div class="feat"><svg viewBox="0 0 24 24"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg>One-click start</div>
+      <div class="feat"><svg viewBox="0 0 24 24"><path d="M12 2.5l8 3v6c0 4.8-3.3 8.3-8 10-4.7-1.7-8-5.2-8-10v-6z"/><path d="M8.5 12l2.5 2.5 4.5-4.5"/></svg>Library protection</div>
+      <div class="feat"><svg viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M12 7v7M9 11l3 3 3-3"/></svg>Installable PWA</div>
+      <div class="feat"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M10 8l5 2.5-5 2.5z"/><path d="M8 21h8"/></svg>Slideshow</div>
+      <div class="feat"><svg viewBox="0 0 24 24"><path d="M3 14v-2a9 9 0 0 1 18 0v2"/><rect x="2" y="14" width="5" height="7" rx="1.5"/><rect x="17" y="14" width="5" height="7" rx="1.5"/></svg>Background playback</div>
+      <div class="feat"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><rect x="12" y="12" width="7" height="5" rx="1"/></svg>Picture-in-Picture<sup>*</sup></div>
+    </div>
+    <p class="also"><b>Also:</b> Custom hostname &amp; port, HTTPS, Passwords, User roles, Activity log, and more</p>
+    <p class="note">* Picture-in-Picture depends on your browser and OS.</p>
+  </div>
+  <img class="ipad" src="../screenshot.png" />
+  <img class="panel" src="../server_panel.png" />
+</body>
+</html>
