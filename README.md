@@ -76,6 +76,23 @@ Use the **Picture-in-Picture** button in video controls. It appears when the bro
 </details>
 
 <details>
+<summary><strong>File Upload</strong></summary>
+
+Admin and Editor + Upload users can upload with the upload button at the top right of the viewer.
+
+![Upload dialog](docs/screenshot_upload.png)
+
+![Use case: upload](docs/use_case_upload.png)
+
+Uploads add files to the open library, up to 2 GB each by default, with an optional folder and tags. A copy stays in this computer's temp folder for about 15 minutes, then the running server removes it. If the server stops first, the copy is removed after it starts again.
+
+The panel has no setting for the upload limits. To change them, stop the server and edit `~/.eagle-media-preview-server/settings.json`: `uploadMaxSizeMB` is the size limit per file (default `2048`), and `uploadTimeoutMinutes` is the time allowed to receive one file (default `60`). Raise the timeout along with a larger size limit.
+
+The viewer can show **Success** before a file is really in the library. If Eagle already has the same file, it opens its **Duplicate File Alert** on this computer, and the file isn't added until someone chooses **Use existing file** or **Keep both** there.
+
+</details>
+
+<details>
 <summary><strong>Settings</strong></summary>
 
 #### Server Status
@@ -110,12 +127,6 @@ Use this tab to choose which users can sign in to the viewer. To let other devic
 - Admin: everything an Editor can do, including uploads, plus:
   - Move items to Eagle's trash and restore them. Files are not permanently deleted.
   - Open every shared library, including libraries limited to selected users
-
-Uploads add files to the open library, up to 2 GB each by default, with an optional folder and tags. A copy stays in this computer's temp folder for at least an hour. It is removed at the next upload or server start after that.
-
-The panel has no setting for the upload limits. To change them, stop the server and edit `~/.eagle-media-preview-server/settings.json`: `uploadMaxSizeMB` is the size limit per file (default `2048`), and `uploadTimeoutMinutes` is the time allowed to receive one file (default `60`). Raise the timeout along with a larger size limit.
-
-The viewer can show **Success** before a file is really in the library. If Eagle already has the same file, it opens its **Duplicate File Alert** on this computer, and the file isn't added until someone chooses **Use existing file** or **Keep both** there.
 
 Authentication is optional. When password protection is enabled, browser access uses the built-in login screen and cookie-based sessions. Sessions expire after the configured session duration, 7 days by default.
 

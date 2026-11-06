@@ -400,7 +400,7 @@ Media URLs carry the library id as the `library` query parameter, since media el
   - Adds one file to the open library; the raw request body is the file, up to `uploadMaxSizeMB` (2 GB by default), and `Content-Length` is required
   - Query: `name` (required), `folderId`, and `tag` (repeatable)
   - `POST /api/connect` tells users who may upload the limit as `uploadMaxBytes`, so the viewer can mark a larger file without sending it
-  - The file is streamed to the system temp folder under a random name and passed to Eagle's `/api/v2/item/add`; it is removed right away if that fails. Otherwise it stays for at least an hour, because Eagle can still read it after answering, and the next upload or server start after that removes it
+  - The file is streamed to the system temp folder under a random name and passed to Eagle's `/api/v2/item/add`; it is removed right away if that fails. Otherwise it stays for at least 15 minutes, because Eagle can still read it after answering. The running server sweeps once a minute, and also on start and on each upload
   - The access log records the new item's id, file type, and size, not the file name
   - Eagle answers with success and an id before its Duplicate File Alert is resolved, so an uploaded duplicate isn't in the library until someone answers that dialog in Eagle on the host computer
 
