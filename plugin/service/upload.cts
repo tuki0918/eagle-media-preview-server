@@ -8,7 +8,9 @@ const { pipeline } = require("stream/promises");
 import type { IncomingMessage } from "http";
 
 const UPLOAD_PATH = "/api/uploads";
-const MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024;
+const BYTES_PER_MB = 1024 * 1024;
+const BYTES_PER_GB = 1024 * BYTES_PER_MB;
+const MAX_UPLOAD_BYTES = 2 * BYTES_PER_GB;
 const MAX_UPLOAD_NAME_LENGTH = 255;
 // A connection that stops sending is dropped after this long, however large the file is.
 const UPLOAD_IDLE_TIMEOUT_MS = 60 * 1000;
@@ -33,13 +35,19 @@ function defaultUploadDirectory() {
   return join(tmpdir(), "eagle-media-preview-server-uploads");
 }
 
+function formatLimit(bytes: number) {
+  if (bytes < BYTES_PER_MB) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  if (bytes < BYTES_PER_GB) return `${Number((bytes / BYTES_PER_MB).toFixed(1))} MB`;
+  return `${Number((bytes / BYTES_PER_GB).toFixed(2))} GB`;
+}
+
 // Everything is checked from the request line and headers, before any of the body is read.
-function parseUploadRequest(req: IncomingMessage, url: URL) {
+function parseUploadRequest(req: IncomingMessage, url: URL, maxBytes: number = MAX_UPLOAD_BYTES) {
   const declaredLength = String(req.headers["content-length"] ?? "");
   if (!/^\d+$/.test(declaredLength)) throw new UploadError(411, "Content-Length is required");
   const size = Number(declaredLength);
   if (size === 0) throw new UploadError(400, "The file is empty");
-  if (size > MAX_UPLOAD_BYTES) throw new UploadError(413, "The file is larger than the 2 GB upload limit");
+  if (size > maxBytes) throw new UploadError(413, `The file is larger than the ${formatLimit(maxBytes)} upload limit`);
 
   // The name is a label for Eagle only; the file on disk gets a random one.
   const fileName = String(url.searchParams.get("name") ?? "")
@@ -108,6 +116,7 @@ async function sweepUploads({
 }
 
 module.exports = {
+  BYTES_PER_MB,
   MAX_UPLOAD_BYTES,
   UPLOAD_PATH,
   UPLOAD_REQUEST_TIMEOUT_MS,

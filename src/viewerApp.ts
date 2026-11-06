@@ -124,6 +124,7 @@ let availableExts: string[] = [];
 // type menu is first opened instead of competing with the initial item load.
 let itemTypesRequestId = 0;
 let uploadRefreshRun = 0;
+let uploadMaxBytes: number | undefined;
 let itemTypesState: "idle" | "loading" | "loaded" = "idle";
 let allFoldersTotalRequestId = 0;
 let uncategorizedTotal = 0;
@@ -502,6 +503,7 @@ function showViewer(data: ConnectResponse) {
   setLibraryName(data.library?.name || "");
   currentLibraryId = data.library?.id || "";
   setConnectedLibraryId(currentLibraryId);
+  uploadMaxBytes = data.uploadMaxBytes;
   setEagleStatus(data.app ? "online" : "offline");
   startEagleStatusPolling();
   document.title = libraryTitle(data);
@@ -1154,6 +1156,7 @@ function renderSearchControlButtons() {
   setSearchControlsState({
     allFoldersTotal,
     canUpload: state.permissions.upload,
+    uploadMaxBytes,
     availableExts,
     availableExtsLoading: itemTypesState === "loading",
     tagsTotal,

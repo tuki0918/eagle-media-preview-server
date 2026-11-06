@@ -68,6 +68,8 @@ export interface ConnectResponse {
   app?: {
     version?: string;
   };
+  /** Sent only to users who may upload. */
+  uploadMaxBytes?: number;
 }
 
 export interface HealthResponse extends ConnectResponse {

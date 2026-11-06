@@ -70,6 +70,14 @@ test("parseUploadRequest refuses a request before its body is read", () => {
   assert.throws(() => parse(5, `name=${"a".repeat(256)}`), (error: { status: number }) => error.status === 400);
 });
 
+test("parseUploadRequest applies the configured limit and names it", () => {
+  const { req, url } = fakeRequest(MAX_UPLOAD_BYTES + 1, "name=a.png");
+  assert.equal(parseUploadRequest(req, url, MAX_UPLOAD_BYTES + 1).size, MAX_UPLOAD_BYTES + 1);
+  assert.throws(() => parseUploadRequest(req, url), (error: { message: string; status: number }) => error.status === 413 && error.message.includes("the 2 GB upload"));
+  assert.throws(() => parseUploadRequest(req, url, 512 * 1024 * 1024), (error: { message: string; status: number }) => error.status === 413 && error.message.includes("the 512 MB upload"));
+  assert.throws(() => parseUploadRequest(req, url, 32 * 1024), (error: { message: string; status: number }) => error.status === 413 && error.message.includes("the 32 KB upload"));
+});
+
 test("receiveUpload saves the body under a random name with the extension", async () => {
   await withDirectory(async (directory) => {
     const server = createServer(async (req, res) => {

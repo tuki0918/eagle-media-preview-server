@@ -252,6 +252,65 @@ test("generated settings store keeps a hand-edited trustForwardedFor when the pa
   assert.equal(JSON.parse(await readFile(filePath, "utf8")).trustForwardedFor, true);
 });
 
+test("generated settings store writes the upload limits and keeps hand-edited values when the panel saves", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-runtime-"));
+  const filePath = join(dir, "settings.json");
+  const store = createSettingsStore({ filePath });
+  await store.load();
+  const raw = JSON.parse(await readFile(filePath, "utf8"));
+  assert.equal(raw.uploadMaxSizeMB, 2048);
+  assert.equal(raw.uploadTimeoutMinutes, 60);
+
+  await writeFile(filePath, JSON.stringify({ ...raw, uploadMaxSizeMB: 500, uploadTimeoutMinutes: 180 }), "utf8");
+  await store.save({ port: 41600 });
+  const saved = JSON.parse(await readFile(filePath, "utf8"));
+  assert.equal(saved.uploadMaxSizeMB, 500);
+  assert.equal(saved.uploadTimeoutMinutes, 180);
+});
+
+test("a mistyped upload limit falls back to the default, and timeouts stop at their maximum", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-runtime-"));
+  const filePath = join(dir, "settings.json");
+  const store = createSettingsStore({ filePath });
+  await store.load();
+  const raw = JSON.parse(await readFile(filePath, "utf8"));
+  await writeFile(filePath, JSON.stringify({ ...raw, uploadMaxSizeMB: "2g", uploadTimeoutMinutes: 100000 }), "utf8");
+  const loaded = await store.load();
+  assert.equal(loaded.uploadMaxSizeMB, 2048);
+  assert.equal(loaded.uploadTimeoutMinutes, 24 * 60);
+});
+
+test("generated server manager gives the viewer server the upload limits in its own units", async () => {
+  let options: Record<string, unknown> = {};
+  const settings = { ...DEFAULT_SETTINGS, host: "127.0.0.1", port: 41532, uploadMaxSizeMB: 512, uploadTimeoutMinutes: 180 };
+  const manager = createServerManager({
+    settingsStore: {
+      async load() {
+        return settings;
+      },
+      async save() {
+        return settings;
+      },
+    },
+    viewerServerFactory(input: Record<string, unknown>) {
+      options = input;
+      return {
+        async start() {},
+        async stop() {},
+        status() {
+          return { state: "running", host: "127.0.0.1", port: 41532 };
+        },
+      };
+    },
+    lanAddressProvider() {
+      return [{ label: "lo0", address: "127.0.0.1" }];
+    },
+  });
+  await manager.start();
+  assert.equal(options.uploadMaxBytes, 512 * 1024 * 1024);
+  assert.equal(options.uploadRequestTimeoutMs, 3 * 60 * 60 * 1000);
+});
+
 test("generated settings store saves multiple auth users with roles", async () => {
   const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-runtime-"));
   const store = createSettingsStore({ filePath: join(dir, "settings.json") });

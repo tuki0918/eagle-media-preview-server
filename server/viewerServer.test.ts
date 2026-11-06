@@ -4017,6 +4017,35 @@ test("uploads stream the file to disk and hand its path to Eagle", async () => {
   }
 });
 
+test("the configured upload limit is enforced, and only users who may upload are told it", async () => {
+  let calls = 0;
+  const viewer = uploadViewer(async () => {
+    calls += 1;
+  }, { uploadMaxBytes: 4 });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const connect = async (cookie: string) => (await fetch(`${origin}/api/connect`, {
+      method: "POST",
+      headers: { Cookie: cookie, Origin: origin, "Content-Type": "application/json" },
+      body: "{}",
+    })).json() as Promise<{ uploadMaxBytes?: number }>;
+    const adminCookie = await loginCookie(origin, "admin", "admin");
+    assert.equal((await connect(adminCookie)).uploadMaxBytes, 4);
+    assert.equal((await connect(await loginCookie(origin, "ed", "edit"))).uploadMaxBytes, undefined);
+
+    const response = await fetch(`${origin}/api/uploads?name=a.png`, {
+      method: "POST",
+      headers: { Cookie: adminCookie, Origin: origin, "Content-Type": "application/octet-stream" },
+      body: "12345",
+    });
+    assert.equal(response.status, 413);
+    assert.equal(calls, 0);
+  } finally {
+    await viewer.stop();
+  }
+});
+
 test("uploads are refused for users without the permission, before reaching Eagle", async () => {
   let calls = 0;
   const add = async () => {

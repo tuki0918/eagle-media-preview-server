@@ -334,9 +334,10 @@ test("clicking outside the dialog doesn't close it", async () => {
   await ui.unmount();
 });
 
-test("a file over the limit is marked straight away and never sent", async () => {
+test("a file over the server's limit is marked straight away and never sent", async () => {
   const upload = vi.spyOn(api, "uploadFile").mockResolvedValue(undefined as never);
   const ui = await renderButton(true);
+  await act(async () => setSearchControlsState({ ...getSearchControlsState(), uploadMaxBytes: 2 * 1024 * 1024 * 1024 }));
   await ui.open();
   const input = ui.query<HTMLInputElement>("#uploadFileInput")!;
   const file = new ui.dom.window.File(["data"], "huge.mov");

@@ -60,6 +60,9 @@ export interface PluginSettings {
   sessionDurationDays?: number | string;
   /** Believe X-Forwarded-For from a proxy on this machine; off by default. */
   trustForwardedFor?: boolean;
+  /** Only edited by hand in settings.json, like trustForwardedFor. */
+  uploadMaxSizeMB?: number;
+  uploadTimeoutMinutes?: number;
   sharedLibraries?: SharedLibrary[];
 }
 

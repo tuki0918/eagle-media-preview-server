@@ -60,6 +60,8 @@ Defaults and how to change them:
 | Public Network | disabled | **Public Network** toggle |
 | Auto start | disabled | **Auto start** toggle |
 | Trust `X-Forwarded-For` from this computer | disabled | Not in the panel; set `"trustForwardedFor": true` in `settings.json` while the server is stopped (see [Tunnels and reverse proxies](#tunnels-and-reverse-proxies)) |
+| Upload size limit per file | 2048 MB | Not in the panel; `uploadMaxSizeMB` in `settings.json` while the server is stopped |
+| Time allowed to receive one upload | 60 minutes | Not in the panel; `uploadTimeoutMinutes` in `settings.json` while the server is stopped |
 
 All values are saved to `~/.eagle-media-preview-server/settings.json`. Fields under **Settings** are locked while the server runs and take effect at the next start. The toggles in Server Status stay available while it runs, and a change to Password, Public Network, or HTTPS restarts the running server.
 
@@ -221,6 +223,8 @@ type Settings = {
   sessionDurationDays: number;
   sharedLibraries: Array<{ name: string; path: string; access?: "selected"; users?: string[] }>;
   trustForwardedFor: boolean;
+  uploadMaxSizeMB: number;
+  uploadTimeoutMinutes: number;
 };
 ```
 
@@ -231,6 +235,8 @@ A `sharedLibraries` entry with `access: "selected"` can be opened only by the us
 `blockedAddresses` holds single addresses or CIDR ranges, managed from **Activity → Blocked addresses**; changes apply to the running server without a restart. Entries that overlap loopback (`127.0.0.0/8`, `::1`) are rejected.
 
 `trustForwardedFor` defaults to `false` and is not shown in the panel; see [Tunnels and reverse proxies](#tunnels-and-reverse-proxies).
+
+`uploadMaxSizeMB` (a whole number, default `2048`, which is 2 GB) and `uploadTimeoutMinutes` (default `60`, up to 1440) are not shown in the panel either. A value that can't be read falls back to its default, and a timeout above its maximum is lowered to the maximum. `uploadTimeoutMinutes` is the time allowed to receive any whole request, so raise it along with a larger size limit: the default covers 2 GB at about 0.6 MB/s.
 
 Legacy settings with `basicAuthUser`, `passwordHash`, and `allowMetadataEditing` are read for migration, converted into `authUsers`, and rewritten with `settingsVersion: 2`.
 
@@ -391,8 +397,9 @@ Media URLs carry the library id as the `library` query parameter, since media el
 - `POST /api/items/:id/trash` — Admin
   - Moves an item to Eagle's trash or restores it; requires `isDeleted` as a boolean
 - `POST /api/uploads` — Admin, or Editor with `canUpload`
-  - Adds one file to the open library; the raw request body is the file, up to 2 GB, and `Content-Length` is required
+  - Adds one file to the open library; the raw request body is the file, up to `uploadMaxSizeMB` (2 GB by default), and `Content-Length` is required
   - Query: `name` (required), `folderId`, and `tag` (repeatable)
+  - `POST /api/connect` tells users who may upload the limit as `uploadMaxBytes`, so the viewer can mark a larger file without sending it
   - The file is streamed to the system temp folder under a random name and passed to Eagle's `/api/item/addFromPath`; it is removed right away if that fails, and otherwise about an hour later
 
 #### Eagle Web API — called by the viewer server only

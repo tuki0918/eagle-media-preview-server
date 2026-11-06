@@ -10,7 +10,7 @@ const { createConnectionContext } = require("./connection.cjs");
 const { createLibraryAccessPolicy, libraryIdFor } = require("./libraryAccess.cjs");
 const { readInternetShortcutUrl, servedMediaInfo, streamItemMedia } = require("./media.cjs");
 const { resolveDefaultPublicDir, securityHeaders, serveStatic } = require("./static.cjs");
-const { UPLOAD_PATH, UPLOAD_REQUEST_TIMEOUT_MS, UploadError, discardUpload, parseUploadRequest, receiveUpload, sweepUploads } = require("./upload.cjs");
+const { MAX_UPLOAD_BYTES, UPLOAD_PATH, UPLOAD_REQUEST_TIMEOUT_MS, UploadError, discardUpload, parseUploadRequest, receiveUpload, sweepUploads } = require("./upload.cjs");
 const {
   AUTH_SESSION_MAX_AGE_SECONDS,
   authRequired,
@@ -46,6 +46,8 @@ interface ViewerServerOptions {
   blockedAddresses?: Array<string | { address: string; addedAt?: number }>;
   /** Believe X-Forwarded-For from a proxy on this machine. Off unless the admin confirms the proxy sets it. */
   trustForwardedFor?: boolean;
+  uploadMaxBytes?: number;
+  uploadRequestTimeoutMs?: number;
   customDomain?: string;
   allowMetadataEditing?: boolean;
   authUsers?: AuthUser[];
@@ -187,6 +189,7 @@ interface LibraryAccessPolicy {
 interface ApiContext {
   /** Re-reads the open library from Eagle right before a write and throws if it changed. */
   confirmLibraryBeforeWrite: (res: ServerResponse) => Promise<void>;
+  uploadMaxBytes: number;
   getSession: () => EagleSession;
   libraryAccess: LibraryAccessPolicy;
   libraryId: (libraryPath: unknown) => string;
@@ -253,6 +256,8 @@ function createViewerServer({
   sharedLibraries = null,
   libraryUserRules = [],
   trustForwardedFor = false,
+  uploadMaxBytes = MAX_UPLOAD_BYTES,
+  uploadRequestTimeoutMs = UPLOAD_REQUEST_TIMEOUT_MS,
   eagleClient = createEagleClient(),
 }: ViewerServerOptions = {}) {
   let serverInstance: NetServer | null = null;
@@ -437,6 +442,7 @@ function createViewerServer({
           getSession: () => currentSession,
           libraryAccess,
           libraryId,
+          uploadMaxBytes,
         });
         return;
       }
@@ -460,7 +466,7 @@ function createViewerServer({
       sendJson(res, status, { error: errorMessage(error) || "Internal server error", ...code });
     }
   });
-  (server as NetServer & { requestTimeout?: number }).requestTimeout = UPLOAD_REQUEST_TIMEOUT_MS;
+  (server as NetServer & { requestTimeout?: number }).requestTimeout = uploadRequestTimeoutMs;
   const openSockets = new Set<Socket>();
   // The raw TCP socket is reported for both HTTP and HTTPS, so destroying it also ends TLS sessions.
   server.on("connection", (socket: Socket) => {
@@ -661,7 +667,7 @@ async function cachedItemTypes(session: { client: EagleClient; libraryInfo(): Pr
   return { complete: scan.complete, items: scan.items };
 }
 
-async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { auth, confirmLibraryBeforeWrite, getSession, libraryAccess, libraryId }: ApiContext & { auth: AuthContext }) {
+async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { auth, confirmLibraryBeforeWrite, getSession, libraryAccess, libraryId, uploadMaxBytes }: ApiContext & { auth: AuthContext }) {
   const session = getSession();
 
   if (url.pathname === "/api/connect") {
@@ -669,7 +675,7 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       sendMethodNotAllowed(res, ["POST"]);
       return;
     }
-    await handleConnect(req, res, session, libraryId, libraryAccess, authenticatedUser(req, auth));
+    await handleConnect(req, res, session, libraryId, libraryAccess, authenticatedUser(req, auth), hasUploadAccess(req, auth) ? uploadMaxBytes : undefined);
     return;
   }
 
@@ -870,7 +876,7 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       sendJson(res, 403, { error: UPLOAD_FORBIDDEN_MESSAGE });
       return;
     }
-    const upload = parseUploadRequest(req, url);
+    const upload = parseUploadRequest(req, url, uploadMaxBytes);
     editedItems.set(res, { ext: upload.extension.slice(1), size: upload.size });
     void sweepUploads();
     const filePath = await receiveUpload(req, { extension: upload.extension });
@@ -1216,7 +1222,7 @@ function sendLoginRateLimited(res: ServerResponse, retryAfterSeconds: number) {
 }
 
 // The Eagle API connection is fixed server-side; viewer clients can only check it, never repoint it.
-async function handleConnect(req: IncomingMessage, res: ServerResponse, session: EagleSession, libraryId: ApiContext["libraryId"], libraryAccess: LibraryAccessPolicy, user: LibraryUser | null) {
+async function handleConnect(req: IncomingMessage, res: ServerResponse, session: EagleSession, libraryId: ApiContext["libraryId"], libraryAccess: LibraryAccessPolicy, user: LibraryUser | null, uploadMaxBytes?: number) {
   await readJson(req);
   try {
     const [app, library] = await Promise.all([
@@ -1233,7 +1239,7 @@ async function handleConnect(req: IncomingMessage, res: ServerResponse, session:
       sendLibraryForbidden(res);
       return;
     }
-    sendJson(res, 200, { app, library: publicLibraryInfo(library, libraryId) });
+    sendJson(res, 200, { app, library: publicLibraryInfo(library, libraryId), uploadMaxBytes });
   } catch (error) {
     sendJson(res, 502, { error: `Unable to connect to Eagle API: ${errorMessage(error)}` });
   }

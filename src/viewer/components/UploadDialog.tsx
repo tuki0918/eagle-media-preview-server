@@ -11,9 +11,6 @@ import { getShellView, subscribeShellView } from "../shellVisibility";
 import { FolderOptionItems } from "./FolderOptions";
 import { settingsDialogClassName, settingsDialogCloseClassName, settingsDialogFieldClassName, settingsDialogFooterClassName, settingsDialogHeaderClassName, settingsDialogPanelClassName, settingsDialogPrimaryButtonClassName, settingsDialogSelectClassName, settingsDialogTitleClassName } from "./settingsDialogStyles";
 
-// Matches the server's limit, so a file that can't be accepted isn't sent at all.
-const MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024;
-const TOO_LARGE_MESSAGE = "This file is larger than the 2 GB upload limit";
 const RESULT_UNKNOWN_MESSAGE = "Eagle may have added this file. Check the library before choosing it again.";
 
 const secondaryButtonClassName = "h-11 flex-1 touch-manipulation rounded-full transition-colors";
@@ -26,6 +23,7 @@ interface UploadEntry {
   id: number;
   progress: number;
   status: UploadStatus;
+  tooLarge: boolean;
 }
 
 /** For users with the upload permission; the server refuses everyone else whatever this shows. */
@@ -74,7 +72,7 @@ function isResultUnknown(error: unknown) {
 }
 
 function canSend(entry: UploadEntry) {
-  return (entry.status === "pending" || entry.status === "failed") && entry.file.size <= MAX_UPLOAD_BYTES;
+  return (entry.status === "pending" || entry.status === "failed") && !entry.tooLarge;
 }
 
 export function parseUploadTags(value: string) {
@@ -82,7 +80,7 @@ export function parseUploadTags(value: string) {
 }
 
 export function UploadDialog({ onClose }: { onClose: () => void }) {
-  const { folders, selectedFolderId } = useSyncExternalStore(subscribeSearchControlsState, getSearchControlsState, getSearchControlsState);
+  const { folders, selectedFolderId, uploadMaxBytes } = useSyncExternalStore(subscribeSearchControlsState, getSearchControlsState, getSearchControlsState);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLButtonElement>(null);
@@ -124,8 +122,16 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
   const addFiles = (files: FileList | null) => {
     if (!files?.length) return;
     const added = Array.from(files).map((file): UploadEntry => {
-      const tooLarge = file.size > MAX_UPLOAD_BYTES;
-      return { error: tooLarge ? TOO_LARGE_MESSAGE : "", file, id: nextId.current++, progress: 0, status: tooLarge ? "failed" : "pending" };
+      // A file the server would refuse isn't sent at all.
+      const tooLarge = uploadMaxBytes !== undefined && file.size > uploadMaxBytes;
+      return {
+        error: tooLarge ? `This file is larger than the ${formatFileSize(uploadMaxBytes)} upload limit` : "",
+        file,
+        id: nextId.current++,
+        progress: 0,
+        status: tooLarge ? "failed" : "pending",
+        tooLarge,
+      };
     });
     setEntries((current) => [...current, ...added]);
   };
@@ -374,6 +380,6 @@ function UploadThumbnail({ file }: { file: File }) {
 
 function formatFileSize(bytes: number) {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  if (bytes < 1024 * 1024 * 1024) return `${Number((bytes / (1024 * 1024)).toFixed(1))} MB`;
+  return `${Number((bytes / (1024 * 1024 * 1024)).toFixed(2))} GB`;
 }

@@ -110,7 +110,7 @@ Use this tab to choose which users can sign in to the viewer. To let other devic
   - Move items to Eagle's trash and restore them. Files are not permanently deleted.
   - Open every shared library, including libraries limited to selected users
 
-Uploads add files to the open library, up to 2 GB each, with an optional folder and tags. They are kept in this computer's temp folder for up to an hour after they finish.
+Uploads add files to the open library, up to 2 GB each by default, with an optional folder and tags. They are kept in this computer's temp folder for up to an hour after they finish.
 
 Authentication is optional. When password protection is enabled, browser access uses the built-in login screen and cookie-based sessions. Sessions expire after the configured session duration, 7 days by default.
 
