@@ -2,7 +2,7 @@ import type { EagleFolder, EagleSmartFolder, ViewerSection } from "./types";
 
 export interface SearchControlsState {
   allFoldersTotal: number;
-  /** Admins may add files to the library. */
+  /** The user may add files to the library. */
   canUpload?: boolean;
   /** The server's limit per file, known once connected. */
   uploadMaxBytes?: number;

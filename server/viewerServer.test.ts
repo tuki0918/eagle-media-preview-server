@@ -1,3 +1,4 @@
+import { connect } from "node:net";
 import { test } from "vitest";
 import assert from "node:assert/strict";
 import { once } from "node:events";
@@ -4041,6 +4042,58 @@ test("the configured upload limit is enforced, and only users who may upload are
     });
     assert.equal(response.status, 413);
     assert.equal(calls, 0);
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("a request that stops sending its body is dropped, but a slow upload isn't", async () => {
+  const added: string[] = [];
+  const viewer = uploadViewer(async (input) => {
+    added.push(input.path);
+  }, { requestBodyTimeoutMs: 100 });
+  await viewer.start();
+  try {
+    const port = viewer.status().port;
+    const origin = `http://127.0.0.1:${port}`;
+    const closesAfterPartialBody = (head: string) => new Promise<void>((resolve, reject) => {
+      const socket = connect(port, "127.0.0.1", () => socket.write(`${head}\r\nHost: 127.0.0.1:${port}\r\nOrigin: ${origin}\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n{`));
+      socket.resume();
+      const timer = setTimeout(() => {
+        socket.destroy();
+        reject(new Error(`still open: ${head}`));
+      }, 3000);
+      socket.on("error", () => {});
+      socket.on("close", () => {
+        clearTimeout(timer);
+        resolve();
+      });
+    });
+    await closesAfterPartialBody("POST /api/auth/login HTTP/1.1");
+
+    const cookie = await loginCookie(origin, "admin", "admin");
+    const connected = await (await fetch(`${origin}/api/connect`, {
+      method: "POST",
+      headers: { Cookie: cookie, Origin: origin, "Content-Type": "application/json" },
+      body: "{}",
+    })).json() as { library: { id: string } };
+    const status = await new Promise<number>((resolve, reject) => {
+      const upload = httpRequest({
+        host: "127.0.0.1",
+        port,
+        method: "POST",
+        path: "/api/uploads?name=a.png",
+        headers: { Cookie: cookie, Origin: origin, "Content-Length": 2, "X-Library-Id": connected.library.id },
+      }, (response) => {
+        response.resume();
+        resolve(response.statusCode ?? 0);
+      });
+      upload.on("error", reject);
+      upload.write("1");
+      setTimeout(() => upload.end("2"), 300);
+    });
+    assert.equal(status, 201);
+    assert.equal(added.length, 1);
   } finally {
     await viewer.stop();
   }

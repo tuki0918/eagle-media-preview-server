@@ -49,6 +49,8 @@ interface ViewerServerOptions {
   trustForwardedFor?: boolean;
   uploadMaxBytes?: number;
   uploadRequestTimeoutMs?: number;
+  /** How long a request other than an upload may take to send its body. */
+  requestBodyTimeoutMs?: number;
   customDomain?: string;
   allowMetadataEditing?: boolean;
   authUsers?: AuthUser[];
@@ -237,6 +239,26 @@ interface LibraryGuard {
 // consult this right before responding so a switch during the request never leaks the new library.
 const libraryGuards = new WeakMap<ServerResponse, LibraryGuard>();
 
+const REQUEST_BODY_TIMEOUT_MS = 60 * 1000;
+
+// The server's requestTimeout has to cover a whole upload. Everything else sends little or nothing,
+// so it doesn't get that long to hold a connection open. Only the body is timed: a slow download
+// or a paused video is a finished request.
+function dropStalledRequestBody(req: IncomingMessage, res: ServerResponse, timeoutMs: number) {
+  // Kept here because req.socket can be null once the request has closed.
+  const { socket } = req;
+  const timer = setTimeout(() => {
+    // The socket, since answering early closes the request while the body is still outstanding.
+    if (!req.complete) socket.destroy();
+  }, timeoutMs);
+  timer.unref?.();
+  const stopIfDone = () => {
+    if (req.complete || socket.destroyed) clearTimeout(timer);
+  };
+  req.once("close", stopIfDone);
+  res.once("close", stopIfDone);
+}
+
 function createViewerServer({
   accessLog: requestedAccessLog = null,
   blockedAddresses = [],
@@ -259,6 +281,7 @@ function createViewerServer({
   trustForwardedFor = false,
   uploadMaxBytes = MAX_UPLOAD_BYTES,
   uploadRequestTimeoutMs = UPLOAD_REQUEST_TIMEOUT_MS,
+  requestBodyTimeoutMs = REQUEST_BODY_TIMEOUT_MS,
   eagleClient = createEagleClient(),
 }: ViewerServerOptions = {}) {
   let serverInstance: NetServer | null = null;
@@ -393,6 +416,7 @@ function createViewerServer({
   const server = createProtocolServer({ httpsCertPath, httpsEnabled, httpsKeyPath }, async (req: IncomingMessage, res: ServerResponse) => {
     try {
       const url = new URL(req.url || "/", `${httpsEnabled ? "https" : "http"}://${req.headers.host}`);
+      if (url.pathname !== UPLOAD_PATH) dropStalledRequestBody(req, res, requestBodyTimeoutMs);
       // Direct clients are dropped when they connect; this also catches clients behind a local proxy.
       const requestAddress = displayClientAddress(req, trustForwardedFor);
       if (blockList.isBlocked(requestAddress)) {

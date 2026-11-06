@@ -65,7 +65,7 @@ async function renderButton(canUpload: boolean, selectedFolderId = "") {
   };
 }
 
-test("the upload button only appears for admins", async () => {
+test("the upload button only appears with the upload permission", async () => {
   const ui = await renderButton(false);
   expect(ui.query("#uploadButton")).toBeNull();
   await ui.unmount();
