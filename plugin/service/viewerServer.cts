@@ -10,7 +10,7 @@ const { createConnectionContext } = require("./connection.cjs");
 const { createLibraryAccessPolicy, libraryIdFor } = require("./libraryAccess.cjs");
 const { readInternetShortcutUrl, servedMediaInfo, streamItemMedia } = require("./media.cjs");
 const { resolveDefaultPublicDir, securityHeaders, serveStatic } = require("./static.cjs");
-const { MAX_UPLOAD_BYTES, UPLOAD_PATH, UPLOAD_REQUEST_TIMEOUT_MS, UploadError, discardUpload, parseUploadRequest, receiveUpload, sweepUploads } = require("./upload.cjs");
+const { MAX_UPLOAD_BYTES, UPLOAD_PATH, UPLOAD_REQUEST_TIMEOUT_MS, UPLOAD_SWEEP_INTERVAL_MS, UploadError, discardUpload, parseUploadRequest, receiveUpload, sweepUploads } = require("./upload.cjs");
 const {
   AUTH_SESSION_MAX_AGE_SECONDS,
   authRequired,
@@ -49,6 +49,7 @@ interface ViewerServerOptions {
   trustForwardedFor?: boolean;
   uploadMaxBytes?: number;
   uploadRequestTimeoutMs?: number;
+  uploadSweepIntervalMs?: number;
   /** How long a request other than an upload may take to send its body. */
   requestBodyTimeoutMs?: number;
   customDomain?: string;
@@ -281,10 +282,12 @@ function createViewerServer({
   trustForwardedFor = false,
   uploadMaxBytes = MAX_UPLOAD_BYTES,
   uploadRequestTimeoutMs = UPLOAD_REQUEST_TIMEOUT_MS,
+  uploadSweepIntervalMs = UPLOAD_SWEEP_INTERVAL_MS,
   requestBodyTimeoutMs = REQUEST_BODY_TIMEOUT_MS,
   eagleClient = createEagleClient(),
 }: ViewerServerOptions = {}) {
   let serverInstance: NetServer | null = null;
+  let uploadSweepTimer: ReturnType<typeof setInterval> | null = null;
   let state = "stopped";
   let boundAddress = "";
   let boundPort = 0;
@@ -524,6 +527,8 @@ function createViewerServer({
         boundAddress = typeof address === "object" && address ? address.address : host;
         boundPort = typeof address === "object" && address ? address.port : port;
         state = "running";
+        uploadSweepTimer = setInterval(() => void sweepUploads(), uploadSweepIntervalMs);
+        uploadSweepTimer.unref?.();
         return this.status();
       } catch (error) {
         state = "error";
@@ -533,6 +538,8 @@ function createViewerServer({
     },
 
     async stop() {
+      if (uploadSweepTimer) clearInterval(uploadSweepTimer);
+      uploadSweepTimer = null;
       if (!serverInstance || state === "stopped") {
         state = "stopped";
         return this.status();

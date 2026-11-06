@@ -3,7 +3,7 @@ import { test } from "vitest";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { createReadStream } from "node:fs";
-import { mkdir, readFile, truncate, writeFile, utimes, rm } from "node:fs/promises";
+import { mkdir, readFile, stat, truncate, writeFile, utimes, rm } from "node:fs/promises";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { createRequire } from "node:module";
@@ -4098,6 +4098,39 @@ test("a request that stops sending its body is dropped, but a slow upload isn't"
     assert.equal(added.length, 1);
   } finally {
     await viewer.stop();
+  }
+});
+
+test("uploads older than fifteen minutes are swept while the server runs, and not after it stops", async () => {
+  const directory = join(tmpdir(), "eagle-media-preview-server-uploads");
+  await mkdir(directory, { recursive: true });
+  const stamp = `sweep-test-${process.pid}-${Date.now()}`;
+  const addFile = async (name: string, ageMinutes: number) => {
+    const filePath = join(directory, `${stamp}-${name}`);
+    await writeFile(filePath, "x");
+    const time = new Date(Date.now() - ageMinutes * 60 * 1000);
+    await utimes(filePath, time, time);
+    return filePath;
+  };
+  const exists = (filePath: string) => stat(filePath).then(() => true, () => false);
+  const viewer = uploadViewer(async () => {}, { uploadSweepIntervalMs: 20 });
+  await viewer.start();
+  const recent = await addFile("recent", 14);
+  const old = await addFile("old", 16);
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    assert.equal(await exists(old), false);
+    assert.equal(await exists(recent), true);
+
+    await viewer.stop();
+    const afterStop = await addFile("after-stop", 16);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(await exists(afterStop), true);
+    await rm(afterStop, { force: true });
+  } finally {
+    await viewer.stop();
+    await rm(recent, { force: true });
+    await rm(old, { force: true });
   }
 });
 

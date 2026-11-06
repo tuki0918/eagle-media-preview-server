@@ -1,0 +1,37 @@
+---
+title: UPLOAD  ·  ADD FILES FROM ANY DEVICE
+---
+block-beta
+    accDescr: Upload from the viewer on any device; the server hands each file to Eagle on the host.<br>Give Editor + Upload only to people who should add files. Viewers and Editors see no upload button.
+    columns 3
+
+    block:devices["DEVICES"]
+        columns 1
+        phone("PARTNER  ·  Editor + Upload<br>phone<br>trip photos")
+        laptop("YOU  ·  Admin<br>laptop<br>videos, documents")
+        kids("KIDS  ·  Viewer<br>tablet<br>*✕ no upload button*")
+    end
+    block:host["HOST MACHINE"]
+        columns 1
+        server["MEDIA PREVIEW SERVER<br>✓ Checks upload permission<br>✓ Up to 2 GB per file<br>✓ Temp copy for about 15 minutes"]
+        eagle("EAGLE APP<br>adds it to the open library<br>*duplicate? asks on this computer*")
+    end
+    block:storage["LIBRARY"]
+        columns 1
+        library[("FAMILY LIBRARY<br>Family.library<br>new photos, videos<br>✓ folder + tags")]
+    end
+
+    phone -->|HTTPS| server
+    laptop -->|HTTPS| server
+    server -->|adds| eagle
+    eagle -->|saves| library
+
+    style devices stroke:#7fd8e8
+    style host stroke:#b9a0f0
+    style storage stroke:#e8c86e
+    style phone stroke:#7fd8e8
+    style laptop stroke:#7fd8e8
+    style kids stroke:#f08080
+    style server stroke:#b9a0f0
+    style eagle stroke:#7fd99a
+    style library stroke:#e8c86e

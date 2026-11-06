@@ -19,7 +19,8 @@ const UPLOAD_IDLE_TIMEOUT_MS = 60 * 1000;
 const UPLOAD_REQUEST_TIMEOUT_MS = 60 * 60 * 1000;
 // Eagle can still read the file after it answers: removing it right away made imports fail with
 // ENOENT. So a successful upload stays this long, and sweepUploads removes it after that.
-const UPLOAD_RETENTION_MS = 60 * 60 * 1000;
+const UPLOAD_RETENTION_MS = 15 * 60 * 1000;
+const UPLOAD_SWEEP_INTERVAL_MS = 60 * 1000;
 const FILE_EXTENSION_PATTERN = /^\.[A-Za-z0-9]{1,16}$/;
 
 class UploadError extends Error {
@@ -120,6 +121,7 @@ module.exports = {
   MAX_UPLOAD_BYTES,
   UPLOAD_PATH,
   UPLOAD_REQUEST_TIMEOUT_MS,
+  UPLOAD_SWEEP_INTERVAL_MS,
   UploadError,
   discardUpload,
   parseUploadRequest,
