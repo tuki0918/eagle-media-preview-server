@@ -23,8 +23,9 @@ Start it with one click, then browse your library from any browser on your local
 - Browse from phones, tablets, and other computers on your LAN
 - Slideshow, background playback, and Picture-in-Picture
 - Installable as a web app (HTTPS required on other devices)
-- Multiple users with Viewer, Editor, and Admin roles
+- Multiple users with Viewer, Editor, Editor + Upload, and Admin roles
 - Editors can change ratings, tags, and categories
+- File Upload (experimental): add files to the library open in Eagle
 - Share only selected libraries, with optional per-user limits
 - Optional password protection and HTTPS
 - Activity log with address blocking
@@ -48,6 +49,7 @@ Start it with one click, then browse your library from any browser on your local
 - Eagle must be running on the host computer.
 - Viewers see the library currently open in Eagle.
 - Library content requires a connection to the running server.
+- If an uploaded file is already in the library, Eagle shows its duplicate dialog on the host computer, and someone has to answer it there.
 
 ### Disclaimer
 
