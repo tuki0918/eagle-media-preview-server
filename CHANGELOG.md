@@ -7,9 +7,11 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-11-06
+
 ### Added
 
-- Admins, and users with the new **Editor + Upload** role, can upload files to the open library from the viewer, with an optional folder and tags. Each upload appears in the Activity panel with its file ID, type, and size, not its name.
+- Added file upload (experimental): Admins, and users with the new **Editor + Upload** role, can upload files to the library open in Eagle from the viewer, with an optional folder and tags. Each upload appears in the Activity panel with its file ID, type, and size, not its name.
 
 ## [0.7.0] - 2026-11-05
 
@@ -374,7 +376,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 - Initial release of Eagle Media Preview Server.
 
-[Unreleased]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.6.3...v0.7.0
 [0.6.3]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.6.1...v0.6.2
