@@ -35,7 +35,8 @@ Optional:
 - Password protection: require a username and password to access the viewer.
 - Public Network: allow access from other devices on the network.
 - HTTPS: use TLS when certificate paths are set.
-- Multiple users with Viewer, Editor, and Admin roles.
+- Multiple users with Viewer, Editor, Editor + Upload, and Admin roles.
+- Uploads: add files to the open library from the viewer, for Admin and Editor + Upload users.
 - Library protection: share only the Eagle libraries you select.
 
 <details>
@@ -111,6 +112,8 @@ Use this tab to choose which users can sign in to the viewer. To let other devic
   - Open every shared library, including libraries limited to selected users
 
 Uploads add files to the open library, up to 2 GB each by default, with an optional folder and tags. A copy stays in this computer's temp folder for at least an hour. It is removed at the next upload or server start after that.
+
+The panel has no setting for the upload limits. To change them, stop the server and edit `~/.eagle-media-preview-server/settings.json`: `uploadMaxSizeMB` is the size limit per file (default `2048`), and `uploadTimeoutMinutes` is the time allowed to receive one file (default `60`). Raise the timeout along with a larger size limit.
 
 The viewer can show **Success** before a file is really in the library. If Eagle already has the same file, it opens its **Duplicate File Alert** on this computer, and the file isn't added until someone chooses **Use existing file** or **Keep both** there.
 

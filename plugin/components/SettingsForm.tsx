@@ -179,7 +179,7 @@ export function SettingsForm({
         <div id="accessSettingsPanel" role="tabpanel" aria-labelledby="accessSettingsTab" hidden={settingsTab !== "access"}>
           <SettingRow label="Users" help={authEnabled ? "Viewer can browse. Editor can edit metadata. Editor + Upload can also upload files. Admin has all permissions." : "Saved users apply when password protection is enabled."}>
             <div className="overflow-hidden rounded-xl border border-[#e6e6e9]" role="table" aria-label="Users">
-              <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)_28px_124px_28px] items-center gap-1 border-b border-[#efeff1] bg-[#f7f7f8] px-1.5 py-1 text-[10px] font-semibold uppercase leading-none tracking-[0.06em] text-[#8a8f99]" role="row">
+              <div className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)_28px_124px_28px] items-center gap-1 border-b border-[#efeff1] bg-[#f7f7f8] px-1.5 py-1 text-[10px] font-semibold uppercase leading-none tracking-[0.06em] text-[#8a8f99]" role="row">
                 {/* Headers share the rows' grid and start at the controls' text inset (6px padding + 1px border). */}
                 <span className="px-[7px]" role="columnheader">Username</span>
                 <span className="px-[7px]" role="columnheader">Password</span>
@@ -196,7 +196,7 @@ export function SettingsForm({
                 const canTogglePasswordVisible = !user.passwordHash;
                 const passwordVisible = canTogglePasswordVisible && passwordVisibleByIndex[String(index)];
                 return (
-                  <div key={index} className="grid min-h-10 grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)_28px_124px_28px] items-center gap-1 border-b border-[#efeff1] py-1 pl-1.5 pr-1.5 last:border-b-0" role="row">
+                  <div key={index} className="grid min-h-10 grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)_28px_124px_28px] items-center gap-1 border-b border-[#efeff1] py-1 pl-1.5 pr-1.5 last:border-b-0" role="row">
                     <div className="min-w-0" role="cell">
                       <input
                         className={tableInputClassName}
