@@ -110,7 +110,7 @@ Use this tab to choose which users can sign in to the viewer. To let other devic
   - Move items to Eagle's trash and restore them. Files are not permanently deleted.
   - Open every shared library, including libraries limited to selected users
 
-Uploads add files to the open library, up to 2 GB each by default, with an optional folder and tags. They pass through this computer's temp folder, and the copy there is removed as soon as Eagle answers.
+Uploads add files to the open library, up to 2 GB each by default, with an optional folder and tags. A copy stays in this computer's temp folder for at least an hour. It is removed at the next upload or server start after that.
 
 The viewer can show **Success** before a file is really in the library. If Eagle already has the same file, it opens its **Duplicate File Alert** on this computer, and the file isn't added until someone chooses **Use existing file** or **Keep both** there.
 

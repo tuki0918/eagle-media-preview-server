@@ -17,7 +17,8 @@ const UPLOAD_IDLE_TIMEOUT_MS = 60 * 1000;
 // Node's limit on receiving one whole request, which is 5 minutes by default. It covers the largest
 // upload at about 0.6 MB/s; UPLOAD_IDLE_TIMEOUT_MS is what catches a stalled upload.
 const UPLOAD_REQUEST_TIMEOUT_MS = 60 * 60 * 1000;
-// Uploads are removed as soon as Eagle answers. This is for what a crash or a failed removal leaves.
+// Eagle can still read the file after it answers: removing it right away made imports fail with
+// ENOENT. So a successful upload stays this long, and sweepUploads removes it after that.
 const UPLOAD_RETENTION_MS = 60 * 60 * 1000;
 const FILE_EXTENSION_PATTERN = /^\.[A-Za-z0-9]{1,16}$/;
 
