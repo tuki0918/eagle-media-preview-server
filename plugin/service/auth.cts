@@ -317,6 +317,7 @@ function safeDecodeCookieValue(value: string) {
 }
 
 module.exports = {
+  permissionsForUser,
   AUTH_SESSION_MAX_AGE_SECONDS,
   authRequired,
   expiredAuthSessionCookies,

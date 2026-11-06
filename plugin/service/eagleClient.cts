@@ -563,12 +563,12 @@ function createEagleClient(options: EagleClientOptions = {}) {
       if (!path) throw new Error("path is required");
       if (!name) throw new Error("name is required");
       return unwrapData(
-        await request("/api/item/addFromPath", {
+        await request("/api/v2/item/add", {
           method: "POST",
           body: {
             path,
             name,
-            ...(folderId ? { folderId } : {}),
+            ...(folderId ? { folders: [folderId] } : {}),
             ...(tags.length ? { tags: normalizeStringArray(tags, "tags") } : {}),
           },
         }),

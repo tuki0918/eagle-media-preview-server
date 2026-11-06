@@ -74,6 +74,7 @@ export interface ConnectResponse {
 
 export interface HealthResponse extends ConnectResponse {
   libraryStatus?: "forbidden" | "not_shared" | "shared" | null;
+  permissions?: AuthStatusPermissions;
 }
 
 export interface ViewerPermissions {

@@ -1,6 +1,6 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -14,6 +14,7 @@ const {
   hashPassword,
   normalizeSettings,
 } = require("../../dist/.generated/plugin-service/runtime.cjs");
+const { createViewerServer, sha256 } = require("../../dist/.generated/plugin-service/viewerServer.cjs");
 const PASSWORD_HASH_PATTERN = /^pbkdf2\$sha256\$210000\$[^$]+\$[^$]+$/;
 const SESSION_SECRET_PATTERN = /^[A-Za-z0-9_-]{32,}$/;
 
@@ -309,6 +310,64 @@ test("generated server manager gives the viewer server the upload limits in its 
   await manager.start();
   assert.equal(options.uploadMaxBytes, 512 * 1024 * 1024);
   assert.equal(options.uploadRequestTimeoutMs, 3 * 60 * 60 * 1000);
+});
+
+test("removing the upload permission refuses the same session's next upload, without signing it out", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-runtime-"));
+  const passwordHash = sha256("pw");
+  const user = (canUpload: boolean) => [{ username: "ed", passwordHash, role: "editor", ...(canUpload ? { canUpload: true } : {}) }];
+  const store = createSettingsStore({ filePath: join(dir, "settings.json") });
+  const port = 41800 + Math.floor(Math.random() * 100);
+  await store.save({ authEnabled: true, authUsers: user(true), host: "127.0.0.1", port, sessionSecret: "revoke-test-secret" });
+  const added: string[] = [];
+  const manager = createServerManager({
+    settingsStore: store,
+    viewerServerFactory: (options: Record<string, unknown>) => createViewerServer({
+      ...options,
+      publicDir: dir,
+      eagleClient: {
+        async appInfo() {
+          return { version: "1" };
+        },
+        async libraryInfo() {
+          return { name: "Test", path: "/tmp/Test.library" };
+        },
+        async addItemFromPath(input: { path: string }) {
+          added.push(input.path);
+          await rm(input.path, { force: true });
+        },
+      },
+    }),
+    lanAddressProvider: () => [],
+  });
+  await manager.start();
+  try {
+    const origin = `http://127.0.0.1:${port}`;
+    const login = await fetch(`${origin}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: origin },
+      body: JSON.stringify({ username: "ed", password: "pw" }),
+    });
+    const cookie = login.headers.getSetCookie().map((value) => value.split(";")[0]).join("; ");
+    const headers = { Cookie: cookie, Origin: origin };
+    const health = async () => (await fetch(`${origin}/api/health`, { headers })).json() as Promise<{ permissions: { upload: boolean }; uploadMaxBytes?: number }>;
+    const connect = await (await fetch(`${origin}/api/connect`, { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: "{}" })).json() as { library: { id: string } };
+    const upload = () => fetch(`${origin}/api/uploads?name=a.png`, { method: "POST", headers: { ...headers, "X-Library-Id": connect.library.id }, body: "x" });
+
+    assert.equal((await health()).permissions.upload, true);
+    assert.equal(typeof (await health()).uploadMaxBytes, "number");
+    assert.equal((await upload()).status, 201);
+
+    await manager.saveSettings({ authUsers: user(false) });
+
+    assert.equal((await upload()).status, 403);
+    assert.equal(added.length, 1);
+    const after = await health();
+    assert.equal(after.permissions.upload, false);
+    assert.equal(after.uploadMaxBytes, undefined);
+  } finally {
+    await manager.stop();
+  }
 });
 
 test("generated settings store saves multiple auth users with roles", async () => {

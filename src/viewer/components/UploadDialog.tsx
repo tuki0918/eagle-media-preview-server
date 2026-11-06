@@ -314,11 +314,11 @@ function UploadRow({ entry, onRemove }: { entry: UploadEntry; onRemove?: () => v
       <div className="relative size-12 shrink-0">
         <UploadThumbnail file={entry.file} />
         {entry.status === "done"
-          ? <CheckIcon className="absolute -bottom-1 -right-1 size-4 rounded-full bg-card p-0.5 text-emerald-600" aria-hidden="true" />
+          ? <CheckIcon className="absolute -bottom-1.5 -right-1.5 size-6 rounded-full bg-card p-0.5 text-emerald-600" aria-hidden="true" />
           : entry.status === "failed"
-            ? <CircleAlertIcon className="absolute -bottom-1 -right-1 size-4 rounded-full bg-card p-0.5 text-destructive" aria-hidden="true" />
+            ? <CircleAlertIcon className="absolute -bottom-1.5 -right-1.5 size-6 rounded-full bg-card p-0.5 text-destructive" aria-hidden="true" />
             : entry.status === "unknown"
-              ? <CircleAlertIcon className="absolute -bottom-1 -right-1 size-4 rounded-full bg-card p-0.5 text-amber-600" aria-hidden="true" />
+              ? <CircleAlertIcon className="absolute -bottom-1.5 -right-1.5 size-6 rounded-full bg-card p-0.5 text-amber-600" aria-hidden="true" />
               : null}
       </div>
       <div className="grid min-w-0 flex-1 gap-1">

@@ -112,6 +112,8 @@ Use this tab to choose which users can sign in to the viewer. To let other devic
 
 Uploads add files to the open library, up to 2 GB each by default, with an optional folder and tags. They are kept in this computer's temp folder for up to an hour after they finish.
 
+The viewer can show **Success** before a file is really in the library. If Eagle already has the same file, it opens its **Duplicate File Alert** on this computer, and the file isn't added until someone chooses **Use existing file** or **Keep both** there.
+
 Authentication is optional. When password protection is enabled, browser access uses the built-in login screen and cookie-based sessions. Sessions expire after the configured session duration, 7 days by default.
 
 > [!IMPORTANT]

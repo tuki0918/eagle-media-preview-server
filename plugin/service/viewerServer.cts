@@ -14,6 +14,7 @@ const { MAX_UPLOAD_BYTES, UPLOAD_PATH, UPLOAD_REQUEST_TIMEOUT_MS, UploadError, d
 const {
   AUTH_SESSION_MAX_AGE_SECONDS,
   authRequired,
+  permissionsForUser,
   authSessionTokenFromRequest,
   authStatusResponse,
   authenticatedUser,
@@ -696,6 +697,9 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       library: libraryStatus === "shared" ? publicLibraryInfo(libraryInfo, libraryId) : null,
       libraryStatus,
       error: app.status === "rejected" ? app.reason.message : null,
+      // Changing the upload permission keeps sessions valid, so open viewers learn about it here.
+      permissions: permissionsForUser(authenticatedUser(req, auth), { authenticated: true }),
+      uploadMaxBytes: hasUploadAccess(req, auth) ? uploadMaxBytes : undefined,
     });
     return;
   }
@@ -883,7 +887,8 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
     try {
       // A library switch during a long upload must not put the file in the other library.
       await confirmLibraryBeforeWrite(res);
-      await session.client.addItemFromPath({ path: filePath, name: upload.name, folderId: upload.folderId, tags: upload.tags });
+      const added = await session.client.addItemFromPath({ path: filePath, name: upload.name, folderId: upload.folderId, tags: upload.tags });
+      editedItems.set(res, { ext: upload.extension.slice(1), itemId: addedItemId(added), size: upload.size });
     } catch (error) {
       await discardUpload(filePath);
       throw error;
@@ -1108,7 +1113,7 @@ function logAccess(accessLog: AccessLogRecorder, req: IncomingMessage, res: Serv
   }
   if (pathname === UPLOAD_PATH) {
     const noted = editedItems.get(res);
-    accessLog.record({ ...base, type: "edit", event: "upload", ext: noted?.ext || undefined, path: pathname, size: noted?.size });
+    accessLog.record({ ...base, type: "edit", event: "upload", ext: noted?.ext || undefined, itemId: noted?.itemId, path: pathname, size: noted?.size });
     return;
   }
   const edit = pathname.match(/^\/api\/items\/([^/]+)\/(star|metadata|trash)$/);
@@ -1245,6 +1250,11 @@ async function handleConnect(req: IncomingMessage, res: ServerResponse, session:
   }
 }
 
+function addedItemId(added: unknown) {
+  const id = (added as { id?: unknown } | null | undefined)?.id;
+  return typeof id === "string" && id ? id : undefined;
+}
+
 // Library paths reveal the host's directory layout, so clients only get the display name.
 function publicLibraryInfo(library: EagleLibraryInfo | null | undefined, libraryId: ApiContext["libraryId"]) {
   return library ? { id: libraryId(library.path), name: String(library.name || "") } : null;
@@ -1294,7 +1304,7 @@ function normalizeStar(value: unknown) {
 }
 
 // What an edit request changed, for the access log: the field names, never their values.
-const editedItems = new WeakMap<ServerResponse, { event?: string; ext?: string; fields?: string[]; size?: number }>();
+const editedItems = new WeakMap<ServerResponse, { event?: string; ext?: string; fields?: string[]; itemId?: string; size?: number }>();
 
 function sendLibraryNotShared(res: ServerResponse) {
   sendJson(res, 503, { error: LIBRARY_NOT_SHARED_MESSAGE, code: "LIBRARY_NOT_SHARED" });

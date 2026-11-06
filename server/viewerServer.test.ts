@@ -4232,6 +4232,7 @@ test("uploads are logged with their type and size, not their name", async () => 
   const entries: Array<Record<string, unknown>> = [];
   const viewer = uploadViewer(async (input) => {
     await rm(input.path, { force: true });
+    return { id: "NEWITEM1" };
   }, {
     accessLog: {
       record: (entry: Record<string, unknown>) => entries.push(entry),
@@ -4253,6 +4254,7 @@ test("uploads are logged with their type and size, not their name", async () => 
     assert.equal(entry?.type, "edit");
     assert.equal(entry?.ext, "png");
     assert.equal(entry?.size, 5);
+    assert.equal(entry?.itemId, "NEWITEM1");
     assert.equal(entry?.status, 201);
     assert.ok(!JSON.stringify(entries).includes("secret-name"));
   } finally {

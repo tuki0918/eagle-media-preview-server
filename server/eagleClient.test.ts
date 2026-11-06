@@ -1036,16 +1036,16 @@ test("addItemFromPath posts the file path, name, folder, and tags to Eagle", asy
     baseUrl: "http://localhost:41595",
     fetchImpl: async (url: string, init: { method?: string; body: string }) => {
       calls.push({ url, init });
-      return jsonResponse({ status: "success" });
+      return jsonResponse({ status: "success", data: { id: "NEWITEM1" } });
     },
   });
 
-  await client.addItemFromPath({ path: "/tmp/a.png", name: "a", folderId: "F1", tags: ["x", "x", " y "] });
+  assert.deepEqual(await client.addItemFromPath({ path: "/tmp/a.png", name: "a", folderId: "F1", tags: ["x", "x", " y "] }), { id: "NEWITEM1" });
   await client.addItemFromPath({ path: "/tmp/b.png", name: "b", folderId: "", tags: [] });
 
-  assert.equal(calls[0].url, "http://localhost:41595/api/item/addFromPath");
+  assert.equal(calls[0].url, "http://localhost:41595/api/v2/item/add");
   assert.equal(calls[0].init.method, "POST");
-  assert.deepEqual(JSON.parse(calls[0].init.body), { path: "/tmp/a.png", name: "a", folderId: "F1", tags: ["x", "y"] });
+  assert.deepEqual(JSON.parse(calls[0].init.body), { path: "/tmp/a.png", name: "a", folders: ["F1"], tags: ["x", "y"] });
   assert.deepEqual(JSON.parse(calls[1].init.body), { path: "/tmp/b.png", name: "b" });
 });
 

@@ -710,12 +710,22 @@ async function performEagleStatusCheck() {
       return;
     }
     setEagleStatus(data.app ? "online" : "offline");
+    if (data.permissions) applyHealthPermissions(data);
   } catch (error) {
     if (requestId !== eagleStatusRequestId) return;
     if (handleAuthError(error)) return;
     // The preview server itself being unreachable also means Eagle cannot be reached.
     setEagleStatus("offline");
   }
+}
+
+function applyHealthPermissions(data: HealthResponse) {
+  const permissions = normalizePermissions(data.permissions, state.permissions.read);
+  if (permissions.upload === state.permissions.upload && data.uploadMaxBytes === uploadMaxBytes) return;
+  if (state.permissions.upload && !permissions.upload) showErrorToast("You can no longer upload files");
+  state.permissions = permissions;
+  uploadMaxBytes = data.uploadMaxBytes;
+  renderSearchControlButtons();
 }
 
 function libraryLabel(data: ConnectResponse) {
