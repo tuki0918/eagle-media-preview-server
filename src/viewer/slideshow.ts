@@ -4,8 +4,8 @@ import { itemQueryParams, type ItemQueryState } from "./itemQuery";
 import type { EagleItem, LoadItemsResponse } from "./types";
 
 export type SlideshowEffect = "none" | "fade" | "slide";
-export interface SlideshowSettings { seconds: number; effect: SlideshowEffect; loop: boolean; showTitle: boolean; blurBackground: boolean }
-export const DEFAULT_SLIDESHOW_SETTINGS: SlideshowSettings = { seconds: 5, effect: "fade", loop: false, showTitle: true, blurBackground: true };
+export interface SlideshowSettings { seconds: number; effect: SlideshowEffect; loop: boolean; showTitle: boolean; blurBackground: boolean; reverse: boolean }
+export const DEFAULT_SLIDESHOW_SETTINGS: SlideshowSettings = { seconds: 5, effect: "fade", loop: false, showTitle: true, blurBackground: true, reverse: false };
 const SLIDESHOW_SETTINGS_KEY = "eagleSlideshowSettings";
 const SLIDESHOW_PAGE_SIZE = 30;
 export type SlideshowQuery = Omit<ItemQueryState, "offset" | "limit">;
@@ -19,6 +19,7 @@ export function readSlideshowSettings(): SlideshowSettings {
       loop: saved?.loop === true,
       showTitle: saved?.showTitle !== false,
       blurBackground: saved?.blurBackground !== false,
+      reverse: saved?.reverse === true,
     };
   } catch { return { ...DEFAULT_SLIDESHOW_SETTINGS }; }
 }
@@ -51,20 +52,28 @@ export class SlideshowSource {
   private activePage = 0;
   private disposed = false;
 
-  constructor(query: SlideshowQuery, private loader: PageLoader = fetchPage) {
+  /**
+   * With `reverse`, slide indexes still count up from 0 (shown as 1, 2, 3, …),
+   * but slide 0 is the last item of the list, slide 1 the one before it, and so on.
+   */
+  constructor(query: SlideshowQuery, private loader: PageLoader = fetchPage, private readonly reverse = false) {
     this.query = { ...query, tags: [...query.tags] };
   }
 
   async itemAt(index: number): Promise<EagleItem | null> {
     if (this.disposed) throw new Error("Slideshow closed");
-    if (index < 0 || (this.total !== null && index >= this.total)) return null;
-    const page = Math.floor(index / SLIDESHOW_PAGE_SIZE);
+    // Reverse order needs the list length before it can locate the first slide.
+    if (this.reverse && this.total === null && index >= 0) await this.page(0);
+    const position = this.listPosition(index);
+    if (position === null) return null;
+    const page = Math.floor(position / SLIDESHOW_PAGE_SIZE);
     this.activePage = page;
     this.prune();
-    const item = await this.peek(index);
-    // Prefetch metadata for only the following page; failures are retried on demand.
-    if (this.total !== null && (page + 1) * SLIDESHOW_PAGE_SIZE < this.total) {
-      void this.page(page + 1).catch(() => {});
+    const item = await this.read(position);
+    // Prefetch metadata for only the page played next; failures are retried on demand.
+    const nextPage = this.reverse ? page - 1 : page + 1;
+    if (this.total !== null && nextPage >= 0 && nextPage * SLIDESHOW_PAGE_SIZE < this.total) {
+      void this.page(nextPage).catch(() => {});
     }
     return item;
   }
@@ -72,10 +81,21 @@ export class SlideshowSource {
   /** Read a neighboring item without moving or pruning the playback cursor. */
   async peek(index: number): Promise<EagleItem | null> {
     if (this.disposed) throw new Error("Slideshow closed");
+    if (this.reverse && this.total === null && index >= 0) await this.page(0);
+    const position = this.listPosition(index);
+    return position === null ? null : this.read(position);
+  }
+
+  /** Map a slide index to its position in the list, or null when it is out of range. */
+  private listPosition(index: number): number | null {
     if (index < 0 || (this.total !== null && index >= this.total)) return null;
-    const items = await this.page(Math.floor(index / SLIDESHOW_PAGE_SIZE));
-    const item = items[index % SLIDESHOW_PAGE_SIZE];
-    if (!item && !(this.total !== null && index >= this.total)) {
+    return this.reverse ? (this.total ?? 0) - 1 - index : index;
+  }
+
+  private async read(position: number): Promise<EagleItem | null> {
+    const items = await this.page(Math.floor(position / SLIDESHOW_PAGE_SIZE));
+    const item = items[position % SLIDESHOW_PAGE_SIZE];
+    if (!item && !(this.total !== null && position >= this.total)) {
       throw new Error("The list has changed. Close the slideshow and start again.");
     }
     return item ?? null;

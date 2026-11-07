@@ -42,6 +42,31 @@ test("crosses pages, prefetches the next page, and retains a snapshot of every f
   } finally { source.dispose(); }
 });
 
+test("reverse order plays the list from its last item while slide indexes still count up", async () => {
+  const loader = loaderFor();
+  const source = new SlideshowSource(query, loader, true);
+  try {
+    expect((await source.itemAt(0))?.id).toBe("94");
+    expect(source.total).toBe(95);
+    expect((await source.itemAt(1))?.id).toBe("93");
+    expect((await source.peek(5))?.id).toBe("89");
+    expect((await source.itemAt(5))?.id).toBe("89");
+    expect((await source.itemAt(64))?.id).toBe("30");
+    expect((await source.itemAt(94))?.id).toBe("0");
+    expect(await source.itemAt(95)).toBeNull();
+    expect(await source.itemAt(-1)).toBeNull();
+    // The first page reveals the list length; then the last page is read and the one before it prefetched.
+    expect(loader.mock.calls.slice(0, 3).map(([params]) => params.get("offset"))).toEqual(["0", "90", "60"]);
+  } finally { source.dispose(); }
+});
+
+test("reverse order ends immediately for an empty list", async () => {
+  const source = new SlideshowSource(query, async () => ({ items: [], total: 0 }), true);
+  try {
+    expect(await source.itemAt(0)).toBeNull();
+  } finally { source.dispose(); }
+});
+
 test("smart folders retain smart-folder semantics on every page", async () => {
   const loader = loaderFor();
   const source = new SlideshowSource({ ...query, smartFolderId: "smart-1" }, loader);
@@ -96,10 +121,10 @@ test("settings tolerate unavailable storage and validate persisted values", () =
   expect(readSlideshowSettings()).toEqual(DEFAULT_SLIDESHOW_SETTINGS);
   const values = new Map<string, string>();
   vi.stubGlobal("window", { localStorage: { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => values.set(key, value) } });
-  saveSlideshowSettings({ seconds: 10, effect: "slide", loop: true, showTitle: false, blurBackground: false });
-  expect(readSlideshowSettings()).toEqual({ seconds: 10, effect: "slide", loop: true, showTitle: false, blurBackground: false });
+  saveSlideshowSettings({ seconds: 10, effect: "slide", loop: true, showTitle: false, blurBackground: false, reverse: true });
+  expect(readSlideshowSettings()).toEqual({ seconds: 10, effect: "slide", loop: true, showTitle: false, blurBackground: false, reverse: true });
   values.set("eagleSlideshowSettings", '{"seconds":10,"effect":"slide","loop":true}');
-  expect(readSlideshowSettings()).toEqual({ seconds: 10, effect: "slide", loop: true, showTitle: true, blurBackground: true });
+  expect(readSlideshowSettings()).toEqual({ seconds: 10, effect: "slide", loop: true, showTitle: true, blurBackground: true, reverse: false });
   values.set("eagleSlideshowSettings", '{"seconds":0,"effect":"invalid","loop":"true"}');
   expect(readSlideshowSettings()).toEqual(DEFAULT_SLIDESHOW_SETTINGS);
 });

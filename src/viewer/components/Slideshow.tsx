@@ -127,6 +127,7 @@ export function SlideshowDialog({ query, onClose }: { query: SlideshowQuery; onC
               </label>
               <SlideshowToggle label="Show title" checked={settings.showTitle} onChange={(showTitle) => setSettings({ ...settings, showTitle })} />
               <SlideshowToggle label="Blur background" checked={settings.blurBackground} onChange={(blurBackground) => setSettings({ ...settings, blurBackground })} />
+              <SlideshowToggle label="Reverse order" checked={settings.reverse} onChange={(reverse) => setSettings({ ...settings, reverse })} />
               <SlideshowToggle label="Loop" checked={settings.loop} onChange={(loop) => setSettings({ ...settings, loop })} />
             </div>
             <footer className={settingsDialogFooterClassName}>
@@ -209,11 +210,11 @@ export function SlideshowPlayer({ query, settings, onClose }: { query: Slideshow
   }, [settings.loop, settings.seconds]);
 
   useEffect(() => {
-    const source = new SlideshowSource(query);
+    const source = new SlideshowSource(query, undefined, settings.reverse);
     sourceRef.current = source;
     void navigate(0);
     return () => { request.current += 1; source.dispose(); };
-  }, [navigate, query]);
+  }, [navigate, query, settings.reverse]);
 
   useEffect(() => {
     if (!slide || !ready || loading || error || finished) return;

@@ -7,6 +7,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Added
+
+- Added a Reverse order option to slideshows. It plays the list from the last item to the first, while the slide counter still counts up from 1.
+
 ## [0.7.1] - 2026-11-06
 
 ### Added

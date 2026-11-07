@@ -8,7 +8,7 @@ import type { EagleItem } from "../types";
 import type { SlideshowQuery, SlideshowSettings } from "../slideshow";
 
 const query: SlideshowQuery = { query: "filtered", tags: ["alpha"], folderId: "folder-1", smartFolderId: "", ext: "", rating: "" };
-const settings: SlideshowSettings = { seconds: 3, effect: "fade", loop: false, showTitle: true, blurBackground: true };
+const settings: SlideshowSettings = { seconds: 3, effect: "fade", loop: false, showTitle: true, blurBackground: true, reverse: false };
 let dom: JSDOM;
 let root: import("react-dom/client").Root;
 let container: HTMLElement;
