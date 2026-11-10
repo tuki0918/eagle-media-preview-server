@@ -862,6 +862,152 @@ describe("viewer app data refresh", () => {
   });
 });
 
+describe("viewer app experimental sort", () => {
+  let dom: JSDOM;
+
+  beforeEach(() => {
+    vi.resetModules();
+    dom = installDom();
+    vi.spyOn(dom.window, "scrollTo").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    dom.window.close();
+    delete (globalThis as { document?: Document }).document;
+    delete (globalThis as { window?: Window & typeof globalThis }).window;
+    delete (globalThis as { navigator?: Navigator }).navigator;
+    delete (globalThis as { history?: History }).history;
+    delete (globalThis as { location?: Location }).location;
+    delete (globalThis as { FormData?: typeof FormData }).FormData;
+    delete (globalThis as { HTMLInputElement?: typeof HTMLInputElement }).HTMLInputElement;
+    delete (globalThis as { fetch?: typeof fetch }).fetch;
+  });
+
+  // Serves a signed-in viewer; `items` answers /api/items requests (all of them, sorted or not).
+  function serveViewer({ features, items }: { features?: { sort?: boolean }; items: (params: URLSearchParams) => unknown }) {
+    const requests: Array<{ method: string; url: string }> = [];
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      requests.push({ method: init?.method || "GET", url });
+      if (url === "/api/auth/status") return jsonResponse({ authenticated: true, required: false });
+      if (url === "/api/connect") return jsonResponse({ app: { version: "1.0" }, library: { id: "lib", name: "Library" }, ...(features ? { features } : {}) });
+      if (url === "/api/folders" || url === "/api/smart-folders") return jsonResponse({ items: [] });
+      if (url.startsWith("/api/items?")) return jsonResponse(items(new URLSearchParams(url.split("?")[1])));
+      if (url === "/api/sort-index/cancel") return jsonResponse({ cancelled: true });
+      return jsonResponse({ items: [], total: 0 });
+    }) });
+    const listRequests = () => requests.filter((request) => request.url.startsWith("/api/items?") && new URLSearchParams(request.url.split("?")[1]).get("limit") !== "1");
+    return { listRequests, requests };
+  }
+
+  async function connectViewer() {
+    const { initViewer } = await import("./viewerApp");
+    const shellActions = await import("./viewer/shellActions");
+    const { getLoginConnectState } = await import("./viewer/loginConnectState");
+    const { getResultSurfaceState } = await import("./viewer/resultSurfaceState");
+    const { getSearchControlsState } = await import("./viewer/searchControlsState");
+    await initViewer();
+    await vi.waitFor(() => expect(getLoginConnectState().authenticated).toBe(true));
+    shellActions.submitConnection({ currentTarget: document.querySelector<HTMLFormElement>("#connectForm")!, preventDefault() {} });
+    return { getResultSurfaceState, getSearchControlsState, shellActions };
+  }
+
+  test("shows progress with Cancel while the server indexes, then the sorted list", async () => {
+    history.replaceState(null, "", "/viewer?sort=name");
+    let sortedRequests = 0;
+    serveViewer({
+      features: { sort: true },
+      items: (params) => {
+        if (params.get("sort") !== "name") return { items: [], total: 2 };
+        sortedRequests += 1;
+        return sortedRequests === 1
+          ? { items: [{ id: "eagle-order" }], total: 1, sort: { status: "indexing", loaded: 5, total: 10 } }
+          : { items: [{ id: "a" }, { id: "b" }], total: 2, sort: { status: "ready" } };
+      },
+    });
+    const { getResultSurfaceState, getSearchControlsState } = await connectViewer();
+
+    await vi.waitFor(() => expect(getResultSurfaceState()).toMatchObject({ kind: "message", className: "loading", text: "Preparing sort… 5 / 10 items" }));
+    const surface = getResultSurfaceState();
+    expect(surface.kind === "message" && surface.action?.label).toBe("Cancel");
+    expect(getSearchControlsState()).toMatchObject({ sortAvailable: true, selectedSort: "name" });
+    // Eagle's order is never shown in between; the list appears once the server is ready.
+    await vi.waitFor(() => {
+      const next = getResultSurfaceState();
+      expect(next.kind === "list" && next.items.map((item) => item.id)).toEqual(["a", "b"]);
+    }, { timeout: 4000 });
+    expect(sortedRequests).toBe(2);
+  });
+
+  test("Cancel tells the server to stop and goes back to the default order", async () => {
+    history.replaceState(null, "", "/viewer?sort=name&order=desc");
+    const { listRequests, requests } = serveViewer({
+      features: { sort: true },
+      items: (params) => params.get("sort")
+        ? { items: [], total: 0, sort: { status: "indexing", loaded: 1, total: 10 } }
+        : { items: [{ id: "default" }], total: 1 },
+    });
+    const { getResultSurfaceState, getSearchControlsState } = await connectViewer();
+    await vi.waitFor(() => expect(getResultSurfaceState()).toMatchObject({ kind: "message", className: "loading" }));
+    const surface = getResultSurfaceState();
+    if (surface.kind !== "message" || !surface.action) throw new Error("Missing Cancel action");
+    surface.action.onClick();
+
+    await vi.waitFor(() => expect(requests.some((request) => request.method === "POST" && request.url === "/api/sort-index/cancel")).toBe(true));
+    await vi.waitFor(() => {
+      const next = getResultSurfaceState();
+      expect(next.kind === "list" && next.items.map((item) => item.id)).toEqual(["default"]);
+    });
+    const last = listRequests().at(-1)!;
+    expect(new URLSearchParams(last.url.split("?")[1]).has("sort")).toBe(false);
+    expect(new URLSearchParams(window.location.search).has("sort")).toBe(false);
+    expect(new URLSearchParams(window.location.search).has("order")).toBe(false);
+    expect(getSearchControlsState()).toMatchObject({ selectedSort: "", selectedOrder: "" });
+  });
+
+  test("ignores a sort in the URL when the server doesn't offer sorting", async () => {
+    history.replaceState(null, "", "/viewer?sort=name");
+    const { listRequests } = serveViewer({ items: () => ({ items: [{ id: "x" }], total: 1 }) });
+    const { getResultSurfaceState, getSearchControlsState } = await connectViewer();
+    await vi.waitFor(() => expect(getResultSurfaceState().kind).toBe("list"));
+    for (const request of listRequests()) {
+      expect(new URLSearchParams(request.url.split("?")[1]).has("sort")).toBe(false);
+    }
+    expect(getSearchControlsState()).toMatchObject({ sortAvailable: false, selectedSort: "", hasResettableFilters: false });
+  });
+
+  test("Reset filters and the library title clear the sort like a filter; picking a sort asks for it", async () => {
+    history.replaceState(null, "", "/viewer?sort=name&ext=png");
+    const { listRequests } = serveViewer({
+      features: { sort: true },
+      items: (params) => ({ items: [{ id: "x" }], total: 1, ...(params.get("sort") ? { sort: { status: "ready" } } : {}) }),
+    });
+    const { getResultSurfaceState, getSearchControlsState, shellActions } = await connectViewer();
+    await vi.waitFor(() => expect(getResultSurfaceState().kind).toBe("list"));
+    expect(getSearchControlsState()).toMatchObject({ selectedSort: "name", hasResettableFilters: true });
+    const lastParams = () => new URLSearchParams(listRequests().at(-1)!.url.split("?")[1]);
+    expect(lastParams().get("sort")).toBe("name");
+
+    shellActions.resetFilters();
+    await vi.waitFor(() => expect(lastParams().has("sort")).toBe(false));
+    expect(lastParams().has("ext")).toBe(false);
+    expect(getSearchControlsState()).toMatchObject({ selectedSort: "", hasResettableFilters: false });
+
+    shellActions.changeSort("filesize", "desc");
+    await vi.waitFor(() => expect(lastParams().get("sort")).toBe("filesize"));
+    expect(lastParams().get("order")).toBe("desc");
+    expect(new URLSearchParams(window.location.search).get("sort")).toBe("filesize");
+    // Sorting alone counts as resettable, but not as narrowing the results.
+    expect(getSearchControlsState()).toMatchObject({ hasResettableFilters: true, hasActiveFilters: false });
+
+    shellActions.openAllItems();
+    await vi.waitFor(() => expect(lastParams().has("sort")).toBe(false));
+    expect(new URLSearchParams(window.location.search).has("sort")).toBe(false);
+  });
+});
+
 function jsonResponse(body: unknown) {
   return {
     ok: true,

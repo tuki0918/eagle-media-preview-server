@@ -174,3 +174,166 @@ test("library index build can be cancelled, dropping what it read, and starts ov
     await rm(libraryPath, { recursive: true, force: true });
   }
 });
+
+test("library index checks mtime.json at most once per refresh interval, unless marked stale", async () => {
+  const libraryPath = await createLibrary(sampleItems);
+  try {
+    const index = await readyIndex(libraryPath, { refreshIntervalMs: 60_000 });
+    const sort = parseIndexSort("filesize", "desc");
+    await writeItem(libraryPath, { ...sampleItems[1], size: 5000, lastModified: 2 });
+    await writeMtime(libraryPath, { A1: 1, B2: 2, C3: 1, D4: 1 });
+    // Within the interval the old order stays.
+    assert.deepEqual((await index.query({}, sort, 0, 10)).ids, ["A1", "C3", "B2"]);
+    index.markStale();
+    assert.deepEqual((await index.query({}, sort, 0, 10)).ids, ["B2", "A1", "C3"]);
+  } finally {
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("library index keeps the last good data when Eagle is still writing a file", async () => {
+  const libraryPath = await createLibrary(sampleItems);
+  try {
+    const index = await readyIndex(libraryPath);
+    const sort = parseIndexSort("filesize", "desc");
+    // A half-written mtime.json changes nothing and is read again next time.
+    await writeFile(join(libraryPath, "mtime.json"), "{\"A1\":");
+    assert.deepEqual((await index.query({}, sort, 0, 10)).ids, ["A1", "C3", "B2"]);
+    // A half-written metadata.json keeps the item as it was.
+    await writeFile(join(libraryPath, "images", "B2.info", "metadata.json"), "{\"id\":\"B2\",");
+    await writeMtime(libraryPath, { A1: 1, B2: 2, C3: 1, D4: 1 });
+    assert.deepEqual((await index.query({}, sort, 0, 10)).ids, ["A1", "C3", "B2"]);
+    // Once Eagle finishes, the next change is picked up.
+    await writeItem(libraryPath, { ...sampleItems[1], size: 5000, lastModified: 3 });
+    await writeMtime(libraryPath, { A1: 1, B2: 3, C3: 1, D4: 1 });
+    assert.deepEqual((await index.query({}, sort, 0, 10)).ids, ["B2", "A1", "C3"]);
+  } finally {
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("library index skips ids Eagle left in mtime.json until their time changes", async () => {
+  const libraryPath = await createLibrary(sampleItems);
+  try {
+    const index = await readyIndex(libraryPath);
+    const sort = parseIndexSort("import", "");
+    await writeMtime(libraryPath, { A1: 1, B2: 1, C3: 1, D4: 1, GONE1: 5 });
+    assert.equal((await index.query({}, sort, 0, 10)).total, 3);
+    // The folder appears later without a new time: it is not looked for again on every check.
+    await writeItem(libraryPath, { id: "GONE1", name: "late", lastModified: 5, modificationTime: 9 });
+    await writeMtime(libraryPath, { A1: 1, B2: 1, C3: 1, D4: 1, GONE1: 5, OTHER: 0 });
+    assert.equal((await index.query({}, sort, 0, 10)).total, 3);
+    await writeMtime(libraryPath, { A1: 1, B2: 1, C3: 1, D4: 1, GONE1: 6 });
+    assert.deepEqual((await index.query({}, sort, 0, 10)).ids, ["GONE1", "A1", "C3", "B2"]);
+  } finally {
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("library index ignores folders that are not items and metadata for a different id", async () => {
+  const libraryPath = await createLibrary(sampleItems.slice(0, 2));
+  try {
+    await mkdir(join(libraryPath, "images", "notes"), { recursive: true });
+    await mkdir(join(libraryPath, "images", "bad id!.info"), { recursive: true });
+    await writeFile(join(libraryPath, "images", "bad id!.info", "metadata.json"), JSON.stringify({ id: "bad id!", name: "x" }));
+    await mkdir(join(libraryPath, "images", "X9.info"), { recursive: true });
+    await writeFile(join(libraryPath, "images", "X9.info", "metadata.json"), JSON.stringify({ id: "OTHER", name: "copied" }));
+    const index = await readyIndex(libraryPath);
+    assert.deepEqual((await index.query({}, parseIndexSort("name", ""), 0, 10)).ids.sort(), ["A1", "B2"]);
+  } finally {
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("library index reverses the whole list for the other direction, ties included, as Eagle does", async () => {
+  const libraryPath = await createLibrary([
+    { id: "T1", name: "a", size: 10 },
+    { id: "T2", name: "b", size: 10 },
+    { id: "T3", name: "c", size: 20 },
+    { id: "T4", name: "d", size: 10 },
+  ]);
+  try {
+    const index = await readyIndex(libraryPath);
+    const ascending = (await index.query({}, parseIndexSort("filesize", "asc"), 0, 10)).ids;
+    const descending = (await index.query({}, parseIndexSort("filesize", "desc"), 0, 10)).ids;
+    assert.equal(ascending.at(-1), "T3");
+    assert.deepEqual(descending, [...ascending].reverse());
+  } finally {
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("library index applies confirmed tag and folder edits to filters, and ignores unknown items", async () => {
+  const libraryPath = await createLibrary(sampleItems);
+  try {
+    const index = await readyIndex(libraryPath, { refreshIntervalMs: 60_000 });
+    const sort = parseIndexSort("import", "");
+    index.noteItem({ id: "C3", tags: ["cat"], folders: [] });
+    index.noteItem({ id: "B2", star: 9 });
+    index.noteItem({ id: "NOPE", star: 5 });
+    index.noteItem(null);
+    assert.deepEqual((await index.query({ tags: ["cat"] }, sort, 0, 10)).ids, ["A1", "C3", "B2"]);
+    assert.deepEqual((await index.query({ isUnfiled: true }, sort, 0, 10)).ids, ["C3", "B2"]);
+    // Ratings are clamped to 0-5.
+    assert.deepEqual((await index.query({ ratings: [5] }, sort, 0, 10)).ids, ["A1", "B2"]);
+    assert.equal((await index.query({}, sort, 0, 10)).total, 3);
+  } finally {
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("library index retries a failed build only after a pause", async () => {
+  const libraryPath = join(tmpdir(), `index-test-late-${process.pid}-${Date.now()}`);
+  const realNow = Date.now;
+  try {
+    const index = createLibraryIndex(libraryPath);
+    assert.equal(await index.whenReady(1000), false);
+    assert.equal(index.status, "failed");
+    // The library appears, but a request right away does not start another build.
+    await mkdir(join(libraryPath, "images"), { recursive: true });
+    await writeItem(libraryPath, { id: "L1", name: "late" });
+    assert.equal(await index.whenReady(200), false);
+    assert.equal(index.status, "failed");
+    const later = realNow() + 31_000;
+    Date.now = () => later;
+    assert.equal(await index.whenReady(5000), true);
+    assert.equal((await index.query({}, parseIndexSort("name", ""), 0, 10)).total, 1);
+  } finally {
+    Date.now = realNow;
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("library index stops a build when disposed", async () => {
+  const items = Array.from({ length: 200 }, (_, i) => ({ id: `D${String(i).padStart(4, "0")}`, name: `item ${i}` }));
+  const libraryPath = await createLibrary(items);
+  try {
+    const index = createLibraryIndex(libraryPath, { concurrency: 1 });
+    assert.equal(await index.whenReady(0), false);
+    index.dispose();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.notEqual(index.status, "ready");
+    assert.ok(index.progress().loaded < 200);
+  } finally {
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("library index manager release stops a build in progress and a later request starts a new index", async () => {
+  const items = Array.from({ length: 200 }, (_, i) => ({ id: `M${String(i).padStart(4, "0")}`, name: `item ${i}` }));
+  const libraryPath = await createLibrary(items);
+  try {
+    const manager = createLibraryIndexManager({ concurrency: 1 });
+    const first = manager.forLibrary(libraryPath);
+    assert.equal(await first.whenReady(0), false);
+    manager.release();
+    assert.equal(manager.loaded(), null);
+    const second = manager.forLibrary(libraryPath);
+    assert.notEqual(second, first);
+    assert.equal(await second.whenReady(5000), true);
+    assert.equal((await second.query({}, parseIndexSort("name", ""), 0, 1000)).total, 200);
+    manager.release();
+  } finally {
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});

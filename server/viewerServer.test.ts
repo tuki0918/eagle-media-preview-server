@@ -4350,18 +4350,19 @@ test("uploads are logged with their type and size, not their name", async () => 
   }
 });
 
-async function createSortLibrary() {
-  const libraryPath = join(tmpdir(), `sort-library-${process.pid}-${Date.now()}.library`);
-  const items = [
-    { id: "A1", name: "b-file", size: 300, modificationTime: 3 },
-    { id: "B2", name: "a-file", size: 100, modificationTime: 1 },
-    { id: "C3", name: "c-file", size: 200, modificationTime: 2 },
-  ];
+const DEFAULT_SORT_ITEMS: Array<Record<string, unknown> & { id: string }> = [
+  { id: "A1", name: "b-file", size: 300, modificationTime: 3 },
+  { id: "B2", name: "a-file", size: 100, modificationTime: 1 },
+  { id: "C3", name: "c-file", size: 200, modificationTime: 2 },
+];
+
+async function createSortLibrary(items = DEFAULT_SORT_ITEMS) {
+  const libraryPath = join(tmpdir(), `sort-library-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.library`);
   for (const item of items) {
     await mkdir(join(libraryPath, "images", `${item.id}.info`), { recursive: true });
     await writeFile(join(libraryPath, "images", `${item.id}.info`, "metadata.json"), JSON.stringify({ ext: "png", tags: [], folders: [], lastModified: 1, ...item }));
   }
-  await writeFile(join(libraryPath, "mtime.json"), JSON.stringify({ A1: 1, B2: 1, C3: 1, all: 3 }));
+  await writeFile(join(libraryPath, "mtime.json"), JSON.stringify({ ...Object.fromEntries(items.map((item) => [item.id, 1])), all: items.length }));
   return libraryPath;
 }
 
@@ -4447,5 +4448,204 @@ test("without experimentalSort, /api/items ignores sort and connect lists no fea
     assert.equal(cancel.status, 404);
   } finally {
     await viewer.stop();
+  }
+});
+
+const MANY_SORT_ITEMS = Array.from({ length: 300 }, (_, i) => ({ id: `N${String(i).padStart(4, "0")}`, name: `item ${i}` }));
+
+function sortTestClient(libraryPath: () => string, overrides: Record<string, unknown> = {}) {
+  return {
+    async appInfo() {
+      return { version: "1.0.0" };
+    },
+    async libraryInfo() {
+      return { path: libraryPath(), name: "Sort" };
+    },
+    async itemsByIds(ids: string[]) {
+      return ids.map((id) => ({ id }));
+    },
+    async listItems() {
+      return { items: [{ id: "eagle-order" }], total: 1, offset: 0, limit: 30 };
+    },
+    ...overrides,
+  };
+}
+
+async function postJsonTo(url: string, origin: string, body: unknown = {}, headers: Record<string, string> = {}) {
+  return fetch(url, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json", ...headers }, body: JSON.stringify(body) });
+}
+
+test("experimental sort answers in Eagle's order with progress until the index is ready", async () => {
+  const libraryPath = await createSortLibrary(MANY_SORT_ITEMS);
+  const viewer = createViewerServer({ host: "127.0.0.1", port: 0, viewerPassword: "", experimentalSort: true, sortIndexWaitMs: 0, eagleClient: sortTestClient(() => libraryPath) });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const first = await (await fetch(`${origin}/api/items?sort=name&limit=30`)).json();
+    assert.equal(first.sort.status, "indexing");
+    assert.equal(typeof first.sort.loaded, "number");
+    assert.equal(typeof first.sort.total, "number");
+    assert.deepEqual(first.items, [{ id: "eagle-order" }]);
+    let ready: { items: Array<{ id: string }>; sort: { status: string }; total: number } | null = null;
+    for (let attempt = 0; attempt < 100 && !ready; attempt += 1) {
+      const page = await (await fetch(`${origin}/api/items?sort=name&limit=30`)).json();
+      if (page.sort.status === "ready") ready = page;
+      else await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    assert.ok(ready, "the index never became ready");
+    assert.equal(ready.total, 300);
+    assert.equal(ready.items[0].id, "N0000");
+  } finally {
+    await viewer.stop();
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("experimental sort falls back to Eagle's order when the library folder can't be read", async () => {
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    viewerPassword: "",
+    experimentalSort: true,
+    eagleClient: sortTestClient(() => join(tmpdir(), `missing-${process.pid}.library`)),
+  });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const page = await (await fetch(`${origin}/api/items?sort=name`)).json();
+    assert.deepEqual(page, { items: [{ id: "eagle-order" }], total: 1, offset: 0, limit: 30, sort: { status: "failed", loaded: 0, total: 0 } });
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("experimental sort leaves smart folders to Eagle", async () => {
+  const libraryPath = await createSortLibrary();
+  const calls: unknown[] = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    viewerPassword: "",
+    experimentalSort: true,
+    eagleClient: sortTestClient(() => libraryPath, {
+      async smartFolderItems(options: unknown) {
+        calls.push(options);
+        return { items: [{ id: "smart" }], total: 1, offset: 0, limit: 30 };
+      },
+      async itemsByIds() {
+        throw new Error("smart folders must not use the index");
+      },
+    }),
+  });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const page = await (await fetch(`${origin}/api/items?smartFolderId=sf-1&sort=name&order=desc`)).json();
+    assert.deepEqual(page, { items: [{ id: "smart" }], total: 1, offset: 0, limit: 30 });
+    assert.deepEqual(calls, [{ smartFolderId: "sf-1", offset: 0, limit: 30 }]);
+  } finally {
+    await viewer.stop();
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("experimental sort applies the viewer's filters to the index", async () => {
+  const libraryPath = await createSortLibrary([
+    { id: "F1", name: "IMG cat", ext: "jpg", star: 5, tags: ["cat", "cute"], folders: ["FOLDER"] },
+    { id: "F2", name: "img dog", ext: "png", star: 0, tags: ["dog"], folders: [] },
+    { id: "F3", name: "note", ext: "png", star: 3, tags: [], folders: ["FOLDER"] },
+    { id: "F4", name: "trash", ext: "png", star: 5, tags: [], folders: [], isDeleted: true },
+  ]);
+  const viewer = createViewerServer({ host: "127.0.0.1", port: 0, viewerPassword: "", experimentalSort: true, eagleClient: sortTestClient(() => libraryPath) });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const ids = async (query: string) => ((await (await fetch(`${origin}/api/items?sort=name&${query}`)).json()).items as Array<{ id: string }>).map((item) => item.id);
+    assert.deepEqual(await ids(""), ["F1", "F2", "F3"]);
+    assert.deepEqual(await ids("folderId=FOLDER"), ["F1", "F3"]);
+    assert.deepEqual(await ids("folderId=__untagged__"), ["F3"]);
+    assert.deepEqual(await ids("folderId=__uncategorized__"), ["F2"]);
+    assert.deepEqual(await ids("ext=JPG"), ["F1"]);
+    assert.deepEqual(await ids("rating=5,0"), ["F1", "F2"]);
+    assert.deepEqual(await ids("tags=cat&tags=cute"), ["F1"]);
+    assert.deepEqual(await ids("q=img"), ["F1", "F2"]);
+    assert.deepEqual(await ids("q=img&rating=0"), ["F2"]);
+  } finally {
+    await viewer.stop();
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("experimental sort sees a rating edit from the viewer at once", async () => {
+  const libraryPath = await createSortLibrary();
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    allowMetadataEditing: true,
+    passwordHash: sha256("secret"),
+    basicAuthUsername: "eagle",
+    experimentalSort: true,
+    eagleClient: sortTestClient(() => libraryPath, {
+      async updateItemStar(id: string, star: unknown) {
+        return { id, star };
+      },
+    }),
+  });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const cookie = await loginCookie(origin, "eagle", "secret");
+    const ids = async () => ((await (await fetch(`${origin}/api/items?sort=rating&order=desc&rating=4`, { headers: { Cookie: cookie } })).json()).items as Array<{ id: string }>).map((item) => item.id);
+    assert.deepEqual(await ids(), []);
+    const edit = await postJsonTo(`${origin}/api/items/C3/star`, origin, { star: 4 }, { Cookie: cookie });
+    assert.equal(edit.status, 200);
+    // mtime.json has not changed, so only the confirmed edit can explain the new result.
+    assert.deepEqual(await ids(), ["C3"]);
+  } finally {
+    await viewer.stop();
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("experimental sort cancel stops a build in progress and accepts only POST", async () => {
+  const libraryPath = await createSortLibrary(MANY_SORT_ITEMS);
+  const viewer = createViewerServer({ host: "127.0.0.1", port: 0, viewerPassword: "", experimentalSort: true, sortIndexWaitMs: 0, eagleClient: sortTestClient(() => libraryPath) });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const page = await (await fetch(`${origin}/api/items?sort=name`)).json();
+    assert.equal(page.sort.status, "indexing");
+    const cancel = await postJsonTo(`${origin}/api/sort-index/cancel`, origin);
+    assert.equal(cancel.status, 200);
+    assert.deepEqual(await cancel.json(), { cancelled: true });
+    const again = await postJsonTo(`${origin}/api/sort-index/cancel`, origin);
+    assert.deepEqual(await again.json(), { cancelled: false });
+    const wrongMethod = await fetch(`${origin}/api/sort-index/cancel`);
+    assert.equal(wrongMethod.status, 405);
+    assert.equal(wrongMethod.headers.get("allow"), "POST");
+  } finally {
+    await viewer.stop();
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("experimental sort indexes the newly opened library after Eagle switches", async () => {
+  const first = await createSortLibrary();
+  const second = await createSortLibrary([{ id: "Z9", name: "only-item" }]);
+  let current = first;
+  const viewer = createViewerServer({ host: "127.0.0.1", port: 0, viewerPassword: "", experimentalSort: true, eagleClient: sortTestClient(() => current) });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    assert.equal((await (await fetch(`${origin}/api/items?sort=name`)).json()).total, 3);
+    current = second;
+    viewer.notifyLibraryChanged();
+    const page = await (await fetch(`${origin}/api/items?sort=name`)).json();
+    assert.equal(page.total, 1);
+    assert.deepEqual(page.items, [{ id: "Z9" }]);
+  } finally {
+    await viewer.stop();
+    await rm(first, { recursive: true, force: true });
+    await rm(second, { recursive: true, force: true });
   }
 });

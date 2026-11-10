@@ -50,6 +50,8 @@ interface ViewerServerOptions {
   trustForwardedFor?: boolean;
   /** Experimental: sort item lists with an in-memory index of the open library, built on first use. */
   experimentalSort?: boolean;
+  /** How long a sorted request waits for the index before answering with its progress. */
+  sortIndexWaitMs?: number;
   uploadMaxBytes?: number;
   uploadRequestTimeoutMs?: number;
   uploadSweepIntervalMs?: number;
@@ -199,6 +201,7 @@ type SortIndexManager = ReturnType<typeof createLibraryIndexManager>;
 interface ApiContext {
   /** Present only when the experimental sort is on. */
   sortIndexes: SortIndexManager | null;
+  sortIndexWaitMs: number;
   /** Re-reads the open library from Eagle right before a write and throws if it changed. */
   confirmLibraryBeforeWrite: (res: ServerResponse) => Promise<void>;
   uploadMaxBytes: number;
@@ -291,6 +294,7 @@ function createViewerServer({
   libraryUserRules = [],
   trustForwardedFor = false,
   experimentalSort = false,
+  sortIndexWaitMs = SORT_INDEX_WAIT_MS,
   uploadMaxBytes = MAX_UPLOAD_BYTES,
   uploadRequestTimeoutMs = UPLOAD_REQUEST_TIMEOUT_MS,
   uploadSweepIntervalMs = UPLOAD_SWEEP_INTERVAL_MS,
@@ -483,6 +487,7 @@ function createViewerServer({
           libraryAccess,
           libraryId,
           sortIndexes,
+          sortIndexWaitMs,
           uploadMaxBytes,
         });
         return;
@@ -714,7 +719,7 @@ async function cachedItemTypes(session: { client: EagleClient; libraryInfo(): Pr
   return { complete: scan.complete, items: scan.items };
 }
 
-async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { auth, confirmLibraryBeforeWrite, getSession, libraryAccess, libraryId, sortIndexes, uploadMaxBytes }: ApiContext & { auth: AuthContext }) {
+async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { auth, confirmLibraryBeforeWrite, getSession, libraryAccess, libraryId, sortIndexes, sortIndexWaitMs, uploadMaxBytes }: ApiContext & { auth: AuthContext }) {
   const session = getSession();
 
   if (url.pathname === "/api/connect") {
@@ -790,7 +795,7 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
     if (sort && sortIndexes) {
       const library = await session.libraryInfo();
       const index = sortIndexes.forLibrary(String(library?.path || ""));
-      if (library?.path && await index.whenReady(SORT_INDEX_WAIT_MS)) {
+      if (library?.path && await index.whenReady(sortIndexWaitMs)) {
         const page = await index.query({
           ext: url.searchParams.get("ext"),
           folderId: folderId === UNTAGGED_FOLDER_ID || folderId === "__uncategorized__" ? "" : folderId,

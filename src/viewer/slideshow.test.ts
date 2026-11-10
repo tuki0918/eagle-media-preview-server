@@ -134,3 +134,23 @@ test("classifies mixed media and uses static thumbnails for other files", () => 
     expect(slideshowMediaKind({ ext })).toBe(kind);
   }
 });
+
+test("asks for the list in the viewer's sort order, except in smart folders", async () => {
+  const loader = loaderFor();
+  const sorted = new SlideshowSource({ ...query, sort: "name", order: "desc" }, loader);
+  try {
+    await sorted.itemAt(0);
+    expect(loader.mock.calls[0][0].get("sort")).toBe("name");
+    expect(loader.mock.calls[0][0].get("order")).toBe("desc");
+  } finally {
+    sorted.dispose();
+  }
+  const smartLoader = loaderFor();
+  const smart = new SlideshowSource({ ...query, folderId: "", smartFolderId: "smart-1", sort: "name", order: "desc" }, smartLoader);
+  try {
+    await smart.itemAt(0);
+    expect(smartLoader.mock.calls[0][0].has("sort")).toBe(false);
+  } finally {
+    smart.dispose();
+  }
+});

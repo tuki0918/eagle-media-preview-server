@@ -1057,3 +1057,40 @@ test("addItemFromPath surfaces an error status from Eagle", async () => {
 
   await assert.rejects(() => client.addItemFromPath({ path: "/tmp/a.png", name: "a" }), /Import failed/);
 });
+
+test("itemsByIds asks item/get for the ids and returns them in the given order, dropping missing ones", async () => {
+  const calls: RequestCall[] = [];
+  const client = createEagleClient({
+    baseUrl: "http://eagle.local:41595",
+    fetchImpl: async (url: string, init: { method?: string; body: string }) => {
+      calls.push({ url, init });
+      // Eagle answers newest-first, whatever order the ids were sent in.
+      return jsonResponse({ status: "success", data: { data: [{ id: "C" }, { id: "A" }], total: 2, offset: 0, limit: 3 } });
+    },
+  });
+
+  assert.deepEqual(await client.itemsByIds(["A", "B", "C"]), [{ id: "A" }, { id: "C" }]);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "http://eagle.local:41595/api/v2/item/get");
+  const body = JSON.parse(calls[0].init.body);
+  assert.deepEqual(body.ids, ["A", "B", "C"]);
+  assert.equal(body.offset, 0);
+  assert.equal(body.limit, 3);
+  assert.ok(body.fields.includes("id"));
+});
+
+test("itemsByIds sends nothing for no ids and at most 1000 ids", async () => {
+  const sent: number[] = [];
+  const client = createEagleClient({
+    baseUrl: "http://eagle.local:41595",
+    fetchImpl: async (_url: string, init: { method?: string; body: string }) => {
+      sent.push(JSON.parse(init.body).ids.length);
+      return jsonResponse({ status: "success", data: { data: [], total: 0, offset: 0, limit: 0 } });
+    },
+  });
+
+  assert.deepEqual(await client.itemsByIds([]), []);
+  assert.deepEqual(sent, []);
+  await client.itemsByIds(Array.from({ length: 1500 }, (_, i) => `id${i}`));
+  assert.deepEqual(sent, [1000]);
+});
