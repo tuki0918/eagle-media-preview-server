@@ -22,6 +22,7 @@ describe("filter state helpers", () => {
       "★★★☆☆",
     ]);
     expect(activeFilterLabels(emptyFilters({ rating: "0" }))).toEqual(["None"]);
+    expect(activeFilterLabels(emptyFilters({ ext: "png", sort: "name", order: "desc" }))).toEqual(["PNG", "Name ↓"]);
     expect(activeFilterLabels(emptyFilters({ rating: "5,0,4" }))).toEqual(["★5,4, None"]);
   });
 
@@ -62,6 +63,9 @@ describe("filter state helpers", () => {
     expect(hasResettableFilters(emptyFilters({ tags: ["tag"] }))).toBe(true);
     expect(hasResettableFilters(emptyFilters({ ext: "png" }))).toBe(true);
     expect(hasResettableFilters(emptyFilters({ rating: "0" }))).toBe(true);
+    expect(hasResettableFilters(emptyFilters({ sort: "filesize" }))).toBe(true);
+    // Sorting never narrows the results, so it doesn't count as an active filter.
+    expect(hasActiveFilters(emptyFilters({ sort: "filesize" }))).toBe(false);
   });
 
   test("returns the reset state while preserving the selected category", () => {
@@ -72,6 +76,8 @@ describe("filter state helpers", () => {
       smartFolderId: "smart-folder",
       ext: "",
       rating: "",
+      sort: "",
+      order: "",
       offset: 0,
     });
   });

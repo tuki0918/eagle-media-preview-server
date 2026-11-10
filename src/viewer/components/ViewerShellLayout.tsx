@@ -63,6 +63,8 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
     tags: [...tagChips.tags],
     ext: searchState.selectedExt,
     rating: searchState.selectedRating,
+    sort: searchState.sortAvailable ? searchState.selectedSort : "",
+    order: searchState.selectedOrder,
   });
   const showingTags = searchState.section === "tags";
   const inSmartFolder = Boolean(searchState.selectedSmartFolderId);

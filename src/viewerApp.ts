@@ -512,6 +512,8 @@ function showViewer(data: ConnectResponse) {
   setConnectedLibraryId(currentLibraryId);
   uploadMaxBytes = data.uploadMaxBytes;
   sortAvailable = data.features?.sort === true;
+  // A sort from a bookmarked URL means nothing on a server without the experimental sort.
+  if (!sortAvailable) Object.assign(state, { sort: "", order: "" });
   setEagleStatus(data.app ? "online" : "offline");
   startEagleStatusPolling();
   document.title = libraryTitle(data);
