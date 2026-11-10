@@ -1,6 +1,6 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -334,6 +334,133 @@ test("library index manager release stops a build in progress and a later reques
     assert.equal((await second.query({}, parseIndexSort("name", ""), 0, 1000)).total, 200);
     manager.release();
   } finally {
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("library index runs a rescan held back by the interval later, without another mtime.json change", async () => {
+  const libraryPath = await createLibrary(sampleItems);
+  const realNow = Date.now;
+  try {
+    const index = await readyIndex(libraryPath, { rescanIntervalMs: 60_000 });
+    const sort = parseIndexSort("import", "");
+    // C3's folder vanishes (removed outside Eagle); Eagle's count says so, but the build just rescanned.
+    await rm(join(libraryPath, "images", "C3.info"), { recursive: true });
+    await writeMtime(libraryPath, { A1: 1, B2: 1, C3: 1, D4: 1, all: 3 });
+    assert.equal((await index.query({}, sort, 0, 10)).total, 3);
+    const later = realNow() + 61_000;
+    Date.now = () => later;
+    // mtime.json has not changed since, yet the held-back rescan now runs.
+    assert.deepEqual((await index.query({}, sort, 0, 10)).ids, ["A1", "B2"]);
+  } finally {
+    Date.now = realNow;
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("library index retries metadata it couldn't read, even when mtime.json doesn't change", async () => {
+  const libraryPath = await createLibrary(sampleItems);
+  try {
+    // Unreadable during the build: the item is left out at first, not forever.
+    await writeFile(join(libraryPath, "images", "C3.info", "metadata.json"), "{\"id\":\"C3\",");
+    const index = await readyIndex(libraryPath);
+    const sort = parseIndexSort("filesize", "desc");
+    assert.deepEqual((await index.query({}, sort, 0, 10)).ids, ["A1", "B2"]);
+    await writeItem(libraryPath, sampleItems[2]);
+    assert.deepEqual((await index.query({}, sort, 0, 10)).ids, ["A1", "C3", "B2"]);
+
+    // Unreadable after a change: the old data stays until the file can be read.
+    await writeFile(join(libraryPath, "images", "B2.info", "metadata.json"), "{\"id\":\"B2\",");
+    await writeMtime(libraryPath, { A1: 1, B2: 2, C3: 1, D4: 1 });
+    assert.deepEqual((await index.query({}, sort, 0, 10)).ids, ["A1", "C3", "B2"]);
+    await writeItem(libraryPath, { ...sampleItems[1], size: 5000, lastModified: 2 });
+    assert.deepEqual((await index.query({}, sort, 0, 10)).ids, ["B2", "A1", "C3"]);
+  } finally {
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("library index keeps an item whose metadata.json is missing for a while but whose folder is still there", async () => {
+  const libraryPath = await createLibrary(sampleItems);
+  try {
+    // During the build, C3's folder exists but its metadata.json hasn't synced yet.
+    await rm(join(libraryPath, "images", "C3.info", "metadata.json"));
+    const index = await readyIndex(libraryPath);
+    const sort = parseIndexSort("filesize", "desc");
+    assert.deepEqual((await index.query({}, sort, 0, 10)).ids, ["A1", "B2"]);
+    await writeItem(libraryPath, sampleItems[2]);
+    // mtime.json is unchanged, yet C3 comes back.
+    assert.deepEqual((await index.query({}, sort, 0, 10)).ids, ["A1", "C3", "B2"]);
+
+    // Later, a missing metadata.json in a folder that is still there keeps the item as it was.
+    await rm(join(libraryPath, "images", "B2.info", "metadata.json"));
+    await writeMtime(libraryPath, { A1: 1, B2: 2, C3: 1, D4: 1 });
+    assert.deepEqual((await index.query({}, sort, 0, 10)).ids, ["A1", "C3", "B2"]);
+    // Only a removed folder removes the item.
+    await rm(join(libraryPath, "images", "B2.info"), { recursive: true });
+    await writeMtime(libraryPath, { A1: 1, B2: 3, C3: 1, D4: 1 });
+    assert.deepEqual((await index.query({}, sort, 0, 10)).ids, ["A1", "C3"]);
+  } finally {
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("library index tries a held-back rescan again when listing the folder fails", async () => {
+  const libraryPath = await createLibrary(sampleItems);
+  const realNow = Date.now;
+  try {
+    const index = await readyIndex(libraryPath, { rescanIntervalMs: 60_000 });
+    const sort = parseIndexSort("import", "");
+    await rm(join(libraryPath, "images", "C3.info"), { recursive: true });
+    await writeMtime(libraryPath, { A1: 1, B2: 1, C3: 1, D4: 1, all: 3 });
+    assert.equal((await index.query({}, sort, 0, 10)).total, 3);
+    // The images folder can't be listed when the held-back rescan comes due.
+    const imagesDir = join(libraryPath, "images");
+    const parked = join(libraryPath, "images-away");
+    await rename(imagesDir, parked);
+    let now = realNow() + 61_000;
+    Date.now = () => now;
+    await index.query({}, sort, 0, 10);
+    // Once the folder is back, the rescan still happens.
+    await rename(parked, imagesDir);
+    now += 61_000;
+    assert.deepEqual((await index.query({}, sort, 0, 10)).ids, ["A1", "B2"]);
+  } finally {
+    Date.now = realNow;
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("library index treats an item count of 0 as a real count", async () => {
+  const libraryPath = await createLibrary([{ id: "ONLY", name: "last item" }]);
+  try {
+    const index = await readyIndex(libraryPath);
+    const sort = parseIndexSort("name", "");
+    assert.equal((await index.query({}, sort, 0, 10)).total, 1);
+    await rm(join(libraryPath, "images", "ONLY.info"), { recursive: true });
+    await writeMtime(libraryPath, { ONLY: 1, all: 0 });
+    assert.deepEqual(await index.query({}, sort, 0, 10), { ids: [], total: 0 });
+  } finally {
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("library index shows changes it applied even when a later step of the same check fails", async () => {
+  const libraryPath = await createLibrary(sampleItems);
+  const imagesDir = join(libraryPath, "images");
+  try {
+    const index = await readyIndex(libraryPath);
+    const sort = parseIndexSort("filesize", "desc");
+    // Warm the cached results.
+    assert.deepEqual((await index.query({}, sort, 0, 10)).ids, ["A1", "C3", "B2"]);
+    // B2 changes, and Eagle's count asks for a rescan, but the folder can't be listed this time
+    // (files inside can still be read).
+    await writeItem(libraryPath, { ...sampleItems[1], size: 5000, lastModified: 2 });
+    await writeMtime(libraryPath, { A1: 1, B2: 2, C3: 1, D4: 1, all: 99 });
+    await chmod(imagesDir, 0o311);
+    assert.deepEqual((await index.query({}, sort, 0, 10)).ids, ["B2", "A1", "C3"]);
+  } finally {
+    await chmod(imagesDir, 0o755);
     await rm(libraryPath, { recursive: true, force: true });
   }
 });

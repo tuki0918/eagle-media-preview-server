@@ -191,13 +191,21 @@ function createLibraryIndex(libraryPath: string, {
   let buildRun = 0;
   // Ids in mtime.json without an item folder, with the change time they were last checked at.
   const missing = new Map<string, number>();
+  // Items whose metadata.json couldn't be read or parsed (Eagle mid-write, a NAS or sync hiccup).
+  // They are tried again at every check, whether or not mtime.json changed.
+  const unreadable = new Set<string>();
+  // A folder rescan that was due but held back by rescanIntervalMs; it runs at a later check.
+  let rescanPending = false;
   const sortedCache = new Map<string, { items: IndexedItem[]; version: number }>();
   const queryCache = new Map<string, { ids: string[]; version: number }>();
 
-  async function readItem(id: string, run = buildRun) {
+  /** Reads one item; resolves true when the index changed (an item set or dropped). */
+  async function readItem(id: string, run = buildRun): Promise<boolean> {
     try {
       const raw = JSON.parse(await readFile(join(imagesDir, `${id}.info`, "metadata.json"), "utf8"));
-      if (run !== buildRun || !raw || typeof raw !== "object" || raw.id !== id) return;
+      if (run !== buildRun) return false;
+      unreadable.delete(id);
+      if (!raw || typeof raw !== "object" || raw.id !== id) return false;
       const name = typeof raw.name === "string" ? raw.name : "";
       items.set(id, {
         btime: finiteNumber(raw.btime),
@@ -216,9 +224,27 @@ function createLibraryIndex(libraryPath: string, {
         tags: stringList(raw.tags, intern),
         width: finiteNumber(raw.width),
       });
+      return true;
     } catch (error) {
-      // A removed item is dropped; a file Eagle is still writing is read again on its next change.
-      if ((error as NodeJS.ErrnoException)?.code === "ENOENT") items.delete(id);
+      if (run !== buildRun) return false;
+      // An item whose folder is gone was removed. Any other failure, including a metadata.json that
+      // is missing from a folder still there (a NAS or sync delay), keeps what was read and is retried.
+      if ((error as NodeJS.ErrnoException)?.code === "ENOENT" && !(await itemFolderExists(id))) {
+        // Checked again after the await: a cancelled build must not touch the next one's state.
+        if (run !== buildRun) return false;
+        unreadable.delete(id);
+        return items.delete(id);
+      }
+      if (run === buildRun) unreadable.add(id);
+      return false;
+    }
+  }
+
+  async function itemFolderExists(id: string) {
+    try {
+      return (await stat(join(imagesDir, `${id}.info`))).isDirectory();
+    } catch {
+      return false;
     }
   }
 
@@ -260,6 +286,9 @@ function createLibraryIndex(libraryPath: string, {
       }, stopped);
       if (stopped()) return;
       if (mtime) mtimeSignature = mtime.signature;
+      // Items the build couldn't see (a folder still syncing, say) leave the counts apart: check the
+      // folder again later, even if mtime.json doesn't change.
+      if (mtime && countDisagrees(mtime.values)) rescanPending = true;
       lastRefreshCheck = Date.now();
       lastRescan = lastRefreshCheck;
       version += 1;
@@ -272,38 +301,58 @@ function createLibraryIndex(libraryPath: string, {
     }
   }
 
+  // Eagle's own item count, "all" (0 included), against the items held.
+  function countDisagrees(values: Record<string, unknown>) {
+    return typeof values.all === "number" && Number.isFinite(values.all) && values.all !== items.size;
+  }
+
   async function refresh() {
     const mtime = await readMtimeFile();
-    if (!mtime || mtime.signature === mtimeSignature) return;
-    const changed: string[] = [];
-    for (const [id, value] of Object.entries(mtime.values)) {
+    const mtimeChanged = Boolean(mtime && mtime.signature !== mtimeSignature);
+    if (!mtimeChanged && !unreadable.size && !rescanPending) return;
+    const values = mtimeChanged ? mtime!.values : {};
+    const changed = new Set<string>(unreadable);
+    for (const [id, value] of Object.entries(values)) {
       if (id === "all" || !ITEM_ID_PATTERN.test(id)) continue;
       const item = items.get(id);
       const changedAt = finiteNumber(value);
       // Eagle leaves ids of removed items in mtime.json; skip those already found missing.
-      if (item ? changedAt > item.lastModified : missing.get(id) !== changedAt) changed.push(id);
+      if (item ? changedAt > item.lastModified : missing.get(id) !== changedAt) changed.add(id);
     }
-    const before = items.size;
-    await mapWithConcurrency(changed, concurrency, async (id) => {
-      await readItem(id);
-      if (items.has(id)) missing.delete(id);
-      else missing.set(id, finiteNumber(mtime.values[id]));
-    });
-    // Eagle rescans the folder when its item count disagrees; permanent deletes show up only there.
-    const expected = finiteNumber(mtime.values.all);
-    const now = Date.now();
-    let rescanned = false;
-    if (expected && expected !== items.size && now - lastRescan >= rescanIntervalMs) {
-      lastRescan = now;
-      const present = new Set(await listItemIds());
-      for (const id of items.keys()) {
-        if (!present.has(id)) items.delete(id);
+    // Only real changes bump the version: a file that keeps failing must not force a re-sort each time.
+    let updated = false;
+    try {
+      await mapWithConcurrency([...changed], concurrency, async (id) => {
+        if (await readItem(id)) updated = true;
+        if (items.has(id) || unreadable.has(id)) missing.delete(id);
+        else if (id in values) missing.set(id, finiteNumber(values[id]));
+      });
+      // Eagle rescans the folder when its item count disagrees; permanent deletes show up only there.
+      // A rescan held back by the interval is remembered, so it still happens without another change.
+      if (mtimeChanged && countDisagrees(values)) rescanPending = true;
+      const now = Date.now();
+      if (rescanPending && now - lastRescan >= rescanIntervalMs) {
+        lastRescan = now;
+        // Cleared only once the folder could be listed, so a failed listing is tried again later.
+        const present = new Set(await listItemIds());
+        rescanPending = false;
+        for (const id of items.keys()) {
+          if (!present.has(id) && items.delete(id)) updated = true;
+        }
+        for (const id of unreadable) {
+          if (!present.has(id)) unreadable.delete(id);
+        }
+        // Unreadable items were already tried at the start of this check.
+        await mapWithConcurrency([...present].filter((id) => !items.has(id) && !unreadable.has(id)), concurrency, async (id) => {
+          if (await readItem(id)) updated = true;
+        });
       }
-      await mapWithConcurrency([...present].filter((id) => !items.has(id)), concurrency, readItem);
-      rescanned = true;
+      if (mtimeChanged) mtimeSignature = mtime!.signature;
+    } finally {
+      // Changes already applied must reach the cached results even if a later step failed (a
+      // listing error, say); otherwise the next check sees nothing new and the cache stays stale.
+      if (updated) version += 1;
     }
-    mtimeSignature = mtime.signature;
-    if (changed.length || rescanned || items.size !== before) version += 1;
   }
 
   function sortedItems(sort: IndexSort) {
@@ -408,6 +457,8 @@ function createLibraryIndex(libraryPath: string, {
       items.clear();
       strings.clear();
       missing.clear();
+      unreadable.clear();
+      rescanPending = false;
       return true;
     },
 
@@ -416,6 +467,7 @@ function createLibraryIndex(libraryPath: string, {
       items.clear();
       strings.clear();
       missing.clear();
+      unreadable.clear();
       sortedCache.clear();
       queryCache.clear();
     },
@@ -430,6 +482,11 @@ interface LibraryIndexManagerOptions extends LibraryIndexOptions {
 }
 
 const DEFAULT_IDLE_MS = 30 * 60 * 1000;
+
+// Eagle reports a library with or without a trailing separator; both name the same index.
+function libraryKey(libraryPath: string) {
+  return String(libraryPath || "").replace(/[\\/]+$/, "");
+}
 
 // Holds the index for the library open in Eagle: a different path replaces it, and an unused one
 // is released after `idleMs`, to be rebuilt by the next sorted request.
@@ -446,7 +503,7 @@ function createLibraryIndexManager({ idleMs = DEFAULT_IDLE_MS, ...indexOptions }
 
   return {
     forLibrary(libraryPath: string) {
-      const path = String(libraryPath || "").replace(/[\\/]+$/, "");
+      const path = libraryKey(libraryPath);
       if (current?.path !== path) {
         release();
         current = { index: createLibraryIndex(path, indexOptions), path };
@@ -457,8 +514,12 @@ function createLibraryIndexManager({ idleMs = DEFAULT_IDLE_MS, ...indexOptions }
       return current.index;
     },
 
-    /** The index for the current library if one is loaded; never starts a build. */
-    loaded() {
+    /**
+     * The index for the current library if one is loaded; never starts a build. With a path, only
+     * an index of that library is returned.
+     */
+    loaded(libraryPath?: string) {
+      if (libraryPath !== undefined && current?.path !== libraryKey(libraryPath)) return null;
       return current?.index ?? null;
     },
 
