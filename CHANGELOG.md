@@ -10,7 +10,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ### Added
 
 - Added a Reverse order option to slideshows. It plays the list from the last item to the first, while the slide counter still counts up from 1.
-- Added sorting (experimental, off by default): with **Full scan** on under **Settings → Libraries → Advanced Sort**, the viewer's search panel gets a Sort menu (date added, created, or modified; name; type; file size; resolution; rating; duration; ascending or descending). The first sort reads the library's item metadata into memory, with progress and a Cancel button; the result is kept current through `mtime.json` and released after 30 minutes without use. The library itself is never written to. Smart folders keep the default order.
+- Added Advanced Sort (experimental, off by default): with **Full scan** on under **Settings → Libraries → Advanced Sort**, the viewer's search panel gets a Sort menu (date added, created, or modified; name; type; file size; resolution; rating; duration; ascending or descending). The first sort reads the library's item metadata into memory, with progress and a Cancel button; the result is kept current through `mtime.json` and released after 30 minutes without use. The library itself is never written to. Smart folders keep the default order.
 
 ## [0.7.1] - 2026-11-06
 

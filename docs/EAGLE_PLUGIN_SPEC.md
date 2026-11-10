@@ -62,7 +62,7 @@ Defaults and how to change them:
 | Trust `X-Forwarded-For` from this computer | disabled | Not in the panel; set `"trustForwardedFor": true` in `settings.json` while the server is stopped (see [Tunnels and reverse proxies](#tunnels-and-reverse-proxies)) |
 | Upload size limit per file | 2048 MB | Not in the panel; `uploadMaxSizeMB` in `settings.json` while the server is stopped |
 | Time allowed to receive one upload | 60 minutes | Not in the panel; `uploadTimeoutMinutes` in `settings.json` while the server is stopped |
-| Advanced Sort (experimental) | disabled | **Full scan** under **Settings → Libraries → Advanced Sort** (see [Experimental sort](#experimental-sort)) |
+| Advanced Sort (experimental) | disabled | **Full scan** under **Settings → Libraries → Advanced Sort** (see [Advanced Sort](#advanced-sort-experimental)) |
 
 All values are saved to `~/.eagle-media-preview-server/settings.json`. Fields under **Settings** are locked while the server runs and take effect at the next start. The toggles in Server Status stay available while it runs, and a change to Password, Public Network, or HTTPS restarts the running server.
 
@@ -277,7 +277,7 @@ Settings path:
 - Extension filter
 - Rating filter
 - Tag filter chips
-- Sort (experimental, when **Settings → Libraries → Advanced Sort** is on)
+- Sort menu (experimental, when **Full scan** is on under **Settings → Libraries → Advanced Sort**)
 - Page size: `30`, `60`, `120`, `240`
 - Tiles view
 - Grid view
@@ -358,7 +358,7 @@ These routes hand out the library id, so they do not require one.
 - `POST /api/connect`
   - Checks the server-configured Eagle API connection and returns app info and the library display name and id
   - The request body is ignored; viewer clients cannot change the Eagle API host, port, or token
-  - Adds `features: { sort: true }` when the experimental sort is on; the viewer shows its sort menu only then
+  - Adds `features: { sort: true }` when Advanced Sort is on; the viewer shows its sort menu only then
   - The library is read again after the body arrives: if it is not shared it returns `503`, and if Eagle switched libraries during the request it returns `409 LIBRARY_CHANGED`, so an unshared library is never named
 - `GET /api/health`
   - Checks Eagle app/library health; polled by the viewer; library paths are never returned to clients
@@ -373,9 +373,9 @@ These routes hand out the library id, so they do not require one.
   - Returns smart folder list
 - `GET /api/items`
   - Returns item list or search results; `smartFolderId` lists a smart folder's items
-  - With the experimental sort on, `sort` (`import`, `btime`, `mtime`, `name`, `ext`, `filesize`, `resolution`, `rating`, `duration`) and `order` (`asc` / `desc`, default per key as in Eagle) order the list; smart folders ignore them. The answer carries `sort: { status }`: `ready`, or `indexing` with `loaded` / `total` while the index is built (the items are then in Eagle's order, and the viewer asks again), or `failed`
+  - With Advanced Sort on, `sort` (`import`, `btime`, `mtime`, `name`, `ext`, `filesize`, `resolution`, `rating`, `duration`) and `order` (`asc` / `desc`, default per key as in Eagle) order the list; smart folders ignore them. The answer carries `sort: { status }`: `ready`, or `indexing` with `loaded` / `total` while the index is built (the items are then in Eagle's order, and the viewer asks again), or `failed`
 - `POST /api/sort-index/cancel`
-  - Experimental sort only (`404` otherwise): stops a first index build in progress and drops what it read; answers `{ cancelled }`
+  - Advanced Sort only (`404` otherwise): stops a first index build in progress and drops what it read; answers `{ cancelled }`
 - `GET /api/item-types`
   - Returns the file extensions found in the library
 - `GET /api/tags`, `GET /api/tag-overview`
@@ -417,7 +417,7 @@ Media URLs carry the library id as the `library` query parameter, since media el
 The viewer server calls Eagle's local Web API at `http://localhost:41595/api/v2/`. Viewer clients never call it.
 
 - `app/info`, `library/info`: Eagle version and the open library
-- `item/get`, `item/query`, `item/update`: items, search, and rating, tag, and folder changes; the experimental sort fetches each page with `item/get` `ids`
+- `item/get`, `item/query`, `item/update`: items, search, and rating, tag, and folder changes; Advanced Sort fetches each page with `item/get` `ids`
 - `folder/get`, `smartFolder/get`: folders and smart folders
 - `tag/get`, `tagGroup/get`: tags and tag groups
 
@@ -454,7 +454,7 @@ The viewer server calls Eagle's local Web API at `http://localhost:41595/api/v2/
 - Sends `X-Content-Type-Options: nosniff`
 - Returns MIME types for common images, videos, audio, PDF, and text files
 
-### Experimental sort
+### Advanced Sort (experimental)
 
 Eagle's `item/get` always answers newest-first, so other orders come from an index the preview server builds itself. It is off by default and turned on with **Settings → Libraries → Advanced Sort** (saved as `experimentalSort`). Like other settings, it is locked while the server runs and takes effect at the next start.
 

@@ -41,7 +41,7 @@ Optional:
 - HTTPS: use TLS when certificate paths are set.
 - Multiple users with Viewer, Editor, Editor + Upload, and Admin roles.
 - File Upload (experimental): add files to the library open in Eagle, for Admin and Editor + Upload users.
-- Sort (experimental): sort the viewer by date added, created, or modified, name, type, file size, resolution, rating, or duration.
+- Advanced Sort (experimental): sort the viewer by date added, created, or modified, name, type, file size, resolution, rating, or duration.
 - Library protection: share only the Eagle libraries you select.
 
 <details>
@@ -101,20 +101,6 @@ The viewer can show **Success** before a file is really in the library. If Eagle
 </details>
 
 <details>
-<summary><strong>Sort (experimental)</strong></summary>
-
-> [!NOTE]
-> This feature is experimental and may change. It is off by default.
-
-Stop the server, check **Full scan** under **Settings → Libraries → Advanced Sort**, save, and start the server again. The viewer's search panel then has a Sort menu next to the type and rating filters, with ascending and descending orders. **Reset filters** and the library name in the side menu return to the default order. Smart folders always keep the default order.
-
-Eagle can't sort items for other apps, so the first sort reads every item's details from the library folder into memory. The viewer shows the progress, and **Cancel** stops it. This takes about 15–20 seconds for 300,000 items on an internal SSD, and longer on a NAS. Later sorts are quick, and changes made in Eagle show up within a few seconds. The memory is given back after 30 minutes without sorting, when Eagle opens another library, or when the server stops. The library itself is never changed.
-
-While a sort is on, search text matches item names only.
-
-</details>
-
-<details>
 <summary><strong>Settings</strong></summary>
 
 #### Server Status
@@ -157,7 +143,7 @@ Authentication is optional. When password protection is enabled, browser access 
 
 #### Libraries
 
-Choose which Eagle libraries the viewer may serve.
+Choose which Eagle libraries the viewer may serve, and turn on Advanced Sort.
 
 ![](docs/server_panel_libraries.png)
 
@@ -169,11 +155,13 @@ The list's status shows **Online** for the shared library viewers can open right
 
 If every selected user is deleted, the library stays limited and only admins can open it (nobody, if there are no admins); it never opens to everyone. Renaming a user in **Access** keeps their libraries. With password protection off, the selections are kept but not applied.
 
-**Advanced Sort (experimental).** Check **Full scan** to add a Sort menu to the viewer. The first sort scans every item of the library open in Eagle into memory; see **Sort (experimental)** above.
-
 Like other settings, these are locked while the server is running and take effect when the server starts.
 
 **Switching libraries.** Click the folder icon on a library's row and confirm to open that library in Eagle. This also works while the server is running; connected viewers return to the connect screen. Only this panel can switch libraries: viewers can never switch the library open in Eagle.
+
+**Advanced Sort (experimental).** Off by default; the feature may change. Stop the server, check **Full scan**, save, and start the server again. The viewer's search panel then has a Sort menu next to the type and rating filters: date added, created, or modified, name, type, file size, resolution, rating, or duration, each ascending or descending. **Reset filters** and the library name in the side menu return to the default order. Smart folders always keep the default order.
+
+Eagle can't sort items for other apps, so the first sort scans every item of the library open in Eagle into memory. The viewer shows the progress, and **Cancel** stops it. This takes about 15–20 seconds for 300,000 items on an internal SSD, and longer on a NAS. Later sorts are quick, and changes made in Eagle show up within a few seconds. The memory is given back after 30 minutes without sorting, when Eagle opens another library, or when the server stops. The library itself is never changed. While a sort is on, search text matches item names only.
 
 #### Security
 
@@ -254,7 +242,7 @@ The displayed content depends on the Eagle library opened by the Eagle app runni
 
 These are planned, but on hold until the Eagle API supports them:
 
-- Sort smart folders, and sort without first reading the library into memory as the experimental Sort does
+- Sort smart folders, and sort without first reading the library into memory as Advanced Sort does
 - Add or remove favorite tags
 - Filter by multiple file extensions at once
 - Use search filters inside smart folders
