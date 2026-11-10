@@ -22,7 +22,7 @@ describe("filter state helpers", () => {
       "★★★☆☆",
     ]);
     expect(activeFilterLabels(emptyFilters({ rating: "0" }))).toEqual(["None"]);
-    expect(activeFilterLabels(emptyFilters({ ext: "png", sort: "name", order: "desc" }))).toEqual(["PNG", "Name ↓"]);
+    expect(activeFilterLabels(emptyFilters({ ext: "png", sort: "name", order: "desc" }))).toEqual(["PNG", "Name: Z → A"]);
     expect(activeFilterLabels(emptyFilters({ rating: "5,0,4" }))).toEqual(["★5,4, None"]);
   });
 

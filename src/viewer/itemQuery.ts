@@ -1,5 +1,6 @@
 import { UNCATEGORIZED_FOLDER_ID, UNTAGGED_FOLDER_ID } from "./constants";
 import { folderIds, itemTags } from "./format";
+import { effectiveSortOrder } from "./sort";
 import type { EagleItem, ViewerState } from "./types";
 
 export type ItemQueryState = Pick<ViewerState, "offset" | "query" | "tags" | "folderId" | "ext" | "rating"> & {
@@ -21,10 +22,11 @@ export function itemQueryParams(state: ItemQueryState) {
   }
   if (state.ext) params.set("ext", state.ext);
   if (state.rating !== "") params.set("rating", state.rating);
-  // Smart folders keep Eagle's order.
+  // Smart folders keep Eagle's order. The direction is always sent: the viewer's default direction
+  // for a key can differ from the server's, which follows Eagle.
   if (state.sort && !state.smartFolderId) {
     params.set("sort", state.sort);
-    if (state.order) params.set("order", state.order);
+    params.set("order", effectiveSortOrder(state.sort, state.order ?? ""));
   }
   return params;
 }

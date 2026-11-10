@@ -261,6 +261,26 @@
   background: linear-gradient(to right, #ffffff var(--media-progress, 0%), rgba(255, 255, 255, 0.28) var(--media-progress, 0%));
 }
 
+/* With the sort menu and its direction buttons, three menus in one row leave the sort label no room
+   in a narrow search panel (the sidebar takes width too). There, type and rating share the first row
+   and sort moves next to reset. Phones keep their own stacked layout. */
+.search-panel {
+  container: search-panel / inline-size;
+}
+
+@media (min-width: 541px) {
+  @container search-panel (max-width: 819px) {
+    .filter-row.filter-row-sort {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    }
+
+    .filter-row.filter-row-sort > :nth-child(2),
+    .filter-row.filter-row-sort > :nth-child(3) {
+      grid-column: span 2;
+    }
+  }
+}
+
 /* The list follows the results area, not the viewport (the sidebar takes width too), and drops
    its least useful columns before they would be clipped. Phones keep their own two-column layout. */
 .media-list {

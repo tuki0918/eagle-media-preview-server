@@ -1,5 +1,5 @@
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
-import { CheckIcon, FunnelXIcon, Search, SearchSlashIcon, XIcon } from "lucide-react";
+import { ArrowDownWideNarrowIcon, ArrowUpNarrowWideIcon, CheckIcon, FunnelXIcon, Search, SearchSlashIcon, XIcon } from "lucide-react";
 import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,7 +15,7 @@ import {
 import { cn } from "@/lib/utils";
 import { parseRatingFilter, ratingFilterSummary, toggleRatingFilter } from "../filters";
 import { MEDIA_TYPE_OPTIONS, RATING_OPTIONS } from "../shellConfig";
-import { DEFAULT_SORT_LABEL, SORT_OPTIONS, defaultSortOrder, effectiveSortOrder, sortSummary, type SortKey, type SortOrder } from "../sort";
+import { DEFAULT_SORT_LABEL, SORT_OPTIONS, defaultSortOrder, effectiveSortOrder, sortDirectionLabel, sortLabel, type SortKey, type SortOrder } from "../sort";
 import { getTagListState, setTagSearchQuery, subscribeTagListState } from "../tagListState";
 import {
   getSearchControlsState,
@@ -80,7 +80,7 @@ export function SearchControls({
 
   return (
     <section
-      className="controls pointer-events-auto grid w-full gap-3 rounded-lg border border-border bg-[color-mix(in_srgb,var(--popover)_80%,transparent)] p-3 text-popover-foreground shadow-[0_18px_48px_-16px_rgba(15,23,42,0.35)] backdrop-blur-xl backdrop-saturate-150 min-[720px]:rounded-2xl"
+      className="controls search-panel pointer-events-auto grid w-full gap-3 rounded-lg border border-border bg-[color-mix(in_srgb,var(--popover)_80%,transparent)] p-3 text-popover-foreground shadow-[0_18px_48px_-16px_rgba(15,23,42,0.35)] backdrop-blur-xl backdrop-saturate-150 min-[720px]:rounded-2xl"
       aria-label="Search and filters"
       hidden={!displayFiltersOpen}
     >
@@ -193,8 +193,11 @@ export function AdvancedFilters({
       id="advancedFilters"
       // Phones stack the menus and keep reset at the end of the last row: type, then rating, then
       // sort next to reset when the sort menu is there, or rating next to reset when it isn't.
+      // A search panel too narrow for three menus plus the sort direction buttons moves sort to its
+      // own row next to reset (see .filter-row-sort in styles.css).
       className={cn(
         "filter-row grid items-center gap-4 max-[540px]:grid-cols-[minmax(0,1fr)_auto] max-[540px]:gap-3",
+        sortAvailable && "filter-row-sort",
         sortAvailable ? "grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]" : "grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]",
       )}
       hidden={!filtersOpen}
@@ -256,7 +259,7 @@ function FilterMenu({
         id={`${id}Menu`}
         data-filter-menu=""
         align="start"
-        className="max-h-[min(360px,var(--radix-dropdown-menu-content-available-height))] w-[var(--radix-dropdown-menu-trigger-width)] rounded-xl p-1.5"
+        className="max-h-[min(360px,var(--radix-dropdown-menu-content-available-height))] w-[max(var(--radix-dropdown-menu-trigger-width),12rem)] rounded-xl p-1.5"
       >
         {children}
       </DropdownMenuContent>
@@ -332,49 +335,59 @@ function RatingFilter({ selectedRating }: { selectedRating: string }) {
   );
 }
 
+const sortDirectionButtonClassName =
+  "grid h-full w-9 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40 aria-pressed:bg-muted aria-pressed:text-foreground [&_svg]:size-4";
+
 // Experimental: the server sorts with its own index of the library (see docs/design/large-library-index.md).
+// As in Eagle, the menu picks what to sort by and the buttons beside it pick the direction.
 function SortFilter({ selectedSort, selectedOrder }: { selectedSort: SortKey; selectedOrder: "" | SortOrder }) {
-  const summaryText = sortSummary(selectedSort, selectedOrder);
+  const summaryText = sortLabel(selectedSort);
   const order = effectiveSortOrder(selectedSort, selectedOrder);
   return (
-    <FilterMenu id="sortSelect" label="Sort (experimental)" summary={<span className="truncate">{summaryText}</span>} summaryText={summaryText}>
-      <div className="flex items-center justify-between gap-2 px-2 pb-1 pt-1.5 text-xs text-muted-foreground">
-        <span>Sort by</span>
-        <span className="rounded-full border border-border px-1.5 py-px text-[10px] uppercase tracking-wide">Experimental</span>
-      </div>
-      <DropdownMenuPrimitive.RadioGroup value={selectedSort} onValueChange={(value) => changeSort(value as SortKey, "")}>
-        {[{ key: "" as SortKey, label: DEFAULT_SORT_LABEL }, ...SORT_OPTIONS].map((option) => (
-          <DropdownMenuPrimitive.RadioItem key={option.key || "default"} data-slot="dropdown-menu-radio-item" className={filterOptionClassName} value={option.key}>
-            <span className={cn(filterIndicatorClassName, "rounded-full")} aria-hidden="true">
-              <DropdownMenuPrimitive.ItemIndicator>
-                <span className="block size-1.5 rounded-full bg-primary-foreground" />
-              </DropdownMenuPrimitive.ItemIndicator>
-            </span>
-            <span className="truncate">{option.label}</span>
-          </DropdownMenuPrimitive.RadioItem>
-        ))}
-      </DropdownMenuPrimitive.RadioGroup>
-      {selectedSort ? (
-        <>
-          <DropdownMenuPrimitive.Separator className="-mx-1.5 my-1.5 h-px bg-border" />
-          <DropdownMenuPrimitive.RadioGroup
-            value={order}
-            onValueChange={(value) => changeSort(selectedSort, value === defaultSortOrder(selectedSort) ? "" : value as SortOrder)}
-          >
-            {(["asc", "desc"] as const).map((direction) => (
-              <DropdownMenuPrimitive.RadioItem key={direction} data-slot="dropdown-menu-radio-item" className={filterOptionClassName} value={direction}>
+    <div className="flex min-w-0 items-center gap-2">
+      <div className="min-w-0 flex-1">
+        <FilterMenu id="sortSelect" label="Sort (experimental)" summary={<span className="truncate">{summaryText}</span>} summaryText={summaryText}>
+          <div className="flex items-center justify-between gap-2 px-2 pb-1 pt-1.5 text-xs text-muted-foreground">
+            <span>Sort by</span>
+            <span className="rounded-full border border-border px-1.5 py-px text-[10px] uppercase tracking-wide">Experimental</span>
+          </div>
+          {/* A new key starts in its own default direction. */}
+          <DropdownMenuPrimitive.RadioGroup value={selectedSort} onValueChange={(value) => changeSort(value as SortKey, "")}>
+            {[{ key: "" as SortKey, label: DEFAULT_SORT_LABEL }, ...SORT_OPTIONS].map((option) => (
+              <DropdownMenuPrimitive.RadioItem key={option.key || "default"} data-slot="dropdown-menu-radio-item" className={filterOptionClassName} value={option.key}>
                 <span className={cn(filterIndicatorClassName, "rounded-full")} aria-hidden="true">
                   <DropdownMenuPrimitive.ItemIndicator>
                     <span className="block size-1.5 rounded-full bg-primary-foreground" />
                   </DropdownMenuPrimitive.ItemIndicator>
                 </span>
-                <span className="truncate">{direction === "asc" ? "Ascending ↑" : "Descending ↓"}</span>
+                <span className="truncate">{option.label}</span>
               </DropdownMenuPrimitive.RadioItem>
             ))}
           </DropdownMenuPrimitive.RadioGroup>
-        </>
-      ) : null}
-    </FilterMenu>
+        </FilterMenu>
+      </div>
+      {/* Eagle's own order has no direction, so the buttons stay off until a key is picked. */}
+      <div id="sortDirection" role="group" aria-label="Sort direction" className="flex h-11 shrink-0 items-center gap-0.5 rounded-xl border border-input bg-card p-1 shadow-sm">
+        {(["asc", "desc"] as const).map((direction) => {
+          const label = selectedSort ? sortDirectionLabel(selectedSort, direction) : direction === "asc" ? "Ascending" : "Descending";
+          const Icon = direction === "asc" ? ArrowUpNarrowWideIcon : ArrowDownWideNarrowIcon;
+          return (
+            <button
+              key={direction}
+              type="button"
+              className={sortDirectionButtonClassName}
+              aria-label={label}
+              title={label}
+              aria-pressed={Boolean(selectedSort) && order === direction}
+              disabled={!selectedSort}
+              onClick={() => changeSort(selectedSort, direction === defaultSortOrder(selectedSort) ? "" : direction)}
+            >
+              <Icon aria-hidden="true" />
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

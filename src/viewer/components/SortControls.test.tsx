@@ -21,7 +21,8 @@ describe("experimental sort controls", () => {
     expect(without.querySelector("#sortSelect")).toBeNull();
 
     const withSort = parse(renderToStaticMarkup(<AdvancedFilters filtersOpen sortAvailable selectedSort="name" selectedOrder="desc" />));
-    expect(withSort.querySelector("#sortSelect")?.getAttribute("aria-label")).toBe("Sort (experimental): Name ↓");
+    expect(withSort.querySelector("#sortSelect")?.getAttribute("aria-label")).toBe("Sort (experimental): Name");
+    expect(withSort.querySelector('#sortDirection [aria-pressed="true"]')?.getAttribute("aria-label")).toBe("Z → A");
 
     const defaultOrder = parse(renderToStaticMarkup(<AdvancedFilters filtersOpen sortAvailable />));
     expect(defaultOrder.querySelector("#sortSelect")?.textContent).toBe("Default order");

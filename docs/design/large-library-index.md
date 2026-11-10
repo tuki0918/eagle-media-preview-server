@@ -47,7 +47,7 @@ Sort keys and their default directions follow Eagle's `sortData`.
 | `rating` | Rating | Ascending |
 | `duration` | Duration | Ascending |
 
-Picking the other direction reverses the whole list, as Eagle does.
+Picking the other direction reverses the whole list, as Eagle does. These are the server's defaults for a request without `order`; the viewer starts file size, resolution, rating, and duration in the opposite direction and always sends `order`.
 
 ## 3. Measurements
 

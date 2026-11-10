@@ -41,9 +41,15 @@ async function pick(label: string) {
   await act(async () => item.click());
 }
 
-test("picking a sort resets its direction; picking a direction keeps the sort", async () => {
+function directionButton(label: string) {
+  const button = document.querySelector<HTMLButtonElement>(`#sortDirection button[aria-label="${label}"]`);
+  if (!button) throw new Error(`Missing direction button: ${label}`);
+  return button;
+}
+
+test("picking a sort starts it in its default direction", async () => {
   const changeSort = vi.spyOn(actions, "changeSort").mockImplementation(() => {});
-  await act(async () => root.render(<AdvancedFilters filtersOpen sortAvailable selectedSort="filesize" selectedOrder="desc" />));
+  await act(async () => root.render(<AdvancedFilters filtersOpen sortAvailable selectedSort="filesize" selectedOrder="asc" />));
 
   await openSortMenu();
   expect(document.body.textContent).toContain("Experimental");
@@ -51,25 +57,31 @@ test("picking a sort resets its direction; picking a direction keeps the sort", 
   expect(changeSort).toHaveBeenLastCalledWith("name", "");
 
   await openSortMenu();
-  // File size is ascending by default, so that direction is stored as "".
-  await pick("Ascending");
-  expect(changeSort).toHaveBeenLastCalledWith("filesize", "");
-
-  await act(async () => root.render(<AdvancedFilters filtersOpen sortAvailable selectedSort="name" selectedOrder="" />));
-  await openSortMenu();
-  await pick("Descending");
-  expect(changeSort).toHaveBeenLastCalledWith("name", "desc");
-
-  await openSortMenu();
   await pick("Default order");
   expect(changeSort).toHaveBeenLastCalledWith("", "");
 });
 
-test("the direction choices appear only once a sort is picked", async () => {
+test("the direction buttons beside the menu name and switch the direction", async () => {
+  const changeSort = vi.spyOn(actions, "changeSort").mockImplementation(() => {});
+  await act(async () => root.render(<AdvancedFilters filtersOpen sortAvailable selectedSort="filesize" selectedOrder="" />));
+
+  // File size starts largest first, which is stored as "".
+  expect(directionButton("Largest first").getAttribute("aria-pressed")).toBe("true");
+  expect(directionButton("Smallest first").getAttribute("aria-pressed")).toBe("false");
+  await act(async () => directionButton("Smallest first").click());
+  expect(changeSort).toHaveBeenLastCalledWith("filesize", "asc");
+
+  await act(async () => root.render(<AdvancedFilters filtersOpen sortAvailable selectedSort="filesize" selectedOrder="asc" />));
+  await act(async () => directionButton("Largest first").click());
+  expect(changeSort).toHaveBeenLastCalledWith("filesize", "");
+});
+
+test("the menu lists only what to sort by, and the direction is off for the default order", async () => {
   await act(async () => root.render(<AdvancedFilters filtersOpen sortAvailable />));
+  expect([...document.querySelectorAll<HTMLButtonElement>("#sortDirection button")].every((button) => button.disabled)).toBe(true);
   await openSortMenu();
   const labels = [...document.querySelectorAll('[role="menuitemradio"]')].map((element) => element.textContent);
   expect(labels).toContain("Default order");
   expect(labels).toContain("Date added");
-  expect(labels.some((label) => label?.includes("Ascending"))).toBe(false);
+  expect(labels.some((label) => /Ascending|Descending|first/.test(label ?? ""))).toBe(false);
 });

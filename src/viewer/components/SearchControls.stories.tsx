@@ -54,6 +54,15 @@ export const AdvancedFiltersOnly: Story = {
   ),
 };
 
+export const AdvancedFiltersWithSort: Story = {
+  render: () => (
+    // search-panel makes the canvas the container the filter row measures, as the real panel is.
+    <div className={`${storyCanvasClassName} search-panel`}>
+      <AdvancedFilters filtersOpen hasActiveFilters sortAvailable selectedSort="mtime" selectedRating="3" />
+    </div>
+  ),
+};
+
 export const TagSearchPanel: Story = {
   render: () => (
     <div className={storyCanvasClassName}>
