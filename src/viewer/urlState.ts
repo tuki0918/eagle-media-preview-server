@@ -1,5 +1,6 @@
 import { DEFAULT_PAGE_SIZE, DEFAULT_VIEW_MODE, MAX_PAGE_SIZE } from "./constants";
 import { formatRatingFilter, parseRatingFilter } from "./filters";
+import { parseSortKey, parseSortOrder } from "./sort";
 import { clamp, normalizeTag } from "./format";
 import type { ViewerState } from "./types";
 
@@ -12,6 +13,8 @@ export type ViewerUrlState = Pick<
   | "section"
   | "ext"
   | "rating"
+  | "sort"
+  | "order"
   | "filtersOpen"
   | "limit"
   | "viewMode"
@@ -25,6 +28,7 @@ export function parseViewerUrlState(search: string): ViewerUrlState {
   const limit = clampPageSize(params.get("limit"));
   const viewModeParam = params.get("view");
   const viewMode = viewModeParam === "tiles" ? "tiles" : viewModeParam === "list" ? "list" : DEFAULT_VIEW_MODE;
+  const sort = parseSortKey(params.get("sort"));
   return {
     query: params.get("q") || "",
     tags: uniqueTags(params.getAll("tag")),
@@ -33,6 +37,8 @@ export function parseViewerUrlState(search: string): ViewerUrlState {
     section: params.get("section") === "tags" ? "tags" : "items",
     ext: params.get("ext") || "",
     rating: formatRatingFilter(parseRatingFilter(params.get("rating") || "")),
+    sort,
+    order: parseSortOrder(sort, params.get("order")),
     filtersOpen: params.get("filters") === "1",
     limit,
     viewMode,
@@ -54,6 +60,8 @@ export function buildViewerSearch(state: ViewerUrlState) {
   if (state.smartFolderId) params.set("smartFolder", state.smartFolderId);
   if (state.ext) params.set("ext", state.ext);
   if (state.rating !== "") params.set("rating", state.rating);
+  if (state.sort) params.set("sort", state.sort);
+  if (state.sort && state.order) params.set("order", state.order);
   if (state.filtersOpen) params.set("filters", "1");
   if (state.limit !== DEFAULT_PAGE_SIZE) params.set("limit", String(state.limit));
   if (state.viewMode !== DEFAULT_VIEW_MODE) params.set("view", state.viewMode);

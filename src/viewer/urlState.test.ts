@@ -18,6 +18,8 @@ function urlState(overrides: Partial<ViewerUrlState> = {}): ViewerUrlState {
     section: "items",
     ext: "",
     rating: "",
+    sort: "",
+    order: "",
     filtersOpen: false,
     limit: 30,
     viewMode: "tiles",
@@ -38,6 +40,8 @@ describe("viewer URL state", () => {
       section: "items",
       ext: "jpg",
       rating: "4",
+      sort: "",
+      order: "",
       filtersOpen: true,
       limit: 60,
       viewMode: "list",
@@ -51,6 +55,14 @@ describe("viewer URL state", () => {
     expect(clampPageSize("1")).toBe(30);
     expect(clampPageSize("9999")).toBe(1000);
     expect(parseViewerUrlState("?view=tiles&page=9&limit=60").offset).toBe(0);
+  });
+
+  test("round-trips the experimental sort, dropping the default direction and unknown keys", () => {
+    expect(parseViewerUrlState("?sort=name&order=desc")).toMatchObject({ sort: "name", order: "desc" });
+    expect(parseViewerUrlState("?sort=name&order=asc")).toMatchObject({ sort: "name", order: "" });
+    expect(parseViewerUrlState("?sort=bogus&order=asc")).toMatchObject({ sort: "", order: "" });
+    expect(buildViewerSearch(urlState({ sort: "filesize", order: "desc" }))).toBe("sort=filesize&order=desc");
+    expect(buildViewerSearch(urlState({ sort: "import" }))).toBe("sort=import");
   });
 
   test("ignores unsupported view modes", () => {

@@ -5,9 +5,10 @@ const { isIP } = require("net");
 const { randomBytes } = require("crypto");
 const { createAddressBlockList, normalizeClientAddress } = require("./addressBlockList.cjs");
 const { normalizeCustomDomain } = require("./customDomain.cjs");
-const { EagleRequestError, createEagleClient, normalizeStringArray } = require("./eagleClient.cjs");
+const { EagleRequestError, createEagleClient, normalizeStringArray, parseRatingFilter } = require("./eagleClient.cjs");
 const { createConnectionContext } = require("./connection.cjs");
 const { createLibraryAccessPolicy, libraryIdFor } = require("./libraryAccess.cjs");
+const { createLibraryIndexManager, parseIndexSort } = require("./libraryIndex.cjs");
 const { readInternetShortcutUrl, servedMediaInfo, streamItemMedia } = require("./media.cjs");
 const { resolveDefaultPublicDir, securityHeaders, serveStatic } = require("./static.cjs");
 const { MAX_UPLOAD_BYTES, UPLOAD_PATH, UPLOAD_REQUEST_TIMEOUT_MS, UPLOAD_SWEEP_INTERVAL_MS, UploadError, discardUpload, parseUploadRequest, receiveUpload, sweepUploads } = require("./upload.cjs");
@@ -47,6 +48,10 @@ interface ViewerServerOptions {
   blockedAddresses?: Array<string | { address: string; addedAt?: number }>;
   /** Believe X-Forwarded-For from a proxy on this machine. Off unless the admin confirms the proxy sets it. */
   trustForwardedFor?: boolean;
+  /** Experimental: sort item lists with an in-memory index of the open library, built on first use. */
+  experimentalSort?: boolean;
+  /** How long a sorted request waits for the index before answering with its progress. */
+  sortIndexWaitMs?: number;
   uploadMaxBytes?: number;
   uploadRequestTimeoutMs?: number;
   uploadSweepIntervalMs?: number;
@@ -149,6 +154,7 @@ interface EagleClient {
   folders(): Promise<unknown>;
   addItemFromPath(input: { folderId?: string; name: string; path: string; tags?: string[] }): Promise<unknown>;
   itemById(id: string): Promise<EagleItem>;
+  itemsByIds(ids: string[]): Promise<unknown[]>;
   itemExtensions(options?: { onProgress?: (extensions: ItemExtension[]) => void }): Promise<ItemExtension[]>;
   legacyThumbnailPath(id: string): Promise<unknown>;
   listItems(options: {
@@ -190,7 +196,12 @@ interface LibraryAccessPolicy {
   status(libraryPath: unknown, user?: { role?: string; username: string } | null): "forbidden" | "not_shared" | "shared" | "unrestricted";
 }
 
+type SortIndexManager = ReturnType<typeof createLibraryIndexManager>;
+
 interface ApiContext {
+  /** Present only when the experimental sort is on. */
+  sortIndexes: SortIndexManager | null;
+  sortIndexWaitMs: number;
   /** Re-reads the open library from Eagle right before a write and throws if it changed. */
   confirmLibraryBeforeWrite: (res: ServerResponse) => Promise<void>;
   uploadMaxBytes: number;
@@ -211,6 +222,8 @@ const ITEM_TYPES_CACHE_MS = 10 * 60 * 1000;
 // How long a request waits for the scan before answering with the extensions found so far.
 const ITEM_TYPES_PROGRESS_WAIT_MS = 1000;
 const itemTypesCache = new WeakMap<object, ItemTypesScan>();
+// How long a sorted request waits for the index before answering in Eagle's order with progress.
+const SORT_INDEX_WAIT_MS = 1000;
 const LOGIN_FAILURE_LIMIT = 5;
 const LOGIN_FAILURE_MAX_ENTRIES = 500;
 const LOGIN_FAILURE_WINDOW_MS = 10 * 60 * 1000;
@@ -280,6 +293,8 @@ function createViewerServer({
   sharedLibraries = null,
   libraryUserRules = [],
   trustForwardedFor = false,
+  experimentalSort = false,
+  sortIndexWaitMs = SORT_INDEX_WAIT_MS,
   uploadMaxBytes = MAX_UPLOAD_BYTES,
   uploadRequestTimeoutMs = UPLOAD_REQUEST_TIMEOUT_MS,
   uploadSweepIntervalMs = UPLOAD_SWEEP_INTERVAL_MS,
@@ -331,6 +346,7 @@ function createViewerServer({
   const libraryAccess: LibraryAccessPolicy = createLibraryAccessPolicy(sharedLibraries, resolvedAuthUsers.length ? libraryUserRules : []);
   const libraryId = (libraryPath: unknown) => libraryIdFor(libraryPath, resolvedSessionSecret);
   const currentSession: EagleSession = createConnectionContext({ client: eagleClient });
+  const sortIndexes: SortIndexManager | null = experimentalSort ? createLibraryIndexManager() : null;
   // Bumped whenever the plugin reports a library switch.
   let libraryGeneration = 0;
   // What was known when Eagle reported a switch; it stays readable until Eagle is asked again.
@@ -470,6 +486,8 @@ function createViewerServer({
           getSession: () => currentSession,
           libraryAccess,
           libraryId,
+          sortIndexes,
+          sortIndexWaitMs,
           uploadMaxBytes,
         });
         return;
@@ -538,6 +556,7 @@ function createViewerServer({
     },
 
     async stop() {
+      sortIndexes?.release();
       if (uploadSweepTimer) clearInterval(uploadSweepTimer);
       uploadSweepTimer = null;
       if (!serverInstance || state === "stopped") {
@@ -602,6 +621,7 @@ function createViewerServer({
     // including requests that are already in progress.
     notifyLibraryChanged() {
       libraryGeneration += 1;
+      sortIndexes?.release();
       libraryInfoBeforeSwitch = currentSession.lastLibraryInfo?.();
       currentSession.clearLibraryInfo?.();
     },
@@ -699,7 +719,7 @@ async function cachedItemTypes(session: { client: EagleClient; libraryInfo(): Pr
   return { complete: scan.complete, items: scan.items };
 }
 
-async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { auth, confirmLibraryBeforeWrite, getSession, libraryAccess, libraryId, uploadMaxBytes }: ApiContext & { auth: AuthContext }) {
+async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { auth, confirmLibraryBeforeWrite, getSession, libraryAccess, libraryId, sortIndexes, sortIndexWaitMs, uploadMaxBytes }: ApiContext & { auth: AuthContext }) {
   const session = getSession();
 
   if (url.pathname === "/api/connect") {
@@ -707,7 +727,7 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       sendMethodNotAllowed(res, ["POST"]);
       return;
     }
-    await handleConnect(req, res, session, libraryId, libraryAccess, authenticatedUser(req, auth), hasUploadAccess(req, auth) ? uploadMaxBytes : undefined);
+    await handleConnect(req, res, session, libraryId, libraryAccess, authenticatedUser(req, auth), hasUploadAccess(req, auth) ? uploadMaxBytes : undefined, Boolean(sortIndexes));
     return;
   }
 
@@ -769,6 +789,29 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       url.searchParams.get("folderId") || url.searchParams.get("ext") || url.searchParams.get("rating") || tags.length,
     );
     const folderId = url.searchParams.get("folderId");
+    // Smart folders keep Eagle's order; their rules are evaluated only by Eagle.
+    const sort = sortIndexes && !smartFolderId ? parseIndexSort(url.searchParams.get("sort"), url.searchParams.get("order")) : null;
+    let sortStatus: { loaded?: number; status: string; total?: number } | undefined;
+    if (sort && sortIndexes) {
+      const library = await session.libraryInfo();
+      const index = sortIndexes.forLibrary(String(library?.path || ""));
+      if (library?.path && await index.whenReady(sortIndexWaitMs)) {
+        const page = await index.query({
+          ext: url.searchParams.get("ext"),
+          folderId: folderId === UNTAGGED_FOLDER_ID || folderId === "__uncategorized__" ? "" : folderId,
+          isUnfiled: folderId === "__uncategorized__",
+          isUntagged: folderId === UNTAGGED_FOLDER_ID,
+          keywords: query,
+          ratings: parseRatingFilter(url.searchParams.get("rating")),
+          tags,
+        }, sort, offset, limit);
+        const items = await session.client.itemsByIds(page.ids);
+        sendJson(res, 200, { items, total: page.total, offset, limit, sort: { status: "ready" } });
+        return;
+      }
+      // Not ready yet: answer in Eagle's order and say how far the index has got, so the viewer can ask again.
+      sortStatus = { status: index.status === "failed" ? "failed" : "indexing", ...index.progress() };
+    }
     const result = smartFolderId
       ? await session.client.smartFolderItems({ smartFolderId, offset, limit })
       : query && !hasStructuredFilters
@@ -784,7 +827,22 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
           rating: url.searchParams.get("rating"),
           tags,
         });
-    sendJson(res, 200, result);
+    sendJson(res, 200, sortStatus ? { ...(result as object), sort: sortStatus } : result);
+    return;
+  }
+
+  // Experimental sort: lets a viewer stop a long first index build (large libraries, slow disks).
+  if (url.pathname === "/api/sort-index/cancel") {
+    if (!sortIndexes) {
+      sendJson(res, 404, { error: "Not found" });
+      return;
+    }
+    if (req.method !== "POST") {
+      sendMethodNotAllowed(res, ["POST"]);
+      return;
+    }
+    await readJson(req);
+    sendJson(res, 200, { cancelled: Boolean(sortIndexes.loaded()?.cancel()) });
     return;
   }
 
@@ -847,7 +905,11 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
     const star = normalizeStar(body.star);
     editedItems.set(res, { fields: ["rating"] });
     await confirmLibraryBeforeWrite(res);
+    // Taken before the write: if Eagle switches libraries meanwhile, this index is already dropped
+    // and the edit must not land in the next library's index.
+    const sortIndex = sortIndexFor(session, sortIndexes);
     const item = await session.client.updateItemStar(itemId, star);
+    sortIndex?.noteItem({ id: itemId, star: item.star ?? star });
     sendJson(res, 200, { id: item.id || itemId, star: item.star ?? star });
     return;
   }
@@ -868,12 +930,15 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
     // Named from the request: no await may separate the library check below from the write.
     editedItems.set(res, { fields: (["tags", "folders"] as const).filter((field) => metadataPatch[field] !== undefined) });
     await confirmLibraryBeforeWrite(res);
+    const sortIndex = sortIndexFor(session, sortIndexes);
     const item = await session.client.updateItemMetadata(itemId, metadataPatch);
-    sendJson(res, 200, {
+    const updated = {
       id: item.id || itemId,
       tags: Array.isArray(item.tags) ? item.tags : metadataPatch.tags,
       folders: Array.isArray(item.folders) ? item.folders : metadataPatch.folders,
-    });
+    };
+    sortIndex?.noteItem({ ...updated, id: itemId });
+    sendJson(res, 200, updated);
     return;
   }
 
@@ -894,11 +959,11 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
     }
     editedItems.set(res, { event: body.isDeleted ? "trash" : "restore" });
     await confirmLibraryBeforeWrite(res);
+    const sortIndex = sortIndexFor(session, sortIndexes);
     const item = await session.client.updateItemTrash(itemId, body.isDeleted);
-    sendJson(res, 200, {
-      id: item.id || itemId,
-      isDeleted: typeof item.isDeleted === "boolean" ? item.isDeleted : body.isDeleted,
-    });
+    const isDeleted = typeof item.isDeleted === "boolean" ? item.isDeleted : body.isDeleted;
+    sortIndex?.noteItem({ id: itemId, isDeleted });
+    sendJson(res, 200, { id: item.id || itemId, isDeleted });
     return;
   }
 
@@ -918,8 +983,11 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
     try {
       // A library switch during a long upload must not put the file in the other library.
       await confirmLibraryBeforeWrite(res);
+      const sortIndex = sortIndexFor(session, sortIndexes);
       const added = await session.client.addItemFromPath({ path: filePath, name: upload.name, folderId: upload.folderId, tags: upload.tags });
       editedItems.set(res, { ext: upload.extension.slice(1), itemId: addedItemId(added), size: upload.size });
+      // Eagle records the new item in mtime.json shortly; look for it on the next sorted request.
+      sortIndex?.markStale();
     } catch (error) {
       await discardUpload(filePath);
       throw error;
@@ -1258,7 +1326,7 @@ function sendLoginRateLimited(res: ServerResponse, retryAfterSeconds: number) {
 }
 
 // The Eagle API connection is fixed server-side; viewer clients can only check it, never repoint it.
-async function handleConnect(req: IncomingMessage, res: ServerResponse, session: EagleSession, libraryId: ApiContext["libraryId"], libraryAccess: LibraryAccessPolicy, user: LibraryUser | null, uploadMaxBytes?: number) {
+async function handleConnect(req: IncomingMessage, res: ServerResponse, session: EagleSession, libraryId: ApiContext["libraryId"], libraryAccess: LibraryAccessPolicy, user: LibraryUser | null, uploadMaxBytes?: number, sortAvailable = false) {
   await readJson(req);
   try {
     const [app, library] = await Promise.all([
@@ -1275,10 +1343,17 @@ async function handleConnect(req: IncomingMessage, res: ServerResponse, session:
       sendLibraryForbidden(res);
       return;
     }
-    sendJson(res, 200, { app, library: publicLibraryInfo(library, libraryId), uploadMaxBytes });
+    sendJson(res, 200, { app, library: publicLibraryInfo(library, libraryId), uploadMaxBytes, ...(sortAvailable ? { features: { sort: true } } : {}) });
   } catch (error) {
     sendJson(res, 502, { error: `Unable to connect to Eagle API: ${errorMessage(error)}` });
   }
+}
+
+// The loaded sort index, only if it belongs to the library just confirmed open for this request.
+function sortIndexFor(session: EagleSession, sortIndexes: SortIndexManager | null) {
+  if (!sortIndexes) return null;
+  const library = session.lastLibraryInfo?.() as EagleLibraryInfo | null | undefined;
+  return library?.path ? sortIndexes.loaded(String(library.path)) : null;
 }
 
 function addedItemId(added: unknown) {

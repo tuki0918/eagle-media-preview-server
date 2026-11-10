@@ -31,6 +31,7 @@ interface SettingsFormProps {
   /** Asks Eagle to open the library. Not a setting, so it stays available while the server runs. */
   onSwitchLibrary: (library: LibraryCandidate) => void;
   onPortChange: (value: string) => void;
+  onExperimentalSortChange: (checked: boolean) => void;
   onReloadLibraries: () => void;
   onRemoveAuthUser: (index: number) => void;
   onSaveSettings: () => void;
@@ -101,6 +102,7 @@ export function SettingsForm({
   onLibraryUsersChange,
   onSwitchLibrary,
   onPortChange,
+  onExperimentalSortChange,
   onReloadLibraries,
   onRemoveAuthUser,
   onSaveSettings,
@@ -162,7 +164,7 @@ export function SettingsForm({
               onChange={(event) => onCustomDomainChange(event.currentTarget.value)}
             />
           </SettingRow>
-          <SettingRow label="Port" help={serverRunning ? "Stop the server before changing the port." : `The port the server listens on. Default: ${DEFAULT_PORT}.`}>
+          <SettingRow label="Port" help={`The port the server listens on. Default: ${DEFAULT_PORT}.`}>
             <input
               className={`${settingInputClassName} w-24`}
               type="number"
@@ -278,7 +280,7 @@ export function SettingsForm({
         </div>
 
         <div id="librariesSettingsPanel" role="tabpanel" aria-labelledby="librariesSettingsTab" hidden={settingsTab !== "libraries"}>
-          <SettingRow label="Protection" help={serverRunning ? "Stop the server before changing shared libraries." : "When on, the viewer serves only the libraries checked below. While another library is open in Eagle, viewers see it as offline."}>
+          <SettingRow label="Protection" help="When on, the viewer serves only the libraries checked below. While another library is open in Eagle, viewers see it as offline.">
             <label className="inline-flex items-center gap-2 text-[12px] text-[#171717] has-[:disabled]:opacity-60">
               <input
                 type="checkbox"
@@ -368,6 +370,22 @@ export function SettingsForm({
                 </ul>
               </div>
             </div>
+          </SettingRow>
+          <SettingRow
+            label="Advanced Sort"
+            help="Adds a Sort menu to the viewer. The first sort scans every item in the library open in Eagle into memory, which takes a while for large libraries."
+          >
+            <label className="inline-flex items-center gap-2 text-[12px] text-[#171717] has-[:disabled]:opacity-60">
+              <input
+                type="checkbox"
+                aria-label="Advanced Sort: full scan (experimental)"
+                disabled={settingsInputDisabled}
+                checked={Boolean(settings.experimentalSort)}
+                onChange={(event) => onExperimentalSortChange(event.currentTarget.checked)}
+              />
+              <span>Full scan</span>
+              <span className="rounded-full border border-[#e6e6e9] px-1.5 py-px text-[10px] font-semibold uppercase tracking-[0.06em] text-[#8a8f99]">Experimental</span>
+            </label>
           </SettingRow>
         </div>
 

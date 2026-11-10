@@ -1,3 +1,4 @@
+import type { SortKey, SortOrder } from "./sort";
 import type { EagleFolder, EagleSmartFolder, ViewerSection } from "./types";
 
 export interface SearchControlsState {
@@ -21,6 +22,10 @@ export interface SearchControlsState {
   selectedLimit: number;
   selectedRating: string;
   selectedSmartFolderId: string;
+  /** Experimental sort: offered only when the server has it on. */
+  sortAvailable?: boolean;
+  selectedSort?: SortKey;
+  selectedOrder?: "" | SortOrder;
   smartFolders: readonly EagleSmartFolder[];
   /** Sidebar shortcut totals; 0 hides the count. */
   tagsTotal?: number;

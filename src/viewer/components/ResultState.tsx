@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import type { ViewerMode } from "../types";
 
 export type ResultStateViewProps =
-  | { kind: "message"; text: string; className?: string; detail?: string; title?: string }
+  | { kind: "message"; text: string; action?: { label: string; onClick: () => void }; className?: string; detail?: string; title?: string }
   | {
     kind: "empty";
     /** Labels of the clearable filters (search text, tags, type, rating), shown so the user sees what narrowed the results. */
@@ -36,6 +36,11 @@ export function ResultStateView(props: ResultStateViewProps) {
       <div className={loadingMessageClassName} role="status" aria-live="polite">
         <span className="loading-spinner block size-6 animate-spin rounded-full border-2 border-[color-mix(in_srgb,var(--muted-foreground)_25%,transparent)] border-t-muted-foreground" aria-hidden="true" />
         <span>{props.text}</span>
+        {props.action ? (
+          <Button type="button" variant="outline" size="sm" className="mt-1 rounded-lg" onClick={props.action.onClick}>
+            {props.action.label}
+          </Button>
+        ) : null}
       </div>
     );
   }

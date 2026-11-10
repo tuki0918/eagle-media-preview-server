@@ -24,6 +24,8 @@ const settings: PluginSettings = {
   httpsCertPath: "/Users/xxx/127.0.0.1+2.pem",
   httpsKeyPath: "/Users/xxx/127.0.0.1+2-key.pem",
   libraryProtectionEnabled: true,
+  // Advanced Sort is shown off, its default.
+  experimentalSort: false,
   port: 41532,
   sessionDurationDays: 7,
   sharedLibraries,
@@ -61,6 +63,7 @@ createRoot(root).render(
     onLibraryUsersChange={noop}
     onSwitchLibrary={noop}
     onPortChange={noop}
+    onExperimentalSortChange={noop}
     onReloadLibraries={noop}
     onRemoveAuthUser={noop}
     onSaveSettings={noop}

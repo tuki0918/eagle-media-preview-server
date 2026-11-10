@@ -55,6 +55,7 @@ interface PluginSettings {
   settingsVersion: number;
   sharedLibraries: SharedLibrary[];
   trustForwardedFor: boolean;
+  experimentalSort: boolean;
   uploadMaxSizeMB: number;
   uploadTimeoutMinutes: number;
 }
@@ -126,6 +127,7 @@ interface ServerManagerOptions {
     accessLog?: AccessLog;
     blockedAddresses?: BlockedAddress[];
     trustForwardedFor?: boolean;
+    experimentalSort?: boolean;
     uploadMaxBytes?: number;
     uploadRequestTimeoutMs?: number;
   }) => ManagedViewer;
@@ -158,6 +160,7 @@ const DEFAULT_SETTINGS: PluginSettings = {
   settingsVersion: 2,
   sharedLibraries: [],
   trustForwardedFor: false,
+  experimentalSort: false,
   uploadMaxSizeMB: 2048,
   uploadTimeoutMinutes: 60,
 };
@@ -309,6 +312,7 @@ function normalizeSettings(input: SettingsInput = {}): PluginSettings {
     libraryProtectionEnabled: Boolean(input.libraryProtectionEnabled ?? DEFAULT_SETTINGS.libraryProtectionEnabled),
     sharedLibraries: withKnownLibraryUsers(normalizeSharedLibraries(input.sharedLibraries), authUsers),
     trustForwardedFor: input.trustForwardedFor === true,
+    experimentalSort: input.experimentalSort === true,
     uploadMaxSizeMB: normalizeUploadMaxSizeMB(input.uploadMaxSizeMB),
     uploadTimeoutMinutes: normalizeUploadTimeoutMinutes(input.uploadTimeoutMinutes),
   };
@@ -354,6 +358,7 @@ function canonicalSettings(settings: PluginSettings) {
     sessionSecret: settings.sessionSecret,
     sharedLibraries: settings.sharedLibraries,
     trustForwardedFor: settings.trustForwardedFor,
+    experimentalSort: settings.experimentalSort,
     uploadMaxSizeMB: settings.uploadMaxSizeMB,
     uploadTimeoutMinutes: settings.uploadTimeoutMinutes,
   };
@@ -361,7 +366,7 @@ function canonicalSettings(settings: PluginSettings) {
 
 // Settings whose changes go in the access log, by name only. Passwords, secrets, and bookkeeping stay
 // out, and blocked addresses have their own events.
-const LOGGED_SETTING_FIELDS = ["authEnabled", "authUsers", "autoStart", "customDomain", "host", "httpsCertPath", "httpsEnabled", "httpsKeyPath", "libraryProtectionEnabled", "port", "sessionDurationDays", "sharedLibraries", "trustForwardedFor", "uploadMaxSizeMB", "uploadTimeoutMinutes"] as const;
+const LOGGED_SETTING_FIELDS = ["authEnabled", "authUsers", "autoStart", "customDomain", "host", "httpsCertPath", "httpsEnabled", "httpsKeyPath", "libraryProtectionEnabled", "port", "sessionDurationDays", "sharedLibraries", "trustForwardedFor", "experimentalSort", "uploadMaxSizeMB", "uploadTimeoutMinutes"] as const;
 
 function changedSettingFields(before: PluginSettings, after: PluginSettings) {
   return LOGGED_SETTING_FIELDS.filter((field) => JSON.stringify(before[field]) !== JSON.stringify(after[field]));
@@ -708,6 +713,7 @@ function createServerManager({
       accessLog,
       blockedAddresses: settings.blockedAddresses,
       trustForwardedFor: settings.trustForwardedFor,
+      experimentalSort: settings.experimentalSort,
       uploadMaxBytes: settings.uploadMaxSizeMB * BYTES_PER_MB,
       uploadRequestTimeoutMs: settings.uploadTimeoutMinutes * 60 * 1000,
     });

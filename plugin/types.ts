@@ -60,6 +60,8 @@ export interface PluginSettings {
   sessionDurationDays?: number | string;
   /** Believe X-Forwarded-For from a proxy on this machine; off by default. */
   trustForwardedFor?: boolean;
+  /** Experimental, off by default and only edited by hand: sort item lists with an in-memory library index. */
+  experimentalSort?: boolean;
   /** Only edited by hand in settings.json, like trustForwardedFor. */
   uploadMaxSizeMB?: number;
   uploadTimeoutMinutes?: number;

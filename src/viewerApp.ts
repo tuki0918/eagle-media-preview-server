@@ -125,6 +125,10 @@ let availableExts: string[] = [];
 let itemTypesRequestId = 0;
 let uploadRefreshRun = 0;
 let uploadMaxBytes: number | undefined;
+// Experimental sort, offered only when the server says it has it on.
+let sortAvailable = false;
+// While the server builds its index, a sorted list is asked for again this often.
+const SORT_INDEXING_RETRY_MS = 1500;
 let itemTypesState: "idle" | "loading" | "loaded" = "idle";
 let allFoldersTotalRequestId = 0;
 let uncategorizedTotal = 0;
@@ -206,6 +210,9 @@ async function init() {
     },
     ratingChanged: (rating: string) => {
       applyFilterChange({ rating });
+    },
+    sortChanged: (sort, order) => {
+      applyFilterChange({ sort, order });
     },
     pageSizeChanged: (limit: number) => {
       applyFilterChange({ limit });
@@ -504,6 +511,9 @@ function showViewer(data: ConnectResponse) {
   currentLibraryId = data.library?.id || "";
   setConnectedLibraryId(currentLibraryId);
   uploadMaxBytes = data.uploadMaxBytes;
+  sortAvailable = data.features?.sort === true;
+  // A sort from a bookmarked URL means nothing on a server without the experimental sort.
+  if (!sortAvailable) Object.assign(state, { sort: "", order: "" });
   setEagleStatus(data.app ? "online" : "offline");
   startEagleStatusPolling();
   document.title = libraryTitle(data);
@@ -804,12 +814,48 @@ async function loadItems({ append = false }: LoadItemsOptions = {}) {
 
   const params = itemQueryParams({
     ...state,
+    sort: sortAvailable ? state.sort : "",
     limit: currentFetchLimit(),
   });
 
   try {
-    const data = await getJson<LoadItemsResponse>(`/api/items?${params.toString()}`);
+    let data = await getJson<LoadItemsResponse>(`/api/items?${params.toString()}`);
     if (requestId !== state.requestId) return;
+    // The first sorted request makes the server index the library; until then it answers in
+    // Eagle's order, which is not shown so that pages of two different orders never mix.
+    while (data.sort?.status === "indexing") {
+      if (!append) {
+        setResultSurfaceState({
+          kind: "message",
+          text: sortIndexingMessage(data.sort),
+          className: "loading",
+          viewMode: state.viewMode,
+          action: { label: "Cancel", onClick: cancelSortIndexing },
+        });
+      }
+      await new Promise((resolve) => setTimeout(resolve, SORT_INDEXING_RETRY_MS));
+      if (requestId !== state.requestId) return;
+      data = await getJson<LoadItemsResponse>(`/api/items?${params.toString()}`);
+      if (requestId !== state.requestId) return;
+    }
+    // A sorted request answered without a sort status means the server no longer sorts (Advanced
+    // Sort was turned off and the server restarted).
+    const sortTurnedOff = params.has("sort") && !data.sort;
+    if (data.sort?.status === "failed" || sortTurnedOff) {
+      // The server answered in the default order. Drop the sort so that every later page (tiles
+      // loading more, the next page) is in that same order, even once the server could sort again.
+      if (sortTurnedOff) sortAvailable = false;
+      Object.assign(state, { sort: "", order: "" });
+      syncUrlState({ replace: true });
+      renderSearchControlButtons();
+      showErrorToast(sortTurnedOff ? "Sorting was turned off; showing the default order." : "Sorting is unavailable right now; showing the default order.");
+      if (append) {
+        // The pages already shown are sorted, so start the list over, from the top, in the default order.
+        state.offset = 0;
+        void loadItems();
+        return;
+      }
+    }
     const items = data.items || [];
     state.total = Number(data.total || 0);
     if (!append && !hasActiveFilters(state)) {
@@ -850,6 +896,23 @@ async function loadItems({ append = false }: LoadItemsOptions = {}) {
     updatePager();
     setupTileAutoLoading();
   }
+}
+
+// Large libraries take a while to index and keep the disk busy, so the visitor may stop it: the list
+// goes back to the default order and the server drops what it has read so far.
+function cancelSortIndexing() {
+  applyFilterChange({ sort: "", order: "" });
+  postJson("/api/sort-index/cancel", {}).catch((error) => {
+    handleAuthError(error);
+  });
+}
+
+function sortIndexingMessage(progress: NonNullable<LoadItemsResponse["sort"]>) {
+  const loaded = Number(progress.loaded || 0);
+  const total = Number(progress.total || 0);
+  return total > 0
+    ? `Preparing sort… ${loaded.toLocaleString()} / ${total.toLocaleString()} items`
+    : "Preparing sort…";
 }
 
 async function loadAllFoldersTotal() {
@@ -1060,7 +1123,7 @@ function applyControlsFromState() {
   updateStatus();
 }
 
-function applyFilterChange(patch: Partial<Pick<typeof state, "query" | "tags" | "folderId" | "smartFolderId" | "ext" | "rating" | "limit">>) {
+function applyFilterChange(patch: Partial<Pick<typeof state, "query" | "tags" | "folderId" | "smartFolderId" | "ext" | "rating" | "sort" | "order" | "limit">>) {
   Object.assign(state, patch, { offset: 0, section: "items" });
   resetPreviewState();
   syncResetFiltersButton();
@@ -1183,6 +1246,9 @@ function renderSearchControlButtons() {
     selectedLimit: state.limit,
     selectedRating: state.rating,
     selectedSmartFolderId: state.smartFolderId,
+    sortAvailable,
+    selectedSort: state.sort,
+    selectedOrder: state.order,
     smartFolders: state.smartFolders,
   });
 }

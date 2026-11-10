@@ -62,6 +62,7 @@ Defaults and how to change them:
 | Trust `X-Forwarded-For` from this computer | disabled | Not in the panel; set `"trustForwardedFor": true` in `settings.json` while the server is stopped (see [Tunnels and reverse proxies](#tunnels-and-reverse-proxies)) |
 | Upload size limit per file | 2048 MB | Not in the panel; `uploadMaxSizeMB` in `settings.json` while the server is stopped |
 | Time allowed to receive one upload | 60 minutes | Not in the panel; `uploadTimeoutMinutes` in `settings.json` while the server is stopped |
+| Advanced Sort (experimental) | disabled | **Full scan** under **Settings → Libraries → Advanced Sort** (see [Advanced Sort](#advanced-sort-experimental)) |
 
 All values are saved to `~/.eagle-media-preview-server/settings.json`. Fields under **Settings** are locked while the server runs and take effect at the next start. The toggles in Server Status stay available while it runs, and a change to Password, Public Network, or HTTPS restarts the running server.
 
@@ -195,6 +196,7 @@ Build output is created under `dist`:
   - Per-user role and password
   - Session duration
   - Libraries: protection toggle, shared-library checklist with a folder icon that switches Eagle to that library, and each library's status (Online when the server is running and it is the library open in Eagle, Offline for other shared libraries, none until sharing is saved), and a reload icon in the list header, above the checkboxes; like other settings, they are locked while the server runs and take effect when it starts
+  - Advanced Sort (experimental), below the libraries: the **Full scan** checkbox turns on the viewer's Sort menu
   - The checklist is built on the admin's machine, without the Eagle HTTP API: saved entries, the open library from `eagle.library`, and `libraryHistory` from Eagle's `Settings` file in `eagle.app.getPath("userData")` (only that key is read; libraries that no longer exist are skipped)
 
 ### Persisted Settings
@@ -223,6 +225,7 @@ type Settings = {
   sessionDurationDays: number;
   sharedLibraries: Array<{ name: string; path: string; access?: "selected"; users?: string[] }>;
   trustForwardedFor: boolean;
+  experimentalSort: boolean; // "Full scan" under Settings → Libraries → Advanced Sort; false by default
   uploadMaxSizeMB: number;
   uploadTimeoutMinutes: number;
 };
@@ -274,6 +277,7 @@ Settings path:
 - Extension filter
 - Rating filter
 - Tag filter chips
+- Sort menu (experimental, when **Full scan** is on under **Settings → Libraries → Advanced Sort**)
 - Page size: `30`, `60`, `120`, `240`
 - Tiles view
 - Grid view
@@ -354,6 +358,7 @@ These routes hand out the library id, so they do not require one.
 - `POST /api/connect`
   - Checks the server-configured Eagle API connection and returns app info and the library display name and id
   - The request body is ignored; viewer clients cannot change the Eagle API host, port, or token
+  - Adds `features: { sort: true }` when Advanced Sort is on; the viewer shows its sort menu only then
   - The library is read again after the body arrives: if it is not shared it returns `503`, and if Eagle switched libraries during the request it returns `409 LIBRARY_CHANGED`, so an unshared library is never named
 - `GET /api/health`
   - Checks Eagle app/library health; polled by the viewer; library paths are never returned to clients
@@ -368,6 +373,9 @@ These routes hand out the library id, so they do not require one.
   - Returns smart folder list
 - `GET /api/items`
   - Returns item list or search results; `smartFolderId` lists a smart folder's items
+  - With Advanced Sort on, `sort` (`import`, `btime`, `mtime`, `name`, `ext`, `filesize`, `resolution`, `rating`, `duration`) and `order` (`asc` / `desc`, default per key as in Eagle) order the list; smart folders ignore them. The answer carries `sort: { status }`: `ready`, or `indexing` with `loaded` / `total` while the index is built (the items are then in Eagle's order, and the viewer asks again), or `failed`, after which the viewer drops the sort and shows the default order, and a slideshow reports an error to retry. A sorted request answered without `sort` (Advanced Sort turned off and the server restarted) makes an open viewer drop the sort and hide the Sort menu too. A slideshow waits for `indexing` to end rather than keep a page in the default order
+- `POST /api/sort-index/cancel`
+  - Advanced Sort only (`404` otherwise): stops a first index build in progress and drops what it read; answers `{ cancelled }`
 - `GET /api/item-types`
   - Returns the file extensions found in the library
 - `GET /api/tags`, `GET /api/tag-overview`
@@ -409,7 +417,7 @@ Media URLs carry the library id as the `library` query parameter, since media el
 The viewer server calls Eagle's local Web API at `http://localhost:41595/api/v2/`. Viewer clients never call it.
 
 - `app/info`, `library/info`: Eagle version and the open library
-- `item/get`, `item/query`, `item/update`: items, search, and rating, tag, and folder changes
+- `item/get`, `item/query`, `item/update`: items, search, and rating, tag, and folder changes; Advanced Sort fetches each page with `item/get` `ids`
 - `folder/get`, `smartFolder/get`: folders and smart folders
 - `tag/get`, `tagGroup/get`: tags and tag groups
 
@@ -445,6 +453,21 @@ The viewer server calls Eagle's local Web API at `http://localhost:41595/api/v2/
 - A range request that carries `If-Range` and does not get `304` from the conditional checks above always gets the whole file with `200`, and its `Range` is ignored even if unsatisfiable. RFC 9110 lets `If-Range` match only a strong validator, and the server has none: the ETag is weak, and `Last-Modified` has second precision, so a file replaced within the same second would still match its date and mix old and new bytes. Range requests without `If-Range`, such as ordinary video seeking, are served as `206`
 - Sends `X-Content-Type-Options: nosniff`
 - Returns MIME types for common images, videos, audio, PDF, and text files
+
+### Advanced Sort (experimental)
+
+Eagle's `item/get` always answers newest-first, so other orders come from an index the preview server builds itself. It is off by default and turned on with **Settings → Libraries → Advanced Sort** (saved as `experimentalSort`). Like other settings, it is locked while the server runs and takes effect at the next start.
+
+- Built on the first sorted request, not at start: every `<library>/images/<id>.info/metadata.json` is read (about 17 seconds for 300,000 items on an internal SSD; slower on a NAS). A request waits up to 1 second, then answers in Eagle's order with progress
+- While it builds, the viewer shows "Preparing sort… n / N items" with a **Cancel** button. Cancel goes back to the default order and calls `POST /api/sort-index/cancel`, which stops reading the library and frees what was read; the next sorted request starts over
+- The viewer labels Eagle's own order "Default order"
+- In the viewer, the sort behaves like a filter: it shows among the active filter labels, and the reset filters button and the library title in the side menu (show all items) return to the default order. Picking a folder keeps it, as it keeps the other filters
+- Kept current like Eagle keeps its own cache: at most every 2 seconds a sorted request stats `<library>/mtime.json` and, if it changed, reads again the items whose time went up. A folder rescan, when Eagle's `all` count disagrees, runs at most once a minute; one held back by that limit runs at a later check even if `mtime.json` doesn't change again. A `metadata.json` that can't be read or parsed, or is missing from an item folder that is still there (Eagle mid-write, a NAS or sync delay), keeps the item as last read, or leaves it out during the first build, and is read again at every check until it works; only a removed item folder removes the item. Eagle's `all` count is compared after the first build too, and `0` counts. Rating, tag, folder, and trash edits made through the viewer apply at once, to the index of the library the edit was made in (not to one built after a library switch during the edit)
+- Holds only what filters and sorting need (about 150 MB for 300,000 items); the page itself is fetched from Eagle by id, so items look the same as in Eagle's order. Released after 30 minutes without a sorted request, on a library switch, and on stop
+- Filters match Eagle's `item/get`: folder membership, untagged, uncategorized, extension, ratings (`0` is unrated), all listed tags, and the search text as a case-insensitive name match. Search text without other filters is matched against names only, not Eagle's full-text `item/query`
+- Never writes to the library
+
+Design notes: [docs/design/large-library-index.md](design/large-library-index.md).
 
 ## Authentication
 

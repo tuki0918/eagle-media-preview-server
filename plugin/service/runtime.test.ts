@@ -253,6 +253,57 @@ test("generated settings store keeps a hand-edited trustForwardedFor when the pa
   assert.equal(JSON.parse(await readFile(filePath, "utf8")).trustForwardedFor, true);
 });
 
+test("experimentalSort is off unless settings.json says true", () => {
+  assert.equal(DEFAULT_SETTINGS.experimentalSort, false);
+  assert.equal(normalizeSettings({}).experimentalSort, false);
+  assert.equal(normalizeSettings({ experimentalSort: "true" }).experimentalSort, false);
+  assert.equal(normalizeSettings({ experimentalSort: 1 }).experimentalSort, false);
+  assert.equal(normalizeSettings({ experimentalSort: true }).experimentalSort, true);
+});
+
+test("generated settings store keeps a hand-edited experimentalSort when the panel saves", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-runtime-"));
+  const filePath = join(dir, "settings.json");
+  const store = createSettingsStore({ filePath });
+  assert.equal((await store.load()).experimentalSort, false);
+  const raw = JSON.parse(await readFile(filePath, "utf8"));
+  await writeFile(filePath, JSON.stringify({ ...raw, experimentalSort: true }), "utf8");
+  assert.equal((await store.load()).experimentalSort, true);
+  await store.save({ port: 41600 });
+  assert.equal(JSON.parse(await readFile(filePath, "utf8")).experimentalSort, true);
+});
+
+test("generated server manager passes experimentalSort to the viewer server", async () => {
+  const created: unknown[] = [];
+  const settings = { ...DEFAULT_SETTINGS, host: "127.0.0.1", port: 41532, experimentalSort: true };
+  const manager = createServerManager({
+    settingsStore: {
+      async load() {
+        return settings;
+      },
+      async save() {
+        return settings;
+      },
+    },
+    viewerServerFactory(options: { experimentalSort?: boolean }) {
+      created.push(options.experimentalSort);
+      return {
+        async start() {},
+        async stop() {},
+        status() {
+          return { state: "running", host: "127.0.0.1", port: 41532 };
+        },
+      };
+    },
+    lanAddressProvider() {
+      return [{ label: "lo0", address: "127.0.0.1" }];
+    },
+  });
+
+  await manager.start();
+  assert.deepEqual(created, [true]);
+});
+
 test("generated settings store writes the upload limits and keeps hand-edited values when the panel saves", async () => {
   const dir = await mkdtemp(join(tmpdir(), "eagle-plugin-runtime-"));
   const filePath = join(dir, "settings.json");

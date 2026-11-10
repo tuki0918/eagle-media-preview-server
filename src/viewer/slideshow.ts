@@ -8,6 +8,8 @@ export interface SlideshowSettings { seconds: number; effect: SlideshowEffect; l
 export const DEFAULT_SLIDESHOW_SETTINGS: SlideshowSettings = { seconds: 5, effect: "fade", loop: false, showTitle: true, blurBackground: true, reverse: false };
 const SLIDESHOW_SETTINGS_KEY = "eagleSlideshowSettings";
 const SLIDESHOW_PAGE_SIZE = 30;
+// While the server indexes the library for a sort, a page is asked for again this often.
+const SORT_INDEXING_RETRY_MS = 1500;
 export type SlideshowQuery = Omit<ItemQueryState, "offset" | "limit">;
 
 export function readSlideshowSettings(): SlideshowSettings {
@@ -120,6 +122,30 @@ export class SlideshowSource {
     }
   }
 
+  // A sorted page that the server answered in the default order (index still building) is never
+  // kept: it would mix with sorted pages. Wait for the index instead, and fail if it can't sort.
+  private async loadSorted(params: URLSearchParams, signal: AbortSignal): Promise<LoadItemsResponse> {
+    for (;;) {
+      const data = await this.loader(params, signal);
+      if (data?.sort?.status === "failed") throw new Error("Sorting is unavailable right now. Please retry.");
+      // Sorted pages were asked for, but the server no longer sorts (Advanced Sort turned off).
+      if (params.has("sort") && !data?.sort) throw new Error("Sorting was turned off. Reload the page to continue.");
+      if (data?.sort?.status !== "indexing") return data;
+      await new Promise<void>((resolve, reject) => {
+        // The page request gives up after a while; a large library may still be indexing then.
+        const onAbort = () => {
+          clearTimeout(timer);
+          reject(new Error("Still preparing the sort. Please retry in a moment."));
+        };
+        const timer = setTimeout(() => {
+          signal.removeEventListener("abort", onAbort);
+          resolve();
+        }, SORT_INDEXING_RETRY_MS);
+        signal.addEventListener("abort", onAbort, { once: true });
+      });
+    }
+  }
+
   private page(page: number): Promise<EagleItem[]> {
     const cached = this.pages.get(page);
     if (cached) return Promise.resolve(cached);
@@ -128,7 +154,7 @@ export class SlideshowSource {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 12000);
     const params = itemQueryParams({ ...this.query, offset: page * SLIDESHOW_PAGE_SIZE, limit: SLIDESHOW_PAGE_SIZE });
-    const promise = this.loader(params, controller.signal).then((data) => {
+    const promise = this.loadSorted(params, controller.signal).then((data) => {
       if (this.disposed || controller.signal.aborted) throw new Error("Slideshow request cancelled");
       if (!Array.isArray(data?.items) || !Number.isFinite(data.total) || Number(data.total) < 0) {
         throw new Error("Unable to read the slideshow list. Please retry.");
