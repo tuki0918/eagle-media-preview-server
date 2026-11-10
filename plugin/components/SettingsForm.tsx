@@ -164,7 +164,7 @@ export function SettingsForm({
               onChange={(event) => onCustomDomainChange(event.currentTarget.value)}
             />
           </SettingRow>
-          <SettingRow label="Port" help={serverRunning ? "Stop the server before changing the port." : `The port the server listens on. Default: ${DEFAULT_PORT}.`}>
+          <SettingRow label="Port" help={`The port the server listens on. Default: ${DEFAULT_PORT}.`}>
             <input
               className={`${settingInputClassName} w-24`}
               type="number"
@@ -280,7 +280,7 @@ export function SettingsForm({
         </div>
 
         <div id="librariesSettingsPanel" role="tabpanel" aria-labelledby="librariesSettingsTab" hidden={settingsTab !== "libraries"}>
-          <SettingRow label="Protection" help={serverRunning ? "Stop the server before changing shared libraries." : "When on, the viewer serves only the libraries checked below. While another library is open in Eagle, viewers see it as offline."}>
+          <SettingRow label="Protection" help="When on, the viewer serves only the libraries checked below. While another library is open in Eagle, viewers see it as offline.">
             <label className="inline-flex items-center gap-2 text-[12px] text-[#171717] has-[:disabled]:opacity-60">
               <input
                 type="checkbox"
@@ -373,9 +373,7 @@ export function SettingsForm({
           </SettingRow>
           <SettingRow
             label="Advanced Sort"
-            help={serverRunning
-              ? "Stop the server before changing Advanced Sort."
-              : "Adds a Sort menu to the viewer. The first sort scans every item in the library open in Eagle into memory, which takes a while for large libraries."}
+            help="Adds a Sort menu to the viewer. The first sort scans every item in the library open in Eagle into memory, which takes a while for large libraries."
           >
             <label className="inline-flex items-center gap-2 text-[12px] text-[#171717] has-[:disabled]:opacity-60">
               <input

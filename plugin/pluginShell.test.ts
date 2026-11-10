@@ -221,7 +221,9 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(app, /saveSettings\(\{ forceSave: true, successMessage: "Saved" \}\)/);
   assert.doesNotMatch(uiSource, /onBlur=\{[^}]*saveSettings/);
   assert.doesNotMatch(app, /saveSettings\(\{ forceSave: true, patch: \{ port:/);
-  assert.match(uiSource, /<SettingRow label="Port" help=\{serverRunning \? "Stop the server before changing the port\." : `The port the server listens on\. Default: \$\{DEFAULT_PORT\}\.`\}>/);
+  // A row keeps its own help while the server runs; the lock is explained once, by the server status panel.
+  assert.match(uiSource, /<SettingRow label="Port" help=\{`The port the server listens on\. Default: \$\{DEFAULT_PORT\}\.`\}>/);
+  assert.doesNotMatch(uiSource, /Stop the server before changing/);
   assert.match(uiSource, /value=\{settings\.port \?\? DEFAULT_PORT\}/);
   assert.match(uiSource, /disabled=\{settingsInputDisabled\}/);
   assert.match(uiSource, /flex min-h-9 items-center justify-between gap-3 border-t border-\[#efeff1\] pt-3/);
@@ -1303,8 +1305,11 @@ test("plugin settings inputs are disabled while the server is running", async ()
   const sortCheckbox = dom.window.document.querySelector("input[type=\"checkbox\"][aria-label=\"Advanced Sort: full scan (experimental)\"]");
   assert.ok(sortCheckbox instanceof dom.window.HTMLInputElement);
   assert.equal(sortCheckbox.disabled, true);
-  assert.match(dom.window.document.body.textContent || "", /Stop the server before changing the port\./);
-  assert.match(dom.window.document.body.textContent || "", /Stop the server before changing Advanced Sort\./);
+  // Each row keeps its own help; the lock is explained once, above the settings.
+  assert.match(dom.window.document.body.textContent || "", /Settings are locked while the server is running\. Stop the server to edit them\./);
+  assert.match(dom.window.document.body.textContent || "", /The port the server listens on\./);
+  assert.match(dom.window.document.body.textContent || "", /Adds a Sort menu to the viewer\./);
+  assert.doesNotMatch(dom.window.document.body.textContent || "", /Stop the server before changing/);
 });
 
 test("plugin copy URL uses Eagle clipboard API directly", async () => {
@@ -2035,7 +2040,7 @@ test("plugin saves shared libraries with the settings and reacts to Eagle librar
     assert.doesNotMatch(doc.body.textContent || "", /Online/);
 
     doc.querySelector<HTMLInputElement>('label[aria-label="Start or stop server"] input')?.click();
-    await waitFor(() => /Stop the server before changing shared libraries/.test(doc.body.textContent || ""));
+    await waitFor(() => /Settings are locked while the server is running/.test(doc.body.textContent || ""));
     await waitFor(() => /Online/.test(doc.body.textContent || ""));
     assert.equal(doc.querySelector<HTMLInputElement>('[aria-label="Share only selected libraries"]')?.disabled, true);
     assert.equal(doc.querySelector<HTMLInputElement>('[aria-label="Share Work"]')?.disabled, true);
