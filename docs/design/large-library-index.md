@@ -23,20 +23,15 @@ How Eagle itself does it:
 
 ## 2. Approach (P1, implemented)
 
-The first step is deliberately small.
+How it behaves (the setting, the API, the viewer, updates, filters) is in the spec: [Advanced Sort](../EAGLE_PLUGIN_SPEC.md#advanced-sort-experimental). The decisions behind it:
 
-| Topic | Decision |
-| --- | --- |
-| Enabling | **Settings → Libraries → Advanced Sort** in the plugin panel (`experimentalSort`); off by default, locked while the server runs |
-| Loading | **On demand.** The first sorted request starts the build. Normal browsing is untouched |
-| While building | A request waits up to 1 second. If the index is not ready, the server answers in the default order and adds `sort: { status: "indexing", loaded, total }`. The viewer shows "Preparing sort… n / N items" with a **Cancel** button and asks again every 1.5 seconds. Items from the default order are not shown, so pages in two different orders never mix |
-| Cancelling | `POST /api/sort-index/cancel` stops the build and frees what it read. The viewer that cancels goes back to the default order. The next sorted request starts a new build |
-| Updates | When a sorted request arrives, the server stats `mtime.json`, at most every 2 seconds. If it changed, only the ids whose value went up are read again. When `all` disagrees, the folder is rescanned, at most once a minute |
-| Edits from the viewer | Rating, tag, folder, and trash edits apply to the index as soon as Eagle confirms them. After an upload, the next request checks `mtime.json` |
-| Release | After 30 minutes without a sorted request, on a library switch, and on stop |
-| Response | The index decides only which ids, in which order. The page's items come from Eagle's `item/get` with `ids`, so they look exactly like unsorted ones |
-| Smart folders | Not sorted; they keep the default order |
-| Writes to the library | None |
+- **Experimental and off by default.** It reads Eagle's undocumented library files (`metadata.json`, `mtime.json`), which an Eagle update could change.
+- **Built on demand and kept in memory only.** Normal browsing never pays for it, and nothing is written to disk or to the library. A snapshot on disk is left for later (see 4).
+- **Kept current the way Eagle keeps its own cache.** `mtime.json` tells which items changed, so only those are read again; the folder is rescanned only when Eagle's `all` count disagrees.
+- **The index orders ids; Eagle supplies the items.** Each page is fetched from `item/get` by `ids`, so sorted and unsorted responses look the same and Eagle stays the source of item details.
+- **Sorting and filtering follow Eagle,** so results match Eagle's own app. The one exception: search text alone matches names only, not Eagle's full-text `item/query`.
+- **Pages in two orders never mix.** While the index builds, or when sorting fails or is turned off, the viewer waits, or drops the sort and starts over, rather than showing default-order pages among sorted ones.
+- **Smart folders stay unsorted.** Their rules are evaluated only by Eagle.
 
 Sort keys and their default directions follow Eagle's `sortData`.
 
@@ -53,16 +48,6 @@ Sort keys and their default directions follow Eagle's `sortData`.
 | `duration` | Duration | Ascending |
 
 Picking the other direction reverses the whole list, as Eagle does.
-
-Filters match Eagle's `item/get`:
-
-- folder: the item is directly in the folder
-- tags: the item has every listed tag
-- rating `0`: unrated
-- search text: case-insensitive substring of the name
-- trashed items are left out
-
-**Difference:** search text on its own used to go to Eagle's full-text `item/query`. While sorting, it matches names only.
 
 ## 3. Measurements
 
@@ -113,15 +98,13 @@ Left out of P1 to keep it small.
 
 ### About the size of `mtime.json`
 
-It costs about 31 bytes per item: about 5.3 MB for 170,000 items and 9 MB for 300,000 (0.15 s to parse). The implementation:
+It costs about 31 bytes per item: about 5.3 MB for 170,000 items and 9 MB for 300,000 (0.15 s to parse). Eagle rewrites the whole file on every change, so it is parsed only when its `stat` (mtimeMs and size) changes, and at most every 2 seconds.
 
-- reads it only when its `stat` (mtimeMs and size) changes
-- parses it at most every 2 seconds
-- on a parse failure (Eagle was still writing), keeps what it has and tries again later
-- does not re-read ids without an item folder (Eagle leaves ids of removed items behind) until their value changes
+## 5. Known limitations (accepted for now)
 
-## 5. Open questions
-
-1. Windows paths. The index uses the path Eagle reports as is.
-2. First build time for a few hundred thousand items on a NAS.
-3. When Eagle writes a new item to `mtime.json`. For a few seconds after an upload, the new item may be missing from a sorted list.
+- The first build time on a NAS has not been measured. It is longer than the 17 seconds measured for 300,000 items on an internal SSD; the viewer shows the progress, and **Cancel** or stopping the server ends it.
+- For a few seconds after an upload, the new item may be missing from a sorted list: it appears once Eagle writes it to `mtime.json`, which the next sorted request checks.
+- An item folder that arrives after the first rescan (a slow NAS or sync) is found only when `mtime.json` changes again or the index is rebuilt. Fixing it means rescanning repeatedly while Eagle's `all` count disagrees, with a growing interval so that a library whose count never matches doesn't list its folder every minute.
+- **Cancel** is open to every signed-in user, Viewer role included; while another viewer still waits for the sort, the build starts again.
+- After Advanced Sort is turned back on, a viewer that stayed open shows the Sort menu only once the page is reloaded or connects again.
+- Closing the viewer does not stop a build; stop the server to stop it.
