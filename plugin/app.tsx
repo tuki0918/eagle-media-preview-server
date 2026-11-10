@@ -277,6 +277,7 @@ function App() {
       port: settings.port || 41532,
       sessionDurationDays: settings.sessionDurationDays || 7,
       libraryProtectionEnabled: Boolean(settings.libraryProtectionEnabled),
+      experimentalSort: Boolean(settings.experimentalSort),
       ...patch,
       // Row keys end here: library access is saved by username, and the keys themselves never are.
       sharedLibraries: resolveLibraryUsers((patch.sharedLibraries ?? settings.sharedLibraries) as SharedLibrary[] | undefined, effectiveAuthUsers),
@@ -800,6 +801,7 @@ function App() {
           onSwitchLibrary={(library) => void switchLibrary(library)}
           onReloadLibraries={() => void refreshLibraries({ reportErrors: true })}
           onPortChange={(value) => updateSettings({ port: value })}
+          onExperimentalSortChange={(checked) => updateSettings({ experimentalSort: checked })}
           onRemoveAuthUser={(index) => void removeAuthUser(index)}
           onSaveSettings={() => saveSettings({ forceSave: true, successMessage: "Saved" })}
           onSessionDurationDaysChange={(value) => updateSettings({ sessionDurationDays: value })}

@@ -46,6 +46,14 @@ describe("settingsChange", () => {
     expect(serverRestartSettingsChanged(baseSettings, { uploadTimeoutMinutes: 120 })).toBe(true);
   });
 
+  test("persists and restarts when the experimental sort is turned on or off", () => {
+    expect(settingsPayloadChanged(baseSettings, { experimentalSort: false })).toBe(false);
+    expect(settingsPayloadChanged(baseSettings, { experimentalSort: true })).toBe(true);
+    expect(serverRestartSettingsChanged(baseSettings, { experimentalSort: true })).toBe(true);
+    expect(serverRestartSettingsChanged({ ...baseSettings, experimentalSort: true }, { experimentalSort: false })).toBe(true);
+    expect(serverRestartSettingsChanged({ ...baseSettings, experimentalSort: true }, { experimentalSort: true })).toBe(false);
+  });
+
   test("treats auto start as a persisted setting that does not restart the server", () => {
     expect(settingsPayloadChanged(baseSettings, { autoStart: true })).toBe(true);
     expect(serverRestartSettingsChanged(baseSettings, { autoStart: true })).toBe(false);

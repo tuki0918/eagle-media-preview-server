@@ -456,6 +456,99 @@ test("plugin port input persists after explicit settings save", async () => {
   assert.match(dom.window.document.body.textContent || "", /Saved/);
 });
 
+test("plugin saves the experimental sort setting from Settings → Libraries → Advanced Sort, off by default", async () => {
+  const bundle = await esbuild({
+    bundle: true,
+    define: {
+      "process.env.NODE_ENV": JSON.stringify("test"),
+    },
+    entryPoints: [new URL("./app.tsx", import.meta.url).pathname],
+    format: "iife",
+    platform: "browser",
+    write: false,
+  });
+  const appScript = bundle.outputFiles[0].text;
+  const domOptions = {
+    runScripts: "outside-only",
+    url: "file:///tmp/eagle-plugin/plugin/index.html",
+  } as unknown as ConstructorParameters<typeof JSDOM>[1];
+  const dom = new JSDOM("<!doctype html><html><body><div id=\"root\"></div></body></html>", domOptions);
+  const pluginWindow = dom.window as unknown as Window & {
+    eval: (source: string) => unknown;
+    require: (id: string) => unknown;
+  };
+  const saveCalls: Record<string, unknown>[] = [];
+  let status = {
+    settings: {
+      authEnabled: false,
+      authUsers: [{ username: "eagle", role: "viewer", passwordHash: "hash" }],
+      autoStart: false,
+      host: "127.0.0.1",
+      port: 41532,
+    },
+    state: "stopped",
+    url: "http://127.0.0.1:41532",
+  };
+  pluginWindow.require = (id: string) => {
+    if (id === "path") return path;
+    return {
+      createServerManager() {
+        return {
+          async init() {
+            return status;
+          },
+          async saveSettings(payload: Record<string, unknown>) {
+            saveCalls.push(payload);
+            status = {
+              ...status,
+              settings: {
+                ...status.settings,
+                ...payload,
+              },
+            };
+            return status;
+          },
+          async start() {
+            return status;
+          },
+          async status() {
+            return status;
+          },
+          async stop() {
+            return status;
+          },
+        };
+      },
+    };
+  };
+
+  pluginWindow.eval(appScript);
+  await waitFor(() => {
+    const toggle = dom.window.document.querySelector("#settingsToggleButton");
+    const portInput = dom.window.document.querySelector("input[type=\"number\"]");
+    return toggle instanceof dom.window.HTMLButtonElement
+      && !dom.window.document.querySelector("#settingsPanel")?.hasAttribute("hidden")
+      && portInput instanceof dom.window.HTMLInputElement
+      && !portInput.disabled;
+  });
+
+  const checkbox = dom.window.document.querySelector("input[type=\"checkbox\"][aria-label=\"Advanced Sort: full scan (experimental)\"]");
+  assert.ok(checkbox instanceof dom.window.HTMLInputElement);
+  assert.equal(checkbox.checked, false);
+  assert.equal(checkbox.disabled, false);
+  assert.match(dom.window.document.body.textContent || "", /Experimental/);
+  checkbox.click();
+  assert.equal(saveCalls.length, 0);
+
+  const form = dom.window.document.querySelector("form");
+  assert.ok(form instanceof dom.window.HTMLFormElement);
+  form.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }));
+  await waitFor(() => saveCalls.length > 0);
+
+  assert.equal(saveCalls[0].experimentalSort, true);
+  await waitFor(() => (dom.window.document.querySelector("input[aria-label=\"Advanced Sort: full scan (experimental)\"]") as HTMLInputElement | null)?.checked === true);
+});
+
 test("plugin saves a custom domain and uses the resulting URL for display, QR, copy, and open", async () => {
   const bundle = await esbuild({
     bundle: true,
@@ -1207,7 +1300,11 @@ test("plugin settings inputs are disabled while the server is running", async ()
     assert.ok(checkbox instanceof dom.window.HTMLInputElement);
     assert.equal(checkbox.disabled, false);
   }
+  const sortCheckbox = dom.window.document.querySelector("input[type=\"checkbox\"][aria-label=\"Advanced Sort: full scan (experimental)\"]");
+  assert.ok(sortCheckbox instanceof dom.window.HTMLInputElement);
+  assert.equal(sortCheckbox.disabled, true);
   assert.match(dom.window.document.body.textContent || "", /Stop the server before changing the port\./);
+  assert.match(dom.window.document.body.textContent || "", /Stop the server before changing Advanced Sort\./);
 });
 
 test("plugin copy URL uses Eagle clipboard API directly", async () => {
