@@ -911,8 +911,8 @@ function sortIndexingMessage(progress: NonNullable<LoadItemsResponse["sort"]>) {
   const loaded = Number(progress.loaded || 0);
   const total = Number(progress.total || 0);
   return total > 0
-    ? `Preparing sort… ${loaded.toLocaleString()} / ${total.toLocaleString()} items`
-    : "Preparing sort…";
+    ? `Scanning library… ${loaded.toLocaleString()} / ${total.toLocaleString()} items`
+    : "Scanning library…";
 }
 
 async function loadAllFoldersTotal() {

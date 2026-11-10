@@ -929,7 +929,7 @@ describe("viewer app experimental sort", () => {
     });
     const { getResultSurfaceState, getSearchControlsState } = await connectViewer();
 
-    await vi.waitFor(() => expect(getResultSurfaceState()).toMatchObject({ kind: "message", className: "loading", text: "Preparing sort… 5 / 10 items" }));
+    await vi.waitFor(() => expect(getResultSurfaceState()).toMatchObject({ kind: "message", className: "loading", text: "Scanning library… 5 / 10 items" }));
     const surface = getResultSurfaceState();
     expect(surface.kind === "message" && surface.action?.label).toBe("Cancel");
     expect(getSearchControlsState()).toMatchObject({ sortAvailable: true, selectedSort: "name" });

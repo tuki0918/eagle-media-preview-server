@@ -58,9 +58,9 @@ describe("experimental sort controls", () => {
       const container = dom.window.document.querySelector("#root")!;
       root = createRoot(container);
       await act(async () => {
-        root?.render(<ResultStateView kind="message" className="loading" text="Preparing sort… 5 / 10 items" action={{ label: "Cancel", onClick }} />);
+        root?.render(<ResultStateView kind="message" className="loading" text="Scanning library… 5 / 10 items" action={{ label: "Cancel", onClick }} />);
       });
-      expect(container.textContent).toContain("Preparing sort… 5 / 10 items");
+      expect(container.textContent).toContain("Scanning library… 5 / 10 items");
       const button = [...container.querySelectorAll("button")].find((element) => element.textContent === "Cancel")!;
       await act(async () => {
         button.click();

@@ -135,7 +135,7 @@ export class SlideshowSource {
         // The page request gives up after a while; a large library may still be indexing then.
         const onAbort = () => {
           clearTimeout(timer);
-          reject(new Error("Still preparing the sort. Please retry in a moment."));
+          reject(new Error("Still scanning the library. Please retry in a moment."));
         };
         const timer = setTimeout(() => {
           signal.removeEventListener("abort", onAbort);
