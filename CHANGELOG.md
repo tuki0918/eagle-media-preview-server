@@ -7,10 +7,12 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-11-10
+
 ### Added
 
-- Added a Reverse order option to slideshows. It plays the list from the last item to the first, while the slide counter still counts up from 1.
-- Added Advanced Sort (experimental, off by default): with **Full scan** on under **Settings → Libraries → Advanced Sort**, the viewer's search panel gets a Sort menu (date added, created, or modified; name; type; file size; resolution; rating; duration; ascending or descending). The first sort reads the library's item metadata into memory, with progress and a Cancel button; the result is kept current through `mtime.json` and released after 30 minutes without use. The library itself is never written to. Smart folders keep the default order.
+- Added a Reverse order option to slideshows.
+- Added Advanced Sort (experimental, off by default): turn on **Full scan** under **Settings → Libraries → Advanced Sort** to get a Sort menu in the viewer (date added, created, or modified; name; type; file size; resolution; rating; duration). The first sort reads the whole library, with progress and a Cancel button, so it can take a while for large libraries. The library itself is never changed. Smart folders keep the default order.
 
 ## [0.7.1] - 2026-11-06
 
@@ -381,7 +383,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 - Initial release of Eagle Media Preview Server.
 
-[Unreleased]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.7.2...HEAD
+[0.7.2]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.6.3...v0.7.0
 [0.6.3]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.6.2...v0.6.3
