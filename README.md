@@ -8,6 +8,10 @@
   <img src="plugin/assets/icon_on.png" width="128" height="128" alt="Media Preview Server icon" />
 </p>
 
+<p align="center">
+  <a href="https://github.com/tuki0918/eagle-media-preview-server/releases/latest/download/Media.Preview.Server.eagleplugin"><img src="https://img.shields.io/badge/Download-.eagleplugin-2563eb?style=for-the-badge&logo=github" alt="Download .eagleplugin" /></a>
+</p>
+
 Media Preview Server is an Eagle plugin that turns the Eagle on your Mac or PC into a self-hosted media server.
 Start it with one click, then browse your library (**Media Library**) from phones, tablets, and PCs on your local network.
 
