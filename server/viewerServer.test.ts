@@ -4649,3 +4649,54 @@ test("experimental sort indexes the newly opened library after Eagle switches", 
     await rm(second, { recursive: true, force: true });
   }
 });
+
+test("experimental sort applies an edit only to the index of the library it was made in", async () => {
+  // Two copies of a library share item ids.
+  const first = await createSortLibrary();
+  const second = await createSortLibrary();
+  let current = first;
+  let markStarEditStarted: () => void = () => {};
+  const starEditStarted = new Promise<void>((started) => {
+    markStarEditStarted = started;
+  });
+  let finishStarEdit: () => void = () => {};
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    allowMetadataEditing: true,
+    passwordHash: sha256("secret"),
+    basicAuthUsername: "eagle",
+    experimentalSort: true,
+    eagleClient: sortTestClient(() => current, {
+      async updateItemStar(id: string, star: unknown) {
+        markStarEditStarted();
+        await new Promise<void>((resolve) => {
+          finishStarEdit = resolve;
+        });
+        return { id, star };
+      },
+    }),
+  });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const cookie = await loginCookie(origin, "eagle", "secret");
+    const rated = async () => ((await (await fetch(`${origin}/api/items?sort=name&rating=5`, { headers: { Cookie: cookie } })).json()).items as Array<{ id: string }>).map((item) => item.id);
+    assert.deepEqual(await rated(), []);
+
+    // Rate C3 in the first library; while Eagle is still saving, it switches to the copy.
+    const edit = postJsonTo(`${origin}/api/items/C3/star`, origin, { star: 5 }, { Cookie: cookie });
+    await starEditStarted;
+    current = second;
+    viewer.notifyLibraryChanged();
+    assert.deepEqual(await rated(), []);
+    finishStarEdit();
+    await edit;
+    // The copy's index is untouched: its C3 is still unrated.
+    assert.deepEqual(await rated(), []);
+  } finally {
+    await viewer.stop();
+    await rm(first, { recursive: true, force: true });
+    await rm(second, { recursive: true, force: true });
+  }
+});

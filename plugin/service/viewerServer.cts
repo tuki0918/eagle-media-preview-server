@@ -905,8 +905,11 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
     const star = normalizeStar(body.star);
     editedItems.set(res, { fields: ["rating"] });
     await confirmLibraryBeforeWrite(res);
+    // Taken before the write: if Eagle switches libraries meanwhile, this index is already dropped
+    // and the edit must not land in the next library's index.
+    const sortIndex = sortIndexFor(session, sortIndexes);
     const item = await session.client.updateItemStar(itemId, star);
-    sortIndexes?.loaded()?.noteItem({ id: itemId, star: item.star ?? star });
+    sortIndex?.noteItem({ id: itemId, star: item.star ?? star });
     sendJson(res, 200, { id: item.id || itemId, star: item.star ?? star });
     return;
   }
@@ -927,13 +930,14 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
     // Named from the request: no await may separate the library check below from the write.
     editedItems.set(res, { fields: (["tags", "folders"] as const).filter((field) => metadataPatch[field] !== undefined) });
     await confirmLibraryBeforeWrite(res);
+    const sortIndex = sortIndexFor(session, sortIndexes);
     const item = await session.client.updateItemMetadata(itemId, metadataPatch);
     const updated = {
       id: item.id || itemId,
       tags: Array.isArray(item.tags) ? item.tags : metadataPatch.tags,
       folders: Array.isArray(item.folders) ? item.folders : metadataPatch.folders,
     };
-    sortIndexes?.loaded()?.noteItem({ ...updated, id: itemId });
+    sortIndex?.noteItem({ ...updated, id: itemId });
     sendJson(res, 200, updated);
     return;
   }
@@ -955,9 +959,10 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
     }
     editedItems.set(res, { event: body.isDeleted ? "trash" : "restore" });
     await confirmLibraryBeforeWrite(res);
+    const sortIndex = sortIndexFor(session, sortIndexes);
     const item = await session.client.updateItemTrash(itemId, body.isDeleted);
     const isDeleted = typeof item.isDeleted === "boolean" ? item.isDeleted : body.isDeleted;
-    sortIndexes?.loaded()?.noteItem({ id: itemId, isDeleted });
+    sortIndex?.noteItem({ id: itemId, isDeleted });
     sendJson(res, 200, { id: item.id || itemId, isDeleted });
     return;
   }
@@ -978,10 +983,11 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
     try {
       // A library switch during a long upload must not put the file in the other library.
       await confirmLibraryBeforeWrite(res);
+      const sortIndex = sortIndexFor(session, sortIndexes);
       const added = await session.client.addItemFromPath({ path: filePath, name: upload.name, folderId: upload.folderId, tags: upload.tags });
       editedItems.set(res, { ext: upload.extension.slice(1), itemId: addedItemId(added), size: upload.size });
       // Eagle records the new item in mtime.json shortly; look for it on the next sorted request.
-      sortIndexes?.loaded()?.markStale();
+      sortIndex?.markStale();
     } catch (error) {
       await discardUpload(filePath);
       throw error;
@@ -1341,6 +1347,13 @@ async function handleConnect(req: IncomingMessage, res: ServerResponse, session:
   } catch (error) {
     sendJson(res, 502, { error: `Unable to connect to Eagle API: ${errorMessage(error)}` });
   }
+}
+
+// The loaded sort index, only if it belongs to the library just confirmed open for this request.
+function sortIndexFor(session: EagleSession, sortIndexes: SortIndexManager | null) {
+  if (!sortIndexes) return null;
+  const library = session.lastLibraryInfo?.() as EagleLibraryInfo | null | undefined;
+  return library?.path ? sortIndexes.loaded(String(library.path)) : null;
 }
 
 function addedItemId(added: unknown) {
