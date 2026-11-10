@@ -41,6 +41,7 @@ Optional:
 - HTTPS: use TLS when certificate paths are set.
 - Multiple users with Viewer, Editor, Editor + Upload, and Admin roles.
 - File Upload (experimental): add files to the library open in Eagle, for Admin and Editor + Upload users.
+- Sort (experimental): sort the viewer by date added, created, or modified, name, type, file size, resolution, rating, or duration.
 - Library protection: share only the Eagle libraries you select.
 
 <details>
@@ -100,6 +101,20 @@ The viewer can show **Success** before a file is really in the library. If Eagle
 </details>
 
 <details>
+<summary><strong>Sort (experimental)</strong></summary>
+
+> [!NOTE]
+> This feature is experimental and may change. It is off by default.
+
+Stop the server, check **Full scan** under **Settings → Libraries → Advanced Sort**, save, and start the server again. The viewer's search panel then has a Sort menu next to the type and rating filters, with ascending and descending orders. **Reset filters** and the library name in the side menu return to the default order. Smart folders always keep the default order.
+
+Eagle can't sort items for other apps, so the first sort reads every item's details from the library folder into memory. The viewer shows the progress, and **Cancel** stops it. This takes about 15–20 seconds for 300,000 items on an internal SSD, and longer on a NAS. Later sorts are quick, and changes made in Eagle show up within a few seconds. The memory is given back after 30 minutes without sorting, when Eagle opens another library, or when the server stops. The library itself is never changed.
+
+While a sort is on, search text matches item names only.
+
+</details>
+
+<details>
 <summary><strong>Settings</strong></summary>
 
 #### Server Status
@@ -153,6 +168,8 @@ The list's status shows **Online** for the shared library viewers can open right
 **Who can open a library.** With **Password protection** on, each shared library can be limited to selected users. The people button at the end of the library's row shows **All** (the default: everyone with an account) or how many users can open it, counting admins; click it, choose **Selected users**, and tick the users who may open the library. Admins can always open every shared library. A user who signs in while a library they may not open is open sees a message saying so, stays signed in, and can connect again once a library they may open is open, or sign in as another user. The check applies to every request, not only at sign-in, so an existing session loses access as soon as Eagle switches to a library that user may not open.
 
 If every selected user is deleted, the library stays limited and only admins can open it (nobody, if there are no admins); it never opens to everyone. Renaming a user in **Access** keeps their libraries. With password protection off, the selections are kept but not applied.
+
+**Advanced Sort (experimental).** Check **Full scan** to add a Sort menu to the viewer. The first sort scans every item of the library open in Eagle into memory; see **Sort (experimental)** above.
 
 Like other settings, these are locked while the server is running and take effect when the server starts.
 
@@ -237,7 +254,7 @@ The displayed content depends on the Eagle library opened by the Eagle app runni
 
 These are planned, but on hold until the Eagle API supports them:
 
-- Sort results by date, rating, name, or size
+- Sort smart folders, and sort without first reading the library into memory as the experimental Sort does
 - Add or remove favorite tags
 - Filter by multiple file extensions at once
 - Use search filters inside smart folders

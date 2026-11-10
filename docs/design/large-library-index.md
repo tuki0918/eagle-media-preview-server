@@ -1,6 +1,6 @@
 # Large libraries (300,000 items): local sort index
 
-Status: **Experimental** (P1 implemented, 2026-11-10). Active only when `settings.json` has `"experimentalSort": true`.
+Status: **Experimental** (P1 implemented, 2026-11-10). Active only when **Settings → Libraries → Advanced Sort** is on (saved as `experimentalSort`).
 
 ## 1. Background
 
@@ -27,7 +27,7 @@ The first step is deliberately small.
 
 | Topic | Decision |
 | --- | --- |
-| Enabling | `experimentalSort: true`, edited by hand in `settings.json`; off by default |
+| Enabling | **Settings → Libraries → Advanced Sort** in the plugin panel (`experimentalSort`); off by default, locked while the server runs |
 | Loading | **On demand.** The first sorted request starts the build. Normal browsing is untouched |
 | While building | A request waits up to 1 second. If the index is not ready, the server answers in the default order and adds `sort: { status: "indexing", loaded, total }`. The viewer shows "Preparing sort… n / N items" with a **Cancel** button and asks again every 1.5 seconds. Items from the default order are not shown, so pages in two different orders never mix |
 | Cancelling | `POST /api/sort-index/cancel` stops the build and frees what it read. The viewer that cancels goes back to the default order. The next sorted request starts a new build |

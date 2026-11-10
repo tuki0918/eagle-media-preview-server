@@ -62,7 +62,7 @@ Defaults and how to change them:
 | Trust `X-Forwarded-For` from this computer | disabled | Not in the panel; set `"trustForwardedFor": true` in `settings.json` while the server is stopped (see [Tunnels and reverse proxies](#tunnels-and-reverse-proxies)) |
 | Upload size limit per file | 2048 MB | Not in the panel; `uploadMaxSizeMB` in `settings.json` while the server is stopped |
 | Time allowed to receive one upload | 60 minutes | Not in the panel; `uploadTimeoutMinutes` in `settings.json` while the server is stopped |
-| Sort (experimental) | disabled | Not in the panel; set `"experimentalSort": true` in `settings.json` while the server is stopped (see [Experimental sort](#experimental-sort)) |
+| Advanced Sort (experimental) | disabled | **Full scan** under **Settings → Libraries → Advanced Sort** (see [Experimental sort](#experimental-sort)) |
 
 All values are saved to `~/.eagle-media-preview-server/settings.json`. Fields under **Settings** are locked while the server runs and take effect at the next start. The toggles in Server Status stay available while it runs, and a change to Password, Public Network, or HTTPS restarts the running server.
 
@@ -196,6 +196,7 @@ Build output is created under `dist`:
   - Per-user role and password
   - Session duration
   - Libraries: protection toggle, shared-library checklist with a folder icon that switches Eagle to that library, and each library's status (Online when the server is running and it is the library open in Eagle, Offline for other shared libraries, none until sharing is saved), and a reload icon in the list header, above the checkboxes; like other settings, they are locked while the server runs and take effect when it starts
+  - Advanced Sort (experimental), below the libraries: the **Full scan** checkbox turns on the viewer's Sort menu
   - The checklist is built on the admin's machine, without the Eagle HTTP API: saved entries, the open library from `eagle.library`, and `libraryHistory` from Eagle's `Settings` file in `eagle.app.getPath("userData")` (only that key is read; libraries that no longer exist are skipped)
 
 ### Persisted Settings
@@ -224,6 +225,7 @@ type Settings = {
   sessionDurationDays: number;
   sharedLibraries: Array<{ name: string; path: string; access?: "selected"; users?: string[] }>;
   trustForwardedFor: boolean;
+  experimentalSort: boolean; // "Full scan" under Settings → Libraries → Advanced Sort; false by default
   uploadMaxSizeMB: number;
   uploadTimeoutMinutes: number;
 };
@@ -275,7 +277,7 @@ Settings path:
 - Extension filter
 - Rating filter
 - Tag filter chips
-- Sort (experimental, when the server has `experimentalSort` on)
+- Sort (experimental, when **Settings → Libraries → Advanced Sort** is on)
 - Page size: `30`, `60`, `120`, `240`
 - Tiles view
 - Grid view
@@ -454,7 +456,7 @@ The viewer server calls Eagle's local Web API at `http://localhost:41595/api/v2/
 
 ### Experimental sort
 
-Eagle's `item/get` always answers newest-first, so other orders come from an index the preview server builds itself. It is off unless `experimentalSort` is `true` in `settings.json`.
+Eagle's `item/get` always answers newest-first, so other orders come from an index the preview server builds itself. It is off by default and turned on with **Settings → Libraries → Advanced Sort** (saved as `experimentalSort`). Like other settings, it is locked while the server runs and takes effect at the next start.
 
 - Built on the first sorted request, not at start: every `<library>/images/<id>.info/metadata.json` is read (about 17 seconds for 300,000 items on an internal SSD; slower on a NAS). A request waits up to 1 second, then answers in Eagle's order with progress
 - While it builds, the viewer shows "Preparing sort… n / N items" with a **Cancel** button. Cancel goes back to the default order and calls `POST /api/sort-index/cancel`, which stops reading the library and frees what was read; the next sorted request starts over
