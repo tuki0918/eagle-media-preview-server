@@ -136,7 +136,8 @@ test("classifies mixed media and uses static thumbnails for other files", () => 
 });
 
 test("asks for the list in the viewer's sort order, except in smart folders", async () => {
-  const loader = loaderFor();
+  // A server that sorts reports the sort's status with each sorted page.
+  const loader = vi.fn(async (params: URLSearchParams): Promise<LoadItemsResponse> => ({ ...(await loaderFor()(params)), ...(params.has("sort") ? { sort: { status: "ready" as const } } : {}) }));
   const sorted = new SlideshowSource({ ...query, sort: "name", order: "desc" }, loader);
   try {
     await sorted.itemAt(0);
@@ -152,5 +153,47 @@ test("asks for the list in the viewer's sort order, except in smart folders", as
     expect(smartLoader.mock.calls[0][0].has("sort")).toBe(false);
   } finally {
     smart.dispose();
+  }
+});
+
+test("waits for the server's sort index instead of keeping a page in the default order", async () => {
+  vi.useFakeTimers();
+  let calls = 0;
+  const loader = vi.fn(async (): Promise<LoadItemsResponse> => {
+    calls += 1;
+    return calls === 1
+      ? { items: [{ id: "default-order" }], total: 1, sort: { status: "indexing", loaded: 1, total: 2 } }
+      : { items: [{ id: "a" }, { id: "b" }], total: 2, sort: { status: "ready" } };
+  });
+  const source = new SlideshowSource({ ...query, sort: "name", order: "" }, loader);
+  try {
+    const first = source.itemAt(0);
+    await vi.advanceTimersByTimeAsync(1500);
+    expect((await first)?.id).toBe("a");
+    expect(loader).toHaveBeenCalledTimes(2);
+    expect(source.total).toBe(2);
+  } finally {
+    source.dispose();
+  }
+});
+
+test("reports a retryable error when the server can't sort, rather than mixing orders", async () => {
+  const loader = vi.fn(async (): Promise<LoadItemsResponse> => ({ items: [{ id: "default-order" }], total: 1, sort: { status: "failed" } }));
+  const source = new SlideshowSource({ ...query, sort: "name", order: "" }, loader);
+  try {
+    await expect(source.itemAt(0)).rejects.toThrow(/Sorting is unavailable/);
+  } finally {
+    source.dispose();
+  }
+});
+
+test("reports an error when the server stops sorting, rather than mixing orders", async () => {
+  // Advanced Sort was turned off and the server restarted: the sort is ignored without a status.
+  const loader = vi.fn(async (): Promise<LoadItemsResponse> => ({ items: [{ id: "default-order" }], total: 1 }));
+  const source = new SlideshowSource({ ...query, sort: "name", order: "" }, loader);
+  try {
+    await expect(source.itemAt(0)).rejects.toThrow(/Sorting was turned off/);
+  } finally {
+    source.dispose();
   }
 });

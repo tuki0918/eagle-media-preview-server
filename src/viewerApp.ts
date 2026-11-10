@@ -838,7 +838,24 @@ async function loadItems({ append = false }: LoadItemsOptions = {}) {
       data = await getJson<LoadItemsResponse>(`/api/items?${params.toString()}`);
       if (requestId !== state.requestId) return;
     }
-    if (data.sort?.status === "failed" && !append) showErrorToast("Sorting is unavailable right now; showing the default order.");
+    // A sorted request answered without a sort status means the server no longer sorts (Advanced
+    // Sort was turned off and the server restarted).
+    const sortTurnedOff = params.has("sort") && !data.sort;
+    if (data.sort?.status === "failed" || sortTurnedOff) {
+      // The server answered in the default order. Drop the sort so that every later page (tiles
+      // loading more, the next page) is in that same order, even once the server could sort again.
+      if (sortTurnedOff) sortAvailable = false;
+      Object.assign(state, { sort: "", order: "" });
+      syncUrlState({ replace: true });
+      renderSearchControlButtons();
+      showErrorToast(sortTurnedOff ? "Sorting was turned off; showing the default order." : "Sorting is unavailable right now; showing the default order.");
+      if (append) {
+        // The pages already shown are sorted, so start the list over, from the top, in the default order.
+        state.offset = 0;
+        void loadItems();
+        return;
+      }
+    }
     const items = data.items || [];
     state.total = Number(data.total || 0);
     if (!append && !hasActiveFilters(state)) {
