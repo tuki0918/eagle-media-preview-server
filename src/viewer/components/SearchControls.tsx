@@ -191,6 +191,8 @@ export function AdvancedFilters({
   return (
     <div
       id="advancedFilters"
+      // Phones stack the menus and keep reset at the end of the last row: type, then rating, then
+      // sort next to reset when the sort menu is there, or rating next to reset when it isn't.
       className={cn(
         "filter-row grid items-center gap-4 max-[540px]:grid-cols-[minmax(0,1fr)_auto] max-[540px]:gap-3",
         sortAvailable ? "grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]" : "grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]",
@@ -200,9 +202,11 @@ export function AdvancedFilters({
       <div className="min-w-0 max-[540px]:col-span-2">
         <TypeFilter loading={availableExtsLoading} options={extOptions} selectedExt={selectedExt} />
       </div>
-      <RatingFilter selectedRating={selectedRating} />
+      <div className={cn("min-w-0", sortAvailable && "max-[540px]:col-span-2")}>
+        <RatingFilter selectedRating={selectedRating} />
+      </div>
       {sortAvailable ? (
-        <div className="min-w-0 max-[540px]:order-last max-[540px]:col-span-2">
+        <div className="min-w-0">
           <SortFilter selectedSort={selectedSort} selectedOrder={selectedOrder} />
         </div>
       ) : null}
@@ -244,7 +248,8 @@ function FilterMenu({
           aria-label={`${label}: ${summaryText}`}
           title={summaryText}
         >
-          {summary}
+          {/* Clipped to the field, so a long label never runs under the arrow. */}
+          <span className="flex min-w-0 overflow-hidden">{summary}</span>
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
