@@ -129,13 +129,13 @@ export function ServerStatusPanel({
           </span>
         </aside>
       </div>
-      {running && sortIndex !== undefined ? <SortIndexProgress sortIndex={sortIndex} /> : null}
       {settingsLocked ? (
         <p className="m-0 mt-4 flex items-center gap-2 rounded-xl border border-[#f5dfa8] bg-[#fffaeb] px-3 py-2 text-[11.5px] leading-snug text-[#8a5a00]" role="note">
           <LockIcon className="h-3.5 w-3.5 shrink-0" />
           <span>Settings are locked while the server is running. Stop the server to edit them.</span>
         </p>
       ) : null}
+      {running && sortIndex !== undefined ? <SortIndexProgress sortIndex={sortIndex} /> : null}
     </section>
   );
 }
