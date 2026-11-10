@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { ServerState } from "../types";
+import type { ServerState, SortIndexStatus } from "../types";
 import { CheckIcon, CopyIcon, EmptyQrIcon, GlobeIcon, KeyIcon, LockIcon, PowerIcon, ServerIcon, ShieldIcon } from "./Icons";
 
 interface ServerStatusPanelProps {
@@ -12,6 +12,8 @@ interface ServerStatusPanelProps {
   settings: {
     autoStart?: boolean;
   };
+  /** The Advanced Sort index; undefined hides the row (sort off or server stopped). */
+  sortIndex?: SortIndexStatus | null;
   statusLabel: string;
   /** A start/stop/restart is in flight; the badge shows its label instead of the settled state. */
   statusPending?: boolean;
@@ -36,6 +38,7 @@ export function ServerStatusPanel({
   qrSrc,
   serverState,
   settings,
+  sortIndex,
   statusLabel,
   statusPending = false,
   url,
@@ -126,6 +129,7 @@ export function ServerStatusPanel({
           </span>
         </aside>
       </div>
+      {running && sortIndex !== undefined ? <SortIndexProgress sortIndex={sortIndex} /> : null}
       {settingsLocked ? (
         <p className="m-0 mt-4 flex items-center gap-2 rounded-xl border border-[#f5dfa8] bg-[#fffaeb] px-3 py-2 text-[11.5px] leading-snug text-[#8a5a00]" role="note">
           <LockIcon className="h-3.5 w-3.5 shrink-0" />
@@ -133,6 +137,44 @@ export function ServerStatusPanel({
         </p>
       ) : null}
     </section>
+  );
+}
+
+export function SortIndexProgress({ sortIndex }: { sortIndex: SortIndexStatus | null }) {
+  const status = sortIndex?.status ?? "building";
+  const loaded = sortIndex?.loaded ?? 0;
+  const total = sortIndex?.total ?? 0;
+  // Until the item folders are listed the total is unknown, so the bar only shows activity.
+  const known = status === "building" && total > 0;
+  const percent = status === "ready" ? 100 : known ? Math.min(100, Math.floor((loaded / total) * 100)) : 0;
+  const detail = status === "ready"
+    ? `Ready · ${loaded.toLocaleString()} items`
+    : status === "failed"
+    ? "Scan failed; it is retried when a viewer checks in."
+    : known
+    ? `Scanning library… ${loaded.toLocaleString()} / ${total.toLocaleString()} (${percent}%)`
+    : "Scanning library…";
+  return (
+    <div className="mt-4 grid min-w-0 gap-1.5 rounded-xl border border-[#e6e6e9] px-3 py-2.5" data-testid="sortIndexProgress">
+      <div className="flex min-w-0 items-center justify-between gap-3">
+        <span className={`${fieldLabelClassName} shrink-0 whitespace-nowrap`}>Advanced Sort index</span>
+        <span title={detail} className={`min-w-0 truncate text-[11.5px] ${status === "failed" ? "text-[#b42318]" : "text-[#5f6670]"}`}>{detail}</span>
+      </div>
+      <div
+        className="h-1.5 overflow-hidden rounded-full bg-[#ececef]"
+        role="progressbar"
+        aria-label="Advanced Sort index"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={status === "building" && !known ? undefined : percent}
+        aria-valuetext={detail}
+      >
+        <div
+          className={`h-full rounded-full transition-[width] duration-300 ${status === "failed" ? "bg-[#d92d20]" : status === "ready" ? "bg-[#34c759]" : "bg-[#2563eb]"} ${status === "building" && !known ? "w-1/3 animate-pulse" : ""}`}
+          style={status === "building" && !known ? undefined : { width: `${status === "failed" ? 100 : percent}%` }}
+        />
+      </div>
+    </div>
   );
 }
 

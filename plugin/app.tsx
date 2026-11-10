@@ -79,6 +79,9 @@ const PUBLIC_NETWORK_WITHOUT_PASSWORD_MESSAGE = "Public Network is enabled and p
 const PUBLIC_NETWORK_HTTP_WITH_PASSWORD_MESSAGE = "HTTPS is disabled, so the connection is not protected. Start the server?";
 // Only the connected-device count is live; the detailed view reloads on demand or with Auto refresh.
 const CONNECTED_COUNT_REFRESH_MS = 3000;
+// How often the panel asks for the Advanced Sort index's progress until it is ready.
+const SORT_INDEX_REFRESH_MS = 1000;
+const SORT_INDEX_FAILED_REFRESH_MS = 5000;
 const ACCESS_LOG_AUTO_REFRESH_MS = 10000;
 const ACCESS_LOG_SEARCH_DELAY_MS = 250;
 const HTTPS_DOCS_URL = "https://github.com/tuki0918/eagle-media-preview-server/blob/main/docs/https-mkcert.md";
@@ -160,7 +163,11 @@ function App() {
       };
       // The viewer server must stop answering from the previous library the moment Eagle switches.
       globalThis.eagle?.onLibraryChanged?.((libraryPath) => {
-        void managerRef.current?.libraryChanged?.(libraryPath || globalThis.eagle?.library?.path);
+        // The server starts indexing the new library; reading its status again shows that, which
+        // also restarts following the progress if the previous library's index was ready.
+        void Promise.resolve(managerRef.current?.libraryChanged?.(libraryPath || globalThis.eagle?.library?.path))
+          .catch(() => {})
+          .then(() => refreshSortIndexStatus());
         void refreshLibraries();
       });
       if (globalThis.eagle?.onPluginCreate) {
@@ -192,6 +199,17 @@ function App() {
     }, CONNECTED_COUNT_REFRESH_MS);
     return () => window.clearInterval(timer);
   }, []);
+
+  // Follows the background index build; only the progress is taken, so unsaved settings stay as they are.
+  // Asks on a steady interval while the scan is pending, so an answer that changes nothing (no index
+  // started yet) or a failed check never ends the following.
+  const sortIndexPending = serverState === "running" && status.sortIndex !== undefined && status.sortIndex?.status !== "ready";
+  const sortIndexRefreshMs = status.sortIndex?.status === "failed" ? SORT_INDEX_FAILED_REFRESH_MS : SORT_INDEX_REFRESH_MS;
+  useEffect(() => {
+    if (!sortIndexPending) return;
+    const timer = window.setInterval(() => void refreshSortIndexStatus(), sortIndexRefreshMs);
+    return () => window.clearInterval(timer);
+  }, [sortIndexPending, sortIndexRefreshMs]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setAccessLogSearchQuery(accessLogSearch.trim()), ACCESS_LOG_SEARCH_DELAY_MS);
@@ -226,6 +244,16 @@ function App() {
     const timer = window.setTimeout(() => setUrlCopied(false), 1500);
     return () => window.clearTimeout(timer);
   }, [urlCopied]);
+
+  // Uses only refs and the state setter, so the library-change listener registered once can call it.
+  async function refreshSortIndexStatus() {
+    try {
+      const next = await managerRef.current?.status();
+      if (next) setStatus((current) => ({ ...current, sortIndex: next.sortIndex }));
+    } catch {
+      // The bar keeps its last value until the next check.
+    }
+  }
 
   async function runCommand(command: () => Promise<PluginStatus> | PluginStatus | null | undefined, { action = null, quiet = false }: { action?: BusyAction | null; quiet?: boolean } = {}) {
     setBusy(true);
@@ -737,6 +765,7 @@ function App() {
           qrSrc={qrSrc}
           serverState={serverState}
           settings={settings}
+          sortIndex={serverState === "running" ? status.sortIndex : undefined}
           statusLabel={statusLabel}
           statusPending={busy && busyAction !== null}
           url={status.url || ""}

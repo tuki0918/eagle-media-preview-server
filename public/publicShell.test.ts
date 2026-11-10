@@ -1173,8 +1173,10 @@ test("public UI exposes collapsible advanced filters, with sort only when the se
   assert.match(html, /aria-label=\{label\}/);
   assert.match(html, /aria-expanded=\{filtersOpen\}/);
   assert.match(html, /id="advancedFilters"/);
-  // The experimental sort menu renders only for servers with `experimentalSort` on.
-  assert.match(html, /\{sortAvailable \? \(/);
+  // The experimental sort menu renders only for servers with `experimentalSort` on (disabled while
+  // the server prepares its index).
+  assert.match(html, /const sortShown = sortAvailable \|\| Boolean\(sortPreparing\)/);
+  assert.match(html, /\{sortShown \? \(/);
   assert.match(html, /id="sortSelect"/);
   assert.match(app, /sortAvailable = data\.features\?\.sort === true/);
   assert.doesNotMatch(html, /id="randomizeCheckbox"/);

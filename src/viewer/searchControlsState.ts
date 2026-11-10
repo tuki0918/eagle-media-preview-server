@@ -22,8 +22,10 @@ export interface SearchControlsState {
   selectedLimit: number;
   selectedRating: string;
   selectedSmartFolderId: string;
-  /** Experimental sort: offered only when the server has it on. */
+  /** Experimental sort: usable only when the server has it on and its library index is ready. */
   sortAvailable?: boolean;
+  /** While the server's index is being built: the sort control is shown disabled with this text. */
+  sortPreparing?: string;
   selectedSort?: SortKey;
   selectedOrder?: "" | SortOrder;
   smartFolders: readonly EagleSmartFolder[];

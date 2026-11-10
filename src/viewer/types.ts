@@ -73,6 +73,14 @@ export interface ConnectResponse {
   uploadMaxBytes?: number;
   /** Optional server features; `sort` is the experimental sort. */
   features?: { sort?: boolean };
+  /** With the experimental sort, how far the server's background index of this library has got. */
+  sortIndex?: SortIndexState;
+}
+
+export interface SortIndexState {
+  loaded?: number;
+  status?: "building" | "failed" | "ready";
+  total?: number;
 }
 
 export interface HealthResponse extends ConnectResponse {

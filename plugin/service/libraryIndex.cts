@@ -187,7 +187,7 @@ function createLibraryIndex(libraryPath: string, {
   let lastRescan = 0;
   let mtimeSignature = "";
   let failedAt = 0;
-  // Bumped by cancel(): reads from an abandoned build are dropped.
+  // Bumped by each build: reads from an earlier, abandoned build (a failed one being retried) are dropped.
   let buildRun = 0;
   // Ids in mtime.json without an item folder, with the change time they were last checked at.
   const missing = new Map<string, number>();
@@ -230,7 +230,7 @@ function createLibraryIndex(libraryPath: string, {
       // An item whose folder is gone was removed. Any other failure, including a metadata.json that
       // is missing from a folder still there (a NAS or sync delay), keeps what was read and is retried.
       if ((error as NodeJS.ErrnoException)?.code === "ENOENT" && !(await itemFolderExists(id))) {
-        // Checked again after the await: a cancelled build must not touch the next one's state.
+        // Checked again after the await: an abandoned build must not touch the next one's state.
         if (run !== buildRun) return false;
         unreadable.delete(id);
         return items.delete(id);
@@ -443,25 +443,6 @@ function createLibraryIndex(libraryPath: string, {
       lastRefreshCheck = 0;
     },
 
-    /**
-     * Stops a build in progress and drops what it read, to spare the disk; the next sorted request
-     * starts over. Returns false when no build was running.
-     */
-    cancel() {
-      if (status !== "building") return false;
-      buildRun += 1;
-      building = null;
-      status = "idle";
-      loaded = 0;
-      total = 0;
-      items.clear();
-      strings.clear();
-      missing.clear();
-      unreadable.clear();
-      rescanPending = false;
-      return true;
-    },
-
     dispose() {
       disposed = true;
       items.clear();
@@ -509,8 +490,12 @@ function createLibraryIndexManager({ idleMs = DEFAULT_IDLE_MS, ...indexOptions }
         current = { index: createLibraryIndex(path, indexOptions), path };
       }
       if (idleTimer) clearTimeout(idleTimer);
-      idleTimer = setTimeout(release, idleMs);
-      idleTimer.unref?.();
+      idleTimer = null;
+      // An infinite idleMs keeps the index for as long as the server runs.
+      if (Number.isFinite(idleMs)) {
+        idleTimer = setTimeout(release, idleMs);
+        idleTimer.unref?.();
+      }
       return current.index;
     },
 

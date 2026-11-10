@@ -68,8 +68,17 @@ export interface PluginSettings {
   sharedLibraries?: SharedLibrary[];
 }
 
+/** Where the Advanced Sort index of the open library stands; null until the server has started one. */
+export interface SortIndexStatus {
+  loaded: number;
+  status: "building" | "failed" | "ready";
+  total: number;
+}
+
 export interface PluginStatus {
   lastError?: string;
+  /** Present only while the server runs with Advanced Sort on. */
+  sortIndex?: SortIndexStatus | null;
   settings?: PluginSettings;
   state?: ServerState | string;
   url?: string;

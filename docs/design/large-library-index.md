@@ -26,7 +26,7 @@ How Eagle itself does it:
 How it behaves (the setting, the API, the viewer, updates, filters) is in the spec: [Advanced Sort](../EAGLE_PLUGIN_SPEC.md#advanced-sort-experimental). The decisions behind it:
 
 - **Experimental and off by default.** It reads Eagle's undocumented library files (`metadata.json`, `mtime.json`), which an Eagle update could change.
-- **Built on demand and kept in memory only.** Normal browsing never pays for it, and nothing is written to disk or to the library. A snapshot on disk is left for later (see 4).
+- **Built in the background at server start and kept in memory only.** With the setting on, the scan runs once when the server starts (and after a library switch), so sorting is ready before anyone asks; the viewer disables only the Sort menu until then. Nothing is written to disk or to the library. A snapshot on disk is left for later (see 4).
 - **Kept current the way Eagle keeps its own cache.** `mtime.json` tells which items changed, so only those are read again; the folder is rescanned only when Eagle's `all` count disagrees.
 - **The index orders ids; Eagle supplies the items.** Each page is fetched from `item/get` by `ids`, so sorted and unsorted responses look the same and Eagle stays the source of item details.
 - **Sorting and filtering follow Eagle,** so results match Eagle's own app. The one exception: search text alone matches names only, not Eagle's full-text `item/query`.
@@ -102,9 +102,7 @@ It costs about 31 bytes per item: about 5.3 MB for 170,000 items and 9 MB for 30
 
 ## 5. Known limitations (accepted for now)
 
-- The first build time on a NAS has not been measured. It is longer than the 17 seconds measured for 300,000 items on an internal SSD; the viewer shows the progress, and **Cancel** or stopping the server ends it.
+- The first build time on a NAS has not been measured. It is longer than the 17 seconds measured for 300,000 items on an internal SSD; the plugin panel shows the progress, and stopping the server ends it.
 - For a few seconds after an upload, the new item may be missing from a sorted list: it appears once Eagle writes it to `mtime.json`, which the next sorted request checks.
 - An item folder that arrives after the first rescan (a slow NAS or sync) is found only when `mtime.json` changes again or the index is rebuilt. Fixing it means rescanning repeatedly while Eagle's `all` count disagrees, with a growing interval so that a library whose count never matches doesn't list its folder every minute.
-- **Cancel** is open to every signed-in user, Viewer role included; while another viewer still waits for the sort, the build starts again.
 - After Advanced Sort is turned back on, a viewer that stayed open shows the Sort menu only once the page is reloaded or connects again.
-- Closing the viewer does not stop a build; stop the server to stop it.

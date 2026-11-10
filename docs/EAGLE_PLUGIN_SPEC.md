@@ -364,6 +364,7 @@ These routes hand out the library id, so they do not require one.
   - Checks Eagle app/library health; polled by the viewer; library paths are never returned to clients
   - Returns `libraryStatus` (`shared`, `not_shared`, or `null` when Eagle is unreachable) and, for a shared library, `library: { id, name }`, where `id` is an opaque per-install HMAC of the library path
   - Always answered, even when the open library is not shared
+  - With Advanced Sort on and a shared library, also returns `sortIndex: { status, loaded, total }` (`status`: `building`, `ready`, or `failed`); asking starts a build that is missing, or retries a failed one at most every 30 seconds. `POST /api/connect` returns the same field
 
 #### Browse — sign-in, library id
 
@@ -374,8 +375,6 @@ These routes hand out the library id, so they do not require one.
 - `GET /api/items`
   - Returns item list or search results; `smartFolderId` lists a smart folder's items
   - With Advanced Sort on, `sort` (`import`, `btime`, `mtime`, `name`, `ext`, `filesize`, `resolution`, `rating`, `duration`) and `order` (`asc` / `desc`, default per key as in Eagle) order the list; smart folders ignore them. The answer carries `sort: { status }`: `ready`, or `indexing` with `loaded` / `total` while the index is built (the items are then in Eagle's order, and the viewer asks again), or `failed`, after which the viewer drops the sort and shows the default order, and a slideshow reports an error to retry. A sorted request answered without `sort` (Advanced Sort turned off and the server restarted) makes an open viewer drop the sort and hide the Sort menu too. A slideshow waits for `indexing` to end rather than keep a page in the default order
-- `POST /api/sort-index/cancel`
-  - Advanced Sort only (`404` otherwise): stops a first index build in progress and drops what it read; answers `{ cancelled }`
 - `GET /api/item-types`
   - Returns the file extensions found in the library
 - `GET /api/tags`, `GET /api/tag-overview`
@@ -458,13 +457,15 @@ The viewer server calls Eagle's local Web API at `http://localhost:41595/api/v2/
 
 Eagle's `item/get` always answers newest-first, so other orders come from an index the preview server builds itself. It is off by default and turned on with **Settings → Libraries → Advanced Sort** (saved as `experimentalSort`). Like other settings, it is locked while the server runs and takes effect at the next start.
 
-- Built on the first sorted request, not at start: every `<library>/images/<id>.info/metadata.json` is read (about 17 seconds for 300,000 items on an internal SSD; slower on a NAS). A request waits up to 1 second, then answers in Eagle's order with progress
-- While it builds, the viewer shows "Scanning library… n / N items" with a **Cancel** button. Cancel goes back to the default order and calls `POST /api/sort-index/cancel`, which stops reading the library and frees what was read; the next sorted request starts over
+- Built in the background when the server starts and after a library switch: every `<library>/images/<id>.info/metadata.json` is read (about 17 seconds for 300,000 items on an internal SSD; slower on a NAS). The plugin panel shows the progress under Server Status. A sorted request made before it is ready waits up to 1 second, then answers in Eagle's order with progress
+- Until `/api/health` reports `sortIndex.status: "ready"`, the viewer shows the Sort menu disabled ("Preparing sort… n%") and requests items without a sort; it checks every 2 seconds while the build runs, then enables the menu and reloads a sort kept from the URL
+- If a sorted request still finds it building (a viewer left open while the server restarts, until its next health check), the viewer shows "Scanning library… n / N items" and asks again until the sorted page is ready
+- Viewers cannot stop a scan. To avoid it, turn Advanced Sort off; stopping the server also stops a scan in progress
 - The viewer labels Eagle's own order "Default order"
 - In the viewer, a menu picks the key and two buttons beside it pick the direction, as in Eagle. A newly picked key starts newest, highest, largest, or longest first (names and types A to Z), so for file size, resolution, rating, and duration the viewer's default direction is the reverse of Eagle's; the viewer always sends `order` explicitly
 - In the viewer, the sort behaves like a filter: it shows among the active filter labels, and the reset filters button and the library title in the side menu (show all items) return to the default order. Picking a folder keeps it, as it keeps the other filters
 - Kept current like Eagle keeps its own cache: at most every 2 seconds a sorted request stats `<library>/mtime.json` and, if it changed, reads again the items whose time went up. A folder rescan, when Eagle's `all` count disagrees, runs at most once a minute; one held back by that limit runs at a later check even if `mtime.json` doesn't change again. A `metadata.json` that can't be read or parsed, or is missing from an item folder that is still there (Eagle mid-write, a NAS or sync delay), keeps the item as last read, or leaves it out during the first build, and is read again at every check until it works; only a removed item folder removes the item. Eagle's `all` count is compared after the first build too, and `0` counts. Rating, tag, folder, and trash edits made through the viewer apply at once, to the index of the library the edit was made in (not to one built after a library switch during the edit)
-- Holds only what filters and sorting need (about 150 MB for 300,000 items); the page itself is fetched from Eagle by id, so items look the same as in Eagle's order. Released after 30 minutes without a sorted request, on a library switch, and on stop
+- Holds only what filters and sorting need (about 150 MB for 300,000 items); the page itself is fetched from Eagle by id, so items look the same as in Eagle's order. Kept while the server runs; released on a library switch (then rebuilt) and on stop
 - Filters match Eagle's `item/get`: folder membership, untagged, uncategorized, extension, ratings (`0` is unrated), all listed tags, and the search text as a case-insensitive name match. Search text without other filters is matched against names only, not Eagle's full-text `item/query`
 - Never writes to the library
 

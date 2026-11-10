@@ -2073,3 +2073,125 @@ test("plugin saves shared libraries with the settings and reacts to Eagle librar
     dom.window.close();
   }
 });
+
+test("the Advanced Sort progress follows the new library's scan after Eagle switches libraries", async () => {
+  const bundle = await esbuild({
+    bundle: true,
+    define: { "process.env.NODE_ENV": JSON.stringify("test") },
+    entryPoints: [new URL("./app.tsx", import.meta.url).pathname],
+    format: "iife",
+    platform: "browser",
+    write: false,
+  });
+  const domOptions = {
+    runScripts: "outside-only",
+    url: "file:///tmp/eagle-plugin/plugin/index.html",
+  } as unknown as ConstructorParameters<typeof JSDOM>[1];
+  const dom = new JSDOM("<!doctype html><html><body><div id=\"root\"></div></body></html>", domOptions);
+  const pluginWindow = dom.window as unknown as Window & {
+    eagle: unknown;
+    eval: (source: string) => unknown;
+    require: (id: string) => unknown;
+  };
+  let sortIndex: { loaded: number; status: string; total: number } | null = { status: "ready", loaded: 3, total: 3 };
+  const status = () => ({
+    settings: { authEnabled: false, authUsers: [], autoStart: false, experimentalSort: true, host: "127.0.0.1", port: 41532 },
+    sortIndex,
+    state: "running",
+    url: "http://127.0.0.1:41532",
+  });
+  const eagleEvents: { libraryChanged?: (libraryPath: string) => void } = {};
+  pluginWindow.eagle = { onLibraryChanged(callback: (libraryPath: string) => void) { eagleEvents.libraryChanged = callback; } };
+  pluginWindow.require = (id: string) => {
+    if (id === "path") return path;
+    return {
+      createServerManager() {
+        return {
+          async init() { return status(); },
+          async libraryChanged() {
+            // The server drops the previous index and starts scanning the new library.
+            sortIndex = { status: "building", loaded: 10, total: 100 };
+          },
+          async saveSettings() { return status(); },
+          async start() { return status(); },
+          async status() { return status(); },
+          async stop() { return status(); },
+        };
+      },
+    };
+  };
+
+  pluginWindow.eval(bundle.outputFiles[0].text);
+  const progressText = () => dom.window.document.querySelector("[role=progressbar]")?.getAttribute("aria-valuetext") || "";
+  await waitFor(() => progressText() === "Ready · 3 items");
+  assert.ok(eagleEvents.libraryChanged);
+  eagleEvents.libraryChanged("/Users/xxx/Other.library");
+  await waitFor(() => progressText() === "Scanning library… 10 / 100 (10%)");
+  // Following continues until the new scan is done.
+  sortIndex = { status: "ready", loaded: 100, total: 100 };
+  // The panel asks once a second while a scan runs.
+  await waitFor(() => progressText() === "Ready · 100 items", { timeoutMs: 3000 });
+});
+
+test("the Advanced Sort progress keeps being asked for until the scan has started and finished", async () => {
+  const bundle = await esbuild({
+    bundle: true,
+    define: { "process.env.NODE_ENV": JSON.stringify("test") },
+    entryPoints: [new URL("./app.tsx", import.meta.url).pathname],
+    format: "iife",
+    platform: "browser",
+    write: false,
+  });
+  const domOptions = {
+    runScripts: "outside-only",
+    url: "file:///tmp/eagle-plugin/plugin/index.html",
+  } as unknown as ConstructorParameters<typeof JSDOM>[1];
+  const dom = new JSDOM("<!doctype html><html><body><div id=\"root\"></div></body></html>", domOptions);
+  const pluginWindow = dom.window as unknown as Window & {
+    eval: (source: string) => unknown;
+    require: (id: string) => unknown;
+  };
+  // Eagle is slow to name the library, so the first answers have no index yet; one check fails.
+  const answers: Array<{ loaded: number; status: string; total: number } | null | Error> = [
+    null,
+    null,
+    new Error("busy"),
+    { status: "building", loaded: 5, total: 10 },
+    { status: "ready", loaded: 10, total: 10 },
+  ];
+  let calls = 0;
+  const status = (sortIndex: { loaded: number; status: string; total: number } | null) => ({
+    settings: { authEnabled: false, authUsers: [], autoStart: false, experimentalSort: true, host: "127.0.0.1", port: 41532 },
+    sortIndex,
+    state: "running",
+    url: "http://127.0.0.1:41532",
+  });
+  pluginWindow.require = (id: string) => {
+    if (id === "path") return path;
+    return {
+      createServerManager() {
+        return {
+          async init() { return status(null); },
+          async saveSettings() { return status(null); },
+          async start() { return status(null); },
+          async status() {
+            const answer = answers[Math.min(calls, answers.length - 1)];
+            calls += 1;
+            if (answer instanceof Error) throw answer;
+            return status(answer);
+          },
+          async stop() { return status(null); },
+        };
+      },
+    };
+  };
+
+  pluginWindow.eval(bundle.outputFiles[0].text);
+  const progressText = () => dom.window.document.querySelector("[role=progressbar]")?.getAttribute("aria-valuetext") || "";
+  await waitFor(() => progressText() === "Scanning library…");
+  await waitFor(() => progressText() === "Ready · 10 items", { timeoutMs: 8000 });
+  // Once ready, it stops asking.
+  const settled = calls;
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  assert.equal(calls, settled);
+}, 15_000);

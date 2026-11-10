@@ -1,10 +1,7 @@
-import { act } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { Root } from "react-dom/client";
 import { JSDOM } from "jsdom";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { AdvancedFilters } from "./SearchControls";
-import { ResultStateView } from "./ResultState";
 
 function parse(html: string) {
   return new JSDOM(html).window.document;
@@ -14,6 +11,14 @@ describe("experimental sort controls", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  test("shows the sort menu disabled, with progress, while the server prepares its index", () => {
+    const doc = parse(renderToStaticMarkup(<AdvancedFilters filtersOpen sortPreparing="Preparing sort… 40%" selectedSort="name" />));
+    const trigger = doc.querySelector<HTMLButtonElement>("#sortSelect");
+    expect(trigger?.disabled).toBe(true);
+    expect(trigger?.getAttribute("aria-label")).toBe("Sort (experimental): Preparing sort… 40%");
+    for (const button of doc.querySelectorAll<HTMLButtonElement>("#sortDirection button")) expect(button.disabled).toBe(true);
   });
 
   test("shows the sort menu only when the server offers it", () => {
@@ -46,37 +51,4 @@ describe("experimental sort controls", () => {
     expect(plain.children[1].className).not.toContain("col-span");
   });
 
-  test("shows a Cancel button under the loading message and calls it", async () => {
-    const dom = new JSDOM('<!doctype html><div id="root"></div>', { url: "http://localhost" });
-    for (const name of ["window", "document", "navigator", "Node", "Element", "HTMLElement"] as const) {
-      vi.stubGlobal(name, name === "window" ? dom.window : dom.window[name]);
-    }
-    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-    const onClick = vi.fn();
-    const { createRoot } = await import("react-dom/client");
-    let root: Root | undefined;
-    try {
-      const container = dom.window.document.querySelector("#root")!;
-      root = createRoot(container);
-      await act(async () => {
-        root?.render(<ResultStateView kind="message" className="loading" text="Scanning library… 5 / 10 items" action={{ label: "Cancel", onClick }} />);
-      });
-      expect(container.textContent).toContain("Scanning library… 5 / 10 items");
-      const button = [...container.querySelectorAll("button")].find((element) => element.textContent === "Cancel")!;
-      await act(async () => {
-        button.click();
-      });
-      expect(onClick).toHaveBeenCalledTimes(1);
-
-      await act(async () => {
-        root?.render(<ResultStateView kind="message" className="loading" text="Loading" />);
-      });
-      expect(container.querySelector("button")).toBeNull();
-    } finally {
-      await act(async () => {
-        root?.unmount();
-      });
-      dom.window.close();
-    }
-  });
 });

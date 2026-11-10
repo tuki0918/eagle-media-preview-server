@@ -11,8 +11,6 @@ export type ResultSurfaceState =
     viewMode: ViewerMode;
   }
   | {
-    /** A button under a loading message, such as Cancel while the sort index is built. */
-    action?: { label: string; onClick: () => void };
     className?: string;
     detail?: string;
     kind: "message";

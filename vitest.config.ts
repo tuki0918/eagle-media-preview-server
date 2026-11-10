@@ -22,6 +22,7 @@ export default defineConfig({
       "src/**/*.test.tsx",
       "public/**/*.test.ts",
       "plugin/**/*.test.ts",
+      "plugin/**/*.test.tsx",
       "server/**/*.test.ts",
     ],
   },

@@ -201,6 +201,12 @@ type SortIndexManager = ReturnType<typeof createLibraryIndexManager>;
 interface ApiContext {
   /** Present only when the experimental sort is on. */
   sortIndexes: SortIndexManager | null;
+  /**
+   * Called when a request arrives; the returned function reports the open library's index, starting
+   * its build if needed, but only while the server still runs and no library switch came in between,
+   * so a request answered late never revives an index that stop() or a switch released.
+   */
+  sortIndexCheck: () => (libraryPath: string) => SortIndexState | null;
   sortIndexWaitMs: number;
   /** Re-reads the open library from Eagle right before a write and throws if it changed. */
   confirmLibraryBeforeWrite: (res: ServerResponse) => Promise<void>;
@@ -346,7 +352,24 @@ function createViewerServer({
   const libraryAccess: LibraryAccessPolicy = createLibraryAccessPolicy(sharedLibraries, resolvedAuthUsers.length ? libraryUserRules : []);
   const libraryId = (libraryPath: unknown) => libraryIdFor(libraryPath, resolvedSessionSecret);
   const currentSession: EagleSession = createConnectionContext({ client: eagleClient });
-  const sortIndexes: SortIndexManager | null = experimentalSort ? createLibraryIndexManager() : null;
+  // With Advanced Sort on, the index is built in the background when the server starts (and after a
+  // library switch) and kept while the server runs, so sorting is ready before anyone asks for it.
+  const sortIndexes: SortIndexManager | null = experimentalSort ? createLibraryIndexManager({ idleMs: Infinity }) : null;
+  const sortIndexCheck = () => {
+    const admittedGeneration = libraryGeneration;
+    return (libraryPath: string) => sortIndexes && state === "running" && admittedGeneration === libraryGeneration
+      ? sortIndexState(sortIndexes, libraryPath)
+      : null;
+  };
+  let sortWarmRun = 0;
+  const warmSortIndex = async () => {
+    if (!sortIndexes) return;
+    const run = ++sortWarmRun;
+    const check = sortIndexCheck();
+    const library = await currentSession.libraryInfo().catch(() => null) as EagleLibraryInfo | null;
+    if (run !== sortWarmRun || !library?.path) return;
+    check(String(library.path));
+  };
   // Bumped whenever the plugin reports a library switch.
   let libraryGeneration = 0;
   // What was known when Eagle reported a switch; it stays readable until Eagle is asked again.
@@ -487,6 +510,7 @@ function createViewerServer({
           libraryAccess,
           libraryId,
           sortIndexes,
+          sortIndexCheck,
           sortIndexWaitMs,
           uploadMaxBytes,
         });
@@ -547,6 +571,7 @@ function createViewerServer({
         state = "running";
         uploadSweepTimer = setInterval(() => void sweepUploads(), uploadSweepIntervalMs);
         uploadSweepTimer.unref?.();
+        void warmSortIndex();
         return this.status();
       } catch (error) {
         state = "error";
@@ -556,6 +581,7 @@ function createViewerServer({
     },
 
     async stop() {
+      sortWarmRun += 1;
       sortIndexes?.release();
       if (uploadSweepTimer) clearInterval(uploadSweepTimer);
       uploadSweepTimer = null;
@@ -600,6 +626,7 @@ function createViewerServer({
         lastError,
         activeSessions: authSessions.size,
         requestCount,
+        ...(sortIndexes ? { sortIndex: loadedSortIndexState(sortIndexes) } : {}),
       };
     },
 
@@ -624,6 +651,7 @@ function createViewerServer({
       sortIndexes?.release();
       libraryInfoBeforeSwitch = currentSession.lastLibraryInfo?.();
       currentSession.clearLibraryInfo?.();
+      void warmSortIndex();
     },
 
     server,
@@ -719,7 +747,7 @@ async function cachedItemTypes(session: { client: EagleClient; libraryInfo(): Pr
   return { complete: scan.complete, items: scan.items };
 }
 
-async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { auth, confirmLibraryBeforeWrite, getSession, libraryAccess, libraryId, sortIndexes, sortIndexWaitMs, uploadMaxBytes }: ApiContext & { auth: AuthContext }) {
+async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { auth, confirmLibraryBeforeWrite, getSession, libraryAccess, libraryId, sortIndexes, sortIndexCheck, sortIndexWaitMs, uploadMaxBytes }: ApiContext & { auth: AuthContext }) {
   const session = getSession();
 
   if (url.pathname === "/api/connect") {
@@ -727,7 +755,7 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       sendMethodNotAllowed(res, ["POST"]);
       return;
     }
-    await handleConnect(req, res, session, libraryId, libraryAccess, authenticatedUser(req, auth), hasUploadAccess(req, auth) ? uploadMaxBytes : undefined, Boolean(sortIndexes));
+    await handleConnect(req, res, session, libraryId, libraryAccess, authenticatedUser(req, auth), hasUploadAccess(req, auth) ? uploadMaxBytes : undefined, sortIndexes ? sortIndexCheck() : null);
     return;
   }
 
@@ -736,6 +764,7 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       sendMethodNotAllowed(res, ["GET"]);
       return;
     }
+    const checkSortIndex = sortIndexCheck();
     const [app, library] = await Promise.allSettled([
       session.client.appInfo(),
       session.libraryInfo(),
@@ -751,6 +780,9 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       // Changing the upload permission keeps sessions valid, so open viewers learn about it here.
       permissions: permissionsForUser(authenticatedUser(req, auth), { authenticated: true }),
       uploadMaxBytes: hasUploadAccess(req, auth) ? uploadMaxBytes : undefined,
+      // Lets open viewers enable sorting once the background index is ready. Asking also restarts
+      // a failed build and follows a library switch.
+      ...sortIndexField(libraryStatus === "shared" && libraryInfo?.path ? checkSortIndex(String(libraryInfo.path)) : null),
     });
     return;
   }
@@ -828,21 +860,6 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
           tags,
         });
     sendJson(res, 200, sortStatus ? { ...(result as object), sort: sortStatus } : result);
-    return;
-  }
-
-  // Experimental sort: lets a viewer stop a long first index build (large libraries, slow disks).
-  if (url.pathname === "/api/sort-index/cancel") {
-    if (!sortIndexes) {
-      sendJson(res, 404, { error: "Not found" });
-      return;
-    }
-    if (req.method !== "POST") {
-      sendMethodNotAllowed(res, ["POST"]);
-      return;
-    }
-    await readJson(req);
-    sendJson(res, 200, { cancelled: Boolean(sortIndexes.loaded()?.cancel()) });
     return;
   }
 
@@ -1326,7 +1343,7 @@ function sendLoginRateLimited(res: ServerResponse, retryAfterSeconds: number) {
 }
 
 // The Eagle API connection is fixed server-side; viewer clients can only check it, never repoint it.
-async function handleConnect(req: IncomingMessage, res: ServerResponse, session: EagleSession, libraryId: ApiContext["libraryId"], libraryAccess: LibraryAccessPolicy, user: LibraryUser | null, uploadMaxBytes?: number, sortAvailable = false) {
+async function handleConnect(req: IncomingMessage, res: ServerResponse, session: EagleSession, libraryId: ApiContext["libraryId"], libraryAccess: LibraryAccessPolicy, user: LibraryUser | null, uploadMaxBytes?: number, checkSortIndex: ReturnType<ApiContext["sortIndexCheck"]> | null = null) {
   await readJson(req);
   try {
     const [app, library] = await Promise.all([
@@ -1343,10 +1360,43 @@ async function handleConnect(req: IncomingMessage, res: ServerResponse, session:
       sendLibraryForbidden(res);
       return;
     }
-    sendJson(res, 200, { app, library: publicLibraryInfo(library, libraryId), uploadMaxBytes, ...(sortAvailable ? { features: { sort: true } } : {}) });
+    sendJson(res, 200, {
+      app,
+      library: publicLibraryInfo(library, libraryId),
+      uploadMaxBytes,
+      ...(checkSortIndex ? { features: { sort: true }, ...sortIndexField(library?.path ? checkSortIndex(String(library.path)) : null) } : {}),
+    });
   } catch (error) {
     sendJson(res, 502, { error: `Unable to connect to Eagle API: ${errorMessage(error)}` });
   }
+}
+
+interface SortIndexState {
+  loaded: number;
+  status: "building" | "failed" | "ready";
+  total: number;
+}
+
+function describeSortIndex(index: { progress(): { loaded: number; total: number }; status: string }): SortIndexState {
+  return { status: index.status === "ready" ? "ready" : index.status === "failed" ? "failed" : "building", ...index.progress() };
+}
+
+// Makes sure the library's index exists, building it in the background if needed (a failed build
+// is retried at most every 30 seconds), and says where it stands.
+function sortIndexState(sortIndexes: SortIndexManager, libraryPath: string): SortIndexState {
+  const index = sortIndexes.forLibrary(libraryPath);
+  void index.whenReady(0);
+  return describeSortIndex(index);
+}
+
+function sortIndexField(state: SortIndexState | null) {
+  return state ? { sortIndex: state } : {};
+}
+
+// For the plugin panel: never starts a build.
+function loadedSortIndexState(sortIndexes: SortIndexManager): SortIndexState | null {
+  const index = sortIndexes.loaded();
+  return index ? describeSortIndex(index) : null;
 }
 
 // The loaded sort index, only if it belongs to the library just confirmed open for this request.

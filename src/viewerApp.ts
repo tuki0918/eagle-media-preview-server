@@ -90,6 +90,7 @@ import {
 import type {
   ConnectResponse,
   HealthResponse,
+  SortIndexState,
   AuthStatusResponse,
   EagleItem,
   ItemPatch,
@@ -127,6 +128,19 @@ let uploadRefreshRun = 0;
 let uploadMaxBytes: number | undefined;
 // Experimental sort, offered only when the server says it has it on.
 let sortAvailable = false;
+// With the experimental sort, the server builds its index in the background; sorting stays
+// disabled until /api/health reports it ready, while everything else is usable.
+let sortIndex: SortIndexState | null = null;
+let sortIndexTimer: ReturnType<typeof setTimeout> | null = null;
+// The sort the shown list was loaded with ("" for Eagle's order; null before the first page).
+// Later pages of the same list (tiles loading more, the pager) keep it, so sorting becoming ready
+// or unavailable meanwhile never mixes two orders in one list.
+let listSort: typeof state.sort | null = null;
+// What the shown list is (filters, sort, page size, view); a later page continues it only while
+// these are unchanged, so going back in history to another list's page 3 is a new list.
+let listKey = "";
+// Sorting became ready while a preview was open: the list is reloaded, sorted, once it closes.
+let sortReloadPending = false;
 // While the server builds its index, a sorted list is asked for again this often.
 const SORT_INDEXING_RETRY_MS = 1500;
 let itemTypesState: "idle" | "loading" | "loaded" = "idle";
@@ -142,6 +156,8 @@ let eagleStatusCheckInFlight: Promise<void> | null = null;
 let eagleStatusSession = 0;
 let unsubscribeEagleStatusRequests: (() => void) | null = null;
 const EAGLE_STATUS_POLL_INTERVAL_MS = 30_000;
+const SORT_INDEX_CHECK_MS = 2000;
+const SORT_INDEX_FAILED_CHECK_MS = 15_000;
 // Long enough for Eagle's local API, short enough that a stopped server shows as offline quickly.
 const EAGLE_STATUS_TIMEOUT_MS = 5_000;
 const pendingRatingItemIds = new Set<string>();
@@ -514,8 +530,12 @@ function showViewer(data: ConnectResponse) {
   sortAvailable = data.features?.sort === true;
   // A sort from a bookmarked URL means nothing on a server without the experimental sort.
   if (!sortAvailable) Object.assign(state, { sort: "", order: "" });
+  sortIndex = sortAvailable ? data.sortIndex ?? null : null;
+  listSort = null;
+  sortReloadPending = false;
   setEagleStatus(data.app ? "online" : "offline");
   startEagleStatusPolling();
+  scheduleSortIndexCheck();
   document.title = libraryTitle(data);
   resetViewerResults();
   resetTagList();
@@ -614,7 +634,60 @@ function startEagleStatusPolling() {
   window.addEventListener("online", checkEagleStatus);
 }
 
+function sortReady() {
+  return sortAvailable && sortIndex?.status === "ready";
+}
+
+function sortPreparingLabel() {
+  if (!sortAvailable || sortReady()) return "";
+  if (sortIndex?.status === "failed") return "Sort unavailable";
+  const loaded = Number(sortIndex?.loaded || 0);
+  const total = Number(sortIndex?.total || 0);
+  return total > 0 ? `Preparing sort… ${Math.min(100, Math.floor((loaded / total) * 100))}%` : "Preparing sort…";
+}
+
+// Health is polled every 30 seconds; while the index is being built it is asked sooner, so the
+// sort control follows the progress and turns on soon after the build ends.
+function scheduleSortIndexCheck() {
+  if (sortIndexTimer) clearTimeout(sortIndexTimer);
+  sortIndexTimer = null;
+  if (!sortAvailable || sortReady()) return;
+  sortIndexTimer = setTimeout(() => {
+    sortIndexTimer = null;
+    void checkEagleStatus();
+  }, sortIndex?.status === "failed" ? SORT_INDEX_FAILED_CHECK_MS : SORT_INDEX_CHECK_MS);
+}
+
+function applySortIndex(next: SortIndexState | undefined) {
+  if (!sortAvailable) return;
+  const wasReady = sortReady();
+  const previousLabel = sortPreparingLabel();
+  sortIndex = next ?? null;
+  if (wasReady !== sortReady() || previousLabel !== sortPreparingLabel()) renderSearchControlButtons();
+  // A sort kept from the URL was shown in Eagle's order until now; show it sorted, from the top.
+  // A preview stays open until it is closed (reloading would empty the list behind it).
+  if (!wasReady && sortReady() && state.sort && state.section === "items" && listSort !== null && listSort !== state.sort) {
+    if (isPreviewDialogOpen()) sortReloadPending = true;
+    else reloadSortedList();
+  }
+  scheduleSortIndexCheck();
+}
+
+function currentListKey() {
+  return JSON.stringify([state.query, state.tags, state.folderId, state.smartFolderId, state.ext, state.rating, state.sort, state.order, state.limit, state.viewMode]);
+}
+
+function reloadSortedList() {
+  sortReloadPending = false;
+  state.offset = 0;
+  // The page shown goes back to the first, so the URL (?page=) must say so too.
+  syncUrlState({ replace: true });
+  void loadItems();
+}
+
 function stopEagleStatusPolling() {
+  if (sortIndexTimer) clearTimeout(sortIndexTimer);
+  sortIndexTimer = null;
   eagleStatusRequestId += 1;
   eagleStatusSession += 1;
   eagleStatusCheckInFlight = null;
@@ -721,6 +794,7 @@ async function performEagleStatusCheck() {
     }
     setEagleStatus(data.app ? "online" : "offline");
     if (data.permissions) applyHealthPermissions(data);
+    applySortIndex(data.sortIndex);
   } catch (error) {
     if (requestId !== eagleStatusRequestId) return;
     if (handleAuthError(error)) return;
@@ -812,17 +886,26 @@ async function loadItems({ append = false }: LoadItemsOptions = {}) {
   }
   updatePager();
 
+  // A fresh list (its first page, or another list's page) takes the sort as it stands; later pages
+  // of the same list keep the list's own.
+  const key = currentListKey();
+  const continuesList = (append || state.offset > 0) && listSort !== null && listKey === key;
+  const sort = continuesList ? listSort! : sortReady() ? state.sort : "";
+  listSort = sort;
+  listKey = key;
+  if (!continuesList && sort === state.sort) sortReloadPending = false;
   const params = itemQueryParams({
     ...state,
-    sort: sortAvailable ? state.sort : "",
+    sort,
     limit: currentFetchLimit(),
   });
 
   try {
     let data = await getJson<LoadItemsResponse>(`/api/items?${params.toString()}`);
     if (requestId !== state.requestId) return;
-    // The first sorted request makes the server index the library; until then it answers in
-    // Eagle's order, which is not shown so that pages of two different orders never mix.
+    // Sorting is offered only once the server's index is ready, but a viewer left open while the
+    // server restarts still believes it is ready until its next health check; the server then
+    // answers in Eagle's order, which is not shown so that pages of two different orders never mix.
     while (data.sort?.status === "indexing") {
       if (!append) {
         setResultSurfaceState({
@@ -830,7 +913,6 @@ async function loadItems({ append = false }: LoadItemsOptions = {}) {
           text: sortIndexingMessage(data.sort),
           className: "loading",
           viewMode: state.viewMode,
-          action: { label: "Cancel", onClick: cancelSortIndexing },
         });
       }
       await new Promise((resolve) => setTimeout(resolve, SORT_INDEXING_RETRY_MS));
@@ -846,12 +928,14 @@ async function loadItems({ append = false }: LoadItemsOptions = {}) {
       // loading more, the next page) is in that same order, even once the server could sort again.
       if (sortTurnedOff) sortAvailable = false;
       Object.assign(state, { sort: "", order: "" });
+      listSort = "";
+      if (append || state.offset > 0) state.offset = 0;
       syncUrlState({ replace: true });
       renderSearchControlButtons();
       showErrorToast(sortTurnedOff ? "Sorting was turned off; showing the default order." : "Sorting is unavailable right now; showing the default order.");
-      if (append) {
-        // The pages already shown are sorted, so start the list over, from the top, in the default order.
-        state.offset = 0;
+      if (append || params.get("offset") !== "0") {
+        // The pages already shown (or the ones before this one) are sorted, so start the list over,
+        // from the top, in the default order.
         void loadItems();
         return;
       }
@@ -896,15 +980,6 @@ async function loadItems({ append = false }: LoadItemsOptions = {}) {
     updatePager();
     setupTileAutoLoading();
   }
-}
-
-// Large libraries take a while to index and keep the disk busy, so the visitor may stop it: the list
-// goes back to the default order and the server drops what it has read so far.
-function cancelSortIndexing() {
-  applyFilterChange({ sort: "", order: "" });
-  postJson("/api/sort-index/cancel", {}).catch((error) => {
-    handleAuthError(error);
-  });
 }
 
 function sortIndexingMessage(progress: NonNullable<LoadItemsResponse["sort"]>) {
@@ -1089,6 +1164,7 @@ function closePreview({ skipHistory = false }: OpenPreviewOptions = {}) {
   state.previewInfoOpen = false;
   clearPreviewContents();
   if (!skipHistory) syncUrlState();
+  if (sortReloadPending && state.section === "items" && sortReady()) reloadSortedList();
 }
 
 function togglePreviewInfo() {
@@ -1246,7 +1322,8 @@ function renderSearchControlButtons() {
     selectedLimit: state.limit,
     selectedRating: state.rating,
     selectedSmartFolderId: state.smartFolderId,
-    sortAvailable,
+    sortAvailable: sortReady(),
+    sortPreparing: sortPreparingLabel(),
     selectedSort: state.sort,
     selectedOrder: state.order,
     smartFolders: state.smartFolders,

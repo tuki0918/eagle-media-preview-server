@@ -47,6 +47,7 @@ interface SearchControlsProps {
   selectedExt?: string;
   selectedRating?: string;
   sortAvailable?: boolean;
+  sortPreparing?: string;
   selectedSort?: SortKey;
   selectedOrder?: "" | SortOrder;
 }
@@ -104,6 +105,7 @@ export function SearchControls({
         selectedExt={displaySelectedExt}
         selectedRating={displaySelectedRating}
         sortAvailable={state.sortAvailable}
+        sortPreparing={state.sortPreparing}
         selectedSort={state.selectedSort}
         selectedOrder={state.selectedOrder}
       />
@@ -184,10 +186,13 @@ export function AdvancedFilters({
   selectedExt = "",
   selectedRating = "",
   sortAvailable = false,
+  sortPreparing = "",
   selectedSort = "",
   selectedOrder = "",
-}: Pick<SearchControlsProps, "availableExts" | "availableExtsLoading" | "filtersOpen" | "hasActiveFilters" | "hasResettableFilters" | "selectedExt" | "selectedRating" | "sortAvailable" | "selectedSort" | "selectedOrder">) {
+}: Pick<SearchControlsProps, "availableExts" | "availableExtsLoading" | "filtersOpen" | "hasActiveFilters" | "hasResettableFilters" | "selectedExt" | "selectedRating" | "sortAvailable" | "sortPreparing" | "selectedSort" | "selectedOrder">) {
   const extOptions = mediaTypeOptions(availableExts, selectedExt, availableExtsLoading);
+  // The sort menu stays in place while the server prepares its index, disabled.
+  const sortShown = sortAvailable || Boolean(sortPreparing);
   return (
     <div
       id="advancedFilters"
@@ -197,20 +202,20 @@ export function AdvancedFilters({
       // own row next to reset (see .filter-row-sort in styles.css).
       className={cn(
         "filter-row grid items-center gap-4 max-[540px]:grid-cols-[minmax(0,1fr)_auto] max-[540px]:gap-3",
-        sortAvailable && "filter-row-sort",
-        sortAvailable ? "grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]" : "grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]",
+        sortShown && "filter-row-sort",
+        sortShown ? "grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]" : "grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]",
       )}
       hidden={!filtersOpen}
     >
       <div className="min-w-0 max-[540px]:col-span-2">
         <TypeFilter loading={availableExtsLoading} options={extOptions} selectedExt={selectedExt} />
       </div>
-      <div className={cn("min-w-0", sortAvailable && "max-[540px]:col-span-2")}>
+      <div className={cn("min-w-0", sortShown && "max-[540px]:col-span-2")}>
         <RatingFilter selectedRating={selectedRating} />
       </div>
-      {sortAvailable ? (
+      {sortShown ? (
         <div className="min-w-0">
-          <SortFilter selectedSort={selectedSort} selectedOrder={selectedOrder} />
+          <SortFilter selectedSort={selectedSort} selectedOrder={selectedOrder} preparing={sortAvailable ? "" : sortPreparing} />
         </div>
       ) : null}
       <div className="flex justify-end">
@@ -232,8 +237,10 @@ function FilterMenu({
   summary,
   summaryText,
   children,
+  disabled = false,
   onOpenChange,
 }: {
+  disabled?: boolean;
   id: string;
   label: string;
   summary: ReactNode;
@@ -247,7 +254,8 @@ function FilterMenu({
         <button
           id={id}
           type="button"
-          className={cn(selectClassName, "flex min-w-0 items-center text-left")}
+          className={cn(selectClassName, "flex min-w-0 items-center text-left disabled:cursor-not-allowed disabled:opacity-60")}
+          disabled={disabled}
           aria-label={`${label}: ${summaryText}`}
           title={summaryText}
         >
@@ -340,13 +348,13 @@ const sortDirectionButtonClassName =
 
 // Experimental: the server sorts with its own index of the library (see docs/design/large-library-index.md).
 // As in Eagle, the menu picks what to sort by and the buttons beside it pick the direction.
-function SortFilter({ selectedSort, selectedOrder }: { selectedSort: SortKey; selectedOrder: "" | SortOrder }) {
-  const summaryText = sortLabel(selectedSort);
+function SortFilter({ selectedSort, selectedOrder, preparing = "" }: { selectedSort: SortKey; selectedOrder: "" | SortOrder; preparing?: string }) {
+  const summaryText = preparing || sortLabel(selectedSort);
   const order = effectiveSortOrder(selectedSort, selectedOrder);
   return (
     <div className="flex min-w-0 items-center gap-2">
       <div className="min-w-0 flex-1">
-        <FilterMenu id="sortSelect" label="Sort (experimental)" summary={<span className="truncate">{summaryText}</span>} summaryText={summaryText}>
+        <FilterMenu id="sortSelect" label="Sort (experimental)" disabled={Boolean(preparing)} summary={<span className="truncate">{summaryText}</span>} summaryText={summaryText}>
           <div className="flex items-center justify-between gap-2 px-2 pb-1 pt-1.5 text-xs text-muted-foreground">
             <span>Sort by</span>
             <span className="rounded-full border border-border px-1.5 py-px text-[10px] uppercase tracking-wide">Experimental</span>
@@ -379,7 +387,7 @@ function SortFilter({ selectedSort, selectedOrder }: { selectedSort: SortKey; se
               aria-label={label}
               title={label}
               aria-pressed={Boolean(selectedSort) && order === direction}
-              disabled={!selectedSort}
+              disabled={!selectedSort || Boolean(preparing)}
               onClick={() => changeSort(selectedSort, direction === defaultSortOrder(selectedSort) ? "" : direction)}
             >
               <Icon aria-hidden="true" />

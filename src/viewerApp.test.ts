@@ -886,13 +886,21 @@ describe("viewer app experimental sort", () => {
   });
 
   // Serves a signed-in viewer; `items` answers /api/items requests (all of them, sorted or not).
-  function serveViewer({ features, items }: { features?: { sort?: boolean }; items: (params: URLSearchParams) => unknown }) {
+  // `sortIndex` is what connect and health report about the server's background index; it is
+  // ready unless a test says otherwise.
+  function serveViewer({ features, items, sortIndex = () => ({ status: "ready", loaded: 2, total: 2 }) }: {
+    features?: { sort?: boolean };
+    items: (params: URLSearchParams) => unknown;
+    sortIndex?: () => { loaded?: number; status: string; total?: number };
+  }) {
     const requests: Array<{ method: string; url: string }> = [];
+    const sortIndexFields = () => (features?.sort ? { sortIndex: sortIndex() } : {});
     Object.defineProperty(globalThis, "fetch", { configurable: true, value: vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       requests.push({ method: init?.method || "GET", url });
       if (url === "/api/auth/status") return jsonResponse({ authenticated: true, required: false });
-      if (url === "/api/connect") return jsonResponse({ app: { version: "1.0" }, library: { id: "lib", name: "Library" }, ...(features ? { features } : {}) });
+      if (url === "/api/connect") return jsonResponse({ app: { version: "1.0" }, library: { id: "lib", name: "Library" }, ...(features ? { features } : {}), ...sortIndexFields() });
+      if (url === "/api/health") return jsonResponse({ app: { version: "1.0" }, library: { id: "lib", name: "Library" }, libraryStatus: "shared", ...sortIndexFields() });
       if (url === "/api/folders" || url === "/api/smart-folders") return jsonResponse({ items: [] });
       if (url.startsWith("/api/items?")) return jsonResponse(items(new URLSearchParams(url.split("?")[1])));
       if (url === "/api/sort-index/cancel") return jsonResponse({ cancelled: true });
@@ -914,7 +922,47 @@ describe("viewer app experimental sort", () => {
     return { getResultSurfaceState, getSearchControlsState, shellActions };
   }
 
-  test("shows progress with Cancel while the server indexes, then the sorted list", async () => {
+  test("keeps sorting disabled while the server builds its index, then turns it on and sorts", async () => {
+    history.replaceState(null, "", "/viewer?sort=name");
+    let index: { loaded: number; status: string; total: number } = { status: "building", loaded: 40, total: 100 };
+    const { listRequests } = serveViewer({
+      features: { sort: true },
+      sortIndex: () => index,
+      items: (params) => params.get("sort") === "name"
+        ? { items: [{ id: "a" }, { id: "b" }], total: 2, sort: { status: "ready" } }
+        : { items: [{ id: "eagle-order" }], total: 1 },
+    });
+    const { getResultSurfaceState, getSearchControlsState } = await connectViewer();
+
+    // Everything else works meanwhile: the list shows in Eagle's order, and the sort is kept.
+    await vi.waitFor(() => {
+      const surface = getResultSurfaceState();
+      expect(surface.kind === "list" && surface.items.map((item) => item.id)).toEqual(["eagle-order"]);
+    });
+    expect(getSearchControlsState()).toMatchObject({ sortAvailable: false, sortPreparing: "Preparing sort… 40%", selectedSort: "name" });
+    expect(listRequests().every((request) => !new URLSearchParams(request.url.split("?")[1]).has("sort"))).toBe(true);
+
+    index = { status: "ready", loaded: 100, total: 100 };
+    await vi.waitFor(() => {
+      const surface = getResultSurfaceState();
+      expect(surface.kind === "list" && surface.items.map((item) => item.id)).toEqual(["a", "b"]);
+    }, { timeout: 4000 });
+    expect(getSearchControlsState()).toMatchObject({ sortAvailable: true, sortPreparing: "" });
+  });
+
+  test("a failed index build leaves sorting unavailable without stopping the viewer", async () => {
+    const { listRequests } = serveViewer({
+      features: { sort: true },
+      sortIndex: () => ({ status: "failed", loaded: 0, total: 0 }),
+      items: () => ({ items: [{ id: "eagle-order" }], total: 1 }),
+    });
+    const { getResultSurfaceState, getSearchControlsState } = await connectViewer();
+    await vi.waitFor(() => expect(getResultSurfaceState().kind).toBe("list"));
+    expect(getSearchControlsState()).toMatchObject({ sortAvailable: false, sortPreparing: "Sort unavailable" });
+    expect(listRequests().length).toBeGreaterThan(0);
+  });
+
+  test("shows progress while a sorted request still finds the index building, then the sorted list", async () => {
     history.replaceState(null, "", "/viewer?sort=name");
     let sortedRequests = 0;
     serveViewer({
@@ -930,8 +978,6 @@ describe("viewer app experimental sort", () => {
     const { getResultSurfaceState, getSearchControlsState } = await connectViewer();
 
     await vi.waitFor(() => expect(getResultSurfaceState()).toMatchObject({ kind: "message", className: "loading", text: "Scanning library… 5 / 10 items" }));
-    const surface = getResultSurfaceState();
-    expect(surface.kind === "message" && surface.action?.label).toBe("Cancel");
     expect(getSearchControlsState()).toMatchObject({ sortAvailable: true, selectedSort: "name" });
     // Eagle's order is never shown in between; the list appears once the server is ready.
     await vi.waitFor(() => {
@@ -939,32 +985,6 @@ describe("viewer app experimental sort", () => {
       expect(next.kind === "list" && next.items.map((item) => item.id)).toEqual(["a", "b"]);
     }, { timeout: 4000 });
     expect(sortedRequests).toBe(2);
-  });
-
-  test("Cancel tells the server to stop and goes back to the default order", async () => {
-    history.replaceState(null, "", "/viewer?sort=name&order=desc");
-    const { listRequests, requests } = serveViewer({
-      features: { sort: true },
-      items: (params) => params.get("sort")
-        ? { items: [], total: 0, sort: { status: "indexing", loaded: 1, total: 10 } }
-        : { items: [{ id: "default" }], total: 1 },
-    });
-    const { getResultSurfaceState, getSearchControlsState } = await connectViewer();
-    await vi.waitFor(() => expect(getResultSurfaceState()).toMatchObject({ kind: "message", className: "loading" }));
-    const surface = getResultSurfaceState();
-    if (surface.kind !== "message" || !surface.action) throw new Error("Missing Cancel action");
-    surface.action.onClick();
-
-    await vi.waitFor(() => expect(requests.some((request) => request.method === "POST" && request.url === "/api/sort-index/cancel")).toBe(true));
-    await vi.waitFor(() => {
-      const next = getResultSurfaceState();
-      expect(next.kind === "list" && next.items.map((item) => item.id)).toEqual(["default"]);
-    });
-    const last = listRequests().at(-1)!;
-    expect(new URLSearchParams(last.url.split("?")[1]).has("sort")).toBe(false);
-    expect(new URLSearchParams(window.location.search).has("sort")).toBe(false);
-    expect(new URLSearchParams(window.location.search).has("order")).toBe(false);
-    expect(getSearchControlsState()).toMatchObject({ selectedSort: "", selectedOrder: "" });
   });
 
   test("drops the sort when the server can't sort, so later pages stay in the default order", async () => {
@@ -985,6 +1005,164 @@ describe("viewer app experimental sort", () => {
     shellActions.changeRating("5");
     await vi.waitFor(() => expect(listRequests().length).toBeGreaterThan(before));
     expect(new URLSearchParams(listRequests().at(-1)!.url.split("?")[1]).has("sort")).toBe(false);
+  });
+
+  function stubTileObserver() {
+    const observers: Array<(entries: Array<{ isIntersecting: boolean }>) => void> = [];
+    Object.defineProperty(globalThis, "IntersectionObserver", { configurable: true, value: class {
+      constructor(callback: (entries: Array<{ isIntersecting: boolean }>) => void) {
+        observers.push(callback);
+      }
+      observe() {}
+      disconnect() {}
+    } });
+    return observers;
+  }
+
+  function pageOf(prefix: string, params: URLSearchParams, total = 1000) {
+    const offset = Number(params.get("offset"));
+    const limit = Number(params.get("limit"));
+    return Array.from({ length: Math.max(0, Math.min(limit, total - offset)) }, (_, i) => ({ id: `${prefix}${offset + i}` }));
+  }
+
+  const queryOf = (request: { url: string }) => new URLSearchParams(request.url.split("?")[1]);
+
+  test("sorting that becomes ready during a preview waits until it closes, and loading more keeps the shown order", async () => {
+    history.replaceState(null, "", "/viewer?sort=name&view=tiles");
+    const observers = stubTileObserver();
+    let index = { status: "building", loaded: 1, total: 10 };
+    const { listRequests } = serveViewer({
+      features: { sort: true },
+      sortIndex: () => index,
+      items: (params) => params.get("sort") === "name"
+        ? { items: pageOf("s", params), total: 1000, sort: { status: "ready" } }
+        : { items: pageOf("d", params), total: 1000 },
+    });
+    try {
+      const { getResultSurfaceState } = await connectViewer();
+      await vi.waitFor(() => expect(getResultSurfaceState().kind).toBe("list"));
+      const shown = getResultSurfaceState();
+      if (shown.kind !== "list") throw new Error("Missing result list");
+      shown.onOpenPreview(shown.items[0]);
+      const { getPreviewDialogState } = await import("./viewer/previewDialogState");
+      expect(getPreviewDialogState().open).toBe(true);
+
+      index = { status: "ready", loaded: 10, total: 10 };
+      const { getSearchControlsState } = await import("./viewer/searchControlsState");
+      await vi.waitFor(() => expect(getSearchControlsState().sortAvailable).toBe(true), { timeout: 4000 });
+      // The list behind the preview is not replaced, and more of it is loaded in its own order.
+      expect(listRequests().filter((request) => queryOf(request).get("sort") === "name")).toHaveLength(0);
+      observers.at(-1)!([{ isIntersecting: true }]);
+      await vi.waitFor(() => expect(queryOf(listRequests().at(-1)!).get("offset")).not.toBe("0"));
+      expect(queryOf(listRequests().at(-1)!).has("sort")).toBe(false);
+      await vi.waitFor(() => {
+        const surface = getResultSurfaceState();
+        expect(surface.kind === "list" && surface.items.length).toBeGreaterThan(90);
+      });
+
+      // Closing the preview shows the list sorted, from the top, without mixing in the old order.
+      const { handlePreviewClose } = await import("./viewer/shellActions");
+      handlePreviewClose();
+      await vi.waitFor(() => {
+        const last = queryOf(listRequests().at(-1)!);
+        expect(last.get("sort")).toBe("name");
+        expect(last.get("offset")).toBe("0");
+      });
+      await vi.waitFor(() => {
+        const surface = getResultSurfaceState();
+        const ids = surface.kind === "list" ? surface.items.map((item) => String(item.id)) : [];
+        expect(ids[0]).toBe("s0");
+        expect(ids.every((id) => id.startsWith("s"))).toBe(true);
+        expect(new Set(ids).size).toBe(ids.length);
+      });
+    } finally {
+      delete (globalThis as { IntersectionObserver?: unknown }).IntersectionObserver;
+    }
+  });
+
+  test("a sorted list keeps its order for later pages when the server's index starts rebuilding", async () => {
+    history.replaceState(null, "", "/viewer?sort=name&view=tiles");
+    const observers = stubTileObserver();
+    let index = { status: "ready", loaded: 10, total: 10 };
+    const { listRequests } = serveViewer({
+      features: { sort: true },
+      sortIndex: () => index,
+      items: (params) => !params.get("sort")
+        ? { items: pageOf("d", params), total: 1000 }
+        : index.status === "ready"
+        ? { items: pageOf("s", params), total: 1000, sort: { status: "ready" } }
+        : { items: pageOf("d", params), total: 1000, sort: { status: "indexing", loaded: 1, total: 10 } },
+    });
+    try {
+      const { getResultSurfaceState } = await connectViewer();
+      await vi.waitFor(() => expect(getResultSurfaceState().kind).toBe("list"));
+      // The server restarted: health now reports a build in progress.
+      index = { status: "building", loaded: 1, total: 10 };
+      window.dispatchEvent(new window.Event("online"));
+      const { getSearchControlsState } = await import("./viewer/searchControlsState");
+      await vi.waitFor(() => expect(getSearchControlsState().sortAvailable).toBe(false));
+
+      observers.at(-1)!([{ isIntersecting: true }]);
+      await vi.waitFor(() => expect(queryOf(listRequests().at(-1)!).get("offset")).not.toBe("0"));
+      // Loading more still asks for the list's own sort and waits for it, rather than Eagle's order.
+      expect(queryOf(listRequests().at(-1)!).get("sort")).toBe("name");
+      index = { status: "ready", loaded: 10, total: 10 };
+      await vi.waitFor(() => {
+        const surface = getResultSurfaceState();
+        const ids = surface.kind === "list" ? surface.items.map((item) => String(item.id)) : [];
+        expect(ids.length).toBeGreaterThan(90);
+        expect(ids.every((id) => id.startsWith("s"))).toBe(true);
+        expect(new Set(ids).size).toBe(ids.length);
+      }, { timeout: 4000 });
+    } finally {
+      delete (globalThis as { IntersectionObserver?: unknown }).IntersectionObserver;
+    }
+  });
+
+  test("going back to the first page once sorting is ready also updates the page in the URL", async () => {
+    history.replaceState(null, "", "/viewer?sort=name&view=list&page=3");
+    let index = { status: "building", loaded: 1, total: 10 };
+    const { listRequests } = serveViewer({
+      features: { sort: true },
+      sortIndex: () => index,
+      items: (params) => params.get("sort") === "name"
+        ? { items: pageOf("s", params), total: 1000, sort: { status: "ready" } }
+        : { items: pageOf("d", params), total: 1000 },
+    });
+    const { getResultSurfaceState } = await connectViewer();
+    await vi.waitFor(() => expect(getResultSurfaceState().kind).toBe("list"));
+    expect(queryOf(listRequests().at(-1)!).get("offset")).not.toBe("0");
+
+    index = { status: "ready", loaded: 10, total: 10 };
+    await vi.waitFor(() => {
+      const last = queryOf(listRequests().at(-1)!);
+      expect(last.get("sort")).toBe("name");
+      expect(last.get("offset")).toBe("0");
+    }, { timeout: 4000 });
+    expect(new URLSearchParams(window.location.search).get("page")).toBe("1");
+  });
+
+  test("going back in history to another sort's later page asks for that sort", async () => {
+    history.replaceState(null, "", "/viewer?sort=name&view=list&page=3");
+    const { listRequests } = serveViewer({
+      features: { sort: true },
+      items: (params) => ({ items: pageOf(params.get("sort") || "d", params), total: 1000, sort: { status: "ready" } }),
+    });
+    const { getResultSurfaceState, shellActions } = await connectViewer();
+    await vi.waitFor(() => expect(getResultSurfaceState().kind).toBe("list"));
+    expect(Object.fromEntries(queryOf(listRequests().at(-1)!))).toMatchObject({ sort: "name", offset: "60" });
+
+    shellActions.changeSort("filesize", "");
+    await vi.waitFor(() => expect(Object.fromEntries(queryOf(listRequests().at(-1)!))).toMatchObject({ sort: "filesize", offset: "0" }));
+
+    // Back: name order, page 3, a different list from the one shown.
+    history.replaceState(null, "", "/viewer?sort=name&view=list&page=3");
+    shellActions.handleUrlPop();
+    await vi.waitFor(() => expect(Object.fromEntries(queryOf(listRequests().at(-1)!))).toMatchObject({ sort: "name", offset: "60" }));
+    await vi.waitFor(() => {
+      const surface = getResultSurfaceState();
+      expect(surface.kind === "list" && surface.items[0]?.id).toBe("name60");
+    });
   });
 
   test("starts the tiles over from the top when sorting fails while loading more", async () => {

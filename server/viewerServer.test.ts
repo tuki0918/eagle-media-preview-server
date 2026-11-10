@@ -4401,10 +4401,9 @@ test("experimental sort orders /api/items with the library index and fetches the
     assert.equal(byName.status, 200);
     assert.deepEqual(await byName.json(), { items: [{ id: "B2" }, { id: "A1" }, { id: "C3" }], total: 3, offset: 0, limit: 30, sort: { status: "ready" } });
 
-    // The index is ready, so there is no build left to cancel.
+    // A scan is stopped by turning Advanced Sort off; viewers have no way to cancel it.
     const cancel = await fetch(`${origin}/api/sort-index/cancel`, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: "{}" });
-    assert.equal(cancel.status, 200);
-    assert.deepEqual(await cancel.json(), { cancelled: false });
+    assert.equal(cancel.status, 404);
 
     const bySizeDesc = await (await fetch(`${origin}/api/items?sort=filesize&order=desc&offset=1&limit=1`)).json();
     assert.deepEqual(bySizeDesc.items, [{ id: "C3" }]);
@@ -4444,8 +4443,6 @@ test("without experimentalSort, /api/items ignores sort and connect lists no fea
     const response = await fetch(`${origin}/api/items?sort=name`);
     assert.deepEqual(await response.json(), { items: [], total: 0, offset: 0, limit: 30 });
     assert.equal(calls.length, 1);
-    const cancel = await fetch(`${origin}/api/sort-index/cancel`, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: "{}" });
-    assert.equal(cancel.status, 404);
   } finally {
     await viewer.stop();
   }
@@ -4607,28 +4604,6 @@ test("experimental sort sees a rating edit from the viewer at once", async () =>
   }
 });
 
-test("experimental sort cancel stops a build in progress and accepts only POST", async () => {
-  const libraryPath = await createSortLibrary(MANY_SORT_ITEMS);
-  const viewer = createViewerServer({ host: "127.0.0.1", port: 0, viewerPassword: "", experimentalSort: true, sortIndexWaitMs: 0, eagleClient: sortTestClient(() => libraryPath) });
-  await viewer.start();
-  try {
-    const origin = `http://127.0.0.1:${viewer.status().port}`;
-    const page = await (await fetch(`${origin}/api/items?sort=name`)).json();
-    assert.equal(page.sort.status, "indexing");
-    const cancel = await postJsonTo(`${origin}/api/sort-index/cancel`, origin);
-    assert.equal(cancel.status, 200);
-    assert.deepEqual(await cancel.json(), { cancelled: true });
-    const again = await postJsonTo(`${origin}/api/sort-index/cancel`, origin);
-    assert.deepEqual(await again.json(), { cancelled: false });
-    const wrongMethod = await fetch(`${origin}/api/sort-index/cancel`);
-    assert.equal(wrongMethod.status, 405);
-    assert.equal(wrongMethod.headers.get("allow"), "POST");
-  } finally {
-    await viewer.stop();
-    await rm(libraryPath, { recursive: true, force: true });
-  }
-});
-
 test("experimental sort indexes the newly opened library after Eagle switches", async () => {
   const first = await createSortLibrary();
   const second = await createSortLibrary([{ id: "Z9", name: "only-item" }]);
@@ -4695,6 +4670,150 @@ test("experimental sort applies an edit only to the index of the library it was 
     // The copy's index is untouched: its C3 is still unrated.
     assert.deepEqual(await rated(), []);
   } finally {
+    await viewer.stop();
+    await rm(first, { recursive: true, force: true });
+    await rm(second, { recursive: true, force: true });
+  }
+});
+
+async function waitForSortIndex(read: () => Promise<{ status?: string } | null | undefined> | { status?: string } | null | undefined, status = "ready") {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    if ((await read())?.status === status) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.fail(`the sort index never reached "${status}"`);
+}
+
+test("Advanced Sort builds the index in the background when the server starts", async () => {
+  const libraryPath = await createSortLibrary();
+  const viewer = createViewerServer({ host: "127.0.0.1", port: 0, viewerPassword: "", experimentalSort: true, sortIndexWaitMs: 0, eagleClient: sortTestClient(() => libraryPath) });
+  await viewer.start();
+  try {
+    // No viewer has asked for anything: the plugin panel already sees the build.
+    await waitForSortIndex(() => viewer.status().sortIndex);
+    assert.deepEqual(viewer.status().sortIndex, { status: "ready", loaded: 3, total: 3 });
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const health = await (await globalThis.fetch(`${origin}/api/health`)).json();
+    assert.deepEqual(health.sortIndex, { status: "ready", loaded: 3, total: 3 });
+    const connect = await (await globalThis.fetch(`${origin}/api/connect`, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: "{}" })).json();
+    assert.deepEqual(connect.features, { sort: true });
+    assert.equal(connect.sortIndex.status, "ready");
+    // Even with no wait at all, the first sorted request is answered from the index.
+    const page = await (await fetch(`${origin}/api/items?sort=name`)).json();
+    assert.equal(page.sort.status, "ready");
+    assert.deepEqual(page.items, [{ id: "B2" }, { id: "A1" }, { id: "C3" }]);
+  } finally {
+    await viewer.stop();
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("without Advanced Sort, nothing is indexed and no index status is reported", async () => {
+  const libraryPath = await createSortLibrary();
+  const viewer = createViewerServer({ host: "127.0.0.1", port: 0, viewerPassword: "", eagleClient: sortTestClient(() => libraryPath) });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    assert.equal("sortIndex" in viewer.status(), false);
+    const health = await (await globalThis.fetch(`${origin}/api/health`)).json();
+    assert.equal("sortIndex" in health, false);
+  } finally {
+    await viewer.stop();
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("Advanced Sort rebuilds in the background after Eagle opens another library", async () => {
+  const first = await createSortLibrary();
+  const second = await createSortLibrary([{ id: "Z9", name: "only-item" }]);
+  let current = first;
+  const viewer = createViewerServer({ host: "127.0.0.1", port: 0, viewerPassword: "", experimentalSort: true, sortIndexWaitMs: 0, eagleClient: sortTestClient(() => current) });
+  await viewer.start();
+  try {
+    await waitForSortIndex(() => viewer.status().sortIndex);
+    current = second;
+    viewer.notifyLibraryChanged();
+    await waitForSortIndex(() => viewer.status().sortIndex);
+    assert.deepEqual(viewer.status().sortIndex, { status: "ready", loaded: 1, total: 1 });
+  } finally {
+    await viewer.stop();
+    await rm(first, { recursive: true, force: true });
+    await rm(second, { recursive: true, force: true });
+  }
+});
+
+test("a health check answered after stop never starts the index again", async () => {
+  const libraryPath = await createSortLibrary(MANY_SORT_ITEMS);
+  let releaseAppInfo!: () => void;
+  let appInfoCalled = false;
+  const appInfoGate = new Promise<void>((resolve) => { releaseAppInfo = resolve; });
+  const viewer = createViewerServer({
+    host: "127.0.0.1", port: 0, viewerPassword: "", experimentalSort: true, sortIndexWaitMs: 0,
+    eagleClient: sortTestClient(() => libraryPath, {
+      async appInfo() {
+        appInfoCalled = true;
+        await appInfoGate;
+        return { version: "1.0.0" };
+      },
+    }),
+  });
+  await viewer.start();
+  const origin = `http://127.0.0.1:${viewer.status().port}`;
+  try {
+    const health = globalThis.fetch(`${origin}/api/health`).catch(() => null);
+    for (let attempt = 0; attempt < 200 && !appInfoCalled; attempt += 1) await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.ok(appInfoCalled);
+    const stopping = viewer.stop();
+    assert.equal(viewer.status().sortIndex, null);
+    releaseAppInfo();
+    await stopping;
+    await health;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(viewer.status().sortIndex, null);
+  } finally {
+    releaseAppInfo();
+    await viewer.stop();
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("a health check answered after a library switch never brings back the previous library's index", async () => {
+  const first = await createSortLibrary();
+  const second = await createSortLibrary([{ id: "Z9", name: "only-item" }]);
+  let current = first;
+  let gateAppInfo = false;
+  let releaseAppInfo!: () => void;
+  let appInfoCalled = false;
+  const appInfoGate = new Promise<void>((resolve) => { releaseAppInfo = resolve; });
+  const viewer = createViewerServer({
+    host: "127.0.0.1", port: 0, viewerPassword: "", experimentalSort: true, sortIndexWaitMs: 0,
+    eagleClient: sortTestClient(() => current, {
+      async appInfo() {
+        if (gateAppInfo) {
+          appInfoCalled = true;
+          await appInfoGate;
+        }
+        return { version: "1.0.0" };
+      },
+    }),
+  });
+  await viewer.start();
+  const origin = `http://127.0.0.1:${viewer.status().port}`;
+  try {
+    await waitForSortIndex(() => viewer.status().sortIndex);
+    gateAppInfo = true;
+    // Read while the first library is open: the in-flight check knows only its path.
+    const health = globalThis.fetch(`${origin}/api/health`).then((response) => response.json());
+    for (let attempt = 0; attempt < 200 && !appInfoCalled; attempt += 1) await new Promise((resolve) => setTimeout(resolve, 5));
+    current = second;
+    viewer.notifyLibraryChanged();
+    await waitForSortIndex(() => viewer.status().sortIndex);
+    releaseAppInfo();
+    assert.equal("sortIndex" in await health, false);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.deepEqual(viewer.status().sortIndex, { status: "ready", loaded: 1, total: 1 });
+  } finally {
+    releaseAppInfo();
     await viewer.stop();
     await rm(first, { recursive: true, force: true });
     await rm(second, { recursive: true, force: true });

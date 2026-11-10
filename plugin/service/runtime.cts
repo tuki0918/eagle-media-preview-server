@@ -80,6 +80,8 @@ interface ViewerStatus {
   host: string;
   lastError?: string;
   port: number;
+  /** Present only when Advanced Sort is on. */
+  sortIndex?: { loaded: number; status: string; total: number } | null;
   state: string;
 }
 

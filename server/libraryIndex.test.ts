@@ -155,26 +155,6 @@ test("library index manager replaces the index when the library changes and rele
   }
 });
 
-test("library index build can be cancelled, dropping what it read, and starts over on the next request", async () => {
-  const items = Array.from({ length: 200 }, (_, i) => ({ id: `I${String(i).padStart(4, "0")}`, name: `item ${i}` }));
-  const libraryPath = await createLibrary(items);
-  try {
-    const index = createLibraryIndex(libraryPath, { concurrency: 1 });
-    assert.equal(await index.whenReady(0), false);
-    assert.equal(index.status, "building");
-    assert.equal(index.cancel(), true);
-    assert.equal(index.status, "idle");
-    assert.deepEqual(index.progress(), { loaded: 0, total: 0 });
-    assert.equal(index.cancel(), false);
-    // Reads still in flight from the cancelled build must not leak into the next one.
-    assert.equal(await index.whenReady(5000), true);
-    assert.equal((await index.query({}, parseIndexSort("name", ""), 0, 1000)).total, 200);
-    assert.equal(index.cancel(), false);
-  } finally {
-    await rm(libraryPath, { recursive: true, force: true });
-  }
-});
-
 test("library index checks mtime.json at most once per refresh interval, unless marked stale", async () => {
   const libraryPath = await createLibrary(sampleItems);
   try {
