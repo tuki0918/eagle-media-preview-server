@@ -1,3 +1,4 @@
+import type { SortKey, SortOrder } from "./sort";
 import type { ViewerMode } from "./types";
 
 export interface ViewerShellActions {
@@ -15,6 +16,7 @@ export interface ViewerShellActions {
   mediaTypeChanged: (mediaType: string) => void;
   mediaTypesOpened: () => void;
   ratingChanged: (rating: string) => void;
+  sortChanged: (sort: SortKey, order: "" | SortOrder) => void;
   pageSizeChanged: (pageSize: number) => void;
   toggleFilters: () => void;
   resetFilters: () => void;
@@ -49,6 +51,7 @@ let actions: ViewerShellActions = {
   mediaTypeChanged: noop,
   mediaTypesOpened: noop,
   ratingChanged: noop,
+  sortChanged: noop,
   pageSizeChanged: noop,
   toggleFilters: noop,
   resetFilters: noop,
@@ -138,6 +141,10 @@ export function openMediaTypes() {
 
 export function changeRating(rating: string) {
   actions.ratingChanged(rating);
+}
+
+export function changeSort(sort: SortKey, order: "" | SortOrder) {
+  actions.sortChanged(sort, order);
 }
 
 export function changePageSize(pageSize: number) {

@@ -555,6 +555,20 @@ function createEagleClient(options: EagleClientOptions = {}) {
       );
     },
 
+    // Eagle answers `ids` newest-first like any item/get, so the items come back in the given order.
+    async itemsByIds(ids: string[]) {
+      const wanted = ids.slice(0, MAX_SMART_FOLDER_ITEMS_PAGE_SIZE);
+      if (!wanted.length) return [];
+      const page = normalizePaginatedResponse(
+        await request("/api/v2/item/get", {
+          method: "POST",
+          body: { ids: wanted, fields: ITEM_FIELDS, offset: 0, limit: wanted.length },
+        }),
+      );
+      const byId = new Map(page.items.map((item) => [itemKey(item), item]));
+      return wanted.map((id) => byId.get(id)).filter((item) => item !== undefined);
+    },
+
     async legacyThumbnailPath(id: string) {
       return unwrapData(await request("/api/item/thumbnail", { searchParams: { id } }));
     },

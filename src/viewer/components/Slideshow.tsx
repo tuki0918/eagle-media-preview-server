@@ -24,7 +24,7 @@ export function SlideshowLauncher() {
   const available = surface.kind === "list" && surface.items.length > 0;
   const open = () => {
     const search = getSearchControlsState();
-    setQuery({ query: search.searchQuery, tags: [...getTagChipsState().tags], folderId: search.selectedFolderId, smartFolderId: search.selectedSmartFolderId, ext: search.selectedExt, rating: search.selectedRating });
+    setQuery({ query: search.searchQuery, tags: [...getTagChipsState().tags], folderId: search.selectedFolderId, smartFolderId: search.selectedSmartFolderId, ext: search.selectedExt, rating: search.selectedRating, sort: search.sortAvailable ? search.selectedSort : "", order: search.selectedOrder });
   };
   return (
     <>

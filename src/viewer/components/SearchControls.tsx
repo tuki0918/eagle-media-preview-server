@@ -15,6 +15,7 @@ import {
 import { cn } from "@/lib/utils";
 import { parseRatingFilter, ratingFilterSummary, toggleRatingFilter } from "../filters";
 import { MEDIA_TYPE_OPTIONS, RATING_OPTIONS } from "../shellConfig";
+import { DEFAULT_SORT_LABEL, SORT_OPTIONS, defaultSortOrder, effectiveSortOrder, sortSummary, type SortKey, type SortOrder } from "../sort";
 import { getTagListState, setTagSearchQuery, subscribeTagListState } from "../tagListState";
 import {
   getSearchControlsState,
@@ -25,6 +26,7 @@ import {
   openMediaTypes,
   changeRating,
   changeSearchQuery,
+  changeSort,
   focusSearch,
   handleSearchKeyDown,
   handleSearchOutsidePointerDown,
@@ -44,6 +46,9 @@ interface SearchControlsProps {
   searchQuery?: string;
   selectedExt?: string;
   selectedRating?: string;
+  sortAvailable?: boolean;
+  selectedSort?: SortKey;
+  selectedOrder?: "" | SortOrder;
 }
 
 const selectClassName =
@@ -98,6 +103,9 @@ export function SearchControls({
         hasResettableFilters={displayHasResettableFilters}
         selectedExt={displaySelectedExt}
         selectedRating={displaySelectedRating}
+        sortAvailable={state.sortAvailable}
+        selectedSort={state.selectedSort}
+        selectedOrder={state.selectedOrder}
       />
     </section>
   );
@@ -175,14 +183,29 @@ export function AdvancedFilters({
   hasResettableFilters = hasActiveFilters,
   selectedExt = "",
   selectedRating = "",
-}: Pick<SearchControlsProps, "availableExts" | "availableExtsLoading" | "filtersOpen" | "hasActiveFilters" | "hasResettableFilters" | "selectedExt" | "selectedRating">) {
+  sortAvailable = false,
+  selectedSort = "",
+  selectedOrder = "",
+}: Pick<SearchControlsProps, "availableExts" | "availableExtsLoading" | "filtersOpen" | "hasActiveFilters" | "hasResettableFilters" | "selectedExt" | "selectedRating" | "sortAvailable" | "selectedSort" | "selectedOrder">) {
   const extOptions = mediaTypeOptions(availableExts, selectedExt, availableExtsLoading);
   return (
-    <div id="advancedFilters" className="filter-row grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-4 max-[540px]:grid-cols-[minmax(0,1fr)_auto] max-[540px]:gap-3" hidden={!filtersOpen}>
+    <div
+      id="advancedFilters"
+      className={cn(
+        "filter-row grid items-center gap-4 max-[540px]:grid-cols-[minmax(0,1fr)_auto] max-[540px]:gap-3",
+        sortAvailable ? "grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]" : "grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]",
+      )}
+      hidden={!filtersOpen}
+    >
       <div className="min-w-0 max-[540px]:col-span-2">
         <TypeFilter loading={availableExtsLoading} options={extOptions} selectedExt={selectedExt} />
       </div>
       <RatingFilter selectedRating={selectedRating} />
+      {sortAvailable ? (
+        <div className="min-w-0 max-[540px]:order-last max-[540px]:col-span-2">
+          <SortFilter selectedSort={selectedSort} selectedOrder={selectedOrder} />
+        </div>
+      ) : null}
       <div className="flex justify-end">
         <ResetFiltersButton hasResettableFilters={hasResettableFilters} />
       </div>
@@ -300,6 +323,52 @@ function RatingFilter({ selectedRating }: { selectedRating: string }) {
           <RatingFilterLabel rating={rating} />
         </DropdownMenuPrimitive.CheckboxItem>
       ))}
+    </FilterMenu>
+  );
+}
+
+// Experimental: the server sorts with its own index of the library (see docs/design/large-library-index.md).
+function SortFilter({ selectedSort, selectedOrder }: { selectedSort: SortKey; selectedOrder: "" | SortOrder }) {
+  const summaryText = sortSummary(selectedSort, selectedOrder);
+  const order = effectiveSortOrder(selectedSort, selectedOrder);
+  return (
+    <FilterMenu id="sortSelect" label="Sort (experimental)" summary={<span className="truncate">{summaryText}</span>} summaryText={summaryText}>
+      <div className="flex items-center justify-between gap-2 px-2 pb-1 pt-1.5 text-xs text-muted-foreground">
+        <span>Sort by</span>
+        <span className="rounded-full border border-border px-1.5 py-px text-[10px] uppercase tracking-wide">Experimental</span>
+      </div>
+      <DropdownMenuPrimitive.RadioGroup value={selectedSort} onValueChange={(value) => changeSort(value as SortKey, "")}>
+        {[{ key: "" as SortKey, label: DEFAULT_SORT_LABEL }, ...SORT_OPTIONS].map((option) => (
+          <DropdownMenuPrimitive.RadioItem key={option.key || "default"} data-slot="dropdown-menu-radio-item" className={filterOptionClassName} value={option.key}>
+            <span className={cn(filterIndicatorClassName, "rounded-full")} aria-hidden="true">
+              <DropdownMenuPrimitive.ItemIndicator>
+                <span className="block size-1.5 rounded-full bg-primary-foreground" />
+              </DropdownMenuPrimitive.ItemIndicator>
+            </span>
+            <span className="truncate">{option.label}</span>
+          </DropdownMenuPrimitive.RadioItem>
+        ))}
+      </DropdownMenuPrimitive.RadioGroup>
+      {selectedSort ? (
+        <>
+          <DropdownMenuPrimitive.Separator className="-mx-1.5 my-1.5 h-px bg-border" />
+          <DropdownMenuPrimitive.RadioGroup
+            value={order}
+            onValueChange={(value) => changeSort(selectedSort, value === defaultSortOrder(selectedSort) ? "" : value as SortOrder)}
+          >
+            {(["asc", "desc"] as const).map((direction) => (
+              <DropdownMenuPrimitive.RadioItem key={direction} data-slot="dropdown-menu-radio-item" className={filterOptionClassName} value={direction}>
+                <span className={cn(filterIndicatorClassName, "rounded-full")} aria-hidden="true">
+                  <DropdownMenuPrimitive.ItemIndicator>
+                    <span className="block size-1.5 rounded-full bg-primary-foreground" />
+                  </DropdownMenuPrimitive.ItemIndicator>
+                </span>
+                <span className="truncate">{direction === "asc" ? "Ascending ↑" : "Descending ↓"}</span>
+              </DropdownMenuPrimitive.RadioItem>
+            ))}
+          </DropdownMenuPrimitive.RadioGroup>
+        </>
+      ) : null}
     </FilterMenu>
   );
 }

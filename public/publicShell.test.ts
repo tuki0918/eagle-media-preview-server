@@ -1165,7 +1165,7 @@ test("public results status and empty states stay concise and consistent across 
   assert.match(html, /min-h-\[clamp\(280px,calc\(100dvh-220px\),460px\)\]/);
 });
 
-test("public UI exposes collapsible advanced filters without sort controls", async () => {
+test("public UI exposes collapsible advanced filters, with sort only when the server offers it", async () => {
   const html = await readAppSources();
   const app = await readViewerSources();
 
@@ -1173,11 +1173,13 @@ test("public UI exposes collapsible advanced filters without sort controls", asy
   assert.match(html, /aria-label=\{label\}/);
   assert.match(html, /aria-expanded=\{filtersOpen\}/);
   assert.match(html, /id="advancedFilters"/);
-  assert.doesNotMatch(html, /id="sortSelect"/);
+  // The experimental sort menu renders only for servers with `experimentalSort` on.
+  assert.match(html, /\{sortAvailable \? \(/);
+  assert.match(html, /id="sortSelect"/);
+  assert.match(app, /sortAvailable = data\.features\?\.sort === true/);
   assert.doesNotMatch(html, /id="randomizeCheckbox"/);
   assert.match(app, /state\.filtersOpen/);
   assert.match(app, /params\.set\("filters", "1"\)/);
-  assert.doesNotMatch(app, /params\.set\("sort"/);
   assert.doesNotMatch(app, /params\.set\("random", "1"\)/);
 });
 

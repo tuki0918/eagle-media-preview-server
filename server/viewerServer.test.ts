@@ -4349,3 +4349,103 @@ test("uploads are logged with their type and size, not their name", async () => 
     await viewer.stop();
   }
 });
+
+async function createSortLibrary() {
+  const libraryPath = join(tmpdir(), `sort-library-${process.pid}-${Date.now()}.library`);
+  const items = [
+    { id: "A1", name: "b-file", size: 300, modificationTime: 3 },
+    { id: "B2", name: "a-file", size: 100, modificationTime: 1 },
+    { id: "C3", name: "c-file", size: 200, modificationTime: 2 },
+  ];
+  for (const item of items) {
+    await mkdir(join(libraryPath, "images", `${item.id}.info`), { recursive: true });
+    await writeFile(join(libraryPath, "images", `${item.id}.info`, "metadata.json"), JSON.stringify({ ext: "png", tags: [], folders: [], lastModified: 1, ...item }));
+  }
+  await writeFile(join(libraryPath, "mtime.json"), JSON.stringify({ A1: 1, B2: 1, C3: 1, all: 3 }));
+  return libraryPath;
+}
+
+test("experimental sort orders /api/items with the library index and fetches the page from Eagle", async () => {
+  const libraryPath = await createSortLibrary();
+  const requestedIds: string[][] = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    viewerPassword: "",
+    experimentalSort: true,
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: libraryPath, name: "Sort" };
+      },
+      async itemsByIds(ids: string[]) {
+        requestedIds.push(ids);
+        return ids.map((id) => ({ id }));
+      },
+      async listItems() {
+        throw new Error("listItems should not be used once the index is ready");
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const connect = await fetch(`${origin}/api/connect`, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: "{}" });
+    assert.deepEqual((await connect.json()).features, { sort: true });
+
+    const byName = await fetch(`${origin}/api/items?sort=name&offset=0&limit=30`);
+    assert.equal(byName.status, 200);
+    assert.deepEqual(await byName.json(), { items: [{ id: "B2" }, { id: "A1" }, { id: "C3" }], total: 3, offset: 0, limit: 30, sort: { status: "ready" } });
+
+    // The index is ready, so there is no build left to cancel.
+    const cancel = await fetch(`${origin}/api/sort-index/cancel`, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: "{}" });
+    assert.equal(cancel.status, 200);
+    assert.deepEqual(await cancel.json(), { cancelled: false });
+
+    const bySizeDesc = await (await fetch(`${origin}/api/items?sort=filesize&order=desc&offset=1&limit=1`)).json();
+    assert.deepEqual(bySizeDesc.items, [{ id: "C3" }]);
+    assert.equal(bySizeDesc.total, 3);
+    assert.deepEqual(requestedIds.at(-1), ["C3"]);
+  } finally {
+    await viewer.stop();
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("without experimentalSort, /api/items ignores sort and connect lists no features", async () => {
+  const calls: ItemListOptions[] = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    viewerPassword: "",
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/tmp/Test.library", name: "Test Library" };
+      },
+      async listItems(options: ItemListOptions) {
+        calls.push(options);
+        return { items: [], total: 0, offset: 0, limit: 30 };
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const connect = await fetch(`${origin}/api/connect`, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: "{}" });
+    assert.equal((await connect.json()).features, undefined);
+    const response = await fetch(`${origin}/api/items?sort=name`);
+    assert.deepEqual(await response.json(), { items: [], total: 0, offset: 0, limit: 30 });
+    assert.equal(calls.length, 1);
+    const cancel = await fetch(`${origin}/api/sort-index/cancel`, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: "{}" });
+    assert.equal(cancel.status, 404);
+  } finally {
+    await viewer.stop();
+  }
+});

@@ -36,6 +36,12 @@ describe("itemQueryParams", () => {
     expect(itemQueryParams(queryState({ rating: "" })).has("rating")).toBe(false);
   });
 
+  test("adds the experimental sort, except in smart folders", () => {
+    expect(itemQueryParams(queryState({ sort: "name", order: "desc" })).toString()).toBe("offset=0&limit=30&sort=name&order=desc");
+    expect(itemQueryParams(queryState({ sort: "import", order: "" })).toString()).toBe("offset=0&limit=30&sort=import");
+    expect(itemQueryParams(queryState({ sort: "name", smartFolderId: "sf" })).toString()).toBe("offset=0&limit=30&smartFolderId=sf");
+  });
+
   test("uses smart folder id instead of regular folder id", () => {
     const params = itemQueryParams(queryState({ folderId: "folder-1", smartFolderId: "smart-1" }));
 

@@ -62,6 +62,7 @@ Defaults and how to change them:
 | Trust `X-Forwarded-For` from this computer | disabled | Not in the panel; set `"trustForwardedFor": true` in `settings.json` while the server is stopped (see [Tunnels and reverse proxies](#tunnels-and-reverse-proxies)) |
 | Upload size limit per file | 2048 MB | Not in the panel; `uploadMaxSizeMB` in `settings.json` while the server is stopped |
 | Time allowed to receive one upload | 60 minutes | Not in the panel; `uploadTimeoutMinutes` in `settings.json` while the server is stopped |
+| Sort (experimental) | disabled | Not in the panel; set `"experimentalSort": true` in `settings.json` while the server is stopped (see [Experimental sort](#experimental-sort)) |
 
 All values are saved to `~/.eagle-media-preview-server/settings.json`. Fields under **Settings** are locked while the server runs and take effect at the next start. The toggles in Server Status stay available while it runs, and a change to Password, Public Network, or HTTPS restarts the running server.
 
@@ -274,6 +275,7 @@ Settings path:
 - Extension filter
 - Rating filter
 - Tag filter chips
+- Sort (experimental, when the server has `experimentalSort` on)
 - Page size: `30`, `60`, `120`, `240`
 - Tiles view
 - Grid view
@@ -354,6 +356,7 @@ These routes hand out the library id, so they do not require one.
 - `POST /api/connect`
   - Checks the server-configured Eagle API connection and returns app info and the library display name and id
   - The request body is ignored; viewer clients cannot change the Eagle API host, port, or token
+  - Adds `features: { sort: true }` when the experimental sort is on; the viewer shows its sort menu only then
   - The library is read again after the body arrives: if it is not shared it returns `503`, and if Eagle switched libraries during the request it returns `409 LIBRARY_CHANGED`, so an unshared library is never named
 - `GET /api/health`
   - Checks Eagle app/library health; polled by the viewer; library paths are never returned to clients
@@ -368,6 +371,9 @@ These routes hand out the library id, so they do not require one.
   - Returns smart folder list
 - `GET /api/items`
   - Returns item list or search results; `smartFolderId` lists a smart folder's items
+  - With the experimental sort on, `sort` (`import`, `btime`, `mtime`, `name`, `ext`, `filesize`, `resolution`, `rating`, `duration`) and `order` (`asc` / `desc`, default per key as in Eagle) order the list; smart folders ignore them. The answer carries `sort: { status }`: `ready`, or `indexing` with `loaded` / `total` while the index is built (the items are then in Eagle's order, and the viewer asks again), or `failed`
+- `POST /api/sort-index/cancel`
+  - Experimental sort only (`404` otherwise): stops a first index build in progress and drops what it read; answers `{ cancelled }`
 - `GET /api/item-types`
   - Returns the file extensions found in the library
 - `GET /api/tags`, `GET /api/tag-overview`
@@ -409,7 +415,7 @@ Media URLs carry the library id as the `library` query parameter, since media el
 The viewer server calls Eagle's local Web API at `http://localhost:41595/api/v2/`. Viewer clients never call it.
 
 - `app/info`, `library/info`: Eagle version and the open library
-- `item/get`, `item/query`, `item/update`: items, search, and rating, tag, and folder changes
+- `item/get`, `item/query`, `item/update`: items, search, and rating, tag, and folder changes; the experimental sort fetches each page with `item/get` `ids`
 - `folder/get`, `smartFolder/get`: folders and smart folders
 - `tag/get`, `tagGroup/get`: tags and tag groups
 
@@ -445,6 +451,20 @@ The viewer server calls Eagle's local Web API at `http://localhost:41595/api/v2/
 - A range request that carries `If-Range` and does not get `304` from the conditional checks above always gets the whole file with `200`, and its `Range` is ignored even if unsatisfiable. RFC 9110 lets `If-Range` match only a strong validator, and the server has none: the ETag is weak, and `Last-Modified` has second precision, so a file replaced within the same second would still match its date and mix old and new bytes. Range requests without `If-Range`, such as ordinary video seeking, are served as `206`
 - Sends `X-Content-Type-Options: nosniff`
 - Returns MIME types for common images, videos, audio, PDF, and text files
+
+### Experimental sort
+
+Eagle's `item/get` always answers newest-first, so other orders come from an index the preview server builds itself. It is off unless `experimentalSort` is `true` in `settings.json`.
+
+- Built on the first sorted request, not at start: every `<library>/images/<id>.info/metadata.json` is read (about 17 seconds for 300,000 items on an internal SSD; slower on a NAS). A request waits up to 1 second, then answers in Eagle's order with progress
+- While it builds, the viewer shows "Preparing sort… n / N items" with a **Cancel** button. Cancel goes back to the default order and calls `POST /api/sort-index/cancel`, which stops reading the library and frees what was read; the next sorted request starts over
+- The viewer labels Eagle's own order "Default order"
+- Kept current like Eagle keeps its own cache: at most every 2 seconds a sorted request stats `<library>/mtime.json` and, if it changed, reads again the items whose time went up. A folder rescan, when Eagle's `all` count disagrees, runs at most once a minute. Rating, tag, folder, and trash edits made through the viewer apply at once
+- Holds only what filters and sorting need (about 150 MB for 300,000 items); the page itself is fetched from Eagle by id, so items look the same as in Eagle's order. Released after 30 minutes without a sorted request, on a library switch, and on stop
+- Filters match Eagle's `item/get`: folder membership, untagged, uncategorized, extension, ratings (`0` is unrated), all listed tags, and the search text as a case-insensitive name match. Search text without other filters is matched against names only, not Eagle's full-text `item/query`
+- Never writes to the library
+
+Design notes: [docs/design/large-library-index.md](design/large-library-index.md).
 
 ## Authentication
 

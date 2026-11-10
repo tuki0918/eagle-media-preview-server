@@ -5,7 +5,7 @@ import type { EagleItem, ViewerState } from "./types";
 export type ItemQueryState = Pick<ViewerState, "offset" | "query" | "tags" | "folderId" | "ext" | "rating"> & {
   limit: number;
   smartFolderId: string;
-};
+} & Partial<Pick<ViewerState, "sort" | "order">>;
 
 export function itemQueryParams(state: ItemQueryState) {
   const params = new URLSearchParams({
@@ -21,6 +21,11 @@ export function itemQueryParams(state: ItemQueryState) {
   }
   if (state.ext) params.set("ext", state.ext);
   if (state.rating !== "") params.set("rating", state.rating);
+  // Smart folders keep Eagle's order.
+  if (state.sort && !state.smartFolderId) {
+    params.set("sort", state.sort);
+    if (state.order) params.set("order", state.order);
+  }
   return params;
 }
 

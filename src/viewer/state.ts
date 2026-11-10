@@ -14,6 +14,8 @@ export const state: ViewerState = {
   section: "items",
   ext: "",
   rating: "",
+  sort: "",
+  order: "",
   filtersOpen: false,
   folders: [],
   smartFolders: [],

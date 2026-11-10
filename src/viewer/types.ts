@@ -1,3 +1,4 @@
+import type { SortKey, SortOrder } from "./sort";
 export interface EagleFolder {
   id: string;
   name: string;
@@ -70,6 +71,8 @@ export interface ConnectResponse {
   };
   /** Sent only to users who may upload. */
   uploadMaxBytes?: number;
+  /** Optional server features; `sort` is the experimental sort. */
+  features?: { sort?: boolean };
 }
 
 export interface HealthResponse extends ConnectResponse {
@@ -109,6 +112,8 @@ export interface LoadSmartFoldersResponse {
 export interface LoadItemsResponse {
   items?: EagleItem[];
   total?: number;
+  /** Sent for sorted requests; until "ready" the items are in Eagle's order. */
+  sort?: { status?: "failed" | "indexing" | "ready"; loaded?: number; total?: number };
 }
 
 export interface TagSuggestionApiItem {
@@ -140,6 +145,10 @@ export interface ViewerState {
   section: ViewerSection;
   ext: string;
   rating: string;
+  /** Experimental sort; "" is Eagle's order. */
+  sort: SortKey;
+  /** "" is the sort's default direction. */
+  order: "" | SortOrder;
   filtersOpen: boolean;
   folders: EagleFolder[];
   smartFolders: EagleSmartFolder[];
