@@ -863,10 +863,15 @@ function createServerManager({
         const changedFields = changedSettingFields(current, settings);
         if (changedFields.length) logSystemEvent("settings_changed", { fields: changedFields });
         const restartRequired = serverRestartSettingsChanged(current, settings);
-        if (viewer && restartRequired) {
-          await this.stop();
-          if (wasRunning) return this.start();
+        if (viewer && restartRequired) await this.stop();
+        // Chats are kept by username: a deleted account's chats go with it, so an account made
+        // later with the same name starts with none. Done once the server has stopped, so a reply
+        // still being written can't save them back.
+        const kept = new Set(settings.authUsers.map((user) => user.username));
+        for (const user of current.authUsers) {
+          if (!kept.has(user.username)) await aiChatStore.removeUser(user.username).catch(() => {});
         }
+        if (restartRequired && wasRunning) return this.start();
         return snapshot(settings);
       });
     },

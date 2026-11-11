@@ -1,6 +1,6 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -196,6 +196,18 @@ test("failures say what an admin can fix, and only an admin sees what the provid
   assert.match(aiErrorMessage(new Error("something odd")), /couldn't answer right now/);
   const leaky = aiErrorMessage(Object.assign(new Error("bad key sk-abcdef1234567890 at https://api.example.com/v1?api_key=topsecret99"), { status: 401 }), { detail: true });
   assert.doesNotMatch(leaky, /abcdef1234567890|topsecret99/);
+  for (const said of [
+    '{"error":{"message":"bad","api_key":"dummy-credential-123"}}',
+    "Authorization: Bearer abc.def.ghi-123 rejected",
+    "x-goog-api-key: plainsecret apiKey=plainsecret2 client_secret: \"plainsecret3\"",
+    'https://user:plainsecret@host/v1 "password": "plain secret"',
+    "AIzaSyA1234567890abcdefghijklmnop and token 9f8e7d6c5b4a39281706f5e4d3c2b1a0aa",
+  ]) {
+    const shown = aiErrorMessage(Object.assign(new Error(said), { status: 401 }), { detail: true });
+    assert.doesNotMatch(shown, /dummy-credential|abc\.def|plainsecret|plain secret|AIzaSy|9f8e7d6c/, said);
+  }
+  // Model names and plain words stay readable.
+  assert.match(aiErrorMessage(Object.assign(new Error('"qwen3-embedding:0.6b" does not support chat'), { status: 400 }), { detail: true }), /qwen3-embedding:0\.6b/);
 });
 
 test("a model's <think> reasoning is never shown or mistaken for the reply", async () => {
@@ -334,6 +346,62 @@ test("the chat store keeps only the newest chats and messages", async () => {
   const chat = store.create("LIB", "long");
   chat.messages = [1, 2, 3, 4, 5].map((n) => ({ role: "user", text: String(n), at: n }));
   assert.deepEqual((await store.save("mika", chat)).messages.map((message: { text: string }) => message.text), ["3", "4", "5"]);
+});
+
+test("chat changes count only once written, and a deleted chat or user stays deleted", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "ai-chats-"));
+  const store = createAiChatStore({ dir });
+  const chat = store.create("LIB", "keep me");
+  await store.save("mika", chat);
+
+  // A reply that ends after its chat was deleted doesn't bring it back.
+  assert.equal(await store.remove("mika", "LIB", chat.id), true);
+  assert.equal(await store.save("mika", chat, { onlyIfKept: true }), null);
+  assert.deepEqual(await createAiChatStore({ dir }).list("mika", "LIB"), []);
+
+  // When the file can't be written, a delete fails and the chat is still there.
+  await store.save("mika", chat);
+  await store.save("mika", store.create("LIB", "another"));
+  if (process.getuid?.() !== 0) {
+    const [file] = await readdir(dir);
+    await chmod(join(dir, file), 0o400);
+    await assert.rejects(store.remove("mika", "LIB", chat.id));
+    assert.equal((await store.list("mika", "LIB")).length, 2);
+    await chmod(join(dir, file), 0o600);
+  }
+
+  // A deleted account's chats go with it.
+  await store.save("ken", store.create("LIB", "ken's"));
+  await store.removeUser("mika");
+  assert.deepEqual(await store.list("mika", "LIB"), []);
+  assert.equal((await readdir(dir)).length, 1, "only ken's file is left");
+  assert.deepEqual(await createAiChatStore({ dir }).list("mika", "LIB"), []);
+
+  // Where nothing can be written at all, saving fails rather than seeming to work.
+  await writeFile(join(dir, "a-file"), "");
+  const blocked = createAiChatStore({ dir: join(dir, "a-file", "not-a-folder") });
+  await assert.rejects(blocked.save("mika", blocked.create("LIB", "x")));
+});
+
+test("tags and folders read while Eagle switches libraries are never kept", async () => {
+  let open = true;
+  let tagReads = 0;
+  const { session } = fakeSession({
+    listTags: async () => {
+      tagReads += 1;
+      // Eagle switches to another library while the tags are read.
+      if (tagReads === 1) open = false;
+      return { items: [{ name: tagReads === 1 ? "private-tag" : "sunset", count: 1 }] };
+    },
+  });
+  const assistant = createAiAssistant();
+  const turn = (ai: ReturnType<typeof fakeAi>) => assistant.runTurn({ ai, history: [], onEvent() {}, session, stillOpen: () => open, text: LONG_HELLO, username: "mika" });
+  await assert.rejects(turn(fakeAi(["unused"])), /library open in Eagle has changed/);
+  open = true;
+  const ai = fakeAi(["ok"]);
+  await turn(ai);
+  assert.equal(tagReads, 2);
+  assert.doesNotMatch(JSON.stringify(ai.calls), /private-tag/);
 });
 
 test("items sent to a viewer never carry host paths", () => {

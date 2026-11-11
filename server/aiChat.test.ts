@@ -175,6 +175,48 @@ test("AI chat refuses empty or oversized questions and reports a failed reply", 
   });
 });
 
+test("a chat can't be deleted while its reply is written, and an admin's error details aren't saved", async () => {
+  let release: () => void = () => {};
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const slow = {
+    ...fakeAi([]),
+    streamText() {
+      return { textStream: (async function* (): AsyncGenerator<string> { yield "Part one. "; await gate; yield "Part two."; })(), usage: Promise.resolve({ totalTokens: 1 }) };
+    },
+  };
+  const admins = [{ username: "root", passwordHash: sha256("pw"), role: "admin" }];
+  await withServer({ authUsers: admins, aiChat: { enabled: true, getAi: () => slow } }, async ({ as, login }) => {
+    const root = as(await login("root", "pw"));
+    const first = await events(await root("/api/ai/chats/new/messages", { method: "POST", body: JSON.stringify({ text: "hello there" }) }).then(async (response) => { release(); return response; }));
+    const chatId = String(first[0].id);
+    assert.equal(first.at(-1)?.type, "done");
+
+    // A second reply in the same chat, held open while another tab tries to delete the chat.
+    let releaseAgain: () => void = () => {};
+    const held = new Promise<void>((resolve) => { releaseAgain = resolve; });
+    slow.streamText = () => ({ textStream: (async function* () { yield "Wait. "; await held; yield "Done."; })(), usage: Promise.resolve({ totalTokens: 1 }) });
+    const replying = root(`/api/ai/chats/${chatId}/messages`, { method: "POST", body: JSON.stringify({ text: "more" }) });
+    const response = await replying;
+    const deleting = await root(`/api/ai/chats/${chatId}`, { method: "DELETE" });
+    assert.equal(deleting.status, 409);
+    assert.equal((await deleting.json()).code, "CHAT_BUSY");
+    releaseAgain();
+    assert.equal((await events(response)).at(-1)?.type, "done");
+    assert.equal((await root(`/api/ai/chats/${chatId}`, { method: "DELETE" })).status, 200);
+    assert.equal((await root(`/api/ai/chats/${chatId}`)).status, 404);
+
+    // A failing reply shows the admin what the provider said, but the chat keeps the general message.
+    slow.streamText = (({ onError }: { onError?: (event: { error: unknown }) => void }) => ({
+      textStream: (async function* () { onError?.({ error: Object.assign(new Error('{"api_key":"dummy-credential-1234"} model gone'), { status: 500 }) }); })(),
+    })) as typeof slow.streamText;
+    const failed = await events(await root("/api/ai/chats/new/messages", { method: "POST", body: JSON.stringify({ text: "again" }) }));
+    assert.match(String(failed.at(-1)?.message), /The provider said: .*model gone/);
+    assert.doesNotMatch(JSON.stringify(failed), /dummy-credential/);
+    const saved = await (await root(`/api/ai/chats/${failed[0].id}`)).json();
+    assert.doesNotMatch(JSON.stringify(saved), /provider said|model gone/);
+  });
+});
+
 test("one item can be read by id, without the host's paths", async () => {
   await withServer({}, async ({ as }) => {
     const response = await as()("/api/items/ITEM1");

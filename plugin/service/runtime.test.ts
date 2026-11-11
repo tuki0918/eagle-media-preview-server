@@ -16,6 +16,7 @@ const {
   normalizeSettings,
 } = require("../../dist/.generated/plugin-service/runtime.cjs");
 const { createViewerServer, sha256 } = require("../../dist/.generated/plugin-service/viewerServer.cjs");
+const { createAiChatStore } = require("../../dist/.generated/plugin-service/aiChat.cjs");
 const PASSWORD_HASH_PATTERN = /^pbkdf2\$sha256\$210000\$[^$]+\$[^$]+$/;
 const SESSION_SECRET_PATTERN = /^[A-Za-z0-9_-]{32,}$/;
 
@@ -1548,6 +1549,30 @@ test("settings keep canUpload only on editors, and leave it off users that don't
   });
   assert.deepEqual(saved.authUsers.map((user: { canUpload?: boolean }) => user.canUpload), [true, undefined, undefined, undefined]);
   assert.equal("canUpload" in saved.authUsers[1], false);
+});
+
+test("the plugin doesn't require Eagle's AI Models plugin, which Eagle would insist on before opening it", async () => {
+  const manifest = JSON.parse(await readFile(join(process.cwd(), "manifest.json"), "utf8"));
+  assert.equal(manifest.dependencies, undefined);
+});
+
+test("deleting a user deletes their AI chats", async () => {
+  const settingsDir = await mkdtemp(join(tmpdir(), "eagle-preview-settings-"));
+  const aiChatDir = join(settingsDir, "ai-chats");
+  const settingsStore = createSettingsStore({ filePath: join(settingsDir, "settings.json") });
+  const manager = createServerManager({
+    accessLog: { load: async () => {}, record() {}, flush: async () => {}, touch() {} },
+    aiChatDir,
+    settingsStore,
+    viewerServerFactory: () => ({ start: async () => {}, stop: async () => {}, status: () => ({ state: "stopped", host: "127.0.0.1", port: 41532 }) }),
+  });
+  await manager.saveSettings({ authEnabled: true, authUsers: [{ username: "mika", role: "admin" }, { username: "ken", role: "viewer" }], userPasswords: { mika: "one", ken: "two" } });
+  const chats = createAiChatStore({ dir: aiChatDir });
+  await chats.save("ken", chats.create("LIB", "ken's question"));
+  await chats.save("mika", chats.create("LIB", "mika's question"));
+  await manager.saveSettings({ authUsers: [{ username: "mika", role: "admin" }], userPasswords: { mika: "one" } });
+  assert.deepEqual(await createAiChatStore({ dir: aiChatDir }).list("ken", "LIB"), []);
+  assert.equal((await createAiChatStore({ dir: aiChatDir }).list("mika", "LIB")).length, 1);
 });
 
 test("the AI Models plugin is loaded from Eagle's Plugins folder when Eagle didn't hand it over", async () => {

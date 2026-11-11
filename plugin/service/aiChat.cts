@@ -1,5 +1,5 @@
 const { createHash, randomBytes } = require("crypto");
-const { chmod, mkdir, readFile, stat, writeFile } = require("fs").promises;
+const { chmod, mkdir, readFile, rm, stat, writeFile } = require("fs").promises;
 const { extname, join } = require("path");
 const { resolveLibraryItemFile } = require("./eagleClient.cjs");
 
@@ -271,17 +271,26 @@ function createAiChatStore({ dir = "", maxChatsPerUser = DEFAULT_MAX_CHATS_PER_U
     return loaded;
   }
 
-  function persist(username: string, chats: Chat[]) {
-    if (!dir) return Promise.resolve();
-    const body = `${JSON.stringify({ username, chats })}\n`;
-    const filePath = join(dir, userFileName(username));
-    // A failed write only loses the saved copy; the chat stays usable from memory.
+  // Every change to a user's chats runs one at a time, and is kept only once it is on disk: a chat
+  // deleted while the file can't be written comes back, rather than seeming gone until a restart.
+  function change<T>(username: string, update: (chats: Chat[]) => { chats: Chat[] | null; result: T }) {
     const run = (writes.get(username) || Promise.resolve()).then(async () => {
-      await mkdir(dir, { recursive: true, mode: 0o700 });
-      await writeFile(filePath, body, { encoding: "utf8", mode: 0o600 });
-      await chmod(filePath, 0o600);
-    }).catch(() => {});
-    writes.set(username, run);
+      const { chats, result } = update(await load(username));
+      if (!chats) return result;
+      if (dir) {
+        const filePath = join(dir, userFileName(username));
+        await mkdir(dir, { recursive: true, mode: 0o700 });
+        if (chats.length) {
+          await writeFile(filePath, `${JSON.stringify({ username, chats })}\n`, { encoding: "utf8", mode: 0o600 });
+          await chmod(filePath, 0o600);
+        } else {
+          await rm(filePath, { force: true });
+        }
+      }
+      users.set(username, Promise.resolve(chats));
+      return result;
+    });
+    writes.set(username, run.then(() => {}, () => {}));
     return run;
   }
 
@@ -304,24 +313,28 @@ function createAiChatStore({ dir = "", maxChatsPerUser = DEFAULT_MAX_CHATS_PER_U
       return { id: randomBytes(9).toString("base64url"), libraryId, title: chatTitle(text), createdAt: at, updatedAt: at, messages: [] };
     },
 
-    async save(username: string, chat: Chat) {
-      const chats = await load(username);
-      const saved: Chat = { ...chat, updatedAt: now(), messages: chat.messages.slice(-maxMessagesPerChat) };
-      const next = [saved, ...chats.filter((entry) => entry.id !== chat.id)]
-        .sort((left, right) => right.updatedAt - left.updatedAt)
-        .slice(0, maxChatsPerUser);
-      users.set(username, Promise.resolve(next));
-      await persist(username, next);
-      return saved;
+    /** Saves a chat. With `onlyIfKept`, a chat that is no longer there (deleted meanwhile) stays deleted. */
+    save(username: string, chat: Chat, { onlyIfKept = false }: { onlyIfKept?: boolean } = {}) {
+      return change(username, (chats) => {
+        const saved: Chat = { ...chat, updatedAt: now(), messages: chat.messages.slice(-maxMessagesPerChat) };
+        if (onlyIfKept && !chats.some((entry) => entry.id === chat.id)) return { chats: null, result: null };
+        const next = [saved, ...chats.filter((entry) => entry.id !== chat.id)]
+          .sort((left, right) => right.updatedAt - left.updatedAt)
+          .slice(0, maxChatsPerUser);
+        return { chats: next, result: saved as Chat | null };
+      });
     },
 
-    async remove(username: string, libraryId: string, id: string) {
-      const chats = await load(username);
-      const next = chats.filter((chat) => !(chat.id === id && chat.libraryId === libraryId));
-      if (next.length === chats.length) return false;
-      users.set(username, Promise.resolve(next));
-      await persist(username, next);
-      return true;
+    remove(username: string, libraryId: string, id: string) {
+      return change(username, (chats) => {
+        const next = chats.filter((chat) => !(chat.id === id && chat.libraryId === libraryId));
+        return next.length === chats.length ? { chats: null, result: false } : { chats: next, result: true };
+      });
+    },
+
+    /** Every chat of a user, for when the account is deleted: a new account with that name starts empty. */
+    removeUser(username: string) {
+      return change(username, () => ({ chats: [] as Chat[], result: true }));
     },
   };
 }
@@ -467,7 +480,7 @@ function createAiAssistant({ now = Date.now }: { now?: () => number } = {}) {
   // Eagle's AI Search is its own plugin; when it doesn't answer, it isn't asked again for a while.
   let smartSearchRetryAt = 0;
 
-  async function libraryFacts(session: AssistantSession, libraryPath: string): Promise<LibraryFacts> {
+  async function libraryFacts(session: AssistantSession, libraryPath: string, stillOpen: () => boolean): Promise<LibraryFacts> {
     if (facts && facts.libraryPath === libraryPath && facts.expiresAt > now()) return facts;
     const client = session.client;
     const [tagList, folderPage] = await Promise.allSettled([
@@ -483,6 +496,9 @@ function createAiAssistant({ now = Date.now }: { now?: () => number } = {}) {
         .sort((left, right) => right.count - left.count)
       : [];
     const folders = folderPage.status === "fulfilled" ? flattenFolders(pageItems(folderPage.value)).slice(0, 200) : [];
+    // Eagle answers for whatever library is open now: if it switched while these were read, they
+    // may belong to another library (perhaps one that isn't shared), so they are never kept.
+    if (!stillOpen()) throw new AiChatError(409, "The library open in Eagle has changed", "LIBRARY_CHANGED");
     facts = { expiresAt: now() + LIBRARY_FACTS_TTL_MS, folders, libraryPath, tags };
     return facts;
   }
@@ -727,7 +743,8 @@ function createAiAssistant({ now = Date.now }: { now?: () => number } = {}) {
       if (!ai || !status.available) throw new AiChatError(503, "AI chat isn't set up on the media server", "AI_UNAVAILABLE");
       const library = await session.libraryInfo();
       const libraryPath = String(library?.path || "");
-      const libraryFactsNow = await libraryFacts(session, libraryPath);
+      if (!stillOpen()) throw new AiChatError(409, "The library open in Eagle has changed", "LIBRARY_CHANGED");
+      const libraryFactsNow = await libraryFacts(session, libraryPath, stillOpen);
       const { folders } = libraryFactsNow;
       const features = new Set<string>();
 
@@ -894,8 +911,23 @@ function aiErrorMessage(error: unknown, { detail = false }: { detail?: boolean }
           : /fetch failed|network error|econnrefused|enotfound|etimedout|invalid url|missing required configuration/i.test(said)
             ? "The AI provider can't be reached. If it runs on the media server's computer (Ollama, LM Studio), it may not be running."
             : "The AI model couldn't answer right now. Try again in a bit.";
-  const provider = said.replace(/\s+/g, " ").replace(/\b(sk|key|pk|Bearer)[-_ ][A-Za-z0-9_\-.]{8,}/gi, "[hidden]").replace(/([?&](?:key|token|api_key)=)[^&\s]+/gi, "$1[hidden]").trim().slice(0, 240);
+  const provider = withoutSecrets(said.replace(/\s+/g, " ")).trim().slice(0, 240);
   return detail && provider ? `${summary}\n\nThe provider said: ${provider}` : summary;
+}
+
+// What a provider says can echo the request, keys included. Anything that may be a secret is
+// hidden: values named like one (in JSON, headers, or query strings), auth schemes, known key
+// shapes, credentials in URLs, every query value, and any long opaque token.
+const SECRET_NAME = String.raw`[A-Za-z0-9_-]*(?:key|token|secret|password|passwd|pwd|auth|authorization|credential|signature|session|cookie)[A-Za-z0-9_-]*`;
+function withoutSecrets(text: string) {
+  return text
+    .replace(/\b(Bearer|Basic|Token)\s+[A-Za-z0-9._~+/=-]+/gi, "$1 [hidden]")
+    .replace(new RegExp(String.raw`(["']?${SECRET_NAME}["']?\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,;&}\]]+)`, "gi"), "$1[hidden]")
+    .replace(/\b(?:sk|pk|rk|ghp|gho|ghs|xox[abprs])[-_][A-Za-z0-9_\-.]{6,}/gi, "[hidden]")
+    .replace(/\bAIza[0-9A-Za-z_-]{20,}/g, "[hidden]")
+    .replace(/(\/\/)[^/\s:@]+:[^/\s@]+@/g, "$1[hidden]@")
+    .replace(/([?&][^=\s&#]+=)[^&\s#"']+/g, "$1[hidden]")
+    .replace(/[A-Za-z0-9_\-+/=.]{32,}/g, (token) => (/[0-9]/.test(token) && /[A-Za-z]/.test(token) ? "[hidden]" : token));
 }
 
 // Some local models write their reasoning first, between <think> tags. It isn't part of the reply.

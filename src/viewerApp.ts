@@ -1741,9 +1741,11 @@ function openTagList() {
   void loadTagOverview();
 }
 
-// Opens the AI chat: a saved chat, or a new one.
+// Opens the AI chat: a saved chat, or a new one. A new chat starts empty, with no item attached
+// from an earlier "Ask AI about this" that was never sent.
 function openAiSection(chatId = "") {
   if (!aiAvailable) return;
+  if (!chatId) startNewAiChat();
   changeSearch.cancel();
   hideTagSuggestions();
   Object.assign(state, resetFilterState(), { section: "ai", aiChatId: chatId, filtersOpen: false });

@@ -208,8 +208,10 @@ type AiChatStore = ReturnType<typeof createAiChatStore>;
 
 interface AiContext {
   assistant: ReturnType<typeof createAiAssistant>;
-  /** Users with a reply in progress: one at a time each. */
-  busy: Set<string>;
+  /** Users with a reply in progress (one at a time each), and the chat it is for. */
+  busy: Map<string, string>;
+  /** Set when the server stops: a reply ended by the stop isn't saved. */
+  closed: boolean;
   getAi: () => unknown;
   /** The owner's notes about the library, added to what the model is told. */
   instructions: string;
@@ -376,7 +378,7 @@ function createViewerServer({
   const libraryId = (libraryPath: unknown) => libraryIdFor(libraryPath, resolvedSessionSecret);
   const currentSession: EagleSession = createConnectionContext({ client: eagleClient });
   const ai: AiContext | null = aiChat?.enabled
-    ? { assistant: createAiAssistant(), busy: new Set(), getAi: aiChat.getAi || (() => null), instructions: String(aiChat.instructions || ""), store: aiChat.store || createAiChatStore() }
+    ? { assistant: createAiAssistant(), busy: new Map(), closed: false, getAi: aiChat.getAi || (() => null), instructions: String(aiChat.instructions || ""), store: aiChat.store || createAiChatStore() }
     : null;
   // With Advanced Sort on, the index is built in the background when the server starts (and after a
   // library switch) and kept while the server runs, so sorting is ready before anyone asks for it.
@@ -620,6 +622,7 @@ function createViewerServer({
         return this.status();
       }
       state = "stopping";
+      if (ai) ai.closed = true;
       const closingServer = serverInstance;
       // close() only stops accepting; it waits for every open socket, so keep-alive connections
       // and long media streams would keep stop() pending until the browser lets go.
@@ -1465,7 +1468,17 @@ async function handleAiRoutes(req: IncomingMessage, url: URL, res: ServerRespons
   const chatMatch = url.pathname.match(/^\/api\/ai\/chats\/([A-Za-z0-9_-]{1,64})$/);
   if (chatMatch) {
     if (req.method === "DELETE") {
-      await ai.store.remove(username, library, chatMatch[1]);
+      // The reply would save the chat again when it ends, so it is deleted after the reply.
+      if (ai.busy.get(username) === chatMatch[1]) {
+        sendJson(res, 409, { error: "Wait for the reply to finish, then delete the chat", code: "CHAT_BUSY" });
+        return;
+      }
+      try {
+        await ai.store.remove(username, library, chatMatch[1]);
+      } catch {
+        sendJson(res, 500, { error: "The chat couldn't be deleted: the media server can't write its chat files", code: "CHAT_NOT_SAVED" });
+        return;
+      }
       sendJson(res, 200, { id: chatMatch[1] });
       return;
     }
@@ -1497,7 +1510,8 @@ async function handleAiRoutes(req: IncomingMessage, url: URL, res: ServerRespons
     throw new HttpError(400, `text is required, up to ${MAX_MESSAGE_CHARS} characters`);
   }
   const attachedItemId = typeof body.itemId === "string" ? body.itemId.trim().slice(0, 64) : "";
-  const chat = messageMatch[1] === "new" ? ai.store.create(library, text) : await ai.store.get(username, library, messageMatch[1]);
+  const isNew = messageMatch[1] === "new";
+  const chat = isNew ? ai.store.create(library, text) : await ai.store.get(username, library, messageMatch[1]);
   if (!chat) {
     sendJson(res, 404, { error: "Chat not found" });
     return;
@@ -1511,7 +1525,7 @@ async function handleAiRoutes(req: IncomingMessage, url: URL, res: ServerRespons
     return;
   }
 
-  ai.busy.add(username);
+  ai.busy.set(username, chat.id);
   aiReplyResponses.add(res);
   const abort = new AbortController();
   let finished = false;
@@ -1526,6 +1540,16 @@ async function handleAiRoutes(req: IncomingMessage, url: URL, res: ServerRespons
   send({ type: "chat", id: chat.id, title: chat.title });
   const question = { role: "user" as const, text, at: Date.now() };
   let partial = "";
+  // A chat deleted meanwhile (by an account removal, say) stays deleted; a stopped server saves nothing.
+  const saveChat = async () => {
+    if (ai.closed) return true;
+    try {
+      await ai.store.save(username, chat, { onlyIfKept: !isNew });
+      return true;
+    } catch {
+      return false;
+    }
+  };
   try {
     const result = await ai.assistant.runTurn({
       ai: ai.getAi(),
@@ -1544,21 +1568,22 @@ async function handleAiRoutes(req: IncomingMessage, url: URL, res: ServerRespons
     });
     const answer = { role: "assistant" as const, text: result.text, at: Date.now(), ...(result.items.length ? { items: result.items } : {}) };
     chat.messages.push({ ...question, ...(result.attachedItem ? { attachedItem: result.attachedItem } : {}) }, answer);
-    await ai.store.save(username, chat);
     recordAi({ status: 200, fields: result.features, itemId: attachedItemId || undefined, model: result.model, tokens: result.tokens });
-    send({ type: "done", message: answer });
+    if (await saveChat()) send({ type: "done", message: answer });
+    else send({ type: "error", message: "The reply couldn't be saved: the media server can't write its chat files.", code: "CHAT_NOT_SAVED" });
   } catch (error) {
     const canceled = abort.signal.aborted;
     const known = error instanceof AiChatError ? error as { code: string; status: number } : null;
     const status = canceled ? 499 : known ? known.status : 502;
-    // An admin runs the AI provider, so they get to see what it said.
+    // An admin runs the AI provider, so they get to see what it said, but only as it happens: the
+    // saved chat keeps the general message.
     const message = aiErrorMessage(error, { detail: user.role === "admin" });
     // The question is kept so the chat reads as it happened; what was written before a cancel is kept too.
     if (known?.code !== "LIBRARY_CHANGED") {
       chat.messages.push(question, canceled && partial.trim()
         ? { role: "assistant", text: partial, at: Date.now() }
-        : { role: "assistant", text: canceled ? "Stopped." : message, at: Date.now(), error: true });
-      await ai.store.save(username, chat).catch(() => {});
+        : { role: "assistant", text: canceled ? "Stopped." : aiErrorMessage(error), at: Date.now(), error: true });
+      await saveChat();
     }
     recordAi({ status, itemId: attachedItemId || undefined });
     send({ type: "error", message, ...(known?.code ? { code: known.code } : {}) });
