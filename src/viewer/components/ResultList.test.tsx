@@ -108,6 +108,11 @@ test("list view renders only the chosen columns, including the extra ones", () =
   expect(html).toMatch(/created-cell"[^>]*>2025\/06\/06</);
 });
 
+test("the created date also reads date strings", () => {
+  const html = renderToStaticMarkup(<ResultList items={[{ id: "s", name: "s.png", ext: "png", createdAt: "2025-06-06T12:00:00" }]} viewMode="list" onOpenPreview={() => {}} listColumns={["created"]} />);
+  expect(html).toMatch(/created-cell"[^>]*>2025\/06\/06</);
+});
+
 test("non-web URLs and missing values render as plain text", () => {
   const html = renderToStaticMarkup(
     <ResultList items={[{ id: "x", name: "x.png", ext: "png", url: "javascript:alert(1)" }, { id: "y", name: "y.png", ext: "png" }]} viewMode="list" onOpenPreview={() => {}} listColumns={["url", "annotation", "created"]} />,

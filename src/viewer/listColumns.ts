@@ -93,32 +93,43 @@ export function normalizeListColumns(value: unknown): ListColumnId[] {
 }
 
 export function isDefaultListColumns(columns: readonly ListColumnId[], areaWidth = listAreaWidth) {
-  const defaults = defaultListColumns(areaWidth);
-  return columns.length === defaults.length && defaults.every((id) => columns.includes(id));
+  return sameColumns(columns, defaultListColumns(areaWidth));
 }
 
 /** Without tags, for results areas too narrow to fit the full default table (a phone held sideways, say). */
 export const NARROW_DEFAULT_LIST_COLUMNS: readonly ListColumnId[] = DEFAULT_LIST_COLUMNS.filter((id) => id !== "tags");
+const FULL_DEFAULT_MIN_WIDTH = listColumnLayout(DEFAULT_LIST_COLUMNS).minWidth;
 
 /**
- * Columns shown until the user picks their own: tags only where the full default table fits,
+ * Columns shown until the user changes them: tags only where the full default table fits,
  * so a mid-width area gets a table without tags instead of the compact list.
  */
 export function defaultListColumns(areaWidth = listAreaWidth): readonly ListColumnId[] {
-  return areaWidth >= listColumnLayout(DEFAULT_LIST_COLUMNS).minWidth ? DEFAULT_LIST_COLUMNS : NARROW_DEFAULT_LIST_COLUMNS;
+  return areaWidth >= FULL_DEFAULT_MIN_WIDTH ? DEFAULT_LIST_COLUMNS : NARROW_DEFAULT_LIST_COLUMNS;
+}
+
+/**
+ * The user's changes, kept apart from the width-dependent defaults: columns they turned on that the
+ * defaults leave off, and columns they turned off. Only what they changed is fixed, so turning on
+ * Created in a narrow window still brings tags back once the window is wide.
+ */
+export interface ListColumnChanges {
+  shown: ListColumnId[];
+  hidden: ListColumnId[];
 }
 
 const listeners = new Set<() => void>();
-/** The user's saved choice; `null` while they use the width-dependent defaults. */
-let savedListColumns = readStoredListColumns();
+/** `null` while the user hasn't changed anything. */
+let listColumnChanges = readStoredListColumns();
+let listColumns = applyChanges(listColumnChanges);
 
 export function getListColumns(): readonly ListColumnId[] {
-  return savedListColumns ?? defaultListColumns();
+  return listColumns;
 }
 
-/** Whether the user has picked their own columns (so there is something to reset). */
+/** Whether the user has changed the columns (so there is something to reset). */
 export function hasCustomListColumns() {
-  return savedListColumns !== null;
+  return listColumnChanges !== null;
 }
 
 export function subscribeListColumns(listener: () => void) {
@@ -128,31 +139,24 @@ export function subscribeListColumns(listener: () => void) {
   };
 }
 
-/** Saves a choice; one matching the defaults for the current width goes back to the defaults. */
+/** Shows exactly these columns at the current width, saved as changes from its defaults. */
 export function setListColumns(columns: readonly ListColumnId[]) {
   const next = normalizeListColumns(columns);
-  const saved = isDefaultListColumns(next) ? null : next;
-  try {
-    if (saved) window.localStorage.setItem(LIST_COLUMNS_STORAGE_KEY, JSON.stringify(saved));
-    else window.localStorage.removeItem(LIST_COLUMNS_STORAGE_KEY);
-  } catch {
-    // Keep the in-memory choice when storage is unavailable.
-  }
-  update(saved);
+  const defaults = defaultListColumns();
+  save({ shown: next.filter((id) => !defaults.includes(id)), hidden: defaults.filter((id) => !next.includes(id)) });
 }
 
 export function toggleListColumn(id: ListColumnId, visible: boolean) {
-  const current = getListColumns();
-  setListColumns(visible ? [...current, id] : current.filter((column) => column !== id));
+  const inDefaults = defaultListColumns().includes(id);
+  const shown = (listColumnChanges?.shown ?? []).filter((column) => column !== id);
+  const hidden = (listColumnChanges?.hidden ?? []).filter((column) => column !== id);
+  if (visible && !inDefaults) shown.push(id);
+  if (!visible && inDefaults) hidden.push(id);
+  save({ shown, hidden });
 }
 
 export function resetListColumns() {
-  try {
-    window.localStorage.removeItem(LIST_COLUMNS_STORAGE_KEY);
-  } catch {
-    // Nothing stored to clear.
-  }
-  update(null);
+  save(null);
 }
 
 /** Re-reads the stored choice (after storage was cleared, or in tests). */
@@ -160,23 +164,72 @@ export function initializeListColumns() {
   update(readStoredListColumns());
 }
 
-function update(next: ListColumnId[] | null) {
-  const same = next === savedListColumns
-    || (next !== null && savedListColumns !== null && next.length === savedListColumns.length && next.every((id, index) => id === savedListColumns?.[index]));
-  if (same) return;
-  savedListColumns = next;
+function save(changes: ListColumnChanges | null) {
+  const next = changes && normalizeChanges(changes);
+  try {
+    if (next) window.localStorage.setItem(LIST_COLUMNS_STORAGE_KEY, JSON.stringify(next));
+    else window.localStorage.removeItem(LIST_COLUMNS_STORAGE_KEY);
+  } catch {
+    // Keep the in-memory choice when storage is unavailable.
+  }
+  update(next);
+}
+
+function update(changes: ListColumnChanges | null) {
+  const customChanged = (changes === null) !== (listColumnChanges === null);
+  listColumnChanges = changes;
+  refresh(customChanged);
+}
+
+/** Recomputes the shown columns; listeners hear about it when they (or the reset state) changed. */
+function refresh(force = false) {
+  const next = applyChanges(listColumnChanges);
+  if (next.length === listColumns.length && next.every((id, index) => id === listColumns[index])) {
+    if (force) notify();
+    return;
+  }
+  listColumns = next;
   notify();
+}
+
+function applyChanges(changes: ListColumnChanges | null): ListColumnId[] {
+  const defaults = defaultListColumns();
+  if (!changes) return [...defaults];
+  return normalizeListColumns([...defaults.filter((id) => !changes.hidden.includes(id)), ...changes.shown]);
+}
+
+/** Drops empty changes; `null` means nothing changed. */
+function normalizeChanges(changes: ListColumnChanges): ListColumnChanges | null {
+  const shown = normalizeListColumns(changes.shown);
+  const hidden = normalizeListColumns(changes.hidden).filter((id) => !shown.includes(id));
+  return shown.length || hidden.length ? { shown, hidden } : null;
+}
+
+function sameColumns(a: readonly ListColumnId[], b: readonly ListColumnId[]) {
+  return a.length === b.length && b.every((id) => a.includes(id));
 }
 
 function notify() {
   for (const listener of listeners) listener();
 }
 
-function readStoredListColumns(): ListColumnId[] | null {
+function readStoredListColumns(): ListColumnChanges | null {
   try {
     if (typeof window === "undefined") return null;
     const saved = window.localStorage.getItem(LIST_COLUMNS_STORAGE_KEY);
-    return saved ? normalizeListColumns(JSON.parse(saved)) : null;
+    if (!saved) return null;
+    const value: unknown = JSON.parse(saved);
+    // A plain list of columns (from before changes were kept apart) was an exact choice: keep every
+    // listed column on and every other default off, whatever the width.
+    if (Array.isArray(value)) {
+      const columns = normalizeListColumns(value);
+      return normalizeChanges({ shown: columns, hidden: DEFAULT_LIST_COLUMNS.filter((id) => !columns.includes(id)) });
+    }
+    if (value && typeof value === "object") {
+      const { shown, hidden } = value as Partial<ListColumnChanges>;
+      return normalizeChanges({ shown: Array.isArray(shown) ? shown : [], hidden: Array.isArray(hidden) ? hidden : [] });
+    }
+    return null;
   } catch {
     return null;
   }
@@ -190,11 +243,10 @@ export function getListAreaWidth() {
 
 export function setListAreaWidth(width: number) {
   if (width === listAreaWidth) return;
-  const columnsBefore = getListColumns();
   listAreaWidth = width;
   for (const listener of widthListeners) listener();
   // The defaults depend on the width, so the columns can change with it.
-  if (getListColumns() !== columnsBefore) notify();
+  refresh();
 }
 
 export function subscribeListAreaWidth(listener: () => void) {

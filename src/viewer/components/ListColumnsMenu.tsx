@@ -33,8 +33,8 @@ export function ListColumnsMenu() {
   const columns = useSyncExternalStore(subscribeListColumns, getListColumns, getListColumns);
   const areaWidth = useSyncExternalStore(subscribeListAreaWidth, getListAreaWidth, getListAreaWidth);
   const minWidth = useMemo(() => listColumnLayout(columns).minWidth, [columns]);
-  // Columns change with the width only while on the defaults, so this follows the column store.
-  const custom = hasCustomListColumns();
+  // Subscribed on its own: a reset can leave the columns unchanged (they already match the defaults).
+  const custom = useSyncExternalStore(subscribeListColumns, hasCustomListColumns, hasCustomListColumns);
   if (areaWidth < COMPACT_LIST_MAX_WIDTH) return null;
   return (
     <DropdownMenu modal={false}>

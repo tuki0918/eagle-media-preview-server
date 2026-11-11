@@ -453,9 +453,11 @@ function ListColumnCell({ filters, id, item }: { filters?: ListFilters; id: List
 type ListCellProps = { "data-list-col": ListColumnId };
 const CREATED_DATE_KEYS = ["btime", "createdAt", "createdTime", "creationTime", "birthTime"] as const;
 
+// Timestamps or date strings (an ISO createdAt, say), read the same way as formatDate.
 function firstDate(item: EagleItem, keys: readonly string[]) {
   for (const key of keys) {
-    const value = Number(item[key]);
+    const raw = item[key];
+    const value = typeof raw === "string" && raw.trim() && !Number.isFinite(Number(raw)) ? Date.parse(raw) : Number(raw);
     if (Number.isFinite(value) && value > 0) return value;
   }
   return undefined;

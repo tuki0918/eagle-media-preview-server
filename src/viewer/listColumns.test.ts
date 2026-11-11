@@ -112,7 +112,7 @@ test("a saved choice stays put whatever the width", () => {
   try {
     toggleListColumn("tags", true);
     expect(hasCustomListColumns()).toBe(true);
-    expect(JSON.parse(storage.getItem(LIST_COLUMNS_STORAGE_KEY) || "[]")).toContain("tags");
+    expect(JSON.parse(storage.getItem(LIST_COLUMNS_STORAGE_KEY) || "{}")).toEqual({ shown: ["tags"], hidden: [] });
     setListAreaWidth(1200);
     expect(getListColumns()).toEqual([...DEFAULT_LIST_COLUMNS]);
     setListAreaWidth(800);
@@ -121,6 +121,63 @@ test("a saved choice stays put whatever the width", () => {
     toggleListColumn("tags", false);
     expect(hasCustomListColumns()).toBe(false);
     expect(storage.getItem(LIST_COLUMNS_STORAGE_KEY)).toBeNull();
+  } finally {
+    setListAreaWidth(Number.POSITIVE_INFINITY);
+  }
+});
+
+test("changing another column in a narrow window still brings tags back when it is wide", () => {
+  installDom();
+  initializeListColumns();
+  setListAreaWidth(800);
+  try {
+    toggleListColumn("created", true);
+    expect(getListColumns()).not.toContain("tags");
+    setListAreaWidth(1200);
+    expect(getListColumns()).toEqual([...DEFAULT_LIST_COLUMNS, "created"]);
+    // Tags turned off while wide stay off in every width.
+    toggleListColumn("tags", false);
+    setListAreaWidth(800);
+    setListAreaWidth(1200);
+    expect(getListColumns()).not.toContain("tags");
+  } finally {
+    setListAreaWidth(Number.POSITIVE_INFINITY);
+    resetListColumns();
+  }
+});
+
+test("a column list saved in the earlier format keeps every listed column, tags included, at any width", () => {
+  const storage = installDom();
+  storage.setItem(LIST_COLUMNS_STORAGE_KEY, JSON.stringify([...DEFAULT_LIST_COLUMNS, "created"]));
+  setListAreaWidth(800);
+  try {
+    initializeListColumns();
+    expect(getListColumns()).toEqual([...DEFAULT_LIST_COLUMNS, "created"]);
+    setListAreaWidth(1200);
+    expect(getListColumns()).toEqual([...DEFAULT_LIST_COLUMNS, "created"]);
+  } finally {
+    setListAreaWidth(Number.POSITIVE_INFINITY);
+    resetListColumns();
+  }
+});
+
+test("a reset that leaves the columns as they are still tells subscribers it is no longer custom", () => {
+  installDom();
+  initializeListColumns();
+  setListAreaWidth(800);
+  try {
+    toggleListColumn("tags", true);
+    setListAreaWidth(1200);
+    const columns = getListColumns();
+    expect(columns).toEqual([...DEFAULT_LIST_COLUMNS]);
+    expect(hasCustomListColumns()).toBe(true);
+    const listener = vi.fn();
+    const unsubscribe = subscribeListColumns(listener);
+    resetListColumns();
+    expect(getListColumns()).toBe(columns);
+    expect(hasCustomListColumns()).toBe(false);
+    expect(listener).toHaveBeenCalledTimes(1);
+    unsubscribe();
   } finally {
     setListAreaWidth(Number.POSITIVE_INFINITY);
   }
@@ -142,11 +199,16 @@ test("keeps the column choice in localStorage and notifies subscribers", () => {
   toggleListColumn("url", true);
   toggleListColumn("tags", false);
   expect(getListColumns()).toEqual(["name", "rating", "type", "size", "dimensions", "duration", "modified", "url"]);
-  expect(JSON.parse(storage.getItem(LIST_COLUMNS_STORAGE_KEY) || "[]")).toEqual(getListColumns());
+  // Only the changes are kept, so the width-based defaults still apply to the rest.
+  expect(JSON.parse(storage.getItem(LIST_COLUMNS_STORAGE_KEY) || "{}")).toEqual({ shown: ["url"], hidden: ["tags"] });
   expect(listener).toHaveBeenCalledTimes(2);
 
   // A reload reads the saved choice back.
   setListColumns(["annotation"]);
+  storage.setItem(LIST_COLUMNS_STORAGE_KEY, JSON.stringify({ shown: ["created"], hidden: ["tags", "duration"] }));
+  initializeListColumns();
+  expect(getListColumns()).toEqual(["name", "rating", "type", "size", "dimensions", "modified", "created"]);
+  // A plain column list (the earlier format) still reads back.
   storage.setItem(LIST_COLUMNS_STORAGE_KEY, JSON.stringify(["created", "type"]));
   initializeListColumns();
   expect(getListColumns()).toEqual(["type", "created"]);
