@@ -25,6 +25,8 @@ describe("Advanced Sort index progress", () => {
 
   test("says when the index is ready or failed", () => {
     expect(render({ status: "ready", loaded: 300, total: 300 }).getAttribute("aria-valuetext")).toBe("Ready · 300 items");
-    expect(render({ status: "failed", loaded: 0, total: 0 }).getAttribute("aria-valuetext")).toContain("Scan failed");
+    expect(render({ status: "ready", loaded: 1, total: 1 }).getAttribute("aria-valuetext")).toBe("Ready · 1 item");
+    expect(render({ status: "failed", loaded: 0, total: 0 }).getAttribute("aria-valuetext")).toBe("Scan failed · retried when a viewer connects");
+    expect(render(null).getAttribute("aria-label")).toBe("Advanced Sort Index");
   });
 });

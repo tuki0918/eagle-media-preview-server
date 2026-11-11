@@ -148,22 +148,22 @@ export function SortIndexProgress({ sortIndex }: { sortIndex: SortIndexStatus | 
   const known = status === "building" && total > 0;
   const percent = status === "ready" ? 100 : known ? Math.min(100, Math.floor((loaded / total) * 100)) : 0;
   const detail = status === "ready"
-    ? `Ready · ${loaded.toLocaleString()} items`
+    ? `Ready · ${loaded.toLocaleString()} ${loaded === 1 ? "item" : "items"}`
     : status === "failed"
-    ? "Scan failed; it is retried when a viewer checks in."
+    ? "Scan failed · retried when a viewer connects"
     : known
     ? `Scanning library… ${loaded.toLocaleString()} / ${total.toLocaleString()} (${percent}%)`
     : "Scanning library…";
   return (
     <div className="mt-4 grid min-w-0 gap-1.5 rounded-xl border border-[#e6e6e9] px-3 py-2.5" data-testid="sortIndexProgress">
       <div className="flex min-w-0 items-center justify-between gap-3">
-        <span className={`${fieldLabelClassName} shrink-0 whitespace-nowrap`}>Advanced Sort index</span>
+        <span className={`${fieldLabelClassName} shrink-0 whitespace-nowrap`}>Advanced Sort Index</span>
         <span title={detail} className={`min-w-0 truncate text-[11.5px] ${status === "failed" ? "text-[#b42318]" : "text-[#5f6670]"}`}>{detail}</span>
       </div>
       <div
         className="h-1.5 overflow-hidden rounded-full bg-[#ececef]"
         role="progressbar"
-        aria-label="Advanced Sort index"
+        aria-label="Advanced Sort Index"
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={status === "building" && !known ? undefined : percent}
