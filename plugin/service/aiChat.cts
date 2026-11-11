@@ -84,6 +84,21 @@ interface AssistantClient {
   listItems(options: Record<string, unknown>): Promise<unknown>;
   listTags(options: { limit?: number | string; query?: string }): Promise<unknown>;
   searchItems(options: { limit?: number | string; offset?: number | string; query: string }): Promise<unknown>;
+  /** Every tag in the library; without it only the most used ones are known. */
+  tagOverview?(): Promise<{ tags?: unknown[] } | null | undefined>;
+}
+
+interface LibraryTag {
+  count: number;
+  name: string;
+}
+
+interface LibraryFacts {
+  expiresAt: number;
+  folders: Array<{ id: string; name: string }>;
+  libraryPath: string;
+  /** Every known tag, most used first. */
+  tags: LibraryTag[];
 }
 
 interface AssistantSession {
@@ -102,6 +117,8 @@ interface TurnInput {
   attachedItemId?: string;
   /** Earlier messages of this chat, oldest first. */
   history: ChatMessage[];
+  /** The owner's notes about the library, from the plugin's settings. */
+  instructions?: string;
   onEvent: (event: TurnEvent) => void;
   session: AssistantSession;
   signal?: AbortSignal;
@@ -130,6 +147,13 @@ const MAX_HISTORY_MESSAGES = 16;
 // How many times the model may search before it has to answer.
 const MAX_SEARCH_ROUNDS = 2;
 const MAX_RESULT_ITEMS = 12;
+// The quick search run on every question before the model sees it.
+const MAX_QUICK_TAGS = 3;
+const MAX_QUICK_FOLDERS = 2;
+const MAX_QUICK_KEYWORD_CHARS = 30;
+const MAX_QUICK_MEANING_ITEMS = 8;
+const MAX_PROMPT_TAGS = 40;
+const MAX_INSTRUCTIONS_CHARS = 2000;
 const MAX_DIRECTIVE_CHARS = 600;
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 const LIBRARY_FACTS_TTL_MS = 60 * 1000;
@@ -369,61 +393,218 @@ function describeItemForModel(item: EagleItemLike) {
   });
 }
 
+function uniqueItems(items: EagleItemLike[]) {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const id = typeof item?.id === "string" ? item.id : "";
+    if (!id || seen.has(id) || item.isDeleted === true) return false;
+    seen.add(id);
+    return true;
+  });
+}
+
+function nameKey(value: string) {
+  return value.normalize("NFKC").toLowerCase().replace(/^#/, "").replace(/[\s_\-]+/g, "");
+}
+
+// The real tag or folder closest to a name the model wrote: the same name (ignoring case, spaces,
+// and full-width letters), else one that contains it or is contained in it; the most used wins.
+function closestName<T extends { count?: number; name: string }>(name: string, entries: T[]): T | null {
+  const key = nameKey(name);
+  if (!key) return null;
+  let best: T | null = null;
+  let bestScore = 0;
+  for (const entry of entries) {
+    const entryKey = nameKey(entry.name);
+    if (!entryKey) continue;
+    const score = entryKey === key ? 3 : key.length >= 2 && entryKey.includes(key) ? 2 : entryKey.length >= 2 && key.includes(entryKey) ? 1 : 0;
+    if (score > bestScore || (score && score === bestScore && (entry.count || 0) > (best?.count || 0))) {
+      best = entry;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Tags or folders whose names appear in the text: whole words for names in Latin letters (so "art"
+// isn't found in "party"), anywhere for others (Japanese has no spaces). Longer names first, and
+// none that is part of a name already found.
+function namesIn<T extends { count?: number; name: string }>(text: string, entries: T[]) {
+  const haystack = text.normalize("NFKC").toLowerCase();
+  const found = entries.filter((entry) => {
+    const name = entry.name.normalize("NFKC").toLowerCase().trim();
+    if (name.length < 2) return false;
+    if (/^[\x00-\x7f]+$/.test(name)) return new RegExp(`(^|[^\\p{L}\\p{N}])${escapeRegExp(name)}($|[^\\p{L}\\p{N}])`, "u").test(haystack);
+    return haystack.includes(name);
+  }).sort((left, right) => right.name.length - left.name.length || (right.count || 0) - (left.count || 0));
+  const kept: T[] = [];
+  for (const entry of found) {
+    const name = entry.name.toLowerCase();
+    if (!kept.some((other) => other.name.toLowerCase().includes(name))) kept.push(entry);
+  }
+  return kept;
+}
+
+function quickSearchNote(quick: { folders: string[]; items: EagleItemLike[]; tags: string[] }) {
+  const matched = [
+    quick.tags.length ? `tags ${quick.tags.map((tag) => `"${tag}"`).join(", ")}` : "",
+    quick.folders.length ? `folders ${quick.folders.map((folder) => `"${folder}"`).join(", ")}` : "",
+  ].filter(Boolean).join(" and ");
+  if (!quick.items.length) return `(A quick search of the library for this message${matched ? ` (${matched})` : ""} found nothing.)`;
+  return [
+    `(A quick search of the library for this message${matched ? `, including ${matched} named in it,` : ""} found these items, one per line. They may not all fit the question:`,
+    ...quick.items.map(describeItemForModel),
+    ")",
+  ].join("\n");
+}
+
 function createAiAssistant({ now = Date.now }: { now?: () => number } = {}) {
-  let facts: { expiresAt: number; folders: Array<{ id: string; name: string }>; libraryPath: string; tags: string[] } | null = null;
+  let facts: LibraryFacts | null = null;
   // Eagle's AI Search is its own plugin; when it doesn't answer, it isn't asked again for a while.
   let smartSearchRetryAt = 0;
 
-  async function libraryFacts(session: AssistantSession, libraryPath: string) {
+  async function libraryFacts(session: AssistantSession, libraryPath: string): Promise<LibraryFacts> {
     if (facts && facts.libraryPath === libraryPath && facts.expiresAt > now()) return facts;
-    const [tagPage, folderPage] = await Promise.allSettled([session.client.listTags({ limit: 100 }), session.client.folders()]);
-    const tags = tagPage.status === "fulfilled"
-      ? pageItems(tagPage.value)
-        .map((tag) => ({ count: Number(tag.count ?? tag.imageCount) || 0, name: String(tag.name || "") }))
+    const client = session.client;
+    const [tagList, folderPage] = await Promise.allSettled([
+      typeof client.tagOverview === "function"
+        ? client.tagOverview().then((overview) => (Array.isArray(overview?.tags) ? overview.tags as EagleItemLike[] : []))
+        : client.listTags({ limit: 100 }).then(pageItems),
+      client.folders(),
+    ]);
+    const tags = tagList.status === "fulfilled"
+      ? tagList.value
+        .map((tag) => ({ count: Number(tag?.count ?? tag?.imageCount) || 0, name: String(tag?.name || "").trim() }))
         .filter((tag) => tag.name)
         .sort((left, right) => right.count - left.count)
-        .slice(0, 40)
-        .map((tag) => tag.name)
       : [];
     const folders = folderPage.status === "fulfilled" ? flattenFolders(pageItems(folderPage.value)).slice(0, 200) : [];
     facts = { expiresAt: now() + LIBRARY_FACTS_TTL_MS, folders, libraryPath, tags };
     return facts;
   }
 
-  async function search(session: AssistantSession, directive: SearchDirective, folders: Array<{ id: string; name: string }>) {
-    const folderName = (directive.folder || "").toLowerCase();
-    const folderId = folderName ? folders.find((folder) => folder.name.toLowerCase() === folderName)?.id : "";
-    const structured = Boolean(directive.tags?.length || directive.ext || directive.rating || folderId);
-    const query = directive.query || "";
-    let smart = false;
+  function smartSearchReady(session: AssistantSession) {
+    return typeof session.client.aiSearchByText === "function" && smartSearchRetryAt <= now();
+  }
+
+  // Eagle's AI Search, which fails quietly: a plugin that isn't there just finds nothing.
+  async function searchByMeaning(session: AssistantSession, query: string, limit: number) {
+    if (!query || !smartSearchReady(session)) return [];
+    try {
+      const found = await session.client.aiSearchByText!({ query, limit });
+      return Array.isArray(found) ? found as EagleItemLike[] : [];
+    } catch {
+      smartSearchRetryAt = now() + SMART_SEARCH_RETRY_MS;
+      return [];
+    }
+  }
+
+  // Words against names and notes: the whole phrase first, then each word on its own, then by meaning.
+  async function searchByWords(session: AssistantSession, words: string[]) {
+    const phrase = words.join(" ").trim();
+    const queries = [...new Set([phrase, ...words.flatMap((word) => word.split(/\s+/))].map((word) => word.trim()).filter(Boolean))].slice(0, 4);
+    const [byText, byMeaning] = await Promise.all([
+      Promise.allSettled(queries.map((query) => session.client.searchItems({ query, limit: 30, offset: 0 }))),
+      searchByMeaning(session, phrase, MAX_RESULT_ITEMS),
+    ]);
+    if (byText.every((result) => result.status === "rejected") && !byMeaning.length) {
+      throw (byText[0] as PromiseRejectedResult | undefined)?.reason ?? new Error("Search failed");
+    }
+    const first = byText[0];
+    const total = first?.status === "fulfilled" ? Number((first.value as { total?: unknown } | null)?.total) || 0 : 0;
+    const items = [...byText.flatMap((result) => (result.status === "fulfilled" ? pageItems(result.value) : [])), ...byMeaning];
+    return { items, smart: byMeaning.length > 0, total };
+  }
+
+  async function search(session: AssistantSession, directive: SearchDirective, library: LibraryFacts) {
+    const notes: string[] = [];
+    const words = directive.query ? [directive.query] : [];
+    // The model's tag and folder names are guesses: read them as the closest real ones, or as words.
+    const tags: string[] = [];
+    for (const tag of directive.tags || []) {
+      const match = closestName(tag, library.tags);
+      if (match) {
+        if (!tags.includes(match.name)) tags.push(match.name);
+        if (match.name !== tag) notes.push(`The tag "${tag}" was read as "${match.name}".`);
+      } else {
+        words.push(tag.replace(/^#/, ""));
+        notes.push(`There is no tag "${tag}", so it was searched as a word.`);
+      }
+    }
+    let folderId = "";
+    if (directive.folder) {
+      const match = closestName(directive.folder, library.folders);
+      if (match) {
+        folderId = match.id;
+        if (match.name !== directive.folder) notes.push(`The folder "${directive.folder}" was read as "${match.name}".`);
+      } else {
+        notes.push(`There is no folder "${directive.folder}", so it was left out.`);
+      }
+    }
+
+    // Everything asked for first; while nothing matches, conditions are dropped one at a time.
+    const conditions: Record<string, unknown> = { folderId, ext: directive.ext || "", rating: directive.rating ? String(directive.rating) : "", keywords: words.join(" "), tags };
+    const dropOrder: Array<[string, string]> = [["folderId", "the folder"], ["ext", "the file type"], ["rating", "the rating"], ["keywords", "the words"], ["tags", "the tags"]];
+    const hasFilter = (current: Record<string, unknown>) => Boolean(current.folderId || current.ext || current.rating || (current.tags as string[]).length);
+    const left: string[] = [];
     let found: EagleItemLike[] = [];
+    let smart = false;
     let total = 0;
-    if (structured || !query) {
-      const page = await session.client.listItems({ keywords: query, tags: directive.tags, ext: directive.ext, rating: directive.rating ? String(directive.rating) : "", folderId, limit: 30, offset: 0 });
+    let current = { ...conditions };
+    while (hasFilter(current)) {
+      const page = await session.client.listItems({ ...current, limit: 30, offset: 0 });
       found = pageItems(page);
       total = Number((page as { total?: unknown } | null)?.total) || found.length;
-    } else {
-      const useSmart = typeof session.client.aiSearchByText === "function" && smartSearchRetryAt <= now();
-      const [byText, byMeaning] = await Promise.allSettled([
-        session.client.searchItems({ query, limit: 30, offset: 0 }),
-        useSmart ? session.client.aiSearchByText!({ query, limit: MAX_RESULT_ITEMS }) : Promise.reject(new Error("off")),
-      ]);
-      if (byText.status === "rejected" && byMeaning.status === "rejected") throw byText.reason;
-      if (useSmart && byMeaning.status === "rejected") smartSearchRetryAt = now() + SMART_SEARCH_RETRY_MS;
-      const textItems = byText.status === "fulfilled" ? pageItems(byText.value) : [];
-      const meaningItems = byMeaning.status === "fulfilled" && Array.isArray(byMeaning.value) ? byMeaning.value as EagleItemLike[] : [];
-      smart = meaningItems.length > 0;
-      found = [...textItems, ...meaningItems];
-      total = byText.status === "fulfilled" ? Number((byText.value as { total?: unknown } | null)?.total) || textItems.length : meaningItems.length;
+      if (found.length) break;
+      const next = dropOrder.find(([key]) => (key === "tags" ? (current.tags as string[]).length : current[key]));
+      if (!next) break;
+      current = { ...current, [next[0]]: next[0] === "tags" ? [] : "" };
+      left.push(next[1]);
     }
-    const seen = new Set<string>();
-    const items = found.filter((item) => {
-      const id = typeof item?.id === "string" ? item.id : "";
-      if (!id || seen.has(id) || item.isDeleted === true) return false;
-      seen.add(id);
-      return true;
-    }).slice(0, MAX_RESULT_ITEMS);
-    return { items, smart, total: Math.max(total, items.length) };
+    if (!found.length) {
+      // No filters left, or none asked for: search by words (and tag names), by text and by meaning.
+      const searchWords = words.length ? words : tags;
+      if (searchWords.length) {
+        const byWords = await searchByWords(session, searchWords);
+        found = byWords.items;
+        smart = byWords.smart;
+        total = byWords.total;
+        // Found by words alone: every filter that was asked for has been left out.
+        left.splice(0, left.length, ...dropOrder
+          .filter(([key]) => key !== "keywords" && (key === "tags" ? tags.length : conditions[key]))
+          .map(([, label]) => label));
+      } else if (!hasFilter(conditions)) {
+        const page = await session.client.listItems({ limit: 30, offset: 0 });
+        found = pageItems(page);
+        total = Number((page as { total?: unknown } | null)?.total) || found.length;
+      }
+    }
+    const items = uniqueItems(found).slice(0, MAX_RESULT_ITEMS);
+    if (items.length && left.length) notes.unshift(`No item matched everything, so these results leave out ${left.join(", ")}.`);
+    return { items, notes, smart, total: Math.max(total, items.length) };
+  }
+
+  // Run on every question before the model sees it, so items turn up even when a model doesn't ask
+  // to search: tags and folders named in the question, the question as a keyword when it is short,
+  // and Eagle's AI Search. Items from the first three are "certain"; by meaning they may be anything.
+  async function quickSearch(session: AssistantSession, question: string, library: LibraryFacts) {
+    const tagNames = namesIn(question, library.tags).slice(0, MAX_QUICK_TAGS).map((tag) => tag.name);
+    const folders = namesIn(question, library.folders).slice(0, MAX_QUICK_FOLDERS);
+    const keyword = question.trim();
+    const listed = await Promise.allSettled([
+      ...tagNames.map((name) => session.client.listItems({ tags: [name], limit: MAX_RESULT_ITEMS, offset: 0 })),
+      ...folders.map((folder) => session.client.listItems({ folderId: folder.id, limit: MAX_RESULT_ITEMS, offset: 0 })),
+      ...(keyword && keyword.length <= MAX_QUICK_KEYWORD_CHARS ? [session.client.searchItems({ query: keyword, limit: MAX_RESULT_ITEMS, offset: 0 })] : []),
+    ]);
+    const certain = uniqueItems(listed.flatMap((result) => (result.status === "fulfilled" ? pageItems(result.value) : [])));
+    const meaning = await searchByMeaning(session, question.slice(0, 200), MAX_QUICK_MEANING_ITEMS);
+    const certainIds = new Set(certain.map((item) => item.id as string));
+    const items = uniqueItems([...certain, ...meaning]).slice(0, MAX_RESULT_ITEMS);
+    return { certainIds, folders: folders.map((folder) => folder.name), items, smart: meaning.length > 0, tags: tagNames };
   }
 
   // Reads a small picture of the item for a model that can look at images: the thumbnail, or the
@@ -444,15 +625,16 @@ function createAiAssistant({ now = Date.now }: { now?: () => number } = {}) {
     return "";
   }
 
-  function systemPrompt({ folders, libraryName, tags, username }: { folders: string[]; libraryName: string; tags: string[]; username: string }) {
+  function systemPrompt({ folders, instructions, libraryName, tags, username }: { folders: string[]; instructions: string; libraryName: string; tags: string[]; username: string }) {
     return [
       `You are the assistant built into Media Library, a web viewer for the Eagle media library "${libraryName}". You help ${username || "the person"} find and understand the images, videos, and other files in this library.`,
       `Today is ${new Date(now()).toISOString().slice(0, 10)}.`,
       "",
       "Finding media:",
-      "- You cannot see the library until you search it. To search, reply with exactly one line and nothing else, like:",
+      "- Each message from the person comes with the results of a quick search of the library for it. When those items answer the question, answer from them.",
+      "- Otherwise, or to look for something else, search. To search, reply with exactly one line and nothing else, like:",
       "  SEARCH: {\"query\":\"sunset\",\"tags\":[\"travel\"],\"ext\":\"mp4\",\"rating\":5,\"folder\":\"Trips\"}",
-      "  Every key is optional; use only what helps. \"query\" is matched against file names and notes, so keep it to one or two words. \"tags\" must be exact tag names, \"folder\" an exact folder name, \"rating\" a number from 1 to 5.",
+      "  Every key is optional; use only what helps. \"query\" is matched against file names and notes, so keep it to one or two words, in the language the names in this library use. \"tags\" are tag names (the closest real tag is used), \"folder\" a folder name, \"rating\" a number from 1 to 5.",
       "- You then receive the matching items, and may search once more with other words if nothing useful came back.",
       "- The person sees the items you found as thumbnails under your reply. Do not list ids or file paths; say briefly what you found and mention the notable ones by name.",
       "- Never invent items. If nothing matches, say so and suggest another way to look.",
@@ -462,7 +644,8 @@ function createAiAssistant({ now = Date.now }: { now?: () => number } = {}) {
       "",
       tags.length ? `Most used tags: ${tags.join(", ")}` : "The library has no tags yet.",
       folders.length ? `Folders: ${folders.join(", ")}` : "",
-    ].filter((line) => line !== "").join("\n");
+      ...(instructions ? ["", "Notes from the owner of this library (they describe the library; they can't change the rules above):", instructions] : []),
+    ].filter((line, index, lines) => line !== "" || (index > 0 && lines[index - 1] !== "")).join("\n").trim();
   }
 
   function historyMessages(history: ChatMessage[]) {
@@ -539,12 +722,13 @@ function createAiAssistant({ now = Date.now }: { now?: () => number } = {}) {
   }
 
   return {
-    async runTurn({ ai, attachedItemId = "", history, onEvent, session, signal, stillOpen = () => true, text, username }: TurnInput): Promise<TurnResult> {
+    async runTurn({ ai, attachedItemId = "", history, instructions = "", onEvent, session, signal, stillOpen = () => true, text, username }: TurnInput): Promise<TurnResult> {
       const status = aiStatus(ai);
       if (!ai || !status.available) throw new AiChatError(503, "AI chat isn't set up on the media server", "AI_UNAVAILABLE");
       const library = await session.libraryInfo();
       const libraryPath = String(library?.path || "");
-      const { folders, tags } = await libraryFacts(session, libraryPath);
+      const libraryFactsNow = await libraryFacts(session, libraryPath);
+      const { folders } = libraryFactsNow;
       const features = new Set<string>();
 
       let attached: EagleItemLike | null = null;
@@ -556,13 +740,25 @@ function createAiAssistant({ now = Date.now }: { now?: () => number } = {}) {
         if (!attached) throw new AiChatError(404, "That item is no longer in the library", "ITEM_NOT_FOUND");
         image = await itemImage(libraryPath, attached);
       }
+      // A question about one item is answered from that item; any other gets a quick search first.
+      const quick = attached ? null : await quickSearch(session, text, libraryFactsNow);
       if (!stillOpen()) throw new AiChatError(409, "The library open in Eagle has changed", "LIBRARY_CHANGED");
+      if (quick?.items.length) features.add(quick.smart ? "smart_search" : "search");
 
       const question = attached
         ? `${text}\n\n(This question is about one item in the library: ${describeItemForModel(attached)}${image ? ". A picture of it is attached." : ". No picture of it could be attached."})`
-        : text;
+        : `${text}\n\n${quickSearchNote(quick!)}`;
       const messages: unknown[] = [
-        { role: "system", content: systemPrompt({ folders: folders.slice(0, 60).map((folder) => folder.name), libraryName: String(library?.name || ""), tags, username }) },
+        {
+          role: "system",
+          content: systemPrompt({
+            folders: folders.slice(0, 60).map((folder) => folder.name),
+            instructions: instructions.trim().slice(0, MAX_INSTRUCTIONS_CHARS),
+            libraryName: String(library?.name || ""),
+            tags: libraryFactsNow.tags.slice(0, MAX_PROMPT_TAGS).map((tag) => tag.name),
+            username,
+          }),
+        },
         ...historyMessages(history),
         { role: "user", content: question },
       ];
@@ -609,7 +805,7 @@ function createAiAssistant({ now = Date.now }: { now?: () => number } = {}) {
         tokens += reply.tokens;
         if (!reply.directive) break;
         onEvent({ type: "search", label: searchLabel(reply.directive) });
-        const found = await search(session, reply.directive, folders);
+        const found = await search(session, reply.directive, libraryFactsNow);
         if (!stillOpen()) throw new AiChatError(409, "The library open in Eagle has changed", "LIBRARY_CHANGED");
         features.add(found.smart ? "smart_search" : "search");
         if (found.items.length) {
@@ -625,10 +821,23 @@ function createAiAssistant({ now = Date.now }: { now?: () => number } = {}) {
               found.items.length
                 ? `Search results (${found.items.length} of ${found.total} matching items, one per line):\n${found.items.map(describeItemForModel).join("\n")}`
                 : "Search results: nothing matched.",
+              ...(found.notes.length ? [found.notes.join(" ")] : []),
               last ? "Now answer the person. Do not search again." : "Now answer the person, or search once more with different words if these don't help.",
             ].join("\n\n"),
           },
         );
+      }
+
+      // Without results of its own search, the quick search's items are shown: the certain ones, and
+      // those found by meaning that the reply names (by meaning, something always comes back).
+      if (!items.length && quick?.items.length) {
+        const said = answer.toLowerCase();
+        items = quick.items.filter((item) => {
+          if (quick.certainIds.has(item.id as string)) return true;
+          const name = String(item.name || "").trim().toLowerCase();
+          return name.length >= 2 && said.includes(name);
+        });
+        if (items.length) onEvent({ type: "items", items: items.map(chatItem).filter((item): item is ChatItem => Boolean(item)) });
       }
 
       const reply = answer.trim() || (items.length ? "Here's what I found." : "I couldn't come up with an answer. Try asking in another way.");

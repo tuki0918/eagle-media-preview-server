@@ -229,6 +229,7 @@ type Settings = {
   trustForwardedFor: boolean;
   experimentalSort: boolean; // "Full scan" under Settings → Libraries → Advanced Sort; false by default
   aiChatEnabled: boolean; // "Show AI chat in the viewer" under Settings → AI; false by default
+  aiChatInstructions: string; // "Notes for the AI" under Settings → AI; up to 2,000 characters, "" by default
   uploadMaxSizeMB: number;
   uploadTimeoutMinutes: number;
 };
@@ -497,6 +498,9 @@ Off by default and turned on with **Settings → AI** (saved as `aiChatEnabled`)
 - Replies come from the model set in Eagle's preferences, through Eagle's AI SDK (`eagle.extraModule.ai`, declared in `manifest.json` as the `ai-sdk` dependency, which Eagle's Plugin Center lists as the **AI Models** plugin). The SDK exists only in the plugin window, where the service runtime is loaded, so the preview server calls it directly. The API key never leaves Eagle
 - The default chat model writes replies. If it fails before writing anything, the default vision model is tried in its place; a chat model whose name marks it as an embedding model is skipped, since it can't write. Reasoning a model writes between `<think>` tags is dropped. For a question about an item, the default vision model is tried first, then the chat model, each with the item's thumbnail (or the original, for a small image), then the chat model with the item's details alone
 - The model has no tools. To search, it answers with one line, `SEARCH: {"query", "tags", "ext", "rating", "folder"}`; the server runs the search against Eagle (`item/query` for text, `item/get` for filters, and `aiSearch/searchByText` when Eagle's AI Search plugin answers), hands back up to 12 items, and asks again. It may search twice per reply. The search line is never shown to the user
+- Tag and folder names in a search line are read as the closest real ones (same name ignoring case, spaces, and width; else one containing it or contained in it; the most used wins), and a tag with no match is searched as a word. The model is told how its names were read. When nothing matches every condition, conditions are dropped in this order until something does: folder, file type, rating, words, tags; after that the words (or tag names) are searched as text, the whole phrase and then each word. The model is told what was left out
+- Before the model is called, every question that isn't about one item gets a quick search: items with each tag (up to 3) or in each folder (up to 2) whose name appears in the question (whole words for names in Latin letters), `item/query` with the question when it is 30 characters or fewer, and up to 8 AI Search results. Up to 12 items are added to the question. When the model answers without searching (or its searches find nothing), the viewer is shown the quick search's items from tags, folders, and the keyword, plus AI Search items the reply names
+- **Notes for the AI** (`aiChatInstructions`) are added to the system prompt as the owner's notes on the library, after the rules
 - The model is given the library name, the user name, the 40 most used tags, and up to 60 folder names. For found items it gets the name, type, tags, rating, dimensions, duration, and note, not ids or file paths
 - Nothing is written to the library
 - Chats are saved in `~/.eagle-media-preview-server/ai-chats/`, one file per user (named by a hash of the username), with up to 50 chats per user and 200 messages per chat. A chat lists only what a thumbnail needs for each item; opening one reads the item again

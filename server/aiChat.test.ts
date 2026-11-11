@@ -136,6 +136,19 @@ test("a reply is streamed, saved to the asking user's chats, and logged without 
   });
 });
 
+test("the owner's notes for the AI are part of what the model is told", async () => {
+  const seen: unknown[] = [];
+  const ai = { ...fakeAi(["ok"]), streamText(options: { messages: unknown[] }) {
+    seen.push(options.messages);
+    return { textStream: (async function* () { yield "ok"; })(), usage: Promise.resolve({ totalTokens: 1 }) };
+  } };
+  await withServer({ authUsers: users, aiChat: { enabled: true, getAi: () => ai, instructions: "Tags are in English." } }, async ({ as, login }) => {
+    const mika = as(await login("mika", "one"));
+    await events(await mika("/api/ai/chats/new/messages", { method: "POST", body: JSON.stringify({ text: "hi" }) }));
+    assert.match(JSON.stringify(seen[0]), /Notes from the owner of this library.*Tags are in English\./);
+  });
+});
+
 test("AI chat refuses empty or oversized questions and reports a failed reply", async () => {
   const log: Entry[] = [];
   const failing = {

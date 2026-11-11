@@ -313,6 +313,7 @@ function App() {
       libraryProtectionEnabled: Boolean(settings.libraryProtectionEnabled),
       experimentalSort: Boolean(settings.experimentalSort),
       aiChatEnabled: Boolean(settings.aiChatEnabled),
+      aiChatInstructions: String(settings.aiChatInstructions || ""),
       ...patch,
       // Row keys end here: library access is saved by username, and the keys themselves never are.
       sharedLibraries: resolveLibraryUsers((patch.sharedLibraries ?? settings.sharedLibraries) as SharedLibrary[] | undefined, effectiveAuthUsers),
@@ -847,6 +848,7 @@ function App() {
           userPasswords={userPasswordsRef.current}
           onAddAuthUser={addAuthUser}
           onAiChatEnabledChange={(checked) => updateSettings({ aiChatEnabled: checked })}
+          onAiChatInstructionsChange={(value) => updateSettings({ aiChatInstructions: value })}
           onOpenAiSettings={openAiSettings}
           onReloadAiStatus={() => refreshAiStatus({ reload: true })}
           onChooseHttpsFile={globalThis.eagle?.dialog?.showOpenDialog ? chooseHttpsFile : undefined}

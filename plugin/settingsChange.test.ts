@@ -34,6 +34,13 @@ describe("settingsChange", () => {
     expect(serverRestartSettingsChanged({ ...baseSettings, aiChatEnabled: true }, {})).toBe(false);
   });
 
+  test("persists and restarts when the notes for the AI change", () => {
+    expect(settingsPayloadChanged(baseSettings, { aiChatInstructions: "" })).toBe(false);
+    expect(settingsPayloadChanged(baseSettings, { aiChatInstructions: "Tags are in English." })).toBe(true);
+    expect(serverRestartSettingsChanged({ ...baseSettings, aiChatInstructions: "a" }, { aiChatInstructions: "b" })).toBe(true);
+    expect(serverRestartSettingsChanged({ ...baseSettings, aiChatInstructions: "a" }, {})).toBe(false);
+  });
+
   test("persists and restarts for shared library changes", () => {
     const library = { name: "Work", path: "/Users/me/Work.library" };
     expect(settingsPayloadChanged(baseSettings, { libraryProtectionEnabled: false, sharedLibraries: [] })).toBe(false);

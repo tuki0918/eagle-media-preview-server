@@ -183,6 +183,8 @@ AI Chat (experimental). Off by default; the feature may change.
 
 It uses the AI model you set in Eagle under **Preferences → AI Models**, through Eagle's **AI Models** plugin (Eagle 4.0 Build 20 or later). Eagle asks you to install it when this plugin opens; it is also in the Plugin Center. The **Model** row shows the default chat and vision models Eagle reports. **Show AI chat in the viewer** can be turned on once a default chat model is set. The chat model has to be one that writes text: an embedding model can't reply, and the panel warns when the chat model looks like one. Like other settings, it is locked while the server runs and takes effect at the next start.
 
+**Notes for the AI** tells the model how the library is organized, for example "Tags are in English" or "Each artist has a folder". It is sent with every question, up to 2,000 characters, and applies to every library.
+
 AI chat is shown only while **Password protection** is on, and only to signed-in users. Every reply is written by your AI model, so it uses your AI account.
 
 In the viewer:
@@ -190,12 +192,13 @@ In the viewer:
 - The home view (**All**, with no filters) has an **Ask AI about this library** box. Asking opens the chat.
 - **AI Chat** in the side menu opens a new chat and lists the user's earlier chats.
 - The assistant can search the library open in Eagle by text, tags, rating, folder, and file type, and shows what it found as thumbnails that open in the preview. If Eagle's AI Search plugin is running, its results are added.
+- Every question first gets a quick search: tags and folders named in it, the question itself when it is short, and AI Search. So items turn up even when a small model doesn't ask to search. Tag and folder names the model guesses are matched to the closest real ones, and when nothing matches every condition, conditions are dropped one at a time.
 - **Ask AI about this** in a preview's **More actions** menu starts a chat about that item. Its thumbnail is sent to the model, so a model that can look at images can describe it.
 - The assistant only reads. It never changes ratings, tags, folders, or files.
 
 Each user has their own chats, kept per library, and nobody can open another user's chats. Chats are saved on this computer in `~/.eagle-media-preview-server/ai-chats/`, one file per user, up to 50 chats per user. A user can delete a chat from the chat itself.
 
-What is sent to your AI provider: the user's messages, the names of the library's most used tags and its folders, and for items a search finds or a user asks about, the name, type, tags, rating, dimensions, duration, and note. For an item a user asks about, its thumbnail is sent too.
+What is sent to your AI provider: the user's messages, your **Notes for the AI**, the names of the library's most used tags and its folders, and for items a search finds or a user asks about, the name, type, tags, rating, dimensions, duration, and note. For an item a user asks about, its thumbnail is sent too.
 
 #### Activity
 

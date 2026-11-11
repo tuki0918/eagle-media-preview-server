@@ -53,7 +53,7 @@ interface ViewerServerOptions {
    * The AI chat in the viewer, for signed-in users. `getAi` hands over Eagle's AI SDK
    * (`eagle.extraModule.ai`), which exists only inside the plugin window.
    */
-  aiChat?: { enabled?: boolean; getAi?: () => unknown; store?: AiChatStore } | null;
+  aiChat?: { enabled?: boolean; getAi?: () => unknown; instructions?: string; store?: AiChatStore } | null;
   /** Experimental: sort item lists with an in-memory index of the open library, built on first use. */
   experimentalSort?: boolean;
   /** How long a sorted request waits for the index before answering with its progress. */
@@ -211,6 +211,8 @@ interface AiContext {
   /** Users with a reply in progress: one at a time each. */
   busy: Set<string>;
   getAi: () => unknown;
+  /** The owner's notes about the library, added to what the model is told. */
+  instructions: string;
   store: AiChatStore;
 }
 
@@ -374,7 +376,7 @@ function createViewerServer({
   const libraryId = (libraryPath: unknown) => libraryIdFor(libraryPath, resolvedSessionSecret);
   const currentSession: EagleSession = createConnectionContext({ client: eagleClient });
   const ai: AiContext | null = aiChat?.enabled
-    ? { assistant: createAiAssistant(), busy: new Set(), getAi: aiChat.getAi || (() => null), store: aiChat.store || createAiChatStore() }
+    ? { assistant: createAiAssistant(), busy: new Set(), getAi: aiChat.getAi || (() => null), instructions: String(aiChat.instructions || ""), store: aiChat.store || createAiChatStore() }
     : null;
   // With Advanced Sort on, the index is built in the background when the server starts (and after a
   // library switch) and kept while the server runs, so sorting is ready before anyone asks for it.
@@ -1529,6 +1531,7 @@ async function handleAiRoutes(req: IncomingMessage, url: URL, res: ServerRespons
       ai: ai.getAi(),
       attachedItemId,
       history: chat.messages,
+      instructions: ai.instructions,
       onEvent: (event: { delta?: string; type: string }) => {
         if (event.type === "text") partial += event.delta || "";
         send(event);

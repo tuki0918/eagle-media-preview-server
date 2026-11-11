@@ -60,6 +60,13 @@ function fakeSession(overrides: Record<string, unknown> = {}) {
   };
 }
 
+// What the model asked for; the quick search run on every question asks for fewer items.
+function modelSearches(searches: unknown[]) {
+  return searches.filter((search) => (search as { options: { limit?: number } }).options.limit === 30);
+}
+
+const LONG_HELLO = "Hello, what can you do for me in this library?";
+
 async function run(ai: unknown, session: unknown, input: Record<string, unknown> = {}) {
   const events: Array<Record<string, unknown>> = [];
   const result = await createAiAssistant().runTurn({ ai, history: [], onEvent: (event: Record<string, unknown>) => events.push(event), session, text: "hello", username: "mika", ...input });
@@ -85,7 +92,8 @@ test("search requests are read from a SEARCH line, as JSON or plain words", () =
 test("a plain reply streams through without searching", async () => {
   const ai = fakeAi(["Hello! Ask me about your library."]);
   const { searches, session } = fakeSession();
-  const { events, result, text } = await run(ai, session);
+  // Too long to be a keyword, and it names no tag or folder: the quick search finds nothing.
+  const { events, result, text } = await run(ai, session, { text: LONG_HELLO });
   assert.equal(text, "Hello! Ask me about your library.");
   assert.equal(result.text, text);
   assert.deepEqual(result.items, []);
@@ -100,6 +108,7 @@ test("a plain reply streams through without searching", async () => {
   assert.match(system, /mika/);
   assert.match(system, /Most used tags: cat, sunset/);
   assert.match(system, /Folders: Trips, Kyoto/);
+  assert.match(String(ai.calls[0].messages.at(-1)?.content), /quick search of the library for this message found nothing/);
 });
 
 test("a search request is run and its results are handed back, never shown as text", async () => {
@@ -107,7 +116,7 @@ test("a search request is run and its results are handed back, never shown as te
   const { searches, session } = fakeSession();
   const { events, result, text } = await run(ai, session, { text: "夕焼けの写真ある?" });
   assert.equal(text, "I found a beach sunset.");
-  assert.deepEqual(searches, [{ kind: "text", options: { query: "sunset", limit: 30, offset: 0 } }]);
+  assert.deepEqual(modelSearches(searches), [{ kind: "text", options: { query: "sunset", limit: 30, offset: 0 } }]);
   // Trashed items are left out, and host paths never reach the viewer.
   assert.deepEqual(result.items, [{ id: "A", name: "beach sunset", ext: "jpg" }]);
   assert.deepEqual(result.features, ["search"]);
@@ -124,8 +133,8 @@ test("filters go to the item list, and the model may search at most twice", asyn
   const ai = fakeAi(['SEARCH: {"folder":"kyoto","ext":"mp4"}', "SEARCH: temple", "SEARCH: again", "unused"]);
   const { searches, session } = fakeSession();
   const { result, text } = await run(ai, session);
-  assert.equal(searches.length, 2);
-  assert.deepEqual(searches[0], { kind: "list", options: { keywords: "", tags: [], ext: "mp4", rating: "", folderId: "F2", limit: 30, offset: 0 } });
+  assert.equal(modelSearches(searches).length, 2);
+  assert.deepEqual(modelSearches(searches)[0], { kind: "list", options: { keywords: "", tags: [], ext: "mp4", rating: "", folderId: "F2", limit: 30, offset: 0 } });
   // The third request is not run; it is what the model said, so it is shown as its reply.
   assert.equal(ai.calls.length, 3);
   assert.equal(text, "SEARCH: again");
@@ -193,15 +202,86 @@ test("a model's <think> reasoning is never shown or mistaken for the reply", asy
   const { searches, session } = fakeSession();
   const plain = await run(fakeAi(["<think>\nThe user greets me. SEARCH: nothing\n</think>\n\nHello there."]), session);
   assert.equal(plain.text, "Hello there.");
-  assert.equal(searches.length, 0);
+  assert.equal(modelSearches(searches).length, 0);
 
   const searching = await run(fakeAi(['<think>I should look.</think>\nSEARCH: {"query":"sunset"}', "<think>ok</think>Found it."]), session);
   assert.equal(searching.text, "Found it.");
-  assert.equal(searches.length, 1);
+  assert.equal(modelSearches(searches).length, 1);
 
   // Reasoning that never ends leaves nothing to say, so the fallback line is used.
-  const endless = await run(fakeAi(["<think>still thinking"]), session);
+  const endless = await run(fakeAi(["<think>still thinking"]), session, { text: LONG_HELLO });
   assert.equal(endless.text, "I couldn't come up with an answer. Try asking in another way.");
+});
+
+test("tags and folders the model guesses are read as the closest real ones, or as words", async () => {
+  const ai = fakeAi(['SEARCH: {"tags":["Sunsets","dog"],"folder":"kyoto"}', "Done."]);
+  const { searches, session } = fakeSession();
+  await run(ai, session, { text: LONG_HELLO });
+  // "Sunsets" is the tag "sunset", "kyoto" the folder "Kyoto"; "dog" isn't a tag, so it is a word.
+  assert.deepEqual(modelSearches(searches)[0], { kind: "list", options: { keywords: "dog", tags: ["sunset"], ext: "", rating: "", folderId: "F2", limit: 30, offset: 0 } });
+  const told = String(ai.calls[1].messages.at(-1)?.content);
+  assert.match(told, /The tag "Sunsets" was read as "sunset"/);
+  assert.match(told, /There is no tag "dog", so it was searched as a word/);
+  assert.match(told, /The folder "kyoto" was read as "Kyoto"/);
+});
+
+test("when nothing matches every condition, conditions are dropped one at a time", async () => {
+  const ai = fakeAi(['SEARCH: {"query":"beach","tags":["sunset"],"ext":"gif","rating":5}', "Close matches."]);
+  const { searches, session } = fakeSession({
+    listItems: async (options: Record<string, unknown>) => {
+      searches.push({ kind: "list", options });
+      // Only a search without a file type or rating finds anything.
+      return options.ext || options.rating ? { items: [], total: 0 } : { items: [{ id: "C", name: "beach", ext: "jpg" }], total: 1 };
+    },
+  });
+  const { result } = await run(ai, session, { text: LONG_HELLO });
+  const lists = modelSearches(searches).map((search) => (search as { options: Record<string, unknown> }).options);
+  assert.deepEqual(lists.map((options) => [options.ext, options.rating, options.keywords, options.tags]), [
+    ["gif", "5", "beach", ["sunset"]],
+    ["", "5", "beach", ["sunset"]],
+    ["", "", "beach", ["sunset"]],
+  ]);
+  assert.deepEqual(result.items.map((item: { id: string }) => item.id), ["C"]);
+  assert.match(String(ai.calls[1].messages.at(-1)?.content), /No item matched everything, so these results leave out the file type, the rating/);
+
+  // Nothing at all with filters: the words (and tag names) are searched on their own.
+  const none = fakeAi(['SEARCH: {"tags":["sunset"],"ext":"gif"}', "Nothing."]);
+  const empty = fakeSession({ listItems: async () => ({ items: [], total: 0 }) });
+  const second = await run(none, empty.session, { text: LONG_HELLO });
+  assert.deepEqual(modelSearches(empty.searches), [{ kind: "text", options: { query: "sunset", limit: 30, offset: 0 } }]);
+  assert.deepEqual(second.result.items.map((item: { id: string }) => item.id), ["A"]);
+  assert.match(String(none.calls[1].messages.at(-1)?.content), /leave out the file type, the tags/);
+});
+
+test("every question gets a quick search, so items turn up even when the model doesn't search", async () => {
+  const ai = fakeAi(["Here are your cat pictures."]);
+  const { searches, session } = fakeSession({ aiSearchByText: async () => [{ id: "M1", name: "kitten nap", ext: "jpg" }, { id: "M2", name: "random", ext: "jpg" }] });
+  const { events, result } = await run(ai, session, { text: "Show me cat pictures from my party please, thanks a lot" });
+  // "cat" is a tag named in the question; "party" holds "art" but isn't that word.
+  assert.deepEqual(searches, [{ kind: "list", options: { tags: ["cat"], limit: 12, offset: 0 } }]);
+  const question = String(ai.calls[0].messages.at(-1)?.content);
+  assert.match(question, /including tags "cat" named in it/);
+  assert.match(question, /kyoto temple/);
+  assert.match(question, /kitten nap/);
+  // Certain matches are shown; items found only by meaning are shown when the reply names them.
+  assert.deepEqual(result.items.map((item: { id: string }) => item.id), ["C"]);
+  assert.equal(events.at(-1)?.type, "items");
+  assert.deepEqual(result.features, ["smart_search"]);
+
+  const named = await run(fakeAi(["The best one is kitten nap."]), session, { text: "Which is the cutest sleeping animal here?" });
+  assert.deepEqual(named.result.items.map((item: { id: string }) => item.id), ["M1"]);
+
+  // A question about one item skips it.
+  const about = fakeSession();
+  await run(fakeAi(["A portrait."]), about.session, { attachedItemId: "ITEM1", text: "what is this?" });
+  assert.equal(about.searches.length, 0);
+});
+
+test("the owner's notes about the library are passed to the model", async () => {
+  const ai = fakeAi(["ok"]);
+  const { session } = fakeSession({ listTags: async () => ({ items: [{ name: "art", count: 1 }] }) });
+  await run(ai, session, { instructions: "  Tags are in English.\nArtists are folders.  ", text: LONG_HELLO });
+  assert.match(String(ai.calls[0].messages[0].content), /Notes from the owner of this library[^\n]*\nTags are in English\.\nArtists are folders\.$/);
 });
 
 test("an embedding model set as the chat model is skipped for the vision model", async () => {

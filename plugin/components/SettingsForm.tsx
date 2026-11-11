@@ -22,6 +22,7 @@ interface SettingsFormProps {
   userPasswords: Record<string, string>;
   onAddAuthUser: () => void;
   onAiChatEnabledChange?: (checked: boolean) => void;
+  onAiChatInstructionsChange?: (value: string) => void;
   /** Opens the AI Models section of Eagle's preferences. */
   onOpenAiSettings?: () => void;
   /** Reads Eagle's AI settings again, after the admin changed them. */
@@ -102,6 +103,7 @@ export function SettingsForm({
   userPasswords,
   onAddAuthUser,
   onAiChatEnabledChange,
+  onAiChatInstructionsChange,
   onOpenAiSettings,
   onReloadAiStatus,
   onChooseHttpsFile,
@@ -492,6 +494,21 @@ export function SettingsForm({
                 The chat model looks like an embedding model, which can't write replies. Choose a chat model in Eagle's AI settings.
               </p>
             ) : null}
+          </SettingRow>
+          <SettingRow
+            label="Notes for the AI"
+            help="Tell the AI how this library is organized, so it searches better. For example: tags are in English, artists are folders, the shooting place is in each note. Sent with every question; up to 2,000 characters."
+          >
+            <textarea
+              className={`${settingInputClassName} h-auto min-h-[76px] w-full resize-y py-2 leading-snug`}
+              aria-label="Notes for the AI"
+              disabled={settingsInputDisabled}
+              maxLength={2000}
+              placeholder="Tags are in English. Each artist has a folder. Notes say where a photo was taken."
+              rows={3}
+              value={settings.aiChatInstructions || ""}
+              onChange={(event) => onAiChatInstructionsChange?.(event.currentTarget.value)}
+            />
           </SettingRow>
         </div>
 

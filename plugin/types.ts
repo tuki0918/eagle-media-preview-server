@@ -54,6 +54,7 @@ export interface BlockedAddress {
 export interface PluginSettings {
   /** Shows the AI chat in the viewer to signed-in users. */
   aiChatEnabled?: boolean;
+  aiChatInstructions?: string;
   blockedAddresses?: BlockedAddress[];
   customDomain?: string;
   allowMetadataEditing?: boolean;

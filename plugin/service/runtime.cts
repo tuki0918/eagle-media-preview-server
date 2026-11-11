@@ -39,6 +39,7 @@ interface BlockedAddress {
 interface PluginSettings {
   /** Shows the AI chat in the viewer to signed-in users; needs a default chat model in Eagle. */
   aiChatEnabled: boolean;
+  aiChatInstructions: string;
   blockedAddresses: BlockedAddress[];
   customDomain: string;
   allowMetadataEditing: boolean;
@@ -135,7 +136,7 @@ interface ServerManagerOptions {
     sharedLibraries: string[] | null;
     libraryUserRules?: Array<{ path: string; users: string[] }>;
     accessLog?: AccessLog;
-    aiChat?: { enabled: boolean; getAi: () => unknown; store: ReturnType<typeof createAiChatStore> };
+    aiChat?: { enabled: boolean; getAi: () => unknown; instructions?: string; store: ReturnType<typeof createAiChatStore> };
     blockedAddresses?: BlockedAddress[];
     trustForwardedFor?: boolean;
     experimentalSort?: boolean;
@@ -152,6 +153,7 @@ interface NetworkEntry {
 
 const DEFAULT_SETTINGS: PluginSettings = {
   aiChatEnabled: false,
+  aiChatInstructions: "",
   blockedAddresses: [],
   customDomain: "",
   allowMetadataEditing: false,
@@ -303,6 +305,7 @@ function normalizeSettings(input: SettingsInput = {}): PluginSettings {
   const sessionDurationDays = normalizeSessionDurationDays(input.sessionDurationDays);
   return {
     aiChatEnabled: input.aiChatEnabled === true,
+    aiChatInstructions: normalizeAiChatInstructions(input.aiChatInstructions),
     blockedAddresses: normalizeBlockedAddresses(input.blockedAddresses),
     customDomain: normalizeCustomDomain(input.customDomain),
     autoStart: Boolean(input.autoStart ?? DEFAULT_SETTINGS.autoStart),
@@ -356,6 +359,7 @@ function canonicalSettings(settings: PluginSettings) {
   return {
     settingsVersion: CURRENT_SETTINGS_VERSION,
     aiChatEnabled: settings.aiChatEnabled,
+    aiChatInstructions: settings.aiChatInstructions,
     blockedAddresses: settings.blockedAddresses,
     customDomain: settings.customDomain,
     authUsers: settings.authUsers,
@@ -380,7 +384,7 @@ function canonicalSettings(settings: PluginSettings) {
 
 // Settings whose changes go in the access log, by name only. Passwords, secrets, and bookkeeping stay
 // out, and blocked addresses have their own events.
-const LOGGED_SETTING_FIELDS = ["aiChatEnabled", "authEnabled", "authUsers", "autoStart", "customDomain", "host", "httpsCertPath", "httpsEnabled", "httpsKeyPath", "libraryProtectionEnabled", "port", "sessionDurationDays", "sharedLibraries", "trustForwardedFor", "experimentalSort", "uploadMaxSizeMB", "uploadTimeoutMinutes"] as const;
+const LOGGED_SETTING_FIELDS = ["aiChatEnabled", "aiChatInstructions", "authEnabled", "authUsers", "autoStart", "customDomain", "host", "httpsCertPath", "httpsEnabled", "httpsKeyPath", "libraryProtectionEnabled", "port", "sessionDurationDays", "sharedLibraries", "trustForwardedFor", "experimentalSort", "uploadMaxSizeMB", "uploadTimeoutMinutes"] as const;
 
 function changedSettingFields(before: PluginSettings, after: PluginSettings) {
   return LOGGED_SETTING_FIELDS.filter((field) => JSON.stringify(before[field]) !== JSON.stringify(after[field]));
@@ -495,6 +499,12 @@ function normalizeAuthUser(value: unknown): AuthUser | null {
 
 function normalizeRole(value: unknown): UserRole {
   return value === "admin" || value === "editor" ? value : "viewer";
+}
+
+// Notes the owner writes for the AI about this library; kept short since they ride along with every question.
+const MAX_AI_CHAT_INSTRUCTIONS_CHARS = 2000;
+function normalizeAiChatInstructions(value: unknown) {
+  return typeof value === "string" ? value.replace(/\r\n?/g, "\n").trim().slice(0, MAX_AI_CHAT_INSTRUCTIONS_CHARS) : "";
 }
 
 function normalizeSessionDurationDays(value: unknown) {
@@ -784,7 +794,7 @@ function createServerManager({
       authUsers: settings.authEnabled ? settings.authUsers : [],
       accessLog,
       // Chats are per user, so AI chat needs sign-in.
-      aiChat: { enabled: settings.aiChatEnabled && settings.authEnabled, getAi: currentAi, store: aiChatStore },
+      aiChat: { enabled: settings.aiChatEnabled && settings.authEnabled, getAi: currentAi, instructions: settings.aiChatInstructions, store: aiChatStore },
       blockedAddresses: settings.blockedAddresses,
       trustForwardedFor: settings.trustForwardedFor,
       experimentalSort: settings.experimentalSort,

@@ -1584,12 +1584,12 @@ test("server manager reports whether Eagle has an AI model, and passes AI chat t
   const settingsStore = createSettingsStore({ filePath: join(settingsDir, "settings.json") });
   let ai: unknown = null;
   let reloads = 0;
-  const viewers: Array<{ aiChat?: { enabled: boolean; getAi: () => unknown } }> = [];
+  const viewers: Array<{ aiChat?: { enabled: boolean; getAi: () => unknown; instructions?: string } }> = [];
   const manager = createServerManager({
     accessLog: { load: async () => {}, record() {}, flush: async () => {}, touch() {} },
     aiProvider: () => ai,
     settingsStore,
-    viewerServerFactory: (options: { aiChat?: { enabled: boolean; getAi: () => unknown } }) => {
+    viewerServerFactory: (options: { aiChat?: { enabled: boolean; getAi: () => unknown; instructions?: string } }) => {
       viewers.push(options);
       let state = "stopped";
       return { start: async () => { state = "running"; }, stop: async () => { state = "stopped"; }, status: () => ({ state, host: "127.0.0.1", port: 41532 }) };
@@ -1603,8 +1603,11 @@ test("server manager reports whether Eagle has an AI model, and passes AI chat t
   assert.deepEqual(manager.aiStatus({ reload: true }), { available: true, chatModel: "openai::gpt", imageModel: "", reason: "" });
   assert.equal(reloads, 1);
 
-  await manager.saveSettings({ aiChatEnabled: true });
+  await manager.saveSettings({ aiChatEnabled: true, aiChatInstructions: `  Tags are in English.\r\n${"x".repeat(3000)}` });
   await manager.start();
+  // The owner's notes reach the viewer, tidied and cut to 2,000 characters.
+  assert.equal(viewers[0].aiChat?.instructions?.length, 2000);
+  assert.match(String(viewers[0].aiChat?.instructions), /^Tags are in English\.\nx/);
   assert.equal(viewers[0].aiChat?.enabled, false, "AI chat needs password protection");
   assert.equal(viewers[0].aiChat?.getAi(), ai);
   await manager.saveSettings({ authEnabled: true, authUsers: [{ username: "mika", role: "viewer" }], userPasswords: { mika: "secret" } });
