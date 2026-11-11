@@ -192,13 +192,14 @@ In the viewer:
 - The home view (**All**, with no filters) has an **Ask AI about this library** box. Asking opens the chat.
 - **AI Chat** in the side menu opens a new chat and lists the user's earlier chats.
 - The assistant can search the library open in Eagle by text, tags, rating, folder, and file type, and shows what it found as thumbnails that open in the preview. If Eagle's AI Search plugin is running, its results are added.
+- Search results are a sample of up to 12 items; the model is also told how many matched in all, so it can answer "how many" questions.
 - Every question first gets a quick search: tags and folders named in it, the question itself when it is short, and AI Search. So items turn up even when a small model doesn't ask to search. Tag and folder names the model guesses are matched to the closest real ones, and when nothing matches every condition, conditions are dropped one at a time.
 - **Ask AI about this** in a preview's **More actions** menu starts a chat about that item. A picture of it is sent to the model, so a model that can look at images can describe it: its thumbnail, or the file itself for an image Eagle made no thumbnail for (a small JPEG, PNG, GIF, or WebP up to 4 MB). Other files without a thumbnail are sent as details only.
 - The assistant only reads. It never changes ratings, tags, folders, or files.
 
 Each user has their own chats, kept per library, and nobody can open another user's chats. Chats are saved on this computer in `~/.eagle-media-preview-server/ai-chats/`, one file per user, up to 50 chats per user. A user can delete a chat from the chat itself (not while a reply is being written). Deleting a user in **Settings → Users** deletes their chats too, so an account made later with the same name starts with none. When an admin's reply fails, the admin also sees what the AI provider said, with anything that looks like a key hidden; the saved chat keeps only the general message.
 
-What is sent to your AI provider: the user's messages, your **Notes for the AI**, the names of the library's most used tags and its folders, and for items a search finds or a user asks about, the name, type, tags, rating, dimensions, duration, and note. For an item a user asks about, a picture of it is sent too: its thumbnail, or the original image when Eagle has no thumbnail for it and it is a JPEG, PNG, GIF, or WebP of 4 MB or less.
+What is sent to your AI provider: the user's messages, your **Notes for the AI**, an overview of the library (how many items it has, its most used tags with their counts, starred tags, tag groups, and folders with their counts and descriptions; folders protected with a password in Eagle are left out), and for items a search finds or a user asks about, the name, type, tags, rating, dimensions, duration, file size, main colors, folders, date added, the site it was saved from (the site name only), and note. For an item a user asks about, a picture of it is sent too: its thumbnail, or the original image when Eagle has no thumbnail for it and it is a JPEG, PNG, GIF, or WebP of 4 MB or less.
 
 #### Activity
 

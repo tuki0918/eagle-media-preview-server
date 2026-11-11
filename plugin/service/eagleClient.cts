@@ -33,6 +33,8 @@ interface ListItemsOptions extends PageOptions {
   keywords?: unknown;
   rating?: unknown;
   tags?: unknown;
+  /** More fields than the viewer needs, e.g. "palettes" for the AI chat. */
+  extraFields?: string[];
 }
 
 interface UpdateMetadataInput {
@@ -365,7 +367,7 @@ function createEagleClient(options: EagleClientOptions = {}) {
       return normalizePaginatedResponse(await request("/api/v2/smartFolder/get"));
     },
 
-    async listItems({ offset = 0, limit = 30, folderId, isUntagged = false, isUnfiled = false, ext, rating, keywords, tags }: ListItemsOptions = {}) {
+    async listItems({ offset = 0, limit = 30, folderId, isUntagged = false, isUnfiled = false, ext, rating, keywords, tags, extraFields = [] }: ListItemsOptions = {}) {
       const body: {
         ext?: unknown;
         fields: readonly string[];
@@ -380,7 +382,7 @@ function createEagleClient(options: EagleClientOptions = {}) {
       } = {
         offset: normalizeOffset(offset),
         limit: clampLimit(limit),
-        fields: ITEM_FIELDS,
+        fields: extraFields.length ? [...ITEM_FIELDS, ...extraFields.filter((field) => /^[A-Za-z]+$/.test(field))] : ITEM_FIELDS,
       };
       if (isUnfiled) {
         body.isUnfiled = true;

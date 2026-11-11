@@ -65,6 +65,11 @@ function modelSearches(searches: unknown[]) {
   return searches.filter((search) => (search as { options: { limit?: number } }).options.limit === 30);
 }
 
+// Every search but the one-item read of the library's size.
+function realSearches(searches: unknown[]) {
+  return searches.filter((search) => (search as { options: { limit?: number } }).options.limit !== 1);
+}
+
 const LONG_HELLO = "Hello, what can you do for me in this library?";
 
 async function run(ai: unknown, session: unknown, input: Record<string, unknown> = {}) {
@@ -100,14 +105,16 @@ test("a plain reply streams through without searching", async () => {
   assert.deepEqual(result.features, []);
   assert.equal(result.model, "openai::chat");
   assert.equal(result.tokens, 10);
-  assert.equal(searches.length, 0);
+  assert.equal(realSearches(searches).length, 0);
   assert.equal(events.some((event) => event.type === "search"), false);
-  // The model is told about the library, and who is asking.
+  // The model is told about the library, with counts, and who is asking.
   const system = String(ai.calls[0].messages[0].content);
   assert.match(system, /"Photos"/);
   assert.match(system, /mika/);
-  assert.match(system, /Most used tags: cat, sunset/);
-  assert.match(system, /Folders: Trips, Kyoto/);
+  assert.match(system, /Items in the library: 1\./);
+  assert.match(system, /Tags: 2\. Most used, with how many items have each: cat 20, sunset 9/);
+  assert.match(system, /Folders, with how many items each has \(subfolders included\): Trips 0, Trips\/Kyoto 0/);
+  assert.match(system, /Never count the lines/);
   assert.match(String(ai.calls[0].messages.at(-1)?.content), /quick search of the library for this message found nothing/);
 });
 
@@ -125,7 +132,7 @@ test("a search request is run and its results are handed back, never shown as te
   assert.equal(result.tokens, 20);
   const followUp = ai.calls[1].messages;
   assert.equal(followUp.at(-2)?.role, "assistant");
-  assert.match(String(followUp.at(-1)?.content), /Search results \(1 of 2 matching items/);
+  assert.match(String(followUp.at(-1)?.content), /Search results: at least 2 items match these words by name or note\. 1 are listed/);
   assert.doesNotMatch(JSON.stringify(followUp), /secret/);
 });
 
@@ -134,7 +141,7 @@ test("filters go to the item list, and the model may search at most twice", asyn
   const { searches, session } = fakeSession();
   const { result, text } = await run(ai, session);
   assert.equal(modelSearches(searches).length, 2);
-  assert.deepEqual(modelSearches(searches)[0], { kind: "list", options: { keywords: "", tags: [], ext: "mp4", rating: "", folderId: "F2", limit: 30, offset: 0 } });
+  assert.deepEqual(modelSearches(searches)[0], { kind: "list", options: { keywords: "", tags: [], ext: "mp4", rating: "", folderId: "F2", limit: 30, offset: 0, extraFields: ["palettes"] } });
   // The third request is not run; it is what the model said, so it is shown as its reply.
   assert.equal(ai.calls.length, 3);
   assert.equal(text, "SEARCH: again");
@@ -230,11 +237,11 @@ test("tags and folders the model guesses are read as the closest real ones, or a
   const { searches, session } = fakeSession();
   await run(ai, session, { text: LONG_HELLO });
   // "Sunsets" is the tag "sunset", "kyoto" the folder "Kyoto"; "dog" isn't a tag, so it is a word.
-  assert.deepEqual(modelSearches(searches)[0], { kind: "list", options: { keywords: "dog", tags: ["sunset"], ext: "", rating: "", folderId: "F2", limit: 30, offset: 0 } });
+  assert.deepEqual(modelSearches(searches)[0], { kind: "list", options: { keywords: "dog", tags: ["sunset"], ext: "", rating: "", folderId: "F2", limit: 30, offset: 0, extraFields: ["palettes"] } });
   const told = String(ai.calls[1].messages.at(-1)?.content);
   assert.match(told, /The tag "Sunsets" was read as "sunset"/);
   assert.match(told, /There is no tag "dog", so it was searched as a word/);
-  assert.match(told, /The folder "kyoto" was read as "Kyoto"/);
+  assert.match(told, /The folder "kyoto" was read as "Trips\/Kyoto"/);
 });
 
 test("when nothing matches every condition, conditions are dropped one at a time", async () => {
@@ -270,9 +277,12 @@ test("every question gets a quick search, so items turn up even when the model d
   const { searches, session } = fakeSession({ aiSearchByText: async () => [{ id: "M1", name: "kitten nap", ext: "jpg" }, { id: "M2", name: "random", ext: "jpg" }] });
   const { events, result } = await run(ai, session, { text: "Show me cat pictures from my party please, thanks a lot" });
   // "cat" is a tag named in the question; "party" holds "art" but isn't that word.
-  assert.deepEqual(searches, [{ kind: "list", options: { tags: ["cat"], limit: 12, offset: 0 } }]);
+  assert.deepEqual(realSearches(searches), [{ kind: "list", options: { tags: ["cat"], limit: 12, offset: 0, extraFields: ["palettes"] } }]);
   const question = String(ai.calls[0].messages.at(-1)?.content);
-  assert.match(question, /including tags "cat" named in it/);
+  // The model learns these are a sample, with how many the tag has in all.
+  assert.match(question, /found these 3 items, one per line; a sample, not everything\. In all, the tag "cat": 1 item\./);
+  assert.match(question, /2 of them were found by AI Search as similar in meaning/);
+  assert.match(question, /"name":"kitten nap".*"match":"similar in meaning"/);
   assert.match(question, /kyoto temple/);
   assert.match(question, /kitten nap/);
   // Certain matches are shown; items found only by meaning are shown when the reply names them.
@@ -286,7 +296,40 @@ test("every question gets a quick search, so items turn up even when the model d
   // A question about one item skips it.
   const about = fakeSession();
   await run(fakeAi(["A portrait."]), about.session, { attachedItemId: "ITEM1", text: "what is this?" });
-  assert.equal(about.searches.length, 0);
+  assert.equal(realSearches(about.searches).length, 0);
+});
+
+test("the model reads items as a person would see them, and never password-protected folders", async () => {
+  const ai = fakeAi(['SEARCH: {"tags":["cat"]}', "ok"]);
+  const { session } = fakeSession({
+    folders: async () => ({ items: [
+      { id: "F1", name: "Trips", imageCount: 2, descendantImageCount: 5, description: "Holidays\nabroad", children: [{ id: "F2", name: "Kyoto", imageCount: 3 }] },
+      { id: "P1", name: "Private", password: "1234", imageCount: 9, children: [{ id: "P2", name: "Diary" }] },
+    ] }),
+    tagOverview: async () => ({
+      tags: [{ name: "cat", imageCount: 20 }, { name: "dog", imageCount: 4 }],
+      groups: [{ name: "Animals", tags: ["cat", "dog"] }],
+      starred: [{ name: "cat" }],
+    }),
+    listItems: async (options: Record<string, unknown>) => ({
+      items: options.limit === 1 ? [] : [{
+        id: "C", name: "tabby", ext: "jpg", size: 1_250_000, folders: ["F2", "P2"], btime: Date.UTC(2026, 0, 2),
+        url: "https://www.example.com/cats/1", palettes: [{ color: [230, 40, 40], ratio: 60 }, { color: [20, 40, 200], ratio: 30 }, { color: [250, 250, 250], ratio: 5 }],
+      }],
+      total: options.limit === 1 ? 340 : 25,
+    }),
+  });
+  await run(ai, session, { text: LONG_HELLO });
+  const system = String(ai.calls[0].messages[0].content);
+  assert.match(system, /Items in the library: 340\./);
+  assert.match(system, /Starred tags: cat/);
+  assert.match(system, /Tag groups: Animals: cat, dog/);
+  assert.match(system, /Trips 5 \(Holidays abroad\), Trips\/Kyoto 3/);
+  assert.doesNotMatch(system, /Private|Diary/);
+  const results = String(ai.calls[1].messages.at(-1)?.content);
+  assert.match(results, /Search results: 25 items match in all\. 1 are listed/);
+  assert.match(results, /"fileSize":"1.3 MB","colors":"red 60%, blue 30%","folders":\["Trips\/Kyoto"\],"added":"2026-01-02","from":"example.com"/);
+  assert.doesNotMatch(results, /Diary|https?:/);
 });
 
 test("the owner's notes about the library are passed to the model", async () => {
