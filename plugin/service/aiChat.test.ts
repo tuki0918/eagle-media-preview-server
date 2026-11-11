@@ -88,10 +88,12 @@ test("AI status needs Eagle's AI SDK and a default chat model", () => {
 
 test("search requests are read from a SEARCH line, as JSON or plain words", () => {
   assert.equal(parseSearchDirective("Here are some ideas"), null);
-  assert.deepEqual(parseSearchDirective('SEARCH: {"query":"sunset","tags":["travel"],"ext":".MP4","rating":5,"folder":"Trips"}'), { query: "sunset", tags: ["travel"], ext: "mp4", folder: "Trips", rating: 5 });
-  assert.deepEqual(parseSearchDirective("search: red car\nand more"), { query: "red car" });
-  assert.deepEqual(parseSearchDirective('`SEARCH: {"query": "cat", "rating": 9}`'), { query: "cat", tags: [], ext: "", folder: "" });
-  assert.deepEqual(parseSearchDirective("SEARCH: {not json"), { query: "{not json" });
+  assert.deepEqual(parseSearchDirective('SEARCH: {"query":"sunset","tags":["travel"],"ext":".MP4","rating":5,"folder":"Trips"}'), { queries: ["sunset"], tags: ["travel"], ext: "mp4", folder: "Trips", rating: 5 });
+  // Alternatives, as a list.
+  assert.deepEqual(parseSearchDirective('SEARCH: {"query":["shoe","boot","shoe","靴"]}'), { queries: ["shoe", "boot", "靴"], tags: [], ext: "", folder: "" });
+  assert.deepEqual(parseSearchDirective("search: red car, crimson car\nand more"), { queries: ["red car", "crimson car"] });
+  assert.deepEqual(parseSearchDirective('`SEARCH: {"query": "cat", "rating": 9}`'), { queries: ["cat"], tags: [], ext: "", folder: "" });
+  assert.deepEqual(parseSearchDirective("SEARCH: {not json"), { queries: ["{not json"] });
 });
 
 test("a plain reply streams through without searching", async () => {
@@ -123,16 +125,22 @@ test("a search request is run and its results are handed back, never shown as te
   const { searches, session } = fakeSession();
   const { events, result, text } = await run(ai, session, { text: "夕焼けの写真ある?" });
   assert.equal(text, "I found a beach sunset.");
-  assert.deepEqual(modelSearches(searches), [{ kind: "text", options: { query: "sunset", limit: 30, offset: 0 } }]);
+  // The word is matched against names and notes, and tried as the tag of that name.
+  assert.deepEqual(modelSearches(searches), [
+    { kind: "text", options: { query: "sunset", limit: 30, offset: 0 } },
+    { kind: "list", options: { ext: "", folderId: "", rating: "", tags: ["sunset"], limit: 30, offset: 0, extraFields: ["palettes"] } },
+  ]);
   // Trashed items are left out, and host paths never reach the viewer.
-  assert.deepEqual(result.items, [{ id: "A", name: "beach sunset", ext: "jpg" }]);
+  assert.deepEqual(result.items, [{ id: "A", name: "beach sunset", ext: "jpg" }, { id: "C", name: "kyoto temple", ext: "mp4", duration: 12 }]);
   assert.deepEqual(result.features, ["search"]);
-  assert.deepEqual(events.map((event) => event.type).slice(0, 2), ["search", "items"]);
+  // The thumbnails come with the answer, once the model has said which fit.
+  assert.deepEqual(events.map((event) => event.type).filter((type, index, types) => type !== types[index - 1]), ["search", "text", "items"]);
   assert.equal(events[0].label, "sunset");
   assert.equal(result.tokens, 20);
   const followUp = ai.calls[1].messages;
   assert.equal(followUp.at(-2)?.role, "assistant");
-  assert.match(String(followUp.at(-1)?.content), /Search results: at least 2 items match these words by name or note\. 1 are listed/);
+  assert.match(String(followUp.at(-1)?.content), /Search results: 2 items match in all \("sunset" in names or notes: 2; the tag "sunset": 1; an item matching several is counted once\)\. 2 are listed/);
+  assert.match(String(followUp.at(-1)?.content), /Tags in this library like your words: sunset \(9\)\./);
   assert.doesNotMatch(JSON.stringify(followUp), /secret/);
 });
 
@@ -141,12 +149,13 @@ test("filters go to the item list, and the model may search at most twice", asyn
   const { searches, session } = fakeSession();
   const { result, text } = await run(ai, session);
   assert.equal(modelSearches(searches).length, 2);
-  assert.deepEqual(modelSearches(searches)[0], { kind: "list", options: { keywords: "", tags: [], ext: "mp4", rating: "", folderId: "F2", limit: 30, offset: 0, extraFields: ["palettes"] } });
-  // The third request is not run; it is what the model said, so it is shown as its reply.
+  assert.deepEqual(modelSearches(searches)[0], { kind: "list", options: { tags: [], ext: "mp4", rating: "", folderId: "F2", limit: 30, offset: 0, extraFields: ["palettes"] } });
+  // The third request is not run, and as a search line it is never shown.
   assert.equal(ai.calls.length, 3);
-  assert.equal(text, "SEARCH: again");
+  assert.equal(text, "Here's what I found.");
   assert.match(String(ai.calls[2].messages.at(-1)?.content), /Do not search again/);
-  assert.equal(result.items.length, 1);
+  // With no SHOW line, what both searches found is shown.
+  assert.deepEqual(result.items.map((item: { id: string }) => item.id), ["A", "C"]);
 });
 
 test("AI Search results are added when Eagle's AI Search plugin answers", async () => {
@@ -225,7 +234,7 @@ test("a model's <think> reasoning is never shown or mistaken for the reply", asy
 
   const searching = await run(fakeAi(['<think>I should look.</think>\nSEARCH: {"query":"sunset"}', "<think>ok</think>Found it."]), session);
   assert.equal(searching.text, "Found it.");
-  assert.equal(modelSearches(searches).length, 1);
+  assert.equal(modelSearches(searches).length, 2, "the word, and the tag of that name");
 
   // Reasoning that never ends leaves nothing to say, so the fallback line is used.
   const endless = await run(fakeAi(["<think>still thinking"]), session, { text: LONG_HELLO });
@@ -327,9 +336,61 @@ test("the model reads items as a person would see them, and never password-prote
   assert.match(system, /Trips 5 \(Holidays abroad\), Trips\/Kyoto 3/);
   assert.doesNotMatch(system, /Private|Diary/);
   const results = String(ai.calls[1].messages.at(-1)?.content);
-  assert.match(results, /Search results: 25 items match in all\. 1 are listed/);
+  assert.match(results, /Search results: at least 25 items match in all\. 1 are listed/);
   assert.match(results, /"fileSize":"1.3 MB","colors":"red 60%, blue 30%","folders":\["Trips\/Kyoto"\],"added":"2026-01-02","from":"example.com"/);
   assert.doesNotMatch(results, /Diary|https?:/);
+});
+
+test("a search takes alternative words, each also tried as the tags it names", async () => {
+  const ai = fakeAi(['SEARCH: {"query":["shoe","boot","靴"]}', "Shoes and boots.\nSHOW: running, hiking"]);
+  const lists: unknown[] = [];
+  const texts: string[] = [];
+  const { session } = fakeSession({
+    listTags: async () => ({ items: [{ name: "shoe", count: 2 }, { name: "ski-boot", count: 1 }, { name: "boot", count: 1 }, { name: "fashion", count: 5 }] }),
+    searchItems: async ({ query }: { query: string }) => {
+      texts.push(query);
+      return query === "shoe" ? { items: [{ id: "R", name: "running", ext: "png" }], total: 1 } : { items: [], total: 0 };
+    },
+    listItems: async (options: Record<string, unknown>) => {
+      lists.push(options.tags);
+      const tags = options.tags as string[] | undefined;
+      if (tags?.includes("boot")) return { items: [{ id: "H", name: "hiking", ext: "png" }], total: 1 };
+      if (tags?.includes("ski-boot")) return { items: [{ id: "K", name: "skiing", ext: "png" }], total: 1 };
+      if (tags?.includes("shoe")) return { items: [{ id: "R", name: "running", ext: "png" }, { id: "D", name: "dance", ext: "png" }], total: 2 };
+      return { items: [], total: 0 };
+    },
+  });
+  const { events, result, text } = await run(ai, session, { text: "靴をモチーフにしたアイコン" });
+  assert.deepEqual(texts.slice(-3), ["shoe", "boot", "靴"]);
+  assert.deepEqual(lists.filter(Boolean).slice(-3), [["shoe"], ["boot"], ["ski-boot"]]);
+  const told = String(ai.calls[1].messages.at(-1)?.content);
+  assert.match(told, /Search results: 4 items match in all/);
+  assert.match(told, /Tags in this library like your words: shoe \(2\), boot \(1\), ski-boot \(1\)\./);
+  // Only what the SHOW line names is shown, in its order; the line itself never is.
+  assert.equal(result.text, "Shoes and boots.");
+  assert.doesNotMatch(text, /SHOW/);
+  assert.deepEqual(result.items.map((item: { id: string }) => item.id), ["R", "H"]);
+  assert.equal(events.filter((event) => event.type === "items").length, 1);
+});
+
+test("SHOW: none shows nothing, and protocol lines inside an answer are hidden or run", async () => {
+  const { session } = fakeSession();
+  const none = await run(fakeAi(['SEARCH: {"query":"fashion"}', "These don't look like shoes.\n**SHOW:** none"]), session, { text: LONG_HELLO });
+  assert.equal(none.result.text, "These don't look like shoes.");
+  assert.deepEqual(none.result.items, []);
+  assert.equal(none.events.some((event) => event.type === "items"), false);
+
+  // A search written after some words is run, and the model goes on below them.
+  const midway = fakeAi(['Let me look.\nSEARCH: {"query":"sunset"}', "Found a sunset.\nSHOW: beach sunset"]);
+  const second = await run(midway, session, { text: LONG_HELLO });
+  assert.equal(midway.calls.length, 2);
+  assert.equal(second.result.text, "Let me look.\n\nFound a sunset.");
+  assert.deepEqual(second.result.items.map((item: { id: string }) => item.id), ["A"]);
+  assert.doesNotMatch(second.events.filter((event) => event.type === "text").map((event) => event.delta).join(""), /SEARCH|SHOW/);
+
+  // Lines that only start like one pass through.
+  const plain = await run(fakeAi(["Sure!\nShowing cats is easy.\nSEA turtles too."]), session, { text: LONG_HELLO });
+  assert.equal(plain.text, "Sure!\nShowing cats is easy.\nSEA turtles too.");
 });
 
 test("the owner's notes about the library are passed to the model", async () => {

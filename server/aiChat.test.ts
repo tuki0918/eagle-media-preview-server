@@ -104,10 +104,11 @@ test("a reply is streamed, saved to the asking user's chats, and logged without 
     assert.equal(response.status, 200);
     assert.match(String(response.headers.get("content-type")), /application\/x-ndjson/);
     const stream = await events(response);
-    assert.deepEqual(stream.map((event) => event.type), ["chat", "search", "items", "text", "done"]);
+    // The thumbnails follow the answer, once the model has said which fit.
+    assert.deepEqual(stream.map((event) => event.type), ["chat", "search", "text", "items", "done"]);
     const chatId = String(stream[0].id);
     assert.equal(stream[0].title, "夕焼けの写真は?");
-    assert.deepEqual(stream[2].items, [{ id: "ITEM1", name: "sunset", ext: "jpg" }]);
+    assert.deepEqual(stream[3].items, [{ id: "ITEM1", name: "sunset", ext: "jpg" }]);
     assert.doesNotMatch(JSON.stringify(stream), /secret/);
 
     // The chat continues under its id, and only for the user who started it.

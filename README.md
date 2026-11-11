@@ -192,6 +192,7 @@ In the viewer:
 - The home view (**All**, with no filters) has an **Ask AI about this library** box. Asking opens the chat.
 - **AI Chat** in the side menu opens a new chat and lists the user's earlier chats.
 - The assistant can search the library open in Eagle by text, tags, rating, folder, and file type, and shows what it found as thumbnails that open in the preview. If Eagle's AI Search plugin is running, its results are added.
+- The model searches with several alternative words at once (synonyms and translations, so a Japanese question finds English names and tags), each also tried as matching tags. It then names the items that really fit, and only those are shown.
 - Search results are a sample of up to 12 items; the model is also told how many matched in all, so it can answer "how many" questions.
 - Every question first gets a quick search: tags and folders named in it, the question itself when it is short, and AI Search. So items turn up even when a small model doesn't ask to search. Tag and folder names the model guesses are matched to the closest real ones, and when nothing matches every condition, conditions are dropped one at a time.
 - **Ask AI about this** in a preview's **More actions** menu starts a chat about that item. A picture of it is sent to the model, so a model that can look at images can describe it: its thumbnail, or the file itself for an image Eagle made no thumbnail for (a small JPEG, PNG, GIF, or WebP up to 4 MB). Other files without a thumbnail are sent as details only.
