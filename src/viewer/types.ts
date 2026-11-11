@@ -34,7 +34,7 @@ export interface EagleItem {
 
 export type ViewerMode = "grid" | "tiles" | "list";
 
-export type ViewerSection = "items" | "tags";
+export type ViewerSection = "ai" | "items" | "tags";
 
 export interface PreviewTransform {
   scale: number;
@@ -71,8 +71,8 @@ export interface ConnectResponse {
   };
   /** Sent only to users who may upload. */
   uploadMaxBytes?: number;
-  /** Optional server features; `sort` is the experimental sort. */
-  features?: { sort?: boolean };
+  /** Optional server features; `sort` is the experimental sort, `ai` the AI chat (signed-in users only). */
+  features?: { ai?: boolean; sort?: boolean };
   /** With the experimental sort, how far the server's background index of this library has got. */
   sortIndex?: SortIndexState;
 }
@@ -151,6 +151,8 @@ export interface ViewerState {
   folderId: string;
   smartFolderId: string;
   section: ViewerSection;
+  /** The chat open in the AI section; "" is a new chat. */
+  aiChatId: string;
   ext: string;
   rating: string;
   /** Experimental sort; "" is Eagle's order. */

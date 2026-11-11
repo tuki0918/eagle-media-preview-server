@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { EllipsisIcon, ExternalLinkIcon as LucideExternalLinkIcon, FolderIcon, LinkIcon, LoaderCircleIcon, PencilIcon, RotateCcwIcon, ShareIcon, TagIcon, Trash2Icon, XIcon } from "lucide-react";
+import { EllipsisIcon, ExternalLinkIcon as LucideExternalLinkIcon, FolderIcon, LinkIcon, LoaderCircleIcon, PencilIcon, RotateCcwIcon, ShareIcon, SparklesIcon, TagIcon, Trash2Icon, XIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { errorMessage } from "../api";
@@ -30,6 +30,8 @@ export interface PreviewInfoProps {
   onSaveMetadata: (item: EagleItem, patch: { tags: string[]; folders: string[] }, field: "tags" | "folders") => Promise<{ tags: string[]; folders: string[] }>;
   onTagSuggestions: (query: string, selectedValues: string[]) => Promise<MetadataSuggestion[]> | MetadataSuggestion[];
   onToggleTrash?: (item: EagleItem, isDeleted: boolean) => Promise<void>;
+  /** Starts an AI chat about the item; absent when AI chat is off. */
+  onAskAi?: (item: EagleItem) => void;
 }
 
 const previewLabelClassName = "preview-detail-label text-[13px] font-normal text-muted-foreground";
@@ -138,12 +140,12 @@ export function PreviewInfoActions() {
   if (!actionsVisible) return null;
   return (
     <div id="previewActions" className="preview-info-actions sticky bottom-0 z-[1] -mx-5 mt-auto border-t border-border bg-card px-5 pb-[calc(16px+env(safe-area-inset-bottom))] pt-4 max-[540px]:static desktop:pb-[calc(24px+env(safe-area-inset-bottom))]">
-      {previewInfoState ? <PreviewActions key={String(previewInfoState.item.id || "")} canEditMetadata={previewInfoState.canEditMetadata} canManageLibrary={previewInfoState.canManageLibrary} item={previewInfoState.item} onToggleTrash={previewInfoState.onToggleTrash} /> : null}
+      {previewInfoState ? <PreviewActions key={String(previewInfoState.item.id || "")} canEditMetadata={previewInfoState.canEditMetadata} canManageLibrary={previewInfoState.canManageLibrary} item={previewInfoState.item} onToggleTrash={previewInfoState.onToggleTrash} onAskAi={previewInfoState.onAskAi} /> : null}
     </div>
   );
 }
 
-export function PreviewActions({ canEditMetadata = false, canManageLibrary = false, item, onToggleTrash }: { canEditMetadata?: boolean; canManageLibrary?: boolean; item: EagleItem; onToggleTrash?: (item: EagleItem, isDeleted: boolean) => Promise<void> }) {
+export function PreviewActions({ canEditMetadata = false, canManageLibrary = false, item, onAskAi, onToggleTrash }: { canEditMetadata?: boolean; canManageLibrary?: boolean; item: EagleItem; onAskAi?: (item: EagleItem) => void; onToggleTrash?: (item: EagleItem, isDeleted: boolean) => Promise<void> }) {
   const actionsVisible = useSyncExternalStore(subscribeItemActionsVisible, getItemActionsVisible, getItemActionsVisible);
   const standalone = isStandaloneApp();
   const [trashSaving, setTrashSaving] = useState(false);
@@ -285,6 +287,20 @@ export function PreviewActions({ canEditMetadata = false, canManageLibrary = fal
           className="absolute bottom-full right-0 z-50 mb-2 min-w-48 rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-lg"
           onClick={(event) => event.stopPropagation()}
         >
+          {onAskAi ? (
+            <button
+              type="button"
+              role="menuitem"
+              className="preview-ask-ai-action relative flex w-full cursor-default items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm outline-hidden select-none hover:bg-muted [&_svg]:size-4 [&_svg]:shrink-0"
+              onClick={() => {
+                setMenuOpen(false);
+                onAskAi(item);
+              }}
+            >
+              <SparklesIcon aria-hidden="true" />
+              <span>Ask AI about this</span>
+            </button>
+          ) : null}
           <button
             type="button"
             role="menuitem"

@@ -11,6 +11,7 @@ export type ViewerUrlState = Pick<
   | "folderId"
   | "smartFolderId"
   | "section"
+  | "aiChatId"
   | "ext"
   | "rating"
   | "sort"
@@ -34,7 +35,8 @@ export function parseViewerUrlState(search: string): ViewerUrlState {
     tags: uniqueTags(params.getAll("tag")),
     folderId: params.get("folder") || "",
     smartFolderId: params.get("smartFolder") || "",
-    section: params.get("section") === "tags" ? "tags" : "items",
+    section: params.get("section") === "tags" ? "tags" : params.get("section") === "ai" ? "ai" : "items",
+    aiChatId: params.get("section") === "ai" ? params.get("chat") || "" : "",
     ext: params.get("ext") || "",
     rating: formatRatingFilter(parseRatingFilter(params.get("rating") || "")),
     sort,
@@ -52,6 +54,11 @@ export function buildViewerSearch(state: ViewerUrlState) {
   const params = new URLSearchParams();
   if (state.section === "tags") {
     params.set("section", "tags");
+    return params.toString();
+  }
+  if (state.section === "ai") {
+    params.set("section", "ai");
+    if (state.aiChatId) params.set("chat", state.aiChatId);
     return params.toString();
   }
   if (state.query) params.set("q", state.query);

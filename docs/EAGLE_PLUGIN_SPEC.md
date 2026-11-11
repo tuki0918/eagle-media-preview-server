@@ -63,6 +63,7 @@ Defaults and how to change them:
 | Upload size limit per file | 2048 MB | Not in the panel; `uploadMaxSizeMB` in `settings.json` while the server is stopped |
 | Time allowed to receive one upload | 60 minutes | Not in the panel; `uploadTimeoutMinutes` in `settings.json` while the server is stopped |
 | Advanced Sort (experimental) | disabled | **Full scan** under **Settings → Libraries → Advanced Sort** (see [Advanced Sort](#advanced-sort-experimental)) |
+| AI Chat (experimental) | disabled | **Show AI chat in the viewer** under **Settings → AI** (see [AI Chat](#ai-chat-experimental)) |
 
 All values are saved to `~/.eagle-media-preview-server/settings.json`. Fields under **Settings** are locked while the server runs and take effect at the next start. The toggles in Server Status stay available while it runs, and a change to Password, Public Network, or HTTPS restarts the running server.
 
@@ -95,6 +96,7 @@ To check your tunnel after turning it on:
 
 The log answers where access came from, who signed in, and what was changed; view counts are only a rough guide. Recent events in the Activity panel can be filtered by type and searched by part of the address, user, event, item id, path, file type, changed fields, or status, including the panel's wording for events and fields; the time, size, and library id aren't searched. The log itself does the search, so it covers every kept entry, not only the events listed. Text matching the search shows in blue in the listed events. Clicking a device's address or user, or an event's address, user, or event, adds it as a chip that matches exactly, and picked values show in blue. Several chips of one column match any of them; different columns, the type, and the search text must all match. A chip's x or a second click removes it. Each entry notes the client address and user where there is one, and, for requests, the id of the library last confirmed open in Eagle (the same opaque id the viewer uses). The id is left empty after a library switch until Eagle has been asked again; logging never asks Eagle itself. It is kept in the log file and exports, and isn't shown in the Activity panel.
 
+- AI chat: one entry per reply, with the user, the model, the tokens used when the provider reports them, the item asked about, and what the reply used (`search`, `smart_search`, `image`); never the question or the reply. A failed or stopped reply is kept with its status and isn't counted as a chat
 - Sign-ins: success, failure, lock, and sign-out. Requests refused by the block list or by a library's user limit are kept once a minute per client
 - Item edits: the action and which fields changed (`rating`, `tags`, `folders`), never their values
 - Server and settings, as "this computer": server start, stop, and failed start with the reason; the id of the library open when the server starts, as its own entry, and of the new library on a switch in Eagle (a switch while the plugin is closed sends no event); which settings changed, by name only; blocked and unblocked addresses; clearing the log
@@ -226,6 +228,7 @@ type Settings = {
   sharedLibraries: Array<{ name: string; path: string; access?: "selected"; users?: string[] }>;
   trustForwardedFor: boolean;
   experimentalSort: boolean; // "Full scan" under Settings → Libraries → Advanced Sort; false by default
+  aiChatEnabled: boolean; // "Show AI chat in the viewer" under Settings → AI; false by default
   uploadMaxSizeMB: number;
   uploadTimeoutMinutes: number;
 };
@@ -359,6 +362,7 @@ These routes hand out the library id, so they do not require one.
   - Checks the server-configured Eagle API connection and returns app info and the library display name and id
   - The request body is ignored; viewer clients cannot change the Eagle API host, port, or token
   - Adds `features: { sort: true }` when Advanced Sort is on; the viewer shows its sort menu only then
+  - Adds `features: { ai: true }` when AI chat is on, the caller is signed in, and Eagle reports a default chat model; the viewer shows the AI chat only then
   - The library is read again after the body arrives: if it is not shared it returns `503`, and if Eagle switched libraries during the request it returns `409 LIBRARY_CHANGED`, so an unshared library is never named
 - `GET /api/health`
   - Checks Eagle app/library health; polled by the viewer; library paths are never returned to clients
@@ -381,6 +385,21 @@ These routes hand out the library id, so they do not require one.
   - Return tags, and tags with tag groups and starred tags
 - `GET /api/tag-cover`
   - Returns a cover item for a tag; requires `tag`
+
+#### AI chat — sign-in, library id
+
+Answered only when AI chat is on, the caller is signed in, and Eagle reports a default chat model; otherwise `404` with code `AI_UNAVAILABLE`. Chats belong to the signed-in user and the connected library.
+
+- `GET /api/ai/chats`
+  - The user's chats in this library, newest first: `{ items: [{ id, title, updatedAt }] }`
+- `GET /api/ai/chats/:id`, `DELETE /api/ai/chats/:id`
+  - Reads or deletes one chat; another user's chat is `404`
+- `POST /api/ai/chats/:id/messages`
+  - Body: `{ text, itemId? }`; `text` is up to 4000 characters, `itemId` is the item the question is about. Use `new` as the id to start a chat
+  - Answers with `application/x-ndjson`, one event per line as the reply is written: `chat` (id and title), `search` (what is being looked for), `items` (items found), `text` (the next piece of the reply), then `done` (the saved reply) or `error`
+  - One reply at a time per user; a second request meanwhile gets `429`
+- `GET /api/items/:id`
+  - One item by id, without file paths; the viewer uses it to preview an item a chat lists
 
 #### Media — sign-in, library id
 
@@ -470,6 +489,20 @@ Eagle's `item/get` always answers newest-first, so other orders come from an ind
 - Never writes to the library
 
 Design notes: [docs/design/large-library-index.md](design/large-library-index.md).
+
+### AI Chat (experimental)
+
+Off by default and turned on with **Settings → AI** (saved as `aiChatEnabled`). Like other settings, it is locked while the server runs and takes effect at the next start. It applies only while password protection is on: chats are kept per user, and every reply uses the admin's AI account.
+
+- Replies come from the model set in Eagle's preferences, through Eagle's AI SDK (`eagle.extraModule.ai`, declared in `manifest.json` as the `ai-sdk` dependency, which Eagle's Plugin Center lists as the **AI Models** plugin). The SDK exists only in the plugin window, where the service runtime is loaded, so the preview server calls it directly. The API key never leaves Eagle
+- The default chat model writes replies. If it fails before writing anything, the default vision model is tried in its place; a chat model whose name marks it as an embedding model is skipped, since it can't write. Reasoning a model writes between `<think>` tags is dropped. For a question about an item, the default vision model is tried first, then the chat model, each with the item's thumbnail (or the original, for a small image), then the chat model with the item's details alone
+- The model has no tools. To search, it answers with one line, `SEARCH: {"query", "tags", "ext", "rating", "folder"}`; the server runs the search against Eagle (`item/query` for text, `item/get` for filters, and `aiSearch/searchByText` when Eagle's AI Search plugin answers), hands back up to 12 items, and asks again. It may search twice per reply. The search line is never shown to the user
+- The model is given the library name, the user name, the 40 most used tags, and up to 60 folder names. For found items it gets the name, type, tags, rating, dimensions, duration, and note, not ids or file paths
+- Nothing is written to the library
+- Chats are saved in `~/.eagle-media-preview-server/ai-chats/`, one file per user (named by a hash of the username), with up to 50 chats per user and 200 messages per chat. A chat lists only what a thumbnail needs for each item; opening one reads the item again
+- A library switch during a reply ends it with `LIBRARY_CHANGED`, and nothing from the new library is reported
+- Provider errors are shown to the user in general terms (the provider can't be reached, the model can't chat or wasn't found, the request was rejected). Only an admin also sees the provider's own message, shortened and with anything key-like removed
+- In the viewer, the section is in the URL as `?section=ai`, with `&chat=<id>` for a saved chat
 
 ## Authentication
 

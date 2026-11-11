@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type C
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { SIDEBAR_OPEN_STORAGE_KEY, UNCATEGORIZED_FOLDER_ID, UNTAGGED_FOLDER_ID } from "../constants";
 import { activeFilterLabels } from "../filters";
+import { getAiChatState, subscribeAiChatState } from "../aiChatState";
 import { DEFAULT_SIDEBAR_WIDTH, readSavedSidebarWidth, writeSavedSidebarWidth, subscribeDisplaySettingsReset } from "../displayPreferences";
 import { findFolderById } from "../folderTree";
 import { getResultsStatusState, subscribeResultsStatusState } from "../resultsStatusState";
@@ -12,6 +13,7 @@ import { buildTagSections } from "../tagOverview";
 import type { EagleFolder, EagleSmartFolder } from "../types";
 import { getZoomLevel, gridColumnWidth, subscribeZoomLevel, tileRowHeight } from "../zoomState";
 import { AccountSideMenu } from "./AccountSideMenu";
+import { AiChatView, AiHomePrompt } from "./AiChat";
 import { CardTemplate } from "./CardTemplate";
 import { Pager } from "./Pager";
 import { PreviewDialog } from "./PreviewDialog";
@@ -66,6 +68,8 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
     sort: searchState.sortAvailable ? searchState.selectedSort : "",
     order: searchState.selectedOrder,
   });
+  const aiAvailable = useSyncExternalStore(subscribeAiChatState, getAiChatState, getAiChatState).available;
+  const showingAi = searchState.section === "ai" && aiAvailable;
   const showingTags = searchState.section === "tags";
   const inSmartFolder = Boolean(searchState.selectedSmartFolderId);
   const tagSearchFilters = tagListState.query.trim() ? [`"${tagListState.query.trim()}"`] : [];
@@ -74,7 +78,9 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
   const headerCountLabel = showingTags
     ? `${headerCount.toLocaleString()} ${headerCount === 1 ? "tag" : "tags"}`
     : `${headerCount.toLocaleString()} ${headerCount === 1 ? "item" : "items"}`;
-  const folderName = showingTags ? "All Tags" : selectedFolderName(
+  // The home view: everything in the library, with nothing narrowing it.
+  const showAiPrompt = aiAvailable && searchState.section === "items" && !inSmartFolder && !searchState.selectedFolderId && !activeFilters.length;
+  const folderName = showingAi ? "AI Chat" : showingTags ? "All Tags" : selectedFolderName(
     searchState.selectedFolderId,
     searchState.folders,
     searchState.selectedSmartFolderId,
@@ -115,14 +121,16 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
                 <h1 className="m-0 min-w-0 truncate text-[13px] font-semibold leading-none text-foreground min-[720px]:text-sm">
                   {folderName}
                 </h1>
-                <span
-                  className="shrink-0 rounded-full bg-muted px-2 py-[3px] text-[11px] font-semibold leading-none text-muted-foreground [font-variant-numeric:tabular-nums]"
-                  aria-live="polite"
-                  aria-label={headerCountLabel}
-                  title={headerCountLabel}
-                >
-                  {headerCount.toLocaleString()}
-                </span>
+                {showingAi ? null : (
+                  <span
+                    className="shrink-0 rounded-full bg-muted px-2 py-[3px] text-[11px] font-semibold leading-none text-muted-foreground [font-variant-numeric:tabular-nums]"
+                    aria-live="polite"
+                    aria-label={headerCountLabel}
+                    title={headerCountLabel}
+                  >
+                    {headerCount.toLocaleString()}
+                  </span>
+                )}
               </button>
               <div className="flex min-w-0 items-center justify-end gap-1">
                 <UploadButton />
@@ -130,32 +138,37 @@ export function ViewerShellLayout({ hidden = true }: ViewerShellLayoutProps) {
                 <SearchFiltersButton
                   activeFilters={showingTags ? tagSearchFilters : activeFilters}
                   filtersOpen={searchState.filtersOpen}
-                  unavailableLabel={!showingTags && inSmartFolder ? SMART_FOLDER_FILTERS_UNAVAILABLE_LABEL : undefined}
+                  unavailableLabel={showingAi ? "Filters don't apply to the AI chat" : !showingTags && inSmartFolder ? SMART_FOLDER_FILTERS_UNAVAILABLE_LABEL : undefined}
                 />
               </div>
             </header>
             {/* Overlay the filters below the header so opening them never shifts the results. The panel
                 hugs the header and overhangs the content edges by its corner radius, so thumbnails
                 scrolling underneath can't peek through a gap or around the rounded corners. */}
-            {inSmartFolder && !showingTags ? null : (
+            {showingAi || (inSmartFolder && !showingTags) ? null : (
               <div className="pointer-events-none absolute inset-x-1 top-full min-[720px]:inset-x-2">
                 {showingTags ? <TagSearchControls /> : <SearchControls />}
               </div>
             )}
           </div>
-          {showingTags ? (
+          {showingAi ? (
+            <div className="flex w-full flex-col px-3 pt-1 min-[720px]:px-6 min-[720px]:pt-2">
+              <AiChatView />
+            </div>
+          ) : showingTags ? (
             <div className="flex w-full flex-col gap-3 px-3 pb-16 pt-1 min-[720px]:px-6 min-[720px]:pt-2">
               <TagList />
             </div>
           ) : (
             <div className="flex w-full flex-col gap-3 px-2 pb-28 pt-1 min-[720px]:px-6 min-[720px]:pt-2" style={contentStyle}>
+              {showAiPrompt ? <AiHomePrompt /> : null}
               <SubfolderList />
               <ResultSurface />
               <TilesSentinel />
               <Pager />
             </div>
           )}
-          {showingTags ? null : <ViewerDock />}
+          {showingTags || showingAi ? null : <ViewerDock />}
         </SidebarInset>
       </SidebarProvider>
       <PreviewDialog />

@@ -70,12 +70,14 @@ const EVENT_FILTERS: Array<{ label: string; value: AccessLogEventFilter }> = [
   { label: "Views", value: "view" },
   { label: "Sign-ins", value: "auth" },
   { label: "Edits", value: "edit" },
+  { label: "AI", value: "ai" },
   { label: "Server", value: "system" },
 ];
 
 const EVENT_LABELS: Record<string, string> = {
   address_blocked: "Blocked address",
   address_unblocked: "Unblocked address",
+  ai_chat: "AI chat",
   blocked: "Blocked",
   connect: "Connect failed",
   library_denied: "Library access denied",
@@ -104,6 +106,11 @@ const FAILED_EVENTS = new Set(["blocked", "library_denied", "login_failure", "lo
 
 // Saved setting names as the panel calls them; other logged fields (tags, folders, rating) read as they are.
 const FIELD_LABELS: Record<string, string> = {
+  aiChatEnabled: "AI chat",
+  // What an AI reply used.
+  image: "looked at the item",
+  search: "searched the library",
+  smart_search: "searched the library (AI Search)",
   authEnabled: "password protection",
   authUsers: "users",
   autoStart: "auto start",
@@ -224,10 +231,11 @@ export function AccessLogPanel({
             </div>
           </div>
 
-          <div className="grid grid-cols-4 gap-2 max-[520px]:grid-cols-2">
+          <div className="grid grid-cols-5 gap-2 max-[520px]:grid-cols-2">
             <StatTile label="Connected" value={activeClients} help="Devices seen in the last 2 minutes" />
             <StatTile label="Views" value={totals?.view ?? 0} />
             <StatTile label="Edits" value={totals?.edit ?? 0} />
+            <StatTile label="AI chats" value={totals?.ai ?? 0} help="Replies from the viewer's AI chat" />
             <StatTile label="Failed sign-ins" value={totals?.authFailures ?? 0} />
           </div>
 
@@ -472,6 +480,7 @@ function ClientTable({ blocked, filters, summary, onBlock, onFiltersChange }: { 
         <span role="columnheader">Last seen</span>
         <span className="text-right" role="columnheader">Views</span>
         <span className="text-right" role="columnheader">Edits</span>
+        <span className="text-right" role="columnheader">AI</span>
         <span className="text-right" role="columnheader">Failed</span>
         <span role="columnheader"><span className="sr-only">Actions</span></span>
       </div>
@@ -493,6 +502,7 @@ function ClientTable({ blocked, filters, summary, onBlock, onFiltersChange }: { 
           <span className="tabular-nums" role="cell">{formatRelative(client.lastSeen)}</span>
           <span className="text-right tabular-nums" role="cell">{client.views}</span>
           <span className="text-right tabular-nums" role="cell">{client.edits}</span>
+          <span className="text-right tabular-nums" role="cell">{client.aiChats ?? 0}</span>
           <span className={`text-right tabular-nums ${clientFailures(client) ? "font-semibold text-[#b42318]" : ""}`} role="cell">{clientFailures(client)}</span>
           <span className="grid place-items-center" role="cell">
             {blocked.has(client.ip) ? (
@@ -558,6 +568,8 @@ function EventTable({ emptyText, entries, filters, searchedText, onFiltersChange
           entry.ext ? <Match query={searchedText} text={entry.ext.toUpperCase()} /> : null,
           formatBytes(entry.size) || null,
           fields ? <Match query={searchedText} text={fields} /> : null,
+          entry.model ? <Match query={searchedText} text={entry.model} /> : null,
+          entry.tokens ? `${entry.tokens.toLocaleString()} tokens` : null,
         ].filter(Boolean);
         return (
           <div key={`${entry.at}-${index}`} className={`${eventGridClassName} border-b border-[#f3f3f5] text-[11.5px] text-[#3a3f47] last:border-b-0`} role="row">
@@ -652,7 +664,7 @@ function EmptyRow({ children }: { children: ReactNode }) {
 
 const fieldLabelClassName = "text-[10.5px] font-semibold uppercase leading-tight tracking-[0.06em] text-[#7a7f88]";
 const tableHeaderClassName = "text-[10px] font-semibold uppercase leading-none tracking-[0.06em] text-[#8a8f99]";
-const clientGridClassName = "grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_72px_44px_60px_48px_24px] items-center gap-2 px-2.5 py-1.5";
+const clientGridClassName = "grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_72px_44px_60px_28px_48px_24px] items-center gap-2 px-2.5 py-1.5";
 const eventGridClassName = "grid grid-cols-[76px_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.2fr)_24px] items-center gap-2 px-2.5 py-1.5";
 
 function isLoopback(address: string) {

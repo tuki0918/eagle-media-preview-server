@@ -74,6 +74,34 @@ export async function postJson<T = unknown>(url: string, body: unknown): Promise
   });
 }
 
+export async function deleteJson<T = unknown>(url: string): Promise<T> {
+  return requestJson<T>(url, { method: "DELETE" });
+}
+
+// For answers that arrive piece by piece (the AI chat): resolves once the server has accepted the
+// request, and leaves reading the body to the caller. A refusal throws like any other request.
+export async function postStream(url: string, body: unknown, signal?: AbortSignal): Promise<Response> {
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...connectedLibraryHeaders() },
+      body: JSON.stringify(body),
+      credentials: "same-origin",
+      signal,
+    });
+  } catch (error) {
+    if (!signal?.aborted) notifyRequestOutcome({ libraryId: "", ok: false, status: 0, url });
+    throw error;
+  }
+  notifyRequestOutcome({ libraryId: response.headers?.get?.("X-Library-Id") || "", ok: response.ok, status: response.status, url });
+  if (!response.ok) {
+    const data = await safeJson(response);
+    throw new ApiError(response.status, responseErrorMessage(data, response.status), responseErrorCode(data));
+  }
+  return response;
+}
+
 // `timeoutMs` aborts a request the network never answers, such as one to a stopped server whose
 // port silently drops packets; without it the caller waits for the browser's TCP timeout.
 async function requestJson<T>(url: string, options?: RequestInit, timeoutMs?: number): Promise<T> {

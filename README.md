@@ -43,6 +43,7 @@ Optional:
 - File Upload (experimental): add files to the library open in Eagle, for Admin and Editor + Upload users.
 - Advanced Sort (experimental): sort the viewer by date added, created, or modified, name, type, file size, resolution, rating, or duration.
 - Library protection: share only the Eagle libraries you select.
+- AI Chat (experimental): signed-in users can ask the AI model set in Eagle to find and describe media in the library.
 
 <details>
 <summary><strong>PWA Installation</strong></summary>
@@ -176,9 +177,29 @@ See [HTTPS and mkcert CA Operations](docs/https-mkcert.md) for setup, plugin HTT
 - `TLS Cert`: the certificate file
 - `TLS Key`: the matching private key file
 
+#### AI
+
+AI Chat (experimental). Off by default; the feature may change.
+
+It uses the AI model you set in Eagle under **Preferences → AI Models**, through Eagle's **AI Models** plugin (Eagle 4.0 Build 20 or later). Eagle asks you to install it when this plugin opens; it is also in the Plugin Center. The **Model** row shows the default chat and vision models Eagle reports. **Show AI chat in the viewer** can be turned on once a default chat model is set. The chat model has to be one that writes text: an embedding model can't reply, and the panel warns when the chat model looks like one. Like other settings, it is locked while the server runs and takes effect at the next start.
+
+AI chat is shown only while **Password protection** is on, and only to signed-in users. Every reply is written by your AI model, so it uses your AI account.
+
+In the viewer:
+
+- The home view (**All**, with no filters) has an **Ask AI about this library** box. Asking opens the chat.
+- **AI Chat** in the side menu opens a new chat and lists the user's earlier chats.
+- The assistant can search the library open in Eagle by text, tags, rating, folder, and file type, and shows what it found as thumbnails that open in the preview. If Eagle's AI Search plugin is running, its results are added.
+- **Ask AI about this** in a preview's **More actions** menu starts a chat about that item. Its thumbnail is sent to the model, so a model that can look at images can describe it.
+- The assistant only reads. It never changes ratings, tags, folders, or files.
+
+Each user has their own chats, kept per library, and nobody can open another user's chats. Chats are saved on this computer in `~/.eagle-media-preview-server/ai-chats/`, one file per user, up to 50 chats per user. A user can delete a chat from the chat itself.
+
+What is sent to your AI provider: the user's messages, the names of the library's most used tags and its folders, and for items a search finds or a user asks about, the name, type, tags, rating, dimensions, duration, and note. For an item a user asks about, its thumbnail is sent too.
+
 #### Activity
 
-See which devices connected and what they did: sign-ins, views, edits, failed requests, and server events. Successful browsing isn't listed. Recent events can be filtered by type and searched by any text they show. Click an address, user, or event to filter by exactly that value.
+See which devices connected and what they did: sign-ins, views, edits, AI chat replies, failed requests, and server events. An AI reply is listed with its user, the model, the tokens it used when the provider reports them, and whether it searched the library or looked at an item, never with what was said. Successful browsing isn't listed. Recent events can be filtered by type and searched by any text they show. Click an address, user, or event to filter by exactly that value.
 
 ![](docs/server_panel_activity.png)
 
@@ -234,7 +255,7 @@ See [store_description.md](docs/promo/store_description.md) for the Eagle plugin
 <summary>Planned features and limitations</summary>
 
 - Expand support for additional file extensions
-- Add AI-related capabilities
+- Add more AI-related capabilities
 
 #### Limitations
 

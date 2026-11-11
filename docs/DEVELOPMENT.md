@@ -3,6 +3,7 @@
 ## Requirements
 
 - Eagle 4.0 Build 23 or later
+- Eagle's **AI Models** plugin, which provides the AI SDK (declared in `manifest.json` as the `ai-sdk` dependency; Eagle asks to install it)
 - Node.js 20 or later
 
 ## Development

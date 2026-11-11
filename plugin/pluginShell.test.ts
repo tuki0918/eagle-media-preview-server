@@ -102,7 +102,7 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(uiSource, /<option value="viewer">Viewer<\/option>/);
   assert.match(uiSource, /<option value="editor">Editor<\/option>/);
   assert.match(uiSource, /<option value="admin">Admin<\/option>/);
-  assert.match(uiSource, /type SettingsTab = "access" \| "general" \| "libraries" \| "security";/);
+  assert.match(uiSource, /type SettingsTab = "access" \| "ai" \| "general" \| "libraries" \| "security";/);
   assert.match(app, /const \[settingsTab, setSettingsTab\] = useState<SettingsTab>\("general"\);/);
   assert.match(uiSource, /role="tablist" aria-label="Settings sections"/);
   assert.match(uiSource, /<SettingsTabButton active=\{settingsTab === "general"\} controls="generalSettingsPanel" id="generalSettingsTab" onClick=\{\(\) => onSettingsTabChange\("general"\)\}>General<\/SettingsTabButton>/);

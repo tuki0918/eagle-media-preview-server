@@ -8,6 +8,7 @@
   "logo": "/plugin/assets/icon_on.png",
   "keywords": ["viewer", "lan", "server", "nas"],
   "devTools": false,
+  "dependencies": ["ai-sdk"],
   "main": {
     "serviceMode": true,
     "url": "plugin/index.html",

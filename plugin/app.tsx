@@ -6,11 +6,13 @@ import { CloseIcon } from "./components/Icons";
 import { ServerStatusPanel } from "./components/ServerStatusPanel";
 import { authUserKey, SettingsForm, type HttpsFileField } from "./components/SettingsForm";
 import { serverRestartSettingsChanged, settingsPayloadChanged } from "./settingsChange";
-import type { AccessLogEventFilter, AccessLogFilter, AccessLogRange, AccessLogSearchKeys, AccessLogSummary, AuthUser, LibraryCandidate, LibraryList, PluginSettings, PluginStatus, ServerState, SettingsTab, SharedLibrary, UserRole } from "./types";
+import type { AiStatus, AccessLogEventFilter, AccessLogFilter, AccessLogRange, AccessLogSearchKeys, AccessLogSummary, AuthUser, LibraryCandidate, LibraryList, PluginSettings, PluginStatus, ServerState, SettingsTab, SharedLibrary, UserRole } from "./types";
 
 interface ServerManager {
   accessLogConnectedCount?(): number;
   accessLogPath?(): string;
+  aiStatus?(input?: { reload?: boolean }): AiStatus;
+  openAiSettings?(): void;
   accessLogSummary?(input: { filters?: AccessLogFilter[]; limit?: number; range: AccessLogRange; search?: string; searchKeys?: AccessLogSearchKeys; type?: string }): Promise<AccessLogSummary>;
   blockAddress?(address: string): Promise<PluginStatus>;
   clearAccessLog?(): Promise<void>;
@@ -99,6 +101,7 @@ function App() {
   const [passwordDraftRevision, setPasswordDraftRevision] = useState(0);
   const userPasswordsRef = useRef<Record<string, string>>({});
   const [libraries, setLibraries] = useState<LibraryList | null>(null);
+  const [aiStatus, setAiStatus] = useState<AiStatus | null>(null);
   const [accessLog, setAccessLog] = useState<AccessLogSummary | null>(null);
   const [accessLogRange, setAccessLogRange] = useState<AccessLogRange>("24h");
   const [activityExpanded, setActivityExpanded] = useState(false);
@@ -160,6 +163,7 @@ function App() {
       managerRef.current = runtime.createServerManager();
       const init = () => {
         void runCommand(() => managerRef.current?.init(), { quiet: true }).then(() => refreshLibraries());
+        refreshAiStatus();
       };
       // The viewer server must stop answering from the previous library the moment Eagle switches.
       globalThis.eagle?.onLibraryChanged?.((libraryPath) => {
@@ -174,6 +178,8 @@ function App() {
         globalThis.eagle.onPluginCreate(init);
         globalThis.eagle.onPluginShow?.(() => {
           void runCommand(() => managerRef.current?.status(), { quiet: true }).then(() => refreshLibraries());
+          // The admin may have just set a model in Eagle's preferences.
+          refreshAiStatus({ reload: true });
         });
       } else {
         init();
@@ -306,6 +312,7 @@ function App() {
       sessionDurationDays: settings.sessionDurationDays || 7,
       libraryProtectionEnabled: Boolean(settings.libraryProtectionEnabled),
       experimentalSort: Boolean(settings.experimentalSort),
+      aiChatEnabled: Boolean(settings.aiChatEnabled),
       ...patch,
       // Row keys end here: library access is saved by username, and the keys themselves never are.
       sharedLibraries: resolveLibraryUsers((patch.sharedLibraries ?? settings.sharedLibraries) as SharedLibrary[] | undefined, effectiveAuthUsers),
@@ -362,6 +369,24 @@ function App() {
     } catch (error) {
       // The picker keeps the last list; sharing itself is enforced by the server.
       if (reportErrors) setErrorMessage(error);
+    }
+  }
+
+  // Uses only refs and the state setter, so the listeners registered once can call it.
+  function refreshAiStatus({ reload = false } = {}) {
+    try {
+      const next = managerRef.current?.aiStatus?.({ reload });
+      if (next) setAiStatus(next);
+    } catch {
+      // The AI tab keeps what it showed.
+    }
+  }
+
+  function openAiSettings() {
+    try {
+      managerRef.current?.openAiSettings?.();
+    } catch (error) {
+      setErrorMessage(error);
     }
   }
 
@@ -804,6 +829,7 @@ function App() {
         />
 
         <SettingsForm
+          aiStatus={aiStatus}
           authEnabled={authEnabled}
           authUsers={authUsers}
           busy={busy}
@@ -820,6 +846,9 @@ function App() {
           settingsTab={settingsTab}
           userPasswords={userPasswordsRef.current}
           onAddAuthUser={addAuthUser}
+          onAiChatEnabledChange={(checked) => updateSettings({ aiChatEnabled: checked })}
+          onOpenAiSettings={openAiSettings}
+          onReloadAiStatus={() => refreshAiStatus({ reload: true })}
           onChooseHttpsFile={globalThis.eagle?.dialog?.showOpenDialog ? chooseHttpsFile : undefined}
           onCustomDomainChange={(value) => updateSettings({ customDomain: value })}
           onHttpsCertPathChange={(value) => updateSettings({ httpsCertPath: value })}
@@ -835,7 +864,10 @@ function App() {
           onSaveSettings={() => saveSettings({ forceSave: true, successMessage: "Saved" })}
           onSessionDurationDaysChange={(value) => updateSettings({ sessionDurationDays: value })}
           onSettingsExpandedChange={setSettingsExpanded}
-          onSettingsTabChange={setSettingsTab}
+          onSettingsTabChange={(tab) => {
+            setSettingsTab(tab);
+            if (tab === "ai") refreshAiStatus({ reload: true });
+          }}
           onTogglePasswordVisible={togglePasswordVisible}
           onUpdateAuthUser={updateAuthUser}
           onUserPasswordDraftChange={setUserPasswordDraft}

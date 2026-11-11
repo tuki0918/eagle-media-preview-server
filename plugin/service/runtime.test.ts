@@ -12,6 +12,7 @@ const {
   createServerManager,
   createSettingsStore,
   hashPassword,
+  loadEagleAiModule,
   normalizeSettings,
 } = require("../../dist/.generated/plugin-service/runtime.cjs");
 const { createViewerServer, sha256 } = require("../../dist/.generated/plugin-service/viewerServer.cjs");
@@ -1547,4 +1548,67 @@ test("settings keep canUpload only on editors, and leave it off users that don't
   });
   assert.deepEqual(saved.authUsers.map((user: { canUpload?: boolean }) => user.canUpload), [true, undefined, undefined, undefined]);
   assert.equal("canUpload" in saved.authUsers[1], false);
+});
+
+test("the AI Models plugin is loaded from Eagle's Plugins folder when Eagle didn't hand it over", async () => {
+  const userData = await mkdtemp(join(tmpdir(), "eagle-user-data-"));
+  // Not installed: nothing to load.
+  assert.equal(loadEagleAiModule(userData), null);
+
+  const pluginDir = join(userData, "Plugins", "ai-sdk");
+  await mkdir(pluginDir, { recursive: true });
+  await writeFile(join(pluginDir, "ai-sdk.cjs"), `
+    exports.default = ({ configPath }) => ({
+      configPath,
+      getDefaultModel: (type) => (type === "chat" ? "openai::gpt" : undefined),
+      getModel: (id) => ({ id }),
+      streamText: () => ({ textStream: [] }),
+    });
+  `);
+  const ai = loadEagleAiModule(userData);
+  assert.equal(ai.configPath, join(pluginDir, "config.bin"));
+  assert.equal(ai.getDefaultModel("chat"), "openai::gpt");
+  assert.equal(typeof ai.open, "function");
+  assert.doesNotThrow(() => ai.open());
+  // Loaded once; asking again returns the same module.
+  assert.equal(loadEagleAiModule(userData), ai);
+
+  const broken = await mkdtemp(join(tmpdir(), "eagle-user-data-"));
+  await mkdir(join(broken, "Plugins", "ai-sdk"), { recursive: true });
+  await writeFile(join(broken, "Plugins", "ai-sdk", "ai-sdk.cjs"), "throw new Error('boom');");
+  assert.equal(loadEagleAiModule(broken), null);
+});
+
+test("server manager reports whether Eagle has an AI model, and passes AI chat to the viewer only with sign-in", async () => {
+  const settingsDir = await mkdtemp(join(tmpdir(), "ai-settings-"));
+  const settingsStore = createSettingsStore({ filePath: join(settingsDir, "settings.json") });
+  let ai: unknown = null;
+  let reloads = 0;
+  const viewers: Array<{ aiChat?: { enabled: boolean; getAi: () => unknown } }> = [];
+  const manager = createServerManager({
+    accessLog: { load: async () => {}, record() {}, flush: async () => {}, touch() {} },
+    aiProvider: () => ai,
+    settingsStore,
+    viewerServerFactory: (options: { aiChat?: { enabled: boolean; getAi: () => unknown } }) => {
+      viewers.push(options);
+      let state = "stopped";
+      return { start: async () => { state = "running"; }, stop: async () => { state = "stopped"; }, status: () => ({ state, host: "127.0.0.1", port: 41532 }) };
+    },
+  });
+  // Outside Eagle there is no AI module at all.
+  assert.deepEqual(manager.aiStatus(), { available: false, chatModel: "", imageModel: "", reason: "not_installed" });
+  ai = { getDefaultModel: () => undefined, getModel() {}, streamText() {}, reload() { reloads += 1; } };
+  assert.equal(manager.aiStatus().reason, "no_model");
+  ai = { getDefaultModel: (type: string) => (type === "chat" ? "openai::gpt" : undefined), getModel() {}, streamText() {}, reload() { reloads += 1; } };
+  assert.deepEqual(manager.aiStatus({ reload: true }), { available: true, chatModel: "openai::gpt", imageModel: "", reason: "" });
+  assert.equal(reloads, 1);
+
+  await manager.saveSettings({ aiChatEnabled: true });
+  await manager.start();
+  assert.equal(viewers[0].aiChat?.enabled, false, "AI chat needs password protection");
+  assert.equal(viewers[0].aiChat?.getAi(), ai);
+  await manager.saveSettings({ authEnabled: true, authUsers: [{ username: "mika", role: "viewer" }], userPasswords: { mika: "secret" } });
+  assert.equal(viewers[1].aiChat?.enabled, true);
+  await manager.stop();
+  assert.equal(JSON.parse(await readFile(join(settingsDir, "settings.json"), "utf8")).aiChatEnabled, true);
 });

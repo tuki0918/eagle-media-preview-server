@@ -26,6 +26,14 @@ describe("settingsChange", () => {
     expect(serverRestartSettingsChanged(configured, { customDomain: "dummy.local" })).toBe(false);
   });
 
+  test("persists and restarts when AI chat is turned on or off", () => {
+    expect(settingsPayloadChanged(baseSettings, { aiChatEnabled: false })).toBe(false);
+    expect(settingsPayloadChanged(baseSettings, { aiChatEnabled: true })).toBe(true);
+    expect(serverRestartSettingsChanged(baseSettings, { aiChatEnabled: true })).toBe(true);
+    expect(serverRestartSettingsChanged({ ...baseSettings, aiChatEnabled: true }, { aiChatEnabled: false })).toBe(true);
+    expect(serverRestartSettingsChanged({ ...baseSettings, aiChatEnabled: true }, {})).toBe(false);
+  });
+
   test("persists and restarts for shared library changes", () => {
     const library = { name: "Work", path: "/Users/me/Work.library" };
     expect(settingsPayloadChanged(baseSettings, { libraryProtectionEnabled: false, sharedLibraries: [] })).toBe(false);

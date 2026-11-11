@@ -412,6 +412,16 @@ function createEagleClient(options: EagleClientOptions = {}) {
       );
     },
 
+    // Eagle's AI Search plugin: items whose content is close in meaning to the text. It fails when
+    // that plugin isn't installed or isn't ready, which callers treat as "no smart search".
+    async aiSearchByText({ query, limit = 12 }: { limit?: number; query: string }) {
+      const data = unwrapData(
+        await request("/api/v2/aiSearch/searchByText", { method: "POST", body: { query, options: { limit } } }),
+      );
+      const results = isRecord(data) && Array.isArray(data.results) ? data.results : [];
+      return results.map((result) => (isRecord(result) ? result.item : null)).filter(isRecord);
+    },
+
     async smartFolderItems({ smartFolderId, offset = 0, limit = 30 }: SmartFolderItemsOptions = {}) {
       const id = String(smartFolderId || "").trim();
       if (!id) throw new Error("smartFolderId is required");

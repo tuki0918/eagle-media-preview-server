@@ -1,3 +1,4 @@
+const { existsSync } = require("fs");
 const { chmod, mkdir, readFile, stat, writeFile } = require("fs").promises;
 const { createPrivateKey, createPublicKey, pbkdf2Sync, randomBytes, X509Certificate } = require("crypto");
 const { dirname, join } = require("path");
@@ -6,6 +7,7 @@ const { createEagleLibrarySwitcher } = require("./eagleClient.cjs");
 const { BYTES_PER_MB } = require("./upload.cjs");
 const { createViewerServer } = require("./viewerServer.cjs");
 const { accessLogCsv, createAccessLog } = require("./accessLog.cjs");
+const { aiStatus, createAiChatStore } = require("./aiChat.cjs");
 const { normalizeBlockedAddress, normalizeBlockedAddresses } = require("./addressBlockList.cjs");
 const { serverRestartSettingsChanged } = require("./settingsChange.cjs");
 const { normalizeCustomDomain } = require("./customDomain.cjs");
@@ -35,6 +37,8 @@ interface BlockedAddress {
 }
 
 interface PluginSettings {
+  /** Shows the AI chat in the viewer to signed-in users; needs a default chat model in Eagle. */
+  aiChatEnabled: boolean;
   blockedAddresses: BlockedAddress[];
   customDomain: string;
   allowMetadataEditing: boolean;
@@ -110,6 +114,10 @@ type AccessLog = ReturnType<typeof createAccessLog>;
 
 interface ServerManagerOptions {
   accessLog?: AccessLog;
+  /** Where each user's AI chats are kept; next to the settings file by default. */
+  aiChatDir?: string;
+  /** Eagle's AI SDK. The default reads it from the plugin window this runtime is loaded in. */
+  aiProvider?: () => unknown;
   librarySwitcher?: { switchLibrary(libraryPath: string): Promise<unknown> };
   lanAddressProvider?: () => LanAddress[];
   defaultEagleUserDataPath?: () => string;
@@ -127,6 +135,7 @@ interface ServerManagerOptions {
     sharedLibraries: string[] | null;
     libraryUserRules?: Array<{ path: string; users: string[] }>;
     accessLog?: AccessLog;
+    aiChat?: { enabled: boolean; getAi: () => unknown; store: ReturnType<typeof createAiChatStore> };
     blockedAddresses?: BlockedAddress[];
     trustForwardedFor?: boolean;
     experimentalSort?: boolean;
@@ -142,6 +151,7 @@ interface NetworkEntry {
 }
 
 const DEFAULT_SETTINGS: PluginSettings = {
+  aiChatEnabled: false,
   blockedAddresses: [],
   customDomain: "",
   allowMetadataEditing: false,
@@ -292,6 +302,7 @@ function normalizeSettings(input: SettingsInput = {}): PluginSettings {
   const firstAuthUser = authUsers[0];
   const sessionDurationDays = normalizeSessionDurationDays(input.sessionDurationDays);
   return {
+    aiChatEnabled: input.aiChatEnabled === true,
     blockedAddresses: normalizeBlockedAddresses(input.blockedAddresses),
     customDomain: normalizeCustomDomain(input.customDomain),
     autoStart: Boolean(input.autoStart ?? DEFAULT_SETTINGS.autoStart),
@@ -344,6 +355,7 @@ function withKnownLibraryUsers(libraries: SharedLibrary[], authUsers: AuthUser[]
 function canonicalSettings(settings: PluginSettings) {
   return {
     settingsVersion: CURRENT_SETTINGS_VERSION,
+    aiChatEnabled: settings.aiChatEnabled,
     blockedAddresses: settings.blockedAddresses,
     customDomain: settings.customDomain,
     authUsers: settings.authUsers,
@@ -368,7 +380,7 @@ function canonicalSettings(settings: PluginSettings) {
 
 // Settings whose changes go in the access log, by name only. Passwords, secrets, and bookkeeping stay
 // out, and blocked addresses have their own events.
-const LOGGED_SETTING_FIELDS = ["authEnabled", "authUsers", "autoStart", "customDomain", "host", "httpsCertPath", "httpsEnabled", "httpsKeyPath", "libraryProtectionEnabled", "port", "sessionDurationDays", "sharedLibraries", "trustForwardedFor", "experimentalSort", "uploadMaxSizeMB", "uploadTimeoutMinutes"] as const;
+const LOGGED_SETTING_FIELDS = ["aiChatEnabled", "authEnabled", "authUsers", "autoStart", "customDomain", "host", "httpsCertPath", "httpsEnabled", "httpsKeyPath", "libraryProtectionEnabled", "port", "sessionDurationDays", "sharedLibraries", "trustForwardedFor", "experimentalSort", "uploadMaxSizeMB", "uploadTimeoutMinutes"] as const;
 
 function changedSettingFields(before: PluginSettings, after: PluginSettings) {
   return LOGGED_SETTING_FIELDS.filter((field) => JSON.stringify(before[field]) !== JSON.stringify(after[field]));
@@ -622,8 +634,57 @@ function selectLanAddress({ lanAddresses = [], host = "0.0.0.0" }: {
   return "localhost";
 }
 
+interface EagleWindowApi {
+  app?: { userDataPath?: unknown };
+  extraModule?: { ai?: unknown };
+}
+
+// The runtime is loaded inside the plugin window, where Eagle puts its plugin API on the global object.
+// Eagle sets `eagle.extraModule.ai` when it creates the window, and only if the manifest it has on
+// record lists the "ai-sdk" dependency. A manifest read before that line was added (Eagle keeps it
+// until the plugin is loaded again) leaves it unset, so the module is then loaded the way Eagle does.
+function eagleAiFromWindow() {
+  const eagle = (globalThis as { eagle?: EagleWindowApi }).eagle;
+  if (!eagle) return null;
+  return eagle.extraModule?.ai ?? loadEagleAiModule(typeof eagle.app?.userDataPath === "string" && eagle.app.userDataPath ? eagle.app.userDataPath : defaultEagleUserDataDir());
+}
+
+let loadedAiModule: { ai: unknown; path: string } | null = null;
+
+// Eagle's AI Models plugin is a CommonJS module in Eagle's own Plugins folder; this is how Eagle
+// itself builds `eagle.extraModule.ai`. Returns null when the plugin isn't installed or can't be loaded.
+function loadEagleAiModule(userDataPath: string) {
+  const pluginPath = join(userDataPath, "Plugins", "ai-sdk");
+  const modulePath = join(pluginPath, "ai-sdk.cjs");
+  if (loadedAiModule && loadedAiModule.path === modulePath) return loadedAiModule.ai;
+  if (!existsSync(modulePath)) return null;
+  try {
+    const create = (require(modulePath) as { default?: (options: { configPath: string }) => unknown }).default;
+    if (typeof create !== "function") return null;
+    const ai = {
+      // The settings window belongs to Eagle; this is the request Eagle's own `open` sends.
+      open: () => {
+        try {
+          void (require("electron") as { ipcRenderer?: { invoke(channel: string, input: unknown): Promise<unknown> } }).ipcRenderer
+            ?.invoke("plugin.extraModule.ai.", { method: "open", value: undefined })
+            ?.catch(() => {});
+        } catch {
+          // Not inside Eagle: there is no settings window to open.
+        }
+      },
+      ...(create({ configPath: join(pluginPath, "config.bin") }) as object),
+    };
+    loadedAiModule = { ai, path: modulePath };
+    return ai;
+  } catch {
+    return null;
+  }
+}
+
 function createServerManager({
   accessLog = createAccessLog(),
+  aiChatDir,
+  aiProvider = eagleAiFromWindow,
   librarySwitcher = createEagleLibrarySwitcher(),
   settingsStore = createSettingsStore(),
   viewerServerFactory = createViewerServer,
@@ -631,6 +692,15 @@ function createServerManager({
   defaultEagleUserDataPath = defaultEagleUserDataDir,
 }: ServerManagerOptions = {}) {
   let viewer: ManagedViewer | null = null;
+  // Kept by the manager so chats survive a server restart.
+  const aiChatStore = createAiChatStore({ dir: aiChatDir ?? join(dirname(settingsStore.filePath || defaultSettingsPath()), "ai-chats") });
+  const currentAi = () => {
+    try {
+      return aiProvider();
+    } catch {
+      return null;
+    }
+  };
   let stateOverride: ServerStatus = "stopped";
   let lastError = "";
 
@@ -713,6 +783,8 @@ function createServerManager({
       libraryUserRules: libraryUserRules(settings),
       authUsers: settings.authEnabled ? settings.authUsers : [],
       accessLog,
+      // Chats are per user, so AI chat needs sign-in.
+      aiChat: { enabled: settings.aiChatEnabled && settings.authEnabled, getAi: currentAi, store: aiChatStore },
       blockedAddresses: settings.blockedAddresses,
       trustForwardedFor: settings.trustForwardedFor,
       experimentalSort: settings.experimentalSort,
@@ -830,6 +902,25 @@ function createServerManager({
       return snapshot();
     },
 
+    // Whether Eagle has an AI model the chat can use. `reload` re-reads Eagle's AI settings first,
+    // for after the admin changed them.
+    aiStatus({ reload = false }: { reload?: boolean } = {}) {
+      const ai = currentAi() as { reload?: () => void } | null;
+      if (reload) {
+        try {
+          ai?.reload?.();
+        } catch {
+          // The status below still reports what is known.
+        }
+      }
+      return aiStatus(ai);
+    },
+
+    // Opens the AI Models section of Eagle's preferences.
+    openAiSettings() {
+      (currentAi() as { open?: () => void } | null)?.open?.();
+    },
+
     // The log belongs to the manager, not the viewer, so it stays readable after the server stops.
     async accessLogSummary({ range = "24h", limit = 200, ...query }: { filters?: Array<{ field: "address" | "event" | "user"; value: string }>; limit?: number; range?: "1h" | "24h" | "7d"; search?: string; searchKeys?: { events: string[]; fields: string[] }; type?: string } = {}) {
       await accessLog.load();
@@ -879,5 +970,6 @@ module.exports = {
   createSettingsStore,
   getLanAddresses,
   hashPassword,
+  loadEagleAiModule,
   normalizeSettings,
 };

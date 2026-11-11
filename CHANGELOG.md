@@ -9,10 +9,14 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Added
 
+- Added AI Chat (experimental, off by default): turn on **Show AI chat in the viewer** under **Settings → AI** to let signed-in users ask the AI model set in Eagle's preferences about the library. The viewer gets an **Ask AI about this library** box on the home view, an **AI Chat** entry in the side menu with each user's own chats, and **Ask AI about this** in a preview's **More actions** menu. The assistant can search the library and look at an item's thumbnail; it never changes anything. It needs Eagle's **AI Models** plugin and password protection.
+- Activity lists AI chat replies with the user, model, and tokens used, never what was said, and counts them per device and user.
 - List view: a **Columns** button to show or hide columns, and a compact layout for narrow screens.
 
 ### Changed
 
+- The plugin now declares Eagle's **AI Models** plugin (`ai-sdk`) as a dependency, so Eagle asks to install it when the plugin opens.
+- The access log's CSV export has two more columns at the end: `model` and `tokens`.
 - Advanced Sort now scans the library in the background as soon as the server starts (and again when Eagle opens another library), instead of on the first sort. The viewer stays usable meanwhile: only the Sort menu is disabled, showing "Preparing sort…" with the progress, and it turns on by itself once the scan is done. The plugin panel shows the scan as a progress bar under Server Status. The index is kept while the server runs.
 
 ### Removed
