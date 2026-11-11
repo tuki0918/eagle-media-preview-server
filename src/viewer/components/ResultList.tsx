@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,9 +13,11 @@ import {
   formatDurationCell,
   displayFileName,
   isTimedMedia,
+  mediaTypeLabel,
   itemTags,
   originalFileName,
 } from "../format";
+import { COMPACT_LIST_MAX_WIDTH, getListAreaWidth, getListColumns, listColumnLayout, subscribeListAreaWidth, subscribeListColumns, type ListColumnId, type ListColumnLayout } from "../listColumns";
 import { hasNoThumbnail, thumbnailAriaLabel, thumbnailMediaType, thumbnailOverlayIcon } from "../media";
 import type { EagleItem, ViewerMode } from "../types";
 import { RatingStars } from "./RatingStars";
@@ -26,6 +28,8 @@ interface ResultListProps {
   onOpenPreview: (item: EagleItem) => void;
   /** List rows turn their Type and Tags labels into filter toggles when these are set. */
   filters?: ListFilters;
+  /** List-view columns; defaults to the user's saved choice. */
+  listColumns?: readonly ListColumnId[];
 }
 
 export interface ListFilters {
@@ -79,18 +83,32 @@ const fileNameOverlayTextClassName =
   "block min-w-0 truncate text-xs font-medium leading-tight text-white";
 const durationBadgeClassName =
   "duration-badge absolute bottom-1.5 right-1.5 rounded-full bg-[rgba(10,10,12,0.62)] px-2 py-[3px] text-[10px] font-semibold leading-[1.2] text-white backdrop-blur";
+// Rows share one grid template (--list-cols, see listColumns.ts and styles.css). A results area too
+// narrow for every chosen column gets the compact list instead, so the table never overflows.
 const listTableRowClassName =
-  "media-row grid min-h-[60px] grid-cols-[52px_minmax(160px,1.6fr)_minmax(160px,2fr)_80px_80px_minmax(96px,0.8fr)_72px_104px] items-center gap-3 border-b border-border px-3 py-2 text-[13px] text-muted-foreground transition-colors last:border-b-0 hover:bg-muted/40 max-[540px]:grid-cols-[48px_minmax(0,1fr)] [&>span:not(.row-name-cell):not(.row-tags-cell)]:justify-self-center [&>span:not(.row-name-cell):not(.row-tags-cell)]:text-center";
+  "media-row grid min-h-[60px] items-center gap-3 border-b border-border px-3 py-2 text-[13px] text-muted-foreground transition-colors last:border-b-0 hover:bg-muted/40 [&>span:not(.list-lead):not(.row-tags-cell):not(.row-text-cell)]:justify-self-center [&>span:not(.list-lead):not(.row-tags-cell):not(.row-text-cell)]:text-center";
 const listTableHeaderClassName =
-  `${listTableRowClassName} media-row-header !min-h-9 !py-1 bg-transparent text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground hover:bg-transparent [&>span:nth-child(2)]:justify-self-stretch [&>span:nth-child(2)]:text-left max-[540px]:[&>span:nth-child(2)]:pl-3.5 max-[540px]:[&>span:nth-child(n+3)]:hidden`;
+  `${listTableRowClassName} media-row-header !min-h-9 !py-1 bg-transparent text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground hover:bg-transparent [&>.row-text-cell]:text-left`;
+// The thumbnail and the name and/or rating share the first cell.
+const listLeadClassName = "list-lead flex min-w-0 items-center gap-3 justify-self-stretch";
+// Narrow results areas: thumbnail, then the name with its rating and one line of details. Fixed;
+// the column choice only applies to the table.
+const compactRowClassName =
+  "media-row media-row-compact grid min-h-[60px] grid-cols-[44px_minmax(0,1fr)] items-center gap-3 border-b border-border px-3 py-2 text-[13px] text-muted-foreground transition-colors last:border-b-0 hover:bg-muted/40";
+// Compact rows: name with its rating stars underneath on the left, details in two short lines on the right.
+const compactBodyClassName = "list-compact-body grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 text-left";
+const compactNameClassName = "row-file-name block min-w-0 max-w-full truncate text-left font-medium text-foreground";
+const compactDetailsClassName =
+  "list-compact-details col-start-2 row-start-1 grid justify-items-end gap-0.5 whitespace-nowrap text-right text-[11px] leading-[1.3] text-muted-foreground [font-variant-numeric:tabular-nums]";
+const compactExtraClassName = "list-compact-extra col-span-2 min-w-0";
+const compactTextClassName = "block min-w-0 truncate text-[11px] leading-[1.3] text-muted-foreground";
 const rowNameCellClassName =
-  "row-name-cell grid min-w-0 content-center justify-items-start gap-1 overflow-hidden text-left justify-self-stretch text-foreground max-[540px]:grid-cols-[minmax(0,1fr)_auto] max-[540px]:items-center max-[540px]:pl-3.5 [&_.rating-control]:justify-self-start max-[540px]:[&_.rating-control]:col-span-2 max-[540px]:[&_.rating-control]:row-start-2";
+  "row-name-cell grid min-w-0 flex-1 content-center justify-items-start gap-1 overflow-hidden text-left text-foreground [&_.rating-control]:justify-self-start";
 const rowFileNameClassName =
-  "row-file-name block w-full min-w-0 overflow-hidden text-ellipsis whitespace-nowrap justify-self-start text-left font-medium max-[540px]:col-start-1 max-[540px]:row-start-1";
-const listTableMobileMetaClassName =
-  "list-table-mobile-meta hidden text-[11px] leading-[1.3] text-muted-foreground max-[540px]:col-start-2 max-[540px]:row-start-1 max-[540px]:block max-[540px]:justify-self-end max-[540px]:whitespace-nowrap max-[540px]:text-right";
-const listTableHiddenOnMobileClassName = "max-[540px]:hidden";
-const listTagsCellClassName = "row-tags-cell list-col-narrow flex min-w-0 flex-wrap items-center gap-1 justify-self-stretch py-0.5 max-[540px]:hidden";
+  "row-file-name block w-full min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-left font-medium";
+const listTextCellClassName = "row-text-cell block min-w-0 justify-self-stretch truncate text-left";
+const listUrlLinkClassName = "text-muted-foreground underline-offset-2 hover:text-foreground hover:underline";
+const listTagsCellClassName = "row-tags-cell flex min-w-0 flex-wrap items-center gap-1 justify-self-stretch py-0.5";
 const pillClassName =
   "inline-flex h-auto min-h-[22px] max-w-full items-center rounded-full border px-2 py-[2px] text-[11px] font-medium leading-[1.3]";
 const filterPillClassName =
@@ -102,7 +120,7 @@ const tagPillClassName =
 const tagOverflowButtonClassName =
   `${filterPillClassName} tag-overflow-button border-dashed border-border bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground`;
 const extPillClassName =
-  "ext-pill inline-flex h-auto w-fit min-w-11 justify-center justify-self-center rounded-full border border-border bg-muted px-2 py-[3px] text-[10px] font-semibold tracking-[0.04em] text-muted-foreground max-[540px]:hidden list-col-tiny";
+  "ext-pill inline-flex h-auto w-fit min-w-11 justify-center justify-self-center rounded-full border border-border bg-muted px-2 py-[3px] text-[10px] font-semibold tracking-[0.04em] text-muted-foreground";
 const LIST_VISIBLE_TAGS = 6;
 const cardRatingClassName =
   "rating-control absolute bottom-2 left-2 z-[2] inline-flex items-center gap-0 rounded-full bg-[rgba(10,10,12,0.55)] px-1.5 py-[3px] leading-[1.2] text-white backdrop-blur [&_.rating-star]:h-3 [&_.rating-star]:w-3 [&_.rating-star]:text-[10px] [&_.rating-star]:text-[rgba(255,255,255,0.34)] [&_.rating-star[data-active=true]]:text-yellow-300";
@@ -116,17 +134,26 @@ const ENTER_ROW_DELAY_MS = 50;
 const ENTER_MAX_ROWS = 6;
 const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
-export function ResultList({ items, viewMode, onOpenPreview, filters }: ResultListProps) {
+export function ResultList({ items, viewMode, onOpenPreview, filters, listColumns }: ResultListProps) {
   const tileFillerRef = useRef<HTMLSpanElement>(null);
   const gridAnchorRef = useRef<HTMLSpanElement>(null);
   useLastTileRowFit(tileFillerRef, viewMode === "tiles" ? items : null);
   useEnterStagger(gridAnchorRef, ":scope > .media-card", viewMode === "grid" ? items : null);
   useEnterStagger(tileFillerRef, ":scope > .tile-item", viewMode === "tiles" ? items : null);
+  const storedColumns = useSyncExternalStore(subscribeListColumns, getListColumns, getListColumns);
+  const selectedColumns = listColumns ?? storedColumns;
+  const listLayout = useMemo(() => listColumnLayout(selectedColumns), [selectedColumns]);
+  const areaWidth = useSyncExternalStore(subscribeListAreaWidth, getListAreaWidth, getListAreaWidth);
+  // Two compact patterns: narrow areas get a fixed one; wider areas without room for the table get
+  // one built from the chosen columns, so the column picker still has an effect there.
+  const listMode: ListRowMode = viewMode !== "list" || areaWidth >= listLayout.minWidth ? listLayout
+    : areaWidth < COMPACT_LIST_MAX_WIDTH ? "compact" : { compact: listLayout };
+  const compact = listMode !== listLayout;
   return (
     <>
-      {viewMode === "list" && items.length ? <ListTableHeader /> : null}
+      {viewMode === "list" && !compact && items.length ? <ListTableHeader layout={listLayout} /> : null}
       {items.map((item, index) => (
-        <ResultItem key={String(item.id || item.name || index)} item={item} viewMode={viewMode} onOpenPreview={onOpenPreview} filters={filters} />
+        <ResultItem key={String(item.id || item.name || index)} item={item} viewMode={viewMode} onOpenPreview={onOpenPreview} filters={filters} listLayout={listMode} />
       ))}
       {viewMode === "grid" && items.length ? <span ref={gridAnchorRef} className="grid-enter-anchor hidden" aria-hidden="true" /> : null}
       {viewMode === "tiles" && items.length ? <span ref={tileFillerRef} className="tile-filler h-0 grow-[999999]" aria-hidden="true" /> : null}
@@ -134,8 +161,15 @@ export function ResultList({ items, viewMode, onOpenPreview, filters }: ResultLi
   );
 }
 
-function ResultItem({ filters, item, viewMode, onOpenPreview }: { filters?: ListFilters; item: EagleItem; viewMode: ViewerMode; onOpenPreview: (item: EagleItem) => void }) {
-  if (viewMode === "list") return <ListTableRow item={item} onOpenPreview={onOpenPreview} filters={filters} />;
+/** Table layout, the fixed compact pattern, or the compact pattern built from the chosen columns. */
+type ListRowMode = ListColumnLayout | "compact" | { compact: ListColumnLayout };
+
+function ResultItem({ filters, item, listLayout, viewMode, onOpenPreview }: { filters?: ListFilters; item: EagleItem; listLayout: ListRowMode; viewMode: ViewerMode; onOpenPreview: (item: EagleItem) => void }) {
+  if (viewMode === "list") {
+    if (listLayout === "compact") return <CompactListRow item={item} onOpenPreview={onOpenPreview} />;
+    if ("compact" in listLayout) return <ColumnCompactListRow item={item} layout={listLayout.compact} filters={filters} onOpenPreview={onOpenPreview} />;
+    return <ListTableRow item={item} layout={listLayout} onOpenPreview={onOpenPreview} filters={filters} />;
+  }
   if (viewMode === "tiles") return <TileItem item={item} onOpenPreview={onOpenPreview} />;
   return <GridCard item={item} onOpenPreview={onOpenPreview} />;
 }
@@ -256,68 +290,219 @@ function tileAspectRatio(width: number, height: number) {
   return Math.round(Math.min(TILE_MAX_RATIO, Math.max(TILE_MIN_RATIO, ratio)) * 1000) / 1000;
 }
 
-function ListTableHeader() {
+const listColumnHeaders: Record<ListColumnId, { label: string; className?: string }> = {
+  name: { label: "Name" },
+  rating: { label: "Rating" },
+  tags: { label: "Tags", className: "row-tags-cell text-left" },
+  type: { label: "Type" },
+  size: { label: "Size" },
+  dimensions: { label: "Dimensions" },
+  duration: { label: "Duration" },
+  modified: { label: "Modified" },
+  created: { label: "Created" },
+  annotation: { label: "Annotation", className: "row-text-cell text-left" },
+  url: { label: "URL", className: "row-text-cell text-left" },
+};
+
+function ListTableHeader({ layout }: { layout: ListColumnLayout }) {
+  const leadLabel = layout.showName ? "Name" : layout.showRating ? "Rating" : "";
   return (
-    <div className={listTableHeaderClassName}>
-      <span>Item</span>
-      <span className="row-name-cell text-left">Name</span>
-      <span className="row-tags-cell list-col-narrow text-left">Tags</span>
-      <span className="list-col-tiny">Type</span>
-      <span className="list-col-medium">Size</span>
-      <span className="list-col-wide">Dimensions</span>
-      <span className="list-col-wide">Duration</span>
-      <span className="list-col-medium">Modified</span>
+    <div className={listTableHeaderClassName} style={layout.style}>
+      <span className={listLeadClassName}>
+        <span className="w-11 shrink-0 text-center">Item</span>
+        {leadLabel ? <span className="row-name-cell min-w-0 flex-1 truncate text-left">{leadLabel}</span> : null}
+      </span>
+      {layout.columns.map((id) => (
+        <span key={id} className={listColumnHeaders[id].className} data-list-col={id}>
+          {listColumnHeaders[id].label}
+        </span>
+      ))}
     </div>
   );
 }
 
-function ListTableRow({ filters, item, onOpenPreview }: { filters?: ListFilters; item: EagleItem; onOpenPreview: (item: EagleItem) => void }) {
+function ListTableRow({ filters, item, layout, onOpenPreview }: { filters?: ListFilters; item: EagleItem; layout: ListColumnLayout; onOpenPreview: (item: EagleItem) => void }) {
   return (
-    <article className={listTableRowClassName}>
-      <ThumbnailButton variant="row" item={item} onOpenPreview={onOpenPreview} />
-      <ListTableNameCell item={item} />
-      <ListTagsCell item={item} filters={filters} />
-      <ExtensionPill item={item} filters={filters} />
-      <ListTableCell value={formatBytes(item.size) || "-"} className={`list-col-medium ${listTableHiddenOnMobileClassName}`} />
-      <ListTableCell value={formatDimensions(item) || "-"} className={`dimensions-cell list-col-wide ${listTableHiddenOnMobileClassName}`} />
-      <ListTableCell value={formatDurationCell(item) || "-"} className={`duration-cell list-col-wide ${listTableHiddenOnMobileClassName}`} />
-      <ListTableCell value={formatDateShort(item.modificationTime) || "-"} className={`modified-cell list-col-medium ${listTableHiddenOnMobileClassName}`} title={formatDate(item.modificationTime) || ""} />
+    <article className={listTableRowClassName} style={layout.style}>
+      <span className={listLeadClassName}>
+        <ThumbnailButton variant="row" item={item} onOpenPreview={onOpenPreview} />
+        {layout.showName || layout.showRating ? <ListTableNameCell item={item} layout={layout} /> : null}
+      </span>
+      {layout.columns.map((id) => (
+        <ListColumnCell key={id} id={id} item={item} filters={filters} />
+      ))}
     </article>
   );
 }
 
-function ListTableNameCell({ item }: { item: EagleItem }) {
+// Fixed compact pattern for narrow areas. Resolution or length only shows when there is room (styles.css).
+function CompactListRow({ item, onOpenPreview }: { item: EagleItem; onOpenPreview: (item: EagleItem) => void }) {
+  const media = isTimedMedia(item) ? formatDuration(item.duration) : formatDimensions(item);
+  const facts = [mediaTypeLabel(item), formatBytes(item.size)].filter(Boolean).join(" · ");
+  const date = formatDateShort(item.modificationTime);
   return (
-    <span className={rowNameCellClassName}>
-      <span className={rowFileNameClassName} title={originalFileName(item)}>
-        {item.name || item.id || ""}
+    <article className={compactRowClassName}>
+      <ThumbnailButton variant="row" item={item} onOpenPreview={onOpenPreview} />
+      <span className={compactBodyClassName}>
+        <CompactNameBlock item={item} showName showRating />
+        <span className={compactDetailsClassName}>
+          <span>
+            {facts}
+            {media ? <span className="list-compact-wide-only">{` · ${media}`}</span> : null}
+          </span>
+          {date ? <span title={formatDate(item.modificationTime) || undefined}>{date}</span> : null}
+        </span>
       </span>
-      <span className={listTableMobileMetaClassName}>
-        {[((item.ext || "").toUpperCase() || "FILE"), formatBytes(item.size)].filter(Boolean).join(" · ")}
+    </article>
+  );
+}
+
+// Compact pattern built from the chosen columns: name and rating on the left; the short values on the
+// right, file details on one line and dates on the next; tags, annotation, and URL below.
+const compactFactColumns: readonly ListColumnId[] = ["type", "size", "dimensions", "duration"];
+
+function ColumnCompactListRow({ filters, item, layout, onOpenPreview }: { filters?: ListFilters; item: EagleItem; layout: ListColumnLayout; onOpenPreview: (item: EagleItem) => void }) {
+  const chosen = (id: ListColumnId) => layout.columns.includes(id);
+  const facts = compactFactColumns.filter(chosen).map((id) => compactColumnText(id, item)).filter(Boolean).join(" · ");
+  const modified = formatDateShort(item.modificationTime);
+  const created = formatDateShort(firstDate(item, CREATED_DATE_KEYS));
+  const dates = [
+    chosen("modified") && modified ? `Modified ${modified}` : "",
+    chosen("created") && created ? `Created ${created}` : "",
+  ].filter(Boolean).join(" · ");
+  const annotation = chosen("annotation") && typeof item.annotation === "string" ? item.annotation.replace(/\s+/g, " ").trim() : "";
+  const url = chosen("url") && typeof item.url === "string" ? item.url.trim() : "";
+  const tags = chosen("tags") && itemTags(item).length > 0;
+  return (
+    <article className={`${compactRowClassName} media-row-compact-columns`}>
+      <ThumbnailButton variant="row" item={item} onOpenPreview={onOpenPreview} />
+      <span className={compactBodyClassName}>
+        <CompactNameBlock item={item} showName={layout.showName} showRating={layout.showRating} />
+        {facts || dates ? (
+          <span className={compactDetailsClassName}>
+            {facts ? <span>{facts}</span> : null}
+            {dates ? <span>{dates}</span> : null}
+          </span>
+        ) : null}
+        {tags ? <span className={compactExtraClassName}><ListTagsCell item={item} filters={filters} cellProps={{ "data-list-col": "tags" }} /></span> : null}
+        {annotation ? <span className={`${compactExtraClassName} annotation-cell ${compactTextClassName}`} title={annotation}>{annotation}</span> : null}
+        {url ? <span className={`${compactExtraClassName} [&_.url-cell]:text-[11px]`}><ListUrlCell item={item} cellProps={{ "data-list-col": "url" }} /></span> : null}
       </span>
-      <RatingStars item={item} className={listTableRatingClassName} />
+    </article>
+  );
+}
+
+function CompactNameBlock({ item, showName, showRating }: { item: EagleItem; showName: boolean; showRating: boolean }) {
+  return (
+    <span className="row-name-cell col-start-1 row-start-1 grid min-w-0 justify-items-start gap-1">
+      {showName ? (
+        <span className={compactNameClassName} title={originalFileName(item)}>
+          {item.name || item.id || ""}
+        </span>
+      ) : null}
+      {showRating ? <RatingStars item={item} className={listTableRatingClassName} /> : null}
     </span>
   );
 }
 
-function ListTableCell({ className = "", title = "", value }: { className?: string; title?: string; value: string }) {
+function compactColumnText(id: ListColumnId, item: EagleItem) {
+  switch (id) {
+    case "type":
+      return mediaTypeLabel(item);
+    case "size":
+      return formatBytes(item.size);
+    case "dimensions":
+      return formatDimensions(item);
+    case "duration":
+      return isTimedMedia(item) ? formatDuration(item.duration) : "";
+    default:
+      return "";
+  }
+}
+
+function ListColumnCell({ filters, id, item }: { filters?: ListFilters; id: ListColumnId; item: EagleItem }) {
+  const cellProps = { "data-list-col": id };
+  switch (id) {
+    case "tags":
+      return <ListTagsCell item={item} filters={filters} cellProps={cellProps} />;
+    case "type":
+      return <ExtensionPill item={item} filters={filters} cellProps={cellProps} />;
+    case "size":
+      return <ListTableCell value={formatBytes(item.size) || "-"} cellProps={cellProps} />;
+    case "dimensions":
+      return <ListTableCell value={formatDimensions(item) || "-"} className="dimensions-cell" cellProps={cellProps} />;
+    case "duration":
+      return <ListTableCell value={formatDurationCell(item) || "-"} className="duration-cell" cellProps={cellProps} />;
+    case "modified":
+      return <ListTableCell value={formatDateShort(item.modificationTime) || "-"} className="modified-cell" title={formatDate(item.modificationTime) || ""} cellProps={cellProps} />;
+    case "created": {
+      const value = firstDate(item, CREATED_DATE_KEYS);
+      return <ListTableCell value={formatDateShort(value) || "-"} className="created-cell" title={formatDate(value) || ""} cellProps={cellProps} />;
+    }
+    case "annotation": {
+      const text = typeof item.annotation === "string" ? item.annotation.replace(/\s+/g, " ").trim() : "";
+      return <ListTableCell value={text || "-"} className={`annotation-cell ${listTextCellClassName}`} title={text} cellProps={cellProps} />;
+    }
+    case "url":
+      return <ListUrlCell item={item} cellProps={cellProps} />;
+    default:
+      return null;
+  }
+}
+
+type ListCellProps = { "data-list-col": ListColumnId };
+const CREATED_DATE_KEYS = ["btime", "createdAt", "createdTime", "creationTime", "birthTime"] as const;
+
+function firstDate(item: EagleItem, keys: readonly string[]) {
+  for (const key of keys) {
+    const value = Number(item[key]);
+    if (Number.isFinite(value) && value > 0) return value;
+  }
+  return undefined;
+}
+
+function ListUrlCell({ cellProps, item }: { cellProps: ListCellProps; item: EagleItem }) {
+  const url = typeof item.url === "string" ? item.url.trim() : "";
+  if (!url) return <ListTableCell value="-" className={`url-cell ${listTextCellClassName}`} cellProps={cellProps} />;
+  const linkable = /^https?:\/\//i.test(url);
   return (
-    <span className={className} title={title || undefined}>
+    <span className={`url-cell ${listTextCellClassName}`} title={url} {...cellProps}>
+      {linkable ? <a className={listUrlLinkClassName} href={url} target="_blank" rel="noopener noreferrer">{url.replace(/^https?:\/\/(www\.)?/i, "")}</a> : url}
+    </span>
+  );
+}
+
+function ListTableNameCell({ item, layout }: { item: EagleItem; layout: ListColumnLayout }) {
+  return (
+    <span className={rowNameCellClassName}>
+      {layout.showName ? (
+        <span className={rowFileNameClassName} title={originalFileName(item)}>
+          {item.name || item.id || ""}
+        </span>
+      ) : null}
+      {layout.showRating ? <RatingStars item={item} className={listTableRatingClassName} /> : null}
+    </span>
+  );
+}
+
+function ListTableCell({ cellProps, className = "", title = "", value }: { cellProps: ListCellProps; className?: string; title?: string; value: string }) {
+  return (
+    <span className={className || undefined} title={title || undefined} {...cellProps}>
       {value}
     </span>
   );
 }
 
 // Long tag lists stop after a few pills; the "+N" button expands the row in place.
-function ListTagsCell({ filters, item }: { filters?: ListFilters; item: EagleItem }) {
+function ListTagsCell({ cellProps, filters, item }: { cellProps: ListCellProps; filters?: ListFilters; item: EagleItem }) {
   const [expanded, setExpanded] = useState(false);
   const tags = itemTags(item);
-  if (!tags.length) return <span className={`${listTagsCellClassName} text-muted-foreground`}>-</span>;
+  if (!tags.length) return <span className={`${listTagsCellClassName} text-muted-foreground`} {...cellProps}>-</span>;
   const visibleTags = expanded ? tags : tags.slice(0, LIST_VISIBLE_TAGS);
   const hiddenCount = tags.length - LIST_VISIBLE_TAGS;
   const itemLabel = item.name || item.id || "this item";
   return (
-    <span className={listTagsCellClassName}>
+    <span className={listTagsCellClassName} {...cellProps}>
       {visibleTags.map((tag) => {
         if (!filters) {
           return <span key={tag} className={staticTagPillClassName}><span className="truncate">{tag}</span></span>;
@@ -352,7 +537,7 @@ function ListTagsCell({ filters, item }: { filters?: ListFilters; item: EagleIte
   );
 }
 
-function ExtensionPill({ filters, item }: { filters?: ListFilters; item: EagleItem }) {
+function ExtensionPill({ cellProps, filters, item }: { cellProps: ListCellProps; filters?: ListFilters; item: EagleItem }) {
   const ext = normalizeExt(item.ext || "file");
   const label = String(ext).toUpperCase();
   if (filters && item.ext) {
@@ -362,6 +547,7 @@ function ExtensionPill({ filters, item }: { filters?: ListFilters; item: EagleIt
         type="button"
         className={`${extPillClassName} cursor-pointer transition-colors hover:border-foreground/30 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground`}
         data-ext={ext}
+        {...cellProps}
         aria-pressed={active}
         title={active ? `Remove type filter: ${label}` : `Filter by type: ${label}`}
         onClick={() => filters.onToggleExt(ext)}
@@ -371,7 +557,7 @@ function ExtensionPill({ filters, item }: { filters?: ListFilters; item: EagleIt
     );
   }
   return (
-    <Badge variant="outline" className={extPillClassName} data-ext={ext}>
+    <Badge variant="outline" className={extPillClassName} data-ext={ext} {...cellProps}>
       {label}
     </Badge>
   );

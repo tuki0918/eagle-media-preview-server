@@ -281,52 +281,20 @@
   }
 }
 
-/* The list follows the results area, not the viewport (the sidebar takes width too), and drops
-   its least useful columns before they would be clipped. Phones keep their own two-column layout. */
+/* The list's compact rows adapt to the results area, not the viewport (the sidebar takes width too). */
 .media-list {
   container-type: inline-size;
 }
 
-@media (min-width: 541px) {
-  @container (max-width: 959px) {
-    .media-list .media-row {
-      grid-template-columns: 52px minmax(120px, 1.6fr) minmax(120px, 2fr) 80px 80px 104px;
-    }
-
-    .media-list .list-col-wide {
-      display: none;
-    }
+@container (max-width: 479px) {
+  .media-list .list-compact-wide-only {
+    display: none;
   }
+}
 
-  @container (max-width: 719px) {
-    .media-list .media-row {
-      grid-template-columns: 52px minmax(120px, 1.6fr) minmax(120px, 2fr) 80px;
-    }
-
-    .media-list .list-col-medium {
-      display: none;
-    }
-  }
-
-  @container (max-width: 479px) {
-    .media-list .media-row {
-      grid-template-columns: 52px minmax(0, 1fr) 80px;
-    }
-
-    .media-list .list-col-narrow {
-      display: none;
-    }
-  }
-
-  @container (max-width: 339px) {
-    .media-list .media-row {
-      grid-template-columns: 52px minmax(0, 1fr);
-    }
-
-    .media-list .list-col-tiny {
-      display: none;
-    }
-  }
+/* List table rows share one grid template set by ResultList (see listColumns.ts). */
+.media-list .media-row:not(.media-row-compact) {
+  grid-template-columns: var(--list-cols);
 }
 
 /* Grid cards and tiles rise in from below; --enter-delay sets the order (see ResultList). */

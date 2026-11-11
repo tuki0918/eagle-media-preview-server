@@ -225,9 +225,9 @@ export function AdvancedFilters({
   );
 }
 
-const filterOptionClassName =
+export const filterOptionClassName =
   "group/option flex cursor-default items-center gap-2.5 rounded-lg px-2 py-2 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground";
-const filterIndicatorClassName =
+export const filterIndicatorClassName =
   "flex size-4 shrink-0 items-center justify-center border border-input bg-background text-primary-foreground transition-colors group-data-[state=checked]/option:border-primary group-data-[state=checked]/option:bg-primary";
 
 // Shared by the type and rating filters: a select-styled trigger opening a menu of options.

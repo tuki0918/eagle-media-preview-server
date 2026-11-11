@@ -111,8 +111,8 @@ describe("viewer format helpers", () => {
     expect(mediaTypeLabel({})).toBe("FILE");
     expect(isTimedMedia({ ext: "flac" })).toBe(true);
     expect(isTimedMedia({ ext: "gif" })).toBe(false);
-    expect(formatItemDate({ modifiedAt: "2024-01-02T03:04:00Z" }, ["modifiedAt"])).toMatch(/^2024\/01\/02/);
-    expect(formatDateShort(Date.UTC(2024, 0, 2))).toMatch(/^2024\/01\/02$/);
+    expect(formatItemDate({ modifiedAt: "2024-01-02T12:04:00" }, ["modifiedAt"])).toMatch(/^2024\/01\/02/);
+    expect(formatDateShort(new Date(2024, 0, 2, 12).getTime())).toMatch(/^2024\/01\/02$/);
     expect(clamp(12, 1, 10)).toBe(10);
     expect(clamp(-1, 1, 10)).toBe(1);
   });

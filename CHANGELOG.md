@@ -7,6 +7,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Added
+
+- List view: a **Columns** button to show or hide columns, and a compact layout for narrow screens.
+
 ### Changed
 
 - Advanced Sort now scans the library in the background as soon as the server starts (and again when Eagle opens another library), instead of on the first sort. The viewer stays usable meanwhile: only the Sort menu is disabled, showing "Preparing sort…" with the progress, and it turns on by itself once the scan is done. The plugin panel shows the scan as a progress bar under Server Status. The index is kept while the server runs.

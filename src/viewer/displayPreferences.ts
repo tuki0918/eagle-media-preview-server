@@ -1,5 +1,6 @@
 import { DEFAULT_PAGE_SIZE, DEFAULT_VIEW_MODE, FOLDER_SECTIONS_OPEN_STORAGE_KEY, SIDEBAR_OPEN_STORAGE_KEY, TAG_PICKER_SECTIONS_COLLAPSED_STORAGE_KEY, TAG_SECTIONS_COLLAPSED_STORAGE_KEY } from "./constants";
 import { changePageSize, selectViewMode } from "./shellActions";
+import { LIST_COLUMNS_STORAGE_KEY, initializeListColumns } from "./listColumns";
 import { setItemActionsVisible } from "./itemActionsVisibilityState";
 import { setSubfoldersVisible } from "./subfolderVisibilityState";
 import { setThemePreference, type ThemePreference } from "./themeState";
@@ -56,12 +57,13 @@ export function resetDisplaySettings(preferences: DisplayPreferences = DEFAULT_D
   for (const key of [
     SIDEBAR_WIDTH_STORAGE_KEY, SIDEBAR_OPEN_STORAGE_KEY, FOLDER_SECTIONS_OPEN_STORAGE_KEY,
     TAG_SECTIONS_COLLAPSED_STORAGE_KEY, TAG_PICKER_SECTIONS_COLLAPSED_STORAGE_KEY, "eagleSubfoldersCollapsed", "eagleShowSubfolders",
-    "eagleSlideshowSettings", "eagleShowItemActions", "eagle-media-preview-theme", "eagleViewerZoomLevel", "eagleViewMode",
+    "eagleSlideshowSettings", "eagleShowItemActions", "eagle-media-preview-theme", "eagleViewerZoomLevel", "eagleViewMode", LIST_COLUMNS_STORAGE_KEY,
   ]) {
     try { window.localStorage.removeItem(key); } catch { /* Storage is optional. */ }
   }
   setThemePreference(preferences.theme);
   setZoomLevel(DEFAULT_ZOOM_LEVEL);
+  initializeListColumns();
   setSubfoldersVisible(preferences.showSubfolders);
   setItemActionsVisible(preferences.showItemActions);
   writeSavedViewerMode(DEFAULT_VIEW_MODE);

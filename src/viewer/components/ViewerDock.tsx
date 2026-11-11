@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 import { LayoutDashboard, LayoutGrid, List, ZoomIn, type LucideIcon } from "lucide-react";
 import { getResultsStatusState, subscribeResultsStatusState } from "../resultsStatusState";
 import { selectViewMode } from "../shellActions";
+import { ListColumnsMenu } from "./ListColumnsMenu";
 import { SlideshowLauncher } from "./Slideshow";
 import { dockSurfaceClassName } from "./viewerDockStyles";
 import type { ViewerMode } from "../types";
@@ -15,7 +16,7 @@ export function ViewerDock({ viewMode }: { viewMode?: ViewerMode }) {
     <>
       <SlideshowLauncher />
       <div className="viewer-dock pointer-events-none fixed bottom-[calc(16px+env(safe-area-inset-bottom))] right-[calc(16px+env(safe-area-inset-right))] z-20 flex items-center gap-2 min-[720px]:bottom-6 min-[720px]:right-6">
-        {displayViewMode === "list" ? null : <ZoomControl />}
+        {displayViewMode === "list" ? <ListColumnsMenu /> : <ZoomControl />}
         <div className={dockSurfaceClassName} role="radiogroup" aria-label="View mode">
           <ViewModeButton id="tilesViewButton" mode="tiles" label="Tiles" icon={LayoutDashboard} active={displayViewMode === "tiles"} />
           <ViewModeButton id="gridViewButton" mode="grid" label="Grid" icon={LayoutGrid} active={displayViewMode === "grid"} />

@@ -9,7 +9,7 @@ describe("viewer preview detail rows", () => {
       size: 1536,
       width: 800,
       height: 600,
-      modifiedAt: "2024-01-02T03:04:00Z",
+      modifiedAt: "2024-01-02T12:04:00", // local time, so the shown date is the same in every time zone
     }).map((row) => [row.label, row.value])).toEqual([
       ["Type", "JPG"],
       ["Size", "1.5 KB"],
