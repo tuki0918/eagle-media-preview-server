@@ -55,14 +55,6 @@ export function PreviewDetailsPanel({ canEditMetadata = false, detailRows, folde
   return (
     <section className={previewDetailsSectionClassName}>
       <PreviewItemText item={item} />
-      <section className="preview-detail-group grid gap-2.5" aria-label="Information">
-        <h3 className={previewSectionHeadingClassName}>Information</h3>
-        <div className={previewDetailTableClassName}>
-          {detailRows.map((row) => (
-            <PreviewDetail key={row.label} {...row} />
-          ))}
-        </div>
-      </section>
       {canEditMetadata ? (
         <PreviewMetadataEditor
           key={String(item.id || item.name || "")}
@@ -75,6 +67,14 @@ export function PreviewDetailsPanel({ canEditMetadata = false, detailRows, folde
       ) : (
         <PreviewMetadataSummary folders={folders} item={item} />
       )}
+      <section className="preview-detail-group grid gap-2.5 pb-4" aria-label="Information">
+        <h3 className={previewSectionHeadingClassName}>Information</h3>
+        <div className={previewDetailTableClassName}>
+          {detailRows.map((row) => (
+            <PreviewDetail key={row.label} {...row} />
+          ))}
+        </div>
+      </section>
     </section>
   );
 }
@@ -347,7 +347,7 @@ function PreviewMetadataSummary({ folders, item }: { folders: readonly EagleFold
   const tags = tagValues(item.tags);
   const categories = categoryValues(item.folders).map((value) => folderLabel(value, folders));
   return (
-    <section className="preview-metadata-summary grid gap-6 pb-4">
+    <section className="preview-metadata-summary grid gap-6">
       <MetadataReadOnlyRow icon={<TagIcon aria-hidden="true" />} label="Tags" values={tags} />
       <MetadataReadOnlyRow icon={<FolderIcon aria-hidden="true" />} label="Folders" values={categories} />
     </section>
@@ -428,7 +428,7 @@ function PreviewMetadataEditor({
   };
 
   return (
-    <section className="preview-metadata-summary grid gap-6 pb-4" aria-busy={saving}>
+    <section className="preview-metadata-summary grid gap-6" aria-busy={saving}>
       <EditableMetadataRow
         icon={<TagIcon aria-hidden="true" />}
         label="Tags"
