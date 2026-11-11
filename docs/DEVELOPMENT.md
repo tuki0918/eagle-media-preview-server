@@ -3,6 +3,7 @@
 ## Requirements
 
 - Eagle 4.0 Build 23 or later
+- Eagle's **AI Models** plugin, which provides the AI SDK, for AI Chat only (optional: it is not a `manifest.json` dependency, since Eagle won't open a plugin whose dependency is missing)
 - Node.js 20 or later
 
 ## Development

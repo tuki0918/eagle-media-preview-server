@@ -2,8 +2,9 @@ const { appendFile, mkdir, readFile, rm, writeFile } = require("fs/promises");
 const { tmpdir } = require("os");
 const { join } = require("path");
 
-// "browse" holds only failed requests; "system" is what the admin or the server itself did.
-type AccessLogType = "auth" | "browse" | "edit" | "system" | "view";
+// "browse" holds only failed requests; "system" is what the admin or the server itself did; "ai" is
+// one reply of the AI chat (who asked and what the reply used, never what was said).
+type AccessLogType = "ai" | "auth" | "browse" | "edit" | "system" | "view";
 type AccessLogRange = "1h" | "24h" | "7d";
 
 interface AccessLogEntry {
@@ -18,14 +19,20 @@ interface AccessLogEntry {
   /** The library open in Eagle at the time, as the opaque id the viewer also uses. */
   libraryId?: string;
   method?: string;
+  /** The AI model that wrote a reply, as Eagle names it ("provider::model"). */
+  model?: string;
   path?: string;
   size?: number;
   status?: number;
+  /** Tokens an AI reply used, when the provider reports them. */
+  tokens?: number;
   type: AccessLogType;
   user?: string;
 }
 
 interface AccessLogBucket {
+  ai: number;
+  aiFailures: number;
   auth: number;
   authFailures: number;
   browse: number;
@@ -40,6 +47,7 @@ interface AccessLogBucket {
 
 // One row per address and signed-in user, so a shared address still shows who did what.
 interface AccessLogClient {
+  aiChats: number;
   authFailures: number;
   editFailures: number;
   edits: number;
@@ -58,7 +66,7 @@ interface AccessLogOptions {
   now?: () => number;
 }
 
-const ACCESS_LOG_TYPES: AccessLogType[] = ["auth", "browse", "edit", "system", "view"];
+const ACCESS_LOG_TYPES: AccessLogType[] = ["ai", "auth", "browse", "edit", "system", "view"];
 // Viewers poll /api/health every few seconds, so anyone seen this recently is still connected.
 const ACTIVE_CLIENT_WINDOW_MS = 2 * 60 * 1000;
 interface AccessLogFilter {
@@ -91,7 +99,7 @@ const RANGE_BUCKETS: Record<AccessLogRange, { bucketMs: number; count: number }>
 // investigation, but is not meant to be kept, so a reboot (or the age limit) may drop it.
 function entryMatchesSearch(entry: AccessLogEntry, term: string, eventKeys: Set<string>, fieldKeys: Set<string>) {
   if (eventKeys.has(entry.event) || entry.fields?.some((field) => fieldKeys.has(field))) return true;
-  const texts = [entry.ip, entry.user, entry.event, entry.itemId, entry.path, entry.ext, entry.status, ...(entry.fields || [])];
+  const texts = [entry.ip, entry.user, entry.event, entry.itemId, entry.path, entry.ext, entry.model, entry.status, ...(entry.fields || [])];
   return texts.some((text) => text !== undefined && String(text).toLowerCase().includes(term));
 }
 
@@ -286,6 +294,8 @@ function createAccessLog({
       const buckets: AccessLogBucket[] = Array.from({ length: count }, (_, index) => ({
         start: firstStart + index * bucketMs,
         end: firstStart + (index + 1) * bucketMs,
+        ai: 0,
+        aiFailures: 0,
         auth: 0,
         authFailures: 0,
         browse: 0,
@@ -300,12 +310,12 @@ function createAccessLog({
         const key = clientKey(ip, user);
         let client = clients.get(key);
         if (!client) {
-          client = { authFailures: 0, editFailures: 0, edits: 0, ip, lastSeen: 0, user, views: 0 };
+          client = { aiChats: 0, authFailures: 0, editFailures: 0, edits: 0, ip, lastSeen: 0, user, views: 0 };
           clients.set(key, client);
         }
         return client;
       };
-      const totals = { auth: 0, authFailures: 0, browse: 0, edit: 0, editFailures: 0, system: 0, view: 0, viewFailures: 0 };
+      const totals = { ai: 0, aiFailures: 0, auth: 0, authFailures: 0, browse: 0, edit: 0, editFailures: 0, system: 0, view: 0, viewFailures: 0 };
       for (const entry of entries) {
         // Devices, tiles and chart all count the selected range only.
         if (entry.at < firstStart) continue;
@@ -324,10 +334,12 @@ function createAccessLog({
         const failed = (entry.status ?? 0) >= 400;
         const failedView = entry.type === "view" && failed;
         const failedEdit = entry.type === "edit" && failed;
+        const failedAi = entry.type === "ai" && failed;
         client.lastSeen = Math.max(client.lastSeen, entry.at);
         if (entry.type === "view" && !failedView) client.views += 1;
         if (entry.type === "edit" && !failedEdit) client.edits += 1;
         if (failedEdit) client.editFailures += 1;
+        if (entry.type === "ai" && !failedAi) client.aiChats += 1;
         if (isAuthFailure(entry)) client.authFailures += 1;
         if (failedView) {
           bucket.viewFailures += 1;
@@ -337,6 +349,12 @@ function createAccessLog({
         if (failedEdit) {
           bucket.editFailures += 1;
           totals.editFailures += 1;
+          continue;
+        }
+        // A reply that failed (or was stopped) is listed, but isn't counted as a chat.
+        if (failedAi) {
+          bucket.aiFailures += 1;
+          totals.aiFailures += 1;
           continue;
         }
         bucket[entry.type] += 1;
@@ -424,6 +442,8 @@ function compactEntry(entry: AccessLogEntry): AccessLogEntry {
   if (entry.ext) output.ext = String(entry.ext).slice(0, 16);
   if (typeof entry.size === "number" && Number.isFinite(entry.size) && entry.size >= 0) output.size = entry.size;
   if (typeof entry.status === "number") output.status = entry.status;
+  if (entry.model) output.model = String(entry.model).slice(0, 128);
+  if (typeof entry.tokens === "number" && Number.isFinite(entry.tokens) && entry.tokens > 0) output.tokens = Math.round(entry.tokens);
   return output;
 }
 
@@ -439,7 +459,7 @@ function parseEntry(line: string): AccessLogEntry | null {
 }
 
 function accessLogCsv(entries: AccessLogEntry[]) {
-  const columns: Array<keyof AccessLogEntry> = ["at", "type", "event", "ip", "user", "method", "path", "libraryId", "itemId", "fields", "ext", "size", "status"];
+  const columns: Array<keyof AccessLogEntry> = ["at", "type", "event", "ip", "user", "method", "path", "libraryId", "itemId", "fields", "ext", "size", "status", "model", "tokens"];
   const cell = (value: unknown) => {
     let text = String(value ?? "");
     // User names and paths come from clients; a leading quote keeps a spreadsheet from running them as formulas.

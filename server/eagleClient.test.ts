@@ -107,6 +107,23 @@ test("listItems uses V2 item/get with limited fields and offset", async () => {
   });
 });
 
+test("listItems can ask for more fields, such as the colors the AI chat reads", async () => {
+  const calls: RequestCall[] = [];
+  const client = createEagleClient({
+    baseUrl: "http://eagle.local:41595",
+    fetchImpl: async (url: string, init: { method?: string; body: string }) => {
+      calls.push({ url, init });
+      return jsonResponse({ status: "success", data: { data: [], total: 0, offset: 0, limit: 30 } });
+    },
+  });
+  await client.listItems({ extraFields: ["palettes", "bad field!"] });
+  await client.listItems({});
+  const [withColors, plain] = calls.map((call) => JSON.parse(call.init.body).fields as string[]);
+  assert.equal(withColors.at(-1), "palettes");
+  assert.equal(withColors.length, plain.length + 1);
+  assert.equal(plain.includes("palettes"), false);
+});
+
 test("listItems omits rating when the filter is not specified", async () => {
   const calls: RequestCall[] = [];
   const client = createEagleClient({

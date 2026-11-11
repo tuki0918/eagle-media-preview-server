@@ -16,6 +16,7 @@ function urlState(overrides: Partial<ViewerUrlState> = {}): ViewerUrlState {
     folderId: "",
     smartFolderId: "",
     section: "items",
+    aiChatId: "",
     ext: "",
     rating: "",
     sort: "",
@@ -38,6 +39,7 @@ describe("viewer URL state", () => {
       folderId: "f1",
       smartFolderId: "s1",
       section: "items",
+      aiChatId: "",
       ext: "jpg",
       rating: "4",
       sort: "",
@@ -91,6 +93,14 @@ describe("viewer URL state", () => {
   test("computes current page and deduplicates normalized tags", () => {
     expect(currentPage({ offset: 60, limit: 30 })).toBe(3);
     expect(uniqueTags([" alpha ", "alpha", "", null, "beta"])).toEqual(["alpha", "beta"]);
+  });
+
+  test("keeps the AI chat and its chat id in the URL, and nothing else", () => {
+    expect(buildViewerSearch(urlState({ section: "ai", aiChatId: "c1", query: "cat", tags: ["a"], previewItemId: "i1" }))).toBe("section=ai&chat=c1");
+    expect(buildViewerSearch(urlState({ section: "ai" }))).toBe("section=ai");
+    expect(parseViewerUrlState("?section=ai&chat=c1")).toMatchObject({ section: "ai", aiChatId: "c1" });
+    // A chat id means nothing outside the AI chat.
+    expect(parseViewerUrlState("?chat=c1")).toMatchObject({ section: "items", aiChatId: "" });
   });
 
   test("keeps only the section in the URL while the tag list is open", () => {

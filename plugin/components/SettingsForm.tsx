@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import type { AuthUser, LibraryCandidate, LibraryList, PluginSettings, SettingsTab, SharedLibrary, UserRole } from "../types";
+import type { AiStatus, AuthUser, LibraryCandidate, LibraryList, PluginSettings, SettingsTab, SharedLibrary, UserRole } from "../types";
 import { ChevronIcon, EyeIcon, EyeOffIcon, FolderOpenIcon, MinusIcon, PlusIcon, RefreshIcon, SettingsIcon, UsersIcon } from "./Icons";
 
 interface SettingsFormProps {
+  /** Whether Eagle has an AI model to use; null until Eagle has been asked. */
+  aiStatus?: AiStatus | null;
   authEnabled: boolean;
   authUsers: AuthUser[];
   busy: boolean;
@@ -19,6 +21,12 @@ interface SettingsFormProps {
   settingsTab: SettingsTab;
   userPasswords: Record<string, string>;
   onAddAuthUser: () => void;
+  onAiChatEnabledChange?: (checked: boolean) => void;
+  onAiChatInstructionsChange?: (value: string) => void;
+  /** Opens the AI Models section of Eagle's preferences. */
+  onOpenAiSettings?: () => void;
+  /** Reads Eagle's AI settings again, after the admin changed them. */
+  onReloadAiStatus?: () => void;
   /** Opens Eagle's file picker for a TLS file; omitted when the dialog API is unavailable. */
   onChooseHttpsFile?: (field: HttpsFileField) => void;
   onCustomDomainChange: (value: string) => void;
@@ -77,6 +85,7 @@ const libraryGridClassName = "grid grid-cols-[minmax(0,1fr)_96px_52px] items-cen
 const primaryButtonClassName = "border border-[#171717] bg-[#171717] text-white hover:bg-[#2b2b2b] disabled:cursor-not-allowed disabled:opacity-35";
 
 export function SettingsForm({
+  aiStatus = null,
   authEnabled,
   authUsers,
   busy,
@@ -93,6 +102,10 @@ export function SettingsForm({
   settingsTab,
   userPasswords,
   onAddAuthUser,
+  onAiChatEnabledChange,
+  onAiChatInstructionsChange,
+  onOpenAiSettings,
+  onReloadAiStatus,
   onChooseHttpsFile,
   onCustomDomainChange,
   onHttpsCertPathChange,
@@ -113,6 +126,8 @@ export function SettingsForm({
   onUpdateAuthUser,
   onUserPasswordDraftChange,
 }: SettingsFormProps) {
+  const aiChatEnabled = Boolean(settings.aiChatEnabled);
+  const aiAvailable = Boolean(aiStatus?.available);
   const libraryProtectionEnabled = Boolean(settings.libraryProtectionEnabled);
   // Checkboxes reflect the unsaved draft; the running server keeps the list it started with.
   const sharedLibraryPaths = new Set((settings.sharedLibraries || []).map((library) => library.path));
@@ -142,11 +157,12 @@ export function SettingsForm({
         <ChevronIcon className={`h-[14px] w-[14px] text-[#555c66] transition-transform ${settingsExpanded ? "rotate-180" : ""}`} />
       </button>
       <div id="settingsPanel" className="mt-4 grid gap-2.5" hidden={!settingsExpanded}>
-        <div className="grid grid-cols-4 rounded-full bg-[#f1f1f3] p-1" role="tablist" aria-label="Settings sections">
+        <div className="grid grid-cols-5 rounded-full bg-[#f1f1f3] p-1" role="tablist" aria-label="Settings sections">
           <SettingsTabButton active={settingsTab === "general"} controls="generalSettingsPanel" id="generalSettingsTab" onClick={() => onSettingsTabChange("general")}>General</SettingsTabButton>
           <SettingsTabButton active={settingsTab === "access"} controls="accessSettingsPanel" id="accessSettingsTab" onClick={() => onSettingsTabChange("access")}>Access</SettingsTabButton>
           <SettingsTabButton active={settingsTab === "libraries"} controls="librariesSettingsPanel" id="librariesSettingsTab" onClick={() => onSettingsTabChange("libraries")}>Libraries</SettingsTabButton>
           <SettingsTabButton active={settingsTab === "security"} controls="securitySettingsPanel" id="securitySettingsTab" onClick={() => onSettingsTabChange("security")}>Security</SettingsTabButton>
+          <SettingsTabButton active={settingsTab === "ai"} controls="aiSettingsPanel" id="aiSettingsTab" onClick={() => onSettingsTabChange("ai")}>AI</SettingsTabButton>
         </div>
 
         <div id="generalSettingsPanel" role="tabpanel" aria-labelledby="generalSettingsTab" hidden={settingsTab !== "general"}>
@@ -410,6 +426,88 @@ export function SettingsForm({
               value={settings.httpsKeyPath || ""}
               onChange={onHttpsKeyPathChange}
               onChoose={onChooseHttpsFile ? () => onChooseHttpsFile("key") : undefined}
+            />
+          </SettingRow>
+        </div>
+
+        <div id="aiSettingsPanel" role="tabpanel" aria-labelledby="aiSettingsTab" hidden={settingsTab !== "ai"}>
+          <SettingRow
+            label="AI Chat"
+            help="Adds an AI chat to the viewer for signed-in users. It can search the library open in Eagle and look at an item you ask about. Each user has their own chats. Replies are written by the AI model below, so they use your AI account."
+          >
+            {/* Turning it off always works; turning it on needs a model in Eagle. */}
+            <label className="inline-flex items-center gap-2 text-[12px] text-[#171717] has-[:disabled]:opacity-60">
+              <input
+                type="checkbox"
+                aria-label="Show AI chat in the viewer"
+                disabled={settingsInputDisabled || (!aiAvailable && !aiChatEnabled)}
+                checked={aiChatEnabled}
+                onChange={(event) => onAiChatEnabledChange?.(event.currentTarget.checked)}
+              />
+              <span>Show AI chat in the viewer</span>
+            </label>
+            {aiChatEnabled && !authEnabled ? (
+              <p className="m-0 rounded-lg border border-[#f5dfa8] bg-[#fffaeb] px-2.5 py-1.5 text-[11px] leading-snug text-[#8a5a00]" role="note">
+                AI chat is shown only while password protection is on.
+              </p>
+            ) : null}
+          </SettingRow>
+          <SettingRow label="Model" help="Set in Eagle under Preferences → AI Models. The chat model writes replies; the vision model looks at images.">
+            <div className="flex items-center gap-2">
+              <div className="grid min-w-0 flex-1 gap-0.5 text-[12px] text-[#171717]">
+                {aiAvailable ? (
+                  <>
+                    <span className="inline-flex min-w-0 items-center gap-1.5">
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#16803a]" aria-hidden="true" />
+                      <span className="truncate" title={aiStatus?.chatModel}>Chat: {aiStatus?.chatModel}</span>
+                    </span>
+                    <span className="truncate pl-3 text-[11px] text-[#5f6670]" title={aiStatus?.imageModel || undefined}>
+                      Vision: {aiStatus?.imageModel || "not set (the chat model is used)"}
+                    </span>
+                  </>
+                ) : (
+                  <span className="inline-flex min-w-0 items-center gap-1.5 text-[#5f6670]">
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#a3a7ae]" aria-hidden="true" />
+                    <span>
+                      {aiStatus === null
+                        ? "Checking…"
+                        : aiStatus.reason === "no_model"
+                          ? "No default chat model is set in Eagle."
+                          : "Eagle's AI models aren't available. Install the AI Models plugin from Eagle's Plugin Center (Eagle 4.0 Build 20 or later)."}
+                    </span>
+                  </span>
+                )}
+              </div>
+              {onOpenAiSettings && aiStatus?.reason !== "not_installed" ? (
+                <button className={`inline-flex h-8 shrink-0 items-center rounded-lg px-2.5 text-[11.5px] font-medium ${authActionButtonClassName}`} type="button" disabled={busy} onClick={onOpenAiSettings}>
+                  Open AI settings
+                </button>
+              ) : null}
+              {onReloadAiStatus ? (
+                <button className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${authActionButtonClassName}`} type="button" disabled={busy} aria-label="Check AI models again" title="Check AI models again" onClick={onReloadAiStatus}>
+                  <RefreshIcon className="h-[13px] w-[13px]" />
+                </button>
+              ) : null}
+            </div>
+            {aiAvailable && /embed/i.test(aiStatus?.chatModel || "") ? (
+              <p className="m-0 rounded-lg border border-[#f5dfa8] bg-[#fffaeb] px-2.5 py-1.5 text-[11px] leading-snug text-[#8a5a00]" role="note">
+                The chat model looks like an embedding model, which can't write replies. Choose a chat model in Eagle's AI settings.
+              </p>
+            ) : null}
+          </SettingRow>
+          <SettingRow
+            label="Notes for the AI"
+            help="Tell the AI how this library is organized, so it searches better. For example: tags are in English, artists are folders, the shooting place is in each note. Sent with every question; up to 2,000 characters."
+          >
+            <textarea
+              className={`${settingInputClassName} h-auto min-h-[76px] w-full resize-y py-2 leading-snug`}
+              aria-label="Notes for the AI"
+              disabled={settingsInputDisabled}
+              maxLength={2000}
+              placeholder="Tags are in English. Each artist has a folder. Notes say where a photo was taken."
+              rows={3}
+              value={settings.aiChatInstructions || ""}
+              onChange={(event) => onAiChatInstructionsChange?.(event.currentTarget.value)}
             />
           </SettingRow>
         </div>

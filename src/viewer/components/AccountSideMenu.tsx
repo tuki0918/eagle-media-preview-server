@@ -14,6 +14,7 @@ import {
   RotateCcwIcon,
   SunIcon,
   SettingsIcon,
+  SparklesIcon,
   TagIcon,
   TagsIcon,
   UserRoundIcon,
@@ -40,6 +41,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getAiChatState, subscribeAiChatState, type AiChatSummary } from "../aiChatState";
 import { FOLDER_SECTIONS_OPEN_STORAGE_KEY, UNCATEGORIZED_FOLDER_ID, UNTAGGED_FOLDER_ID } from "../constants";
 import { getEagleStatus, subscribeEagleStatus, type EagleStatus } from "../eagleStatusState";
 import { displayFolderCount } from "../format";
@@ -48,7 +50,7 @@ import { getLibraryFooterName, subscribeLibraryFooterName } from "../libraryFoot
 import { getLoginConnectState, subscribeLoginConnectState } from "../loginConnectState";
 import { getSearchControlsState, subscribeSearchControlsState } from "../searchControlsState";
 import { PAGE_SIZE_OPTIONS } from "../shellConfig";
-import { changeFolder, changePageSize, changeSmartFolder, openAllItems, openTags, submitLogout } from "../shellActions";
+import { changeFolder, changePageSize, changeSmartFolder, openAiChat, openAllItems, openTags, submitLogout } from "../shellActions";
 import { getItemActionsVisible, setItemActionsVisible } from "../itemActionsVisibilityState";
 import { getSubfoldersVisible, setSubfoldersVisible } from "../subfolderVisibilityState";
 import { getThemeState, setThemePreference, type ThemePreference } from "../themeState";
@@ -76,6 +78,8 @@ export function AccountSideMenu() {
   const loginState = useSyncExternalStore(subscribeLoginConnectState, getLoginConnectState, getLoginConnectState);
   const eagleStatus = useSyncExternalStore(subscribeEagleStatus, getEagleStatus, getEagleStatus);
   const searchState = useSyncExternalStore(subscribeSearchControlsState, getSearchControlsState, getSearchControlsState);
+  const aiChat = useSyncExternalStore(subscribeAiChatState, getAiChatState, getAiChatState);
+  const showingAi = aiChat.available && searchState.section === "ai";
   const username = loginState.user?.username?.trim();
   const roleLabel = authRoleLabel(loginState.user?.role, searchState.canUpload);
   const roleDescription = authRoleDescription(loginState.user?.role, searchState.canUpload);
@@ -169,6 +173,8 @@ export function AccountSideMenu() {
         <SidebarContent className="overflow-hidden">
           <FolderNavigationScrollArea filterQuery={folderFilterQuery}>
             <FolderShortcutSideNav
+              aiAvailable={aiChat.available}
+              showingAi={showingAi}
               allFoldersTotal={searchState.allFoldersTotal}
               selectedFolderId={searchState.selectedFolderId}
               selectedSmartFolderId={searchState.selectedSmartFolderId}
@@ -177,6 +183,7 @@ export function AccountSideMenu() {
               uncategorizedTotal={searchState.uncategorizedTotal}
               untaggedTotal={searchState.untaggedTotal}
             />
+            {showingAi && !folderFilterQuery ? <AiChatsSideNav activeChatId={aiChat.chatId} chats={aiChat.chats} /> : null}
             <SmartFolderSideNav
               filterQuery={folderFilterQuery}
               filteredFolders={filteredSmartFolders}
@@ -259,7 +266,42 @@ function FolderNavigationScrollArea({ children, filterQuery }: { children: React
   );
 }
 
+// This user's chats in the connected library, listed while the AI chat is open.
+function AiChatsSideNav({ activeChatId, chats }: { activeChatId: string; chats: readonly AiChatSummary[] }) {
+  const { isMobile, setOpenMobile } = useSidebar();
+  const select = (chatId: string) => {
+    openAiChat(chatId);
+    if (isMobile) setOpenMobile(false);
+  };
+  if (!chats.length) return null;
+  return (
+    <SidebarGroup className="shrink-0 px-3 pb-2 pt-0">
+      <SidebarGroupLabel className="h-8 px-2.5 text-[11px]">Chats</SidebarGroupLabel>
+      <SidebarGroupContent>
+        <SidebarMenu className="gap-0.5" aria-label="AI chats">
+          {chats.slice(0, 30).map((chat) => (
+            <SidebarMenuItem key={chat.id}>
+              <SidebarMenuButton
+                className="h-8 min-w-0 rounded-xl px-2.5 text-[13px] font-normal data-[active=true]:bg-[var(--sidebar-active)] data-[active=true]:font-semibold data-[active=true]:text-[var(--sidebar-active-foreground)]"
+                isActive={chat.id === activeChatId}
+                type="button"
+                aria-current={chat.id === activeChatId ? "page" : undefined}
+                title={chat.title}
+                onClick={() => select(chat.id)}
+              >
+                <span className="min-w-0 truncate">{chat.title}</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ))}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  );
+}
+
 function FolderShortcutSideNav({
+  aiAvailable = false,
+  showingAi = false,
   allFoldersTotal,
   selectedFolderId,
   selectedSmartFolderId,
@@ -268,6 +310,8 @@ function FolderShortcutSideNav({
   uncategorizedTotal,
   untaggedTotal,
 }: {
+  aiAvailable?: boolean;
+  showingAi?: boolean;
   allFoldersTotal: number;
   selectedFolderId: string;
   selectedSmartFolderId: string;
@@ -288,12 +332,17 @@ function FolderShortcutSideNav({
     if (isMobile) setOpenMobile(false);
   };
 
+  const selectAi = () => {
+    openAiChat();
+    if (isMobile) setOpenMobile(false);
+  };
+
   return (
     <SidebarGroup className="shrink-0 px-3 pb-2 pt-2">
       <SidebarGroupContent>
         <SidebarMenu className="gap-1" aria-label="Folder shortcuts">
           <FolderNavItem
-            active={!showingTags && !selectedFolderId && !selectedSmartFolderId}
+            active={!showingTags && !showingAi && !selectedFolderId && !selectedSmartFolderId}
             count={allFoldersTotal}
             depth={0}
             icon="open"
@@ -328,6 +377,16 @@ function FolderShortcutSideNav({
             treeLayout={false}
             onSelect={selectTags}
           />
+          {aiAvailable ? (
+            <FolderNavItem
+              active={showingAi}
+              depth={0}
+              icon="ai"
+              label="AI Chat"
+              treeLayout={false}
+              onSelect={selectAi}
+            />
+          ) : null}
         </SidebarMenu>
       </SidebarGroupContent>
     </SidebarGroup>
@@ -544,7 +603,7 @@ function isSmartFolderGroup(folder: EagleSmartFolder) {
   return folder.icon === "grid";
 }
 
-type FolderNavIconName = "folder" | "inbox" | "open" | "smart" | "smartGroup" | "tag" | "tags";
+type FolderNavIconName = "ai" | "folder" | "inbox" | "open" | "smart" | "smartGroup" | "tag" | "tags";
 
 function FolderTreeNavItems({
   expandedIds,
@@ -1030,6 +1089,7 @@ function FolderNavItem({
 }
 
 function folderNavIcon(icon: FolderNavIconName) {
+  if (icon === "ai") return SparklesIcon;
   if (icon === "inbox") return InboxIcon;
   if (icon === "open") return FolderOpenIcon;
   if (icon === "smart") return FolderCogIcon;

@@ -1,5 +1,5 @@
 import type { SortKey, SortOrder } from "./sort";
-import type { ViewerMode } from "./types";
+import type { EagleItem, ViewerMode } from "./types";
 
 export interface ViewerShellActions {
   connect: (credentials?: { password: string; username: string }) => void;
@@ -13,6 +13,14 @@ export interface ViewerShellActions {
   smartFolderChanged: (smartFolderId: string) => void;
   tagsOpened: () => void;
   allItemsOpened: () => void;
+  /** Opens the AI chat: the given chat, or a new one. */
+  aiOpened: (chatId?: string) => void;
+  /** Starts a new AI chat with this question. */
+  aiAsked: (text: string) => void;
+  /** Starts a new AI chat about one item. */
+  aiItemAsked: (item: EagleItem) => void;
+  /** Opens the preview of an item the AI chat found. */
+  aiItemOpened: (itemId: string) => void;
   mediaTypeChanged: (mediaType: string) => void;
   mediaTypesOpened: () => void;
   ratingChanged: (rating: string) => void;
@@ -48,6 +56,10 @@ let actions: ViewerShellActions = {
   smartFolderChanged: noop,
   tagsOpened: noop,
   allItemsOpened: noop,
+  aiOpened: noop,
+  aiAsked: noop,
+  aiItemAsked: noop,
+  aiItemOpened: noop,
   mediaTypeChanged: noop,
   mediaTypesOpened: noop,
   ratingChanged: noop,
@@ -129,6 +141,22 @@ export function openTags() {
 
 export function openAllItems() {
   actions.allItemsOpened();
+}
+
+export function openAiChat(chatId = "") {
+  actions.aiOpened(chatId);
+}
+
+export function askAi(text: string) {
+  actions.aiAsked(text);
+}
+
+export function askAiAboutItem(item: EagleItem) {
+  actions.aiItemAsked(item);
+}
+
+export function openAiItem(itemId: string) {
+  actions.aiItemOpened(itemId);
 }
 
 export function changeMediaType(mediaType: string) {

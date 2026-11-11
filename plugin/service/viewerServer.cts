@@ -11,6 +11,7 @@ const { createLibraryAccessPolicy, libraryIdFor } = require("./libraryAccess.cjs
 const { createLibraryIndexManager, parseIndexSort } = require("./libraryIndex.cjs");
 const { readInternetShortcutUrl, servedMediaInfo, streamItemMedia } = require("./media.cjs");
 const { resolveDefaultPublicDir, securityHeaders, serveStatic } = require("./static.cjs");
+const { AiChatError, MAX_MESSAGE_CHARS, aiErrorMessage, aiStatus, createAiAssistant, createAiChatStore, publicItem } = require("./aiChat.cjs");
 const { MAX_UPLOAD_BYTES, UPLOAD_PATH, UPLOAD_REQUEST_TIMEOUT_MS, UPLOAD_SWEEP_INTERVAL_MS, UploadError, discardUpload, parseUploadRequest, receiveUpload, sweepUploads } = require("./upload.cjs");
 const {
   AUTH_SESSION_MAX_AGE_SECONDS,
@@ -39,7 +40,7 @@ import type { IncomingMessage, RequestListener, ServerResponse } from "http";
 import type { Server as NetServer, Socket } from "net";
 
 interface AccessLogRecorder {
-  record(entry: { event: string; ext?: string; fields?: string[]; ip: string; itemId?: string; libraryId?: string; method?: string; path?: string; size?: number; status?: number; type: "auth" | "browse" | "edit" | "view"; user?: string }): unknown;
+  record(entry: { event: string; ext?: string; fields?: string[]; ip: string; itemId?: string; libraryId?: string; method?: string; model?: string; path?: string; size?: number; status?: number; tokens?: number; type: "ai" | "auth" | "browse" | "edit" | "view"; user?: string }): unknown;
   touch(ip: string, user?: string): void;
 }
 
@@ -48,6 +49,11 @@ interface ViewerServerOptions {
   blockedAddresses?: Array<string | { address: string; addedAt?: number }>;
   /** Believe X-Forwarded-For from a proxy on this machine. Off unless the admin confirms the proxy sets it. */
   trustForwardedFor?: boolean;
+  /**
+   * The AI chat in the viewer, for signed-in users. `getAi` hands over Eagle's AI SDK
+   * (`eagle.extraModule.ai`), which exists only inside the plugin window.
+   */
+  aiChat?: { enabled?: boolean; getAi?: () => unknown; instructions?: string; store?: AiChatStore } | null;
   /** Experimental: sort item lists with an in-memory index of the open library, built on first use. */
   experimentalSort?: boolean;
   /** How long a sorted request waits for the index before answering with its progress. */
@@ -153,6 +159,7 @@ interface EagleClient {
   appInfo(): Promise<unknown>;
   folders(): Promise<unknown>;
   addItemFromPath(input: { folderId?: string; name: string; path: string; tags?: string[] }): Promise<unknown>;
+  aiSearchByText?(options: { limit?: number; query: string }): Promise<unknown[]>;
   itemById(id: string): Promise<EagleItem>;
   itemsByIds(ids: string[]): Promise<unknown[]>;
   itemExtensions(options?: { onProgress?: (extensions: ItemExtension[]) => void }): Promise<ItemExtension[]>;
@@ -197,6 +204,19 @@ interface LibraryAccessPolicy {
 }
 
 type SortIndexManager = ReturnType<typeof createLibraryIndexManager>;
+type AiChatStore = ReturnType<typeof createAiChatStore>;
+
+interface AiContext {
+  assistant: ReturnType<typeof createAiAssistant>;
+  /** Users with a reply in progress (one at a time each), and the chat it is for. */
+  busy: Map<string, string>;
+  /** Set when the server stops: a reply ended by the stop isn't saved. */
+  closed: boolean;
+  getAi: () => unknown;
+  /** The owner's notes about the library, added to what the model is told. */
+  instructions: string;
+  store: AiChatStore;
+}
 
 interface ApiContext {
   /** Present only when the experimental sort is on. */
@@ -214,6 +234,10 @@ interface ApiContext {
   getSession: () => EagleSession;
   libraryAccess: LibraryAccessPolicy;
   libraryId: (libraryPath: unknown) => string;
+  /** Null when the admin has AI chat off. */
+  ai: AiContext | null;
+  /** Writes one AI reply to the access log: who, when, and what it used, never what was said. */
+  recordAi: (entry: { fields?: string[]; itemId?: string; model?: string; status: number; tokens?: number }) => void;
 }
 
 const defaultPublicDir = resolveDefaultPublicDir();
@@ -299,6 +323,7 @@ function createViewerServer({
   sharedLibraries = null,
   libraryUserRules = [],
   trustForwardedFor = false,
+  aiChat = null,
   experimentalSort = false,
   sortIndexWaitMs = SORT_INDEX_WAIT_MS,
   uploadMaxBytes = MAX_UPLOAD_BYTES,
@@ -352,6 +377,9 @@ function createViewerServer({
   const libraryAccess: LibraryAccessPolicy = createLibraryAccessPolicy(sharedLibraries, resolvedAuthUsers.length ? libraryUserRules : []);
   const libraryId = (libraryPath: unknown) => libraryIdFor(libraryPath, resolvedSessionSecret);
   const currentSession: EagleSession = createConnectionContext({ client: eagleClient });
+  const ai: AiContext | null = aiChat?.enabled
+    ? { assistant: createAiAssistant(), busy: new Map(), closed: false, getAi: aiChat.getAi || (() => null), instructions: String(aiChat.instructions || ""), store: aiChat.store || createAiChatStore() }
+    : null;
   // With Advanced Sort on, the index is built in the background when the server starts (and after a
   // library switch) and kept while the server runs, so sorting is ready before anyone asks for it.
   const sortIndexes: SortIndexManager | null = experimentalSort ? createLibraryIndexManager({ idleMs: Infinity }) : null;
@@ -504,6 +532,10 @@ function createViewerServer({
         }
         if (!(await admitLibraryRequest(req, url, res, authenticatedUser(req, auth)))) return;
         await handleApi(req, url, res, {
+          ai,
+          recordAi: (entry) => {
+            accessLog?.record({ type: "ai", event: "ai_chat", ip: requestAddress, libraryId: logLibraryId(), method: req.method, path: url.pathname, user: authenticatedUser(req, auth)?.username || "", ...entry });
+          },
           auth,
           confirmLibraryBeforeWrite,
           getSession: () => currentSession,
@@ -590,6 +622,7 @@ function createViewerServer({
         return this.status();
       }
       state = "stopping";
+      if (ai) ai.closed = true;
       const closingServer = serverInstance;
       // close() only stops accepting; it waits for every open socket, so keep-alive connections
       // and long media streams would keep stop() pending until the browser lets go.
@@ -747,7 +780,7 @@ async function cachedItemTypes(session: { client: EagleClient; libraryInfo(): Pr
   return { complete: scan.complete, items: scan.items };
 }
 
-async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { auth, confirmLibraryBeforeWrite, getSession, libraryAccess, libraryId, sortIndexes, sortIndexCheck, sortIndexWaitMs, uploadMaxBytes }: ApiContext & { auth: AuthContext }) {
+async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { ai, recordAi, auth, confirmLibraryBeforeWrite, getSession, libraryAccess, libraryId, sortIndexes, sortIndexCheck, sortIndexWaitMs, uploadMaxBytes }: ApiContext & { auth: AuthContext }) {
   const session = getSession();
 
   if (url.pathname === "/api/connect") {
@@ -755,7 +788,7 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       sendMethodNotAllowed(res, ["POST"]);
       return;
     }
-    await handleConnect(req, res, session, libraryId, libraryAccess, authenticatedUser(req, auth), hasUploadAccess(req, auth) ? uploadMaxBytes : undefined, sortIndexes ? sortIndexCheck() : null);
+    await handleConnect(req, res, session, libraryId, libraryAccess, authenticatedUser(req, auth), hasUploadAccess(req, auth) ? uploadMaxBytes : undefined, sortIndexes ? sortIndexCheck() : null, aiChatUser(ai, req, auth) !== null);
     return;
   }
 
@@ -784,6 +817,11 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       // a failed build and follows a library switch.
       ...sortIndexField(libraryStatus === "shared" && libraryInfo?.path ? checkSortIndex(String(libraryInfo.path)) : null),
     });
+    return;
+  }
+
+  if (url.pathname.startsWith("/api/ai/")) {
+    await handleAiRoutes(req, url, res, { ai, auth, libraryId, recordAi, session });
     return;
   }
 
@@ -904,6 +942,25 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       return;
     }
     sendJson(res, 200, { item: await session.client.tagCoverItem(tag) });
+    return;
+  }
+
+  // One item by id, for opening an item the list on screen doesn't hold (one found by the AI chat).
+  const itemMatch = url.pathname.match(/^\/api\/items\/([^/]+)$/);
+  if (itemMatch) {
+    if (req.method !== "GET") {
+      sendMethodNotAllowed(res, ["GET"]);
+      return;
+    }
+    const itemId = decodeURIComponent(itemMatch[1]);
+    const raw = await session.client.itemById(itemId) as EagleItem | EagleItem[];
+    const candidates = Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : [raw];
+    const item = publicItem(candidates.find((candidate) => candidate?.id === itemId));
+    if (!item) {
+      sendJson(res, 404, { error: "Item not found" });
+      return;
+    }
+    sendJson(res, 200, { item });
     return;
   }
 
@@ -1181,6 +1238,11 @@ function logAccess(accessLog: AccessLogRecorder, req: IncomingMessage, res: Serv
   const pathname = url.pathname;
   // Login and logout write their own entries with the outcome.
   if (pathname.startsWith("/api/auth/") && pathname !== "/api/auth/status") return;
+  // A reply writes its own entry when it ends, with what it used; here it only shows the device as connected.
+  if (aiReplyResponses.has(res)) {
+    accessLog.touch(ip, user);
+    return;
+  }
   if (libraryForbiddenResponses.has(res)) {
     // Signed in, but not one of the users the open library is limited to (Connect included).
     if (!isRepeatedFailure(accessLog, `library_denied\u0000${ip}\u0000${user}\u0000${libraryId}`)) {
@@ -1343,7 +1405,7 @@ function sendLoginRateLimited(res: ServerResponse, retryAfterSeconds: number) {
 }
 
 // The Eagle API connection is fixed server-side; viewer clients can only check it, never repoint it.
-async function handleConnect(req: IncomingMessage, res: ServerResponse, session: EagleSession, libraryId: ApiContext["libraryId"], libraryAccess: LibraryAccessPolicy, user: LibraryUser | null, uploadMaxBytes?: number, checkSortIndex: ReturnType<ApiContext["sortIndexCheck"]> | null = null) {
+async function handleConnect(req: IncomingMessage, res: ServerResponse, session: EagleSession, libraryId: ApiContext["libraryId"], libraryAccess: LibraryAccessPolicy, user: LibraryUser | null, uploadMaxBytes?: number, checkSortIndex: ReturnType<ApiContext["sortIndexCheck"]> | null = null, aiChatAvailable = false) {
   await readJson(req);
   try {
     const [app, library] = await Promise.all([
@@ -1364,10 +1426,171 @@ async function handleConnect(req: IncomingMessage, res: ServerResponse, session:
       app,
       library: publicLibraryInfo(library, libraryId),
       uploadMaxBytes,
-      ...(checkSortIndex ? { features: { sort: true }, ...sortIndexField(library?.path ? checkSortIndex(String(library.path)) : null) } : {}),
+      ...(checkSortIndex || aiChatAvailable ? { features: { ...(checkSortIndex ? { sort: true } : {}), ...(aiChatAvailable ? { ai: true } : {}) } } : {}),
+      ...(checkSortIndex ? sortIndexField(library?.path ? checkSortIndex(String(library.path)) : null) : {}),
     });
   } catch (error) {
     sendJson(res, 502, { error: `Unable to connect to Eagle API: ${errorMessage(error)}` });
+  }
+}
+
+// AI chat is for signed-in users: chats are kept per user, and the admin's AI account pays for
+// every reply, so it is never open to visitors without a sign-in.
+function aiChatUser(ai: AiContext | null, req: IncomingMessage, auth: AuthContext) {
+  if (!ai) return null;
+  const user = authenticatedUser(req, auth);
+  return user && aiStatus(ai.getAi()).available ? user : null;
+}
+
+// Responses that carry an AI reply; the access log treats them separately.
+const aiReplyResponses = new WeakSet<ServerResponse>();
+
+async function handleAiRoutes(req: IncomingMessage, url: URL, res: ServerResponse, { ai, auth, libraryId, recordAi, session }: Pick<ApiContext, "ai" | "libraryId" | "recordAi"> & { auth: AuthContext; session: EagleSession }) {
+  const user = aiChatUser(ai, req, auth);
+  if (!ai || !user) {
+    sendJson(res, 404, { error: "AI chat is not available", code: "AI_UNAVAILABLE" });
+    return;
+  }
+  const guard = libraryGuards.get(res);
+  // Chats are kept per library: item ids from one library mean nothing in another.
+  const library = guard?.currentLibraryId() || libraryId((await session.libraryInfo())?.path);
+  const { username } = user;
+
+  if (url.pathname === "/api/ai/chats") {
+    if (req.method !== "GET") {
+      sendMethodNotAllowed(res, ["GET"]);
+      return;
+    }
+    sendJson(res, 200, { items: await ai.store.list(username, library) });
+    return;
+  }
+
+  const chatMatch = url.pathname.match(/^\/api\/ai\/chats\/([A-Za-z0-9_-]{1,64})$/);
+  if (chatMatch) {
+    if (req.method === "DELETE") {
+      // The reply would save the chat again when it ends, so it is deleted after the reply.
+      if (ai.busy.get(username) === chatMatch[1]) {
+        sendJson(res, 409, { error: "Wait for the reply to finish, then delete the chat", code: "CHAT_BUSY" });
+        return;
+      }
+      try {
+        await ai.store.remove(username, library, chatMatch[1]);
+      } catch {
+        sendJson(res, 500, { error: "The chat couldn't be deleted: the media server can't write its chat files", code: "CHAT_NOT_SAVED" });
+        return;
+      }
+      sendJson(res, 200, { id: chatMatch[1] });
+      return;
+    }
+    if (req.method !== "GET") {
+      sendMethodNotAllowed(res, ["GET", "DELETE"]);
+      return;
+    }
+    const chat = await ai.store.get(username, library, chatMatch[1]);
+    if (!chat) {
+      sendJson(res, 404, { error: "Chat not found" });
+      return;
+    }
+    sendJson(res, 200, { id: chat.id, title: chat.title, messages: chat.messages });
+    return;
+  }
+
+  const messageMatch = url.pathname.match(/^\/api\/ai\/chats\/([A-Za-z0-9_-]{1,64})\/messages$/);
+  if (!messageMatch) {
+    sendJson(res, 404, { error: "Not found" });
+    return;
+  }
+  if (req.method !== "POST") {
+    sendMethodNotAllowed(res, ["POST"]);
+    return;
+  }
+  const body = await readJson(req);
+  const text = typeof body.text === "string" ? body.text.trim() : "";
+  if (!text || text.length > MAX_MESSAGE_CHARS) {
+    throw new HttpError(400, `text is required, up to ${MAX_MESSAGE_CHARS} characters`);
+  }
+  const attachedItemId = typeof body.itemId === "string" ? body.itemId.trim().slice(0, 64) : "";
+  const isNew = messageMatch[1] === "new";
+  const chat = isNew ? ai.store.create(library, text) : await ai.store.get(username, library, messageMatch[1]);
+  if (!chat) {
+    sendJson(res, 404, { error: "Chat not found" });
+    return;
+  }
+  if (ai.busy.has(username)) {
+    sendJson(res, 429, { error: "Wait for the current reply to finish" });
+    return;
+  }
+  if (guard && !guard.stillOpen()) {
+    sendJson(res, 409, { error: LIBRARY_CHANGED_MESSAGE, code: "LIBRARY_CHANGED" });
+    return;
+  }
+
+  ai.busy.set(username, chat.id);
+  aiReplyResponses.add(res);
+  const abort = new AbortController();
+  let finished = false;
+  res.once("close", () => {
+    if (!finished) abort.abort();
+  });
+  // One JSON object per line, sent as the reply is written.
+  res.writeHead(200, { ...securityHeaders, "Cache-Control": "no-store", "Content-Type": "application/x-ndjson; charset=utf-8", "X-Accel-Buffering": "no" });
+  const send = (event: object) => {
+    if (!res.writableEnded && !res.destroyed) res.write(`${JSON.stringify(event)}\n`);
+  };
+  send({ type: "chat", id: chat.id, title: chat.title });
+  const question = { role: "user" as const, text, at: Date.now() };
+  let partial = "";
+  // A chat deleted meanwhile (by an account removal, say) stays deleted; a stopped server saves nothing.
+  const saveChat = async () => {
+    if (ai.closed) return true;
+    try {
+      await ai.store.save(username, chat, { onlyIfKept: !isNew });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  try {
+    const result = await ai.assistant.runTurn({
+      ai: ai.getAi(),
+      attachedItemId,
+      history: chat.messages,
+      instructions: ai.instructions,
+      onEvent: (event: { delta?: string; type: string }) => {
+        if (event.type === "text") partial += event.delta || "";
+        send(event);
+      },
+      session,
+      signal: abort.signal,
+      stillOpen: guard ? guard.stillOpen : undefined,
+      text,
+      username,
+    });
+    const answer = { role: "assistant" as const, text: result.text, at: Date.now(), ...(result.items.length ? { items: result.items } : {}) };
+    chat.messages.push({ ...question, ...(result.attachedItem ? { attachedItem: result.attachedItem } : {}) }, answer);
+    recordAi({ status: 200, fields: result.features, itemId: attachedItemId || undefined, model: result.model, tokens: result.tokens });
+    if (await saveChat()) send({ type: "done", message: answer });
+    else send({ type: "error", message: "The reply couldn't be saved: the media server can't write its chat files.", code: "CHAT_NOT_SAVED" });
+  } catch (error) {
+    const canceled = abort.signal.aborted;
+    const known = error instanceof AiChatError ? error as { code: string; status: number } : null;
+    const status = canceled ? 499 : known ? known.status : 502;
+    // An admin runs the AI provider, so they get to see what it said, but only as it happens: the
+    // saved chat keeps the general message.
+    const message = aiErrorMessage(error, { detail: user.role === "admin" });
+    // The question is kept so the chat reads as it happened; what was written before a cancel is kept too.
+    if (known?.code !== "LIBRARY_CHANGED") {
+      chat.messages.push(question, canceled && partial.trim()
+        ? { role: "assistant", text: partial, at: Date.now() }
+        : { role: "assistant", text: canceled ? "Stopped." : aiErrorMessage(error), at: Date.now(), error: true });
+      await saveChat();
+    }
+    recordAi({ status, itemId: attachedItemId || undefined });
+    send({ type: "error", message, ...(known?.code ? { code: known.code } : {}) });
+  } finally {
+    finished = true;
+    ai.busy.delete(username);
+    res.end();
   }
 }
 

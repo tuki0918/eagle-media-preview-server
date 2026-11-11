@@ -15,6 +15,8 @@ import {
   UNTAGGED_FOLDER_ID,
   urlPreviewExts,
 } from "./viewer/constants";
+import { attachAiItem, configureAiChat, loadAiChats, openSavedAiChat, resetAiChat, sendAiMessage, setAiAvailable, startNewAiChat } from "./viewer/aiChat";
+import { getAiChatState } from "./viewer/aiChatState";
 import { ApiError, debounce, errorMessage, getJson, postJson, setConnectedLibraryId, setMediaFallbackCheck, subscribeRequestOutcome, type RequestOutcome } from "./viewer/api";
 import {
   displayFileName,
@@ -126,6 +128,8 @@ let availableExts: string[] = [];
 let itemTypesRequestId = 0;
 let uploadRefreshRun = 0;
 let uploadMaxBytes: number | undefined;
+// The AI chat, offered only when the server says this user may use it.
+let aiAvailable = false;
 // Experimental sort, offered only when the server says it has it on.
 let sortAvailable = false;
 // With the experimental sort, the server builds its index in the background; sorting stays
@@ -179,6 +183,14 @@ async function init() {
   restoreUrlState();
   restoreViewMode();
   await loadAuthStatus();
+  configureAiChat({
+    onAuthError: handleAuthError,
+    onChatCreated: (chatId) => {
+      if (state.section !== "ai") return;
+      state.aiChatId = chatId;
+      syncUrlState({ replace: true });
+    },
+  });
   setViewerShellActions({
     connect,
     logout,
@@ -218,6 +230,16 @@ async function init() {
     },
     tagsOpened: openTagList,
     allItemsOpened: openAllItems,
+    aiOpened: openAiSection,
+    aiAsked: (text: string) => {
+      if (!aiAvailable) return;
+      openAiSection();
+      void sendAiMessage(text);
+    },
+    aiItemAsked: askAiAboutItem,
+    aiItemOpened: (itemId: string) => {
+      void openAiItem(itemId);
+    },
     mediaTypeChanged: (ext: string) => {
       applyFilterChange({ ext });
     },
@@ -527,6 +549,8 @@ function showViewer(data: ConnectResponse) {
   currentLibraryId = data.library?.id || "";
   setConnectedLibraryId(currentLibraryId);
   uploadMaxBytes = data.uploadMaxBytes;
+  aiAvailable = data.features?.ai === true;
+  setAiAvailable(aiAvailable);
   sortAvailable = data.features?.sort === true;
   // A sort from a bookmarked URL means nothing on a server without the experimental sort.
   if (!sortAvailable) Object.assign(state, { sort: "", order: "" });
@@ -558,6 +582,8 @@ function clearViewerSessionState() {
   availableExts = [];
   itemTypesRequestId += 1;
   itemTypesState = "idle";
+  aiAvailable = false;
+  resetAiChat();
   resetViewerResults({ resetOffset: true });
   renderMessage("");
   resetTagList();
@@ -875,6 +901,16 @@ async function loadItems({ append = false }: LoadItemsOptions = {}) {
     await Promise.all([loadTagOverview(), loadAllFoldersTotal()]);
     return;
   }
+  if (state.section === "ai") {
+    if (aiAvailable) {
+      await showAiSection();
+      return;
+    }
+    // A bookmarked chat on a server (or for a user) without AI chat: show the library instead.
+    Object.assign(state, { section: "items", aiChatId: "" });
+    syncUrlState({ replace: true });
+    renderSearchControlButtons();
+  }
   const requestId = ++state.requestId;
   if (append) {
     state.tilesLoadingMore = true;
@@ -991,7 +1027,7 @@ function sortIndexingMessage(progress: NonNullable<LoadItemsResponse["sort"]>) {
 }
 
 async function loadAllFoldersTotal() {
-  if (allFoldersTotal > 0 || (!hasActiveFilters(state) && state.section !== "tags")) return;
+  if (allFoldersTotal > 0 || (!hasActiveFilters(state) && state.section === "items")) return;
   const requestId = ++allFoldersTotalRequestId;
   try {
     const params = new URLSearchParams({ offset: "0", limit: "1" });
@@ -1200,7 +1236,7 @@ function applyControlsFromState() {
 }
 
 function applyFilterChange(patch: Partial<Pick<typeof state, "query" | "tags" | "folderId" | "smartFolderId" | "ext" | "rating" | "sort" | "order" | "limit">>) {
-  Object.assign(state, patch, { offset: 0, section: "items" });
+  Object.assign(state, patch, { offset: 0, section: "items", aiChatId: "" });
   resetPreviewState();
   syncResetFiltersButton();
   syncUrlState();
@@ -1511,6 +1547,7 @@ function renderPreviewDetails(item: EagleItem) {
     onFolderSuggestions: folderSuggestionItems,
     onSaveMetadata: savePreviewMetadata,
     onToggleTrash: setItemTrash,
+    onAskAi: aiAvailable ? askAiAboutItem : undefined,
   });
 }
 
@@ -1695,13 +1732,72 @@ function openTagList() {
   changeSearch.cancel();
   hideTagSuggestions();
   state.requestId += 1;
-  Object.assign(state, resetFilterState(), { section: "tags", filtersOpen: false });
+  Object.assign(state, resetFilterState(), { section: "tags", aiChatId: "", filtersOpen: false });
   resetPreviewState();
   resetTileAutoLoading();
   renderTagChips();
   renderSearchControlButtons();
   syncUrlState();
   void loadTagOverview();
+}
+
+// Opens the AI chat: a saved chat, or a new one. A new chat starts empty, with no item attached
+// from an earlier "Ask AI about this" that was never sent.
+function openAiSection(chatId = "") {
+  if (!aiAvailable) return;
+  if (!chatId) startNewAiChat();
+  changeSearch.cancel();
+  hideTagSuggestions();
+  Object.assign(state, resetFilterState(), { section: "ai", aiChatId: chatId, filtersOpen: false });
+  resetPreviewState();
+  renderTagChips();
+  syncUrlState();
+  window.scrollTo({ top: 0 });
+  void loadItems();
+}
+
+// Shows what the URL says: the chat it names, or a new chat. The chat on screen is chosen before
+// anything is awaited, so a question sent right after opening goes to that chat.
+async function showAiSection() {
+  state.requestId += 1;
+  resetTileAutoLoading();
+  renderSearchControlButtons();
+  void loadAiChats();
+  void loadAllFoldersTotal();
+  const shown = getAiChatState();
+  if (!state.aiChatId) {
+    if (shown.chatId) startNewAiChat();
+    return;
+  }
+  if (shown.chatId === state.aiChatId) return;
+  const chatId = state.aiChatId;
+  if (await openSavedAiChat(chatId)) return;
+  // The chat is gone, or belongs to another user: start a new one.
+  if (state.section !== "ai" || state.aiChatId !== chatId) return;
+  state.aiChatId = "";
+  syncUrlState({ replace: true });
+  startNewAiChat();
+}
+
+function askAiAboutItem(item: EagleItem) {
+  if (!aiAvailable) return;
+  closePreview({ skipHistory: true });
+  openAiSection();
+  attachAiItem(item);
+}
+
+// Items the chat lists carry only what a thumbnail needs, so the item is read again to preview it.
+async function openAiItem(itemId: string) {
+  try {
+    const data = await getJson<{ item?: EagleItem }>(`/api/items/${encodeURIComponent(itemId)}`);
+    if (getShellView() !== "viewer" || state.section !== "ai" || !data.item) return;
+    openPreview(data.item, { skipHistory: true });
+  } catch (error) {
+    if (handleAuthError(error)) return;
+    showErrorToast("Unable to open this item", {
+      description: error instanceof ApiError && error.status === 404 ? "It is no longer in the library." : errorMessage(error),
+    });
+  }
 }
 
 function selectTagFromList(tag: string) {

@@ -12,9 +12,11 @@ const {
   createServerManager,
   createSettingsStore,
   hashPassword,
+  loadEagleAiModule,
   normalizeSettings,
 } = require("../../dist/.generated/plugin-service/runtime.cjs");
 const { createViewerServer, sha256 } = require("../../dist/.generated/plugin-service/viewerServer.cjs");
+const { createAiChatStore } = require("../../dist/.generated/plugin-service/aiChat.cjs");
 const PASSWORD_HASH_PATTERN = /^pbkdf2\$sha256\$210000\$[^$]+\$[^$]+$/;
 const SESSION_SECRET_PATTERN = /^[A-Za-z0-9_-]{32,}$/;
 
@@ -1547,4 +1549,94 @@ test("settings keep canUpload only on editors, and leave it off users that don't
   });
   assert.deepEqual(saved.authUsers.map((user: { canUpload?: boolean }) => user.canUpload), [true, undefined, undefined, undefined]);
   assert.equal("canUpload" in saved.authUsers[1], false);
+});
+
+test("the plugin doesn't require Eagle's AI Models plugin, which Eagle would insist on before opening it", async () => {
+  const manifest = JSON.parse(await readFile(join(process.cwd(), "manifest.json"), "utf8"));
+  assert.equal(manifest.dependencies, undefined);
+});
+
+test("deleting a user deletes their AI chats", async () => {
+  const settingsDir = await mkdtemp(join(tmpdir(), "eagle-preview-settings-"));
+  const aiChatDir = join(settingsDir, "ai-chats");
+  const settingsStore = createSettingsStore({ filePath: join(settingsDir, "settings.json") });
+  const manager = createServerManager({
+    accessLog: { load: async () => {}, record() {}, flush: async () => {}, touch() {} },
+    aiChatDir,
+    settingsStore,
+    viewerServerFactory: () => ({ start: async () => {}, stop: async () => {}, status: () => ({ state: "stopped", host: "127.0.0.1", port: 41532 }) }),
+  });
+  await manager.saveSettings({ authEnabled: true, authUsers: [{ username: "mika", role: "admin" }, { username: "ken", role: "viewer" }], userPasswords: { mika: "one", ken: "two" } });
+  const chats = createAiChatStore({ dir: aiChatDir });
+  await chats.save("ken", chats.create("LIB", "ken's question"));
+  await chats.save("mika", chats.create("LIB", "mika's question"));
+  await manager.saveSettings({ authUsers: [{ username: "mika", role: "admin" }], userPasswords: { mika: "one" } });
+  assert.deepEqual(await createAiChatStore({ dir: aiChatDir }).list("ken", "LIB"), []);
+  assert.equal((await createAiChatStore({ dir: aiChatDir }).list("mika", "LIB")).length, 1);
+});
+
+test("the AI Models plugin is loaded from Eagle's Plugins folder when Eagle didn't hand it over", async () => {
+  const userData = await mkdtemp(join(tmpdir(), "eagle-user-data-"));
+  // Not installed: nothing to load.
+  assert.equal(loadEagleAiModule(userData), null);
+
+  const pluginDir = join(userData, "Plugins", "ai-sdk");
+  await mkdir(pluginDir, { recursive: true });
+  await writeFile(join(pluginDir, "ai-sdk.cjs"), `
+    exports.default = ({ configPath }) => ({
+      configPath,
+      getDefaultModel: (type) => (type === "chat" ? "openai::gpt" : undefined),
+      getModel: (id) => ({ id }),
+      streamText: () => ({ textStream: [] }),
+    });
+  `);
+  const ai = loadEagleAiModule(userData);
+  assert.equal(ai.configPath, join(pluginDir, "config.bin"));
+  assert.equal(ai.getDefaultModel("chat"), "openai::gpt");
+  assert.equal(typeof ai.open, "function");
+  assert.doesNotThrow(() => ai.open());
+  // Loaded once; asking again returns the same module.
+  assert.equal(loadEagleAiModule(userData), ai);
+
+  const broken = await mkdtemp(join(tmpdir(), "eagle-user-data-"));
+  await mkdir(join(broken, "Plugins", "ai-sdk"), { recursive: true });
+  await writeFile(join(broken, "Plugins", "ai-sdk", "ai-sdk.cjs"), "throw new Error('boom');");
+  assert.equal(loadEagleAiModule(broken), null);
+});
+
+test("server manager reports whether Eagle has an AI model, and passes AI chat to the viewer only with sign-in", async () => {
+  const settingsDir = await mkdtemp(join(tmpdir(), "ai-settings-"));
+  const settingsStore = createSettingsStore({ filePath: join(settingsDir, "settings.json") });
+  let ai: unknown = null;
+  let reloads = 0;
+  const viewers: Array<{ aiChat?: { enabled: boolean; getAi: () => unknown; instructions?: string } }> = [];
+  const manager = createServerManager({
+    accessLog: { load: async () => {}, record() {}, flush: async () => {}, touch() {} },
+    aiProvider: () => ai,
+    settingsStore,
+    viewerServerFactory: (options: { aiChat?: { enabled: boolean; getAi: () => unknown; instructions?: string } }) => {
+      viewers.push(options);
+      let state = "stopped";
+      return { start: async () => { state = "running"; }, stop: async () => { state = "stopped"; }, status: () => ({ state, host: "127.0.0.1", port: 41532 }) };
+    },
+  });
+  // Outside Eagle there is no AI module at all.
+  assert.deepEqual(manager.aiStatus(), { available: false, chatModel: "", imageModel: "", reason: "not_installed" });
+  ai = { getDefaultModel: () => undefined, getModel() {}, streamText() {}, reload() { reloads += 1; } };
+  assert.equal(manager.aiStatus().reason, "no_model");
+  ai = { getDefaultModel: (type: string) => (type === "chat" ? "openai::gpt" : undefined), getModel() {}, streamText() {}, reload() { reloads += 1; } };
+  assert.deepEqual(manager.aiStatus({ reload: true }), { available: true, chatModel: "openai::gpt", imageModel: "", reason: "" });
+  assert.equal(reloads, 1);
+
+  await manager.saveSettings({ aiChatEnabled: true, aiChatInstructions: `  Tags are in English.\r\n${"x".repeat(3000)}` });
+  await manager.start();
+  // The owner's notes reach the viewer, tidied and cut to 2,000 characters.
+  assert.equal(viewers[0].aiChat?.instructions?.length, 2000);
+  assert.match(String(viewers[0].aiChat?.instructions), /^Tags are in English\.\nx/);
+  assert.equal(viewers[0].aiChat?.enabled, false, "AI chat needs password protection");
+  assert.equal(viewers[0].aiChat?.getAi(), ai);
+  await manager.saveSettings({ authEnabled: true, authUsers: [{ username: "mika", role: "viewer" }], userPasswords: { mika: "secret" } });
+  assert.equal(viewers[1].aiChat?.enabled, true);
+  await manager.stop();
+  assert.equal(JSON.parse(await readFile(join(settingsDir, "settings.json"), "utf8")).aiChatEnabled, true);
 });

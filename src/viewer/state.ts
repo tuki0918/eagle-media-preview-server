@@ -12,6 +12,7 @@ export const state: ViewerState = {
   folderId: "",
   smartFolderId: "",
   section: "items",
+  aiChatId: "",
   ext: "",
   rating: "",
   sort: "",

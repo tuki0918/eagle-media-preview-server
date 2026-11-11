@@ -33,6 +33,8 @@ interface ListItemsOptions extends PageOptions {
   keywords?: unknown;
   rating?: unknown;
   tags?: unknown;
+  /** More fields than the viewer needs, e.g. "palettes" for the AI chat. */
+  extraFields?: string[];
 }
 
 interface UpdateMetadataInput {
@@ -365,7 +367,7 @@ function createEagleClient(options: EagleClientOptions = {}) {
       return normalizePaginatedResponse(await request("/api/v2/smartFolder/get"));
     },
 
-    async listItems({ offset = 0, limit = 30, folderId, isUntagged = false, isUnfiled = false, ext, rating, keywords, tags }: ListItemsOptions = {}) {
+    async listItems({ offset = 0, limit = 30, folderId, isUntagged = false, isUnfiled = false, ext, rating, keywords, tags, extraFields = [] }: ListItemsOptions = {}) {
       const body: {
         ext?: unknown;
         fields: readonly string[];
@@ -380,7 +382,7 @@ function createEagleClient(options: EagleClientOptions = {}) {
       } = {
         offset: normalizeOffset(offset),
         limit: clampLimit(limit),
-        fields: ITEM_FIELDS,
+        fields: extraFields.length ? [...ITEM_FIELDS, ...extraFields.filter((field) => /^[A-Za-z]+$/.test(field))] : ITEM_FIELDS,
       };
       if (isUnfiled) {
         body.isUnfiled = true;
@@ -410,6 +412,16 @@ function createEagleClient(options: EagleClientOptions = {}) {
           body: { query, offset: normalizeOffset(offset), limit: clampLimit(limit) },
         }),
       );
+    },
+
+    // Eagle's AI Search plugin: items whose content is close in meaning to the text. It fails when
+    // that plugin isn't installed or isn't ready, which callers treat as "no smart search".
+    async aiSearchByText({ query, limit = 12 }: { limit?: number; query: string }) {
+      const data = unwrapData(
+        await request("/api/v2/aiSearch/searchByText", { method: "POST", body: { query, options: { limit } } }),
+      );
+      const results = isRecord(data) && Array.isArray(data.results) ? data.results : [];
+      return results.map((result) => (isRecord(result) ? result.item : null)).filter(isRecord);
     },
 
     async smartFolderItems({ smartFolderId, offset = 0, limit = 30 }: SmartFolderItemsOptions = {}) {

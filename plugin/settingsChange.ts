@@ -1,4 +1,6 @@
 export interface ServerRestartSettings {
+  aiChatEnabled?: unknown;
+  aiChatInstructions?: unknown;
   customDomain?: unknown;
   authEnabled?: unknown;
   authUsers?: unknown;
@@ -37,6 +39,8 @@ export function serverSettingsChanged(current: ServerRestartSettings, nextSettin
   if (uploadSettingsChanged(current, nextSettings)) return true;
   if (Boolean(nextSettings.trustForwardedFor ?? current.trustForwardedFor) !== Boolean(current.trustForwardedFor)) return true;
   if (Boolean(nextSettings.experimentalSort ?? current.experimentalSort) !== Boolean(current.experimentalSort)) return true;
+  if (Boolean(nextSettings.aiChatEnabled ?? current.aiChatEnabled) !== Boolean(current.aiChatEnabled)) return true;
+  if (String(nextSettings.aiChatInstructions ?? current.aiChatInstructions ?? "") !== String(current.aiChatInstructions ?? "")) return true;
   if (Boolean(nextSettings.authEnabled ?? current.authEnabled) !== Boolean(current.authEnabled)) return true;
   if (JSON.stringify(nextSettings.authUsers ?? current.authUsers ?? []) !== JSON.stringify(current.authUsers ?? [])) return true;
   return false;
@@ -56,6 +60,8 @@ export function serverRestartSettingsChanged(current: ServerRestartSettings, nex
   if (uploadSettingsChanged(current, nextSettings)) return true;
   if (Boolean(nextSettings.trustForwardedFor ?? current.trustForwardedFor) !== Boolean(current.trustForwardedFor)) return true;
   if (Boolean(nextSettings.experimentalSort ?? current.experimentalSort) !== Boolean(current.experimentalSort)) return true;
+  if (Boolean(nextSettings.aiChatEnabled ?? current.aiChatEnabled) !== Boolean(current.aiChatEnabled)) return true;
+  if (String(nextSettings.aiChatInstructions ?? current.aiChatInstructions ?? "") !== String(current.aiChatInstructions ?? "")) return true;
   if (nextAuthEnabled !== currentAuthEnabled) return true;
   if (!currentAuthEnabled && !nextAuthEnabled) return false;
   if (hasPasswordUpdates(nextSettings.userPasswords)) return true;

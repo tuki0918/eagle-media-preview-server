@@ -1,5 +1,14 @@
 export type ServerState = "error" | "running" | "stopped";
-export type SettingsTab = "access" | "general" | "libraries" | "security";
+export type SettingsTab = "access" | "ai" | "general" | "libraries" | "security";
+
+/** Whether Eagle has an AI model the viewer's AI chat can use. */
+export interface AiStatus {
+  available: boolean;
+  chatModel: string;
+  imageModel: string;
+  /** Why it is unavailable: no AI SDK in this Eagle, or no default chat model set. */
+  reason: "" | "no_model" | "not_installed";
+}
 export type UserRole = "admin" | "editor" | "viewer";
 
 export interface AuthUser {
@@ -43,6 +52,9 @@ export interface BlockedAddress {
 }
 
 export interface PluginSettings {
+  /** Shows the AI chat in the viewer to signed-in users. */
+  aiChatEnabled?: boolean;
+  aiChatInstructions?: string;
   blockedAddresses?: BlockedAddress[];
   customDomain?: string;
   allowMetadataEditing?: boolean;
@@ -85,7 +97,7 @@ export interface PluginStatus {
 }
 
 export type AccessLogRange = "1h" | "24h" | "7d";
-export type AccessLogType = "auth" | "browse" | "edit" | "system" | "view";
+export type AccessLogType = "ai" | "auth" | "browse" | "edit" | "system" | "view";
 export type AccessLogEventFilter = "" | AccessLogType;
 
 /** A chip in Recent events: an exact value of one column. */
@@ -112,14 +124,21 @@ export interface AccessLogEntry {
   /** The library open in Eagle at the time, as an opaque id. */
   libraryId?: string;
   method?: string;
+  /** The AI model that wrote a reply. */
+  model?: string;
   path?: string;
   size?: number;
   status?: number;
+  /** Tokens an AI reply used, when the provider reports them. */
+  tokens?: number;
   type: AccessLogType;
   user?: string;
 }
 
 export interface AccessLogBucket {
+  /** Replies of the AI chat; failed or stopped ones are in aiFailures. */
+  ai?: number;
+  aiFailures?: number;
   auth: number;
   authFailures: number;
   browse: number;
@@ -138,6 +157,7 @@ export interface AccessLogBucket {
 /** One row per address and signed-in user ("" when the requests carried no user). */
 export interface AccessLogClient {
   active: boolean;
+  aiChats?: number;
   authFailures: number;
   ip: string;
   lastSeen: number;
@@ -156,5 +176,5 @@ export interface AccessLogSummary {
   range: AccessLogRange;
   recent: AccessLogEntry[];
   /** viewFailures: failed media fetches, listed under Views but not counted as views. */
-  totals: { auth: number; authFailures: number; browse: number; edit: number; editFailures?: number; system?: number; view: number; viewFailures?: number };
+  totals: { ai?: number; aiFailures?: number; auth: number; authFailures: number; browse: number; edit: number; editFailures?: number; system?: number; view: number; viewFailures?: number };
 }
