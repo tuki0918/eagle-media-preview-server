@@ -314,6 +314,46 @@ test("library index asks about trashed items again only when mtime.json says the
   }
 });
 
+test("library index asks again about a restored item whose old trash state was still showing", async () => {
+  const libraryPath = await createLibrary(sampleItems);
+  const realNow = Date.now;
+  try {
+    await writeMtime(libraryPath, { A1: 1, B2: 1, C3: 1, D4: 1, all: 4 });
+    const index = await readyIndex(libraryPath, { rescanIntervalMs: 60_000 });
+    const sort = parseIndexSort("import", "");
+    assert.deepEqual(await index.query({}, sort, 0, 10), { complete: true, ids: ["A1", "C3", "B2"], total: 3 });
+    // D4 is restored: mtime.json says so first, while Eagle and metadata.json still show the trash.
+    await writeMtime(libraryPath, { A1: 1, B2: 1, C3: 1, D4: 2, all: 4 });
+    assert.deepEqual(await index.query({}, sort, 0, 10), { complete: false, ids: ["A1", "C3", "B2"], total: 3 });
+    // Eagle catches up; mtime.json doesn't change again, yet D4 is asked about again later.
+    await writeItem(libraryPath, { ...sampleItems[3], isDeleted: false, lastModified: 2 });
+    Date.now = () => realNow() + 61_000;
+    assert.deepEqual(await index.query({}, sort, 0, 10), { complete: true, ids: ["D4", "A1", "C3", "B2"], total: 4 });
+  } finally {
+    Date.now = realNow;
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("library index counts each metadata.json read as progress of an update", async () => {
+  const trash = Array.from({ length: 30 }, (_, i) => ({ id: `Q${String(i).padStart(4, "0")}`, name: `trashed ${i}`, isDeleted: true }));
+  const libraryPath = await createLibrary([sampleItems[0], ...trash]);
+  try {
+    // 20 metadata.json reads a second: going over 30 trashed items again takes about 1.5 s.
+    const index = await readyIndex(libraryPath, { metadataReadsPerSecond: 20, refreshWaitMs: 50, rescanIntervalMs: 60_000 });
+    await writeMtime(libraryPath, { A1: 1, ...Object.fromEntries(trash.map((item) => [item.id, 2])) });
+    assert.equal((await index.extensionCounts({})).status, "refreshing");
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const counts = await index.extensionCounts({});
+    assert.equal(counts.status, "refreshing");
+    // Still reading, but not stalled: the last read was moments ago.
+    assert.ok(counts.stalledForMs < 300, `stalled for ${counts.stalledForMs} ms`);
+    index.dispose();
+  } finally {
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
 test("library index picks up changes, additions, and permanent deletes through mtime.json", async () => {
   const libraryPath = await createLibrary(sampleItems);
   try {

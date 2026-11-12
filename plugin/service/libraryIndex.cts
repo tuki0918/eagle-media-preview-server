@@ -316,9 +316,13 @@ function createLibraryIndex(libraryPath: string, {
    * Asks Eagle for these items, a paced batch at a time, and resolves true when the index changed
    * (an item set or dropped). An id Eagle doesn't return is dropped, and its metadata.json tells
    * why (see whyNotReturned). A batch Eagle couldn't answer keeps what was held and is retried.
+   * `changeTime` gives an item's latest time in mtime.json, when known; `onProgress` is called after
+   * each answer from Eagle and each metadata.json read.
    */
-  async function readItems(ids: readonly string[], { onBatch, run = buildRun, stopped }: {
+  async function readItems(ids: readonly string[], { changeTime = () => undefined, onBatch, onProgress, run = buildRun, stopped }: {
+    changeTime?: (id: string) => number | undefined;
     onBatch?: (batch: string[]) => void;
+    onProgress?: () => void;
     run?: number;
     stopped: () => boolean;
   }) {
@@ -334,6 +338,7 @@ function createLibraryIndex(libraryPath: string, {
         // Kept as it was and asked about again at the next check.
       }
       if (run !== buildRun) break;
+      onProgress?.();
       if (!Array.isArray(answered)) {
         for (const id of batch) unreadable.add(id);
         onBatch?.(batch);
@@ -362,9 +367,11 @@ function createLibraryIndex(libraryPath: string, {
       for (const id of notReturned) {
         await paceMetadataRead(stopped);
         if (stopped()) return updated;
-        const reason = await whyNotReturned(id);
+        const reason = await whyNotReturned(id, changeTime(id));
         // Checked again after the await: an abandoned build must not touch the next one's state.
         if (run !== buildRun) return updated;
+        // A slow disk or NAS can take a while over many of these; each one is progress.
+        onProgress?.();
         if (reason === "trashed") trashed.add(id);
         else trashed.delete(id);
         if (reason === "unconfirmed") unconfirmed.add(id);
@@ -377,11 +384,15 @@ function createLibraryIndex(libraryPath: string, {
 
   // Why Eagle didn't return an item: its metadata.json says it is in the trash, or its folder is
   // gone (removed), or anything else ("unconfirmed": not loaded by Eagle yet, metadata missing or
-  // mid-write). Only the trash is certain, so only it counts as covered.
-  async function whyNotReturned(id: string): Promise<"removed" | "trashed" | "unconfirmed"> {
+  // mid-write). Only the trash is certain, so only it counts as covered. Metadata older than the
+  // item's time in mtime.json (`changedAt`) is not trusted: mtime.json can announce a restore before
+  // Eagle and metadata.json show it, and the item must then be asked about again.
+  async function whyNotReturned(id: string, changedAt: number | undefined): Promise<"removed" | "trashed" | "unconfirmed"> {
     try {
       const raw = JSON.parse(await readFile(join(imagesDir, `${id}.info`, "metadata.json"), "utf8"));
-      return raw && raw.id === id && raw.isDeleted === true ? "trashed" : "unconfirmed";
+      if (!raw || raw.id !== id || raw.isDeleted !== true) return "unconfirmed";
+      const stale = changedAt !== undefined && typeof raw.lastModified === "number" && raw.lastModified < changedAt;
+      return stale ? "unconfirmed" : "trashed";
     } catch (error) {
       if ((error as NodeJS.ErrnoException)?.code === "ENOENT" && !(await itemFolderExists(id))) return "removed";
       return "unconfirmed";
@@ -429,6 +440,7 @@ function createLibraryIndex(libraryPath: string, {
       if (stopped()) return;
       total = ids.length;
       await readItems(ids, {
+        changeTime: (id) => (mtime && id in mtime.values ? finiteNumber(mtime.values[id]) : undefined),
         onBatch: (batch) => {
           if (!stopped()) loaded += batch.length;
         },
@@ -505,12 +517,15 @@ function createLibraryIndex(libraryPath: string, {
     let updated = false;
     try {
       if (await readItems([...changed], {
+        changeTime: (id) => (id in values ? finiteNumber(values[id]) : missing.get(id)),
         onBatch: (batch) => {
-          refreshProgressAt = Date.now();
           for (const id of batch) {
             if (items.has(id) || unreadable.has(id)) missing.delete(id);
             else if (id in values) missing.set(id, finiteNumber(values[id]));
           }
+        },
+        onProgress: () => {
+          refreshProgressAt = Date.now();
         },
         stopped,
       })) updated = true;
@@ -540,7 +555,8 @@ function createLibraryIndex(libraryPath: string, {
         // Unreadable items were already asked about at the start of this check, and trashed ones
         // are asked about once mtime.json says they changed.
         if (await readItems([...present].filter((id) => !items.has(id) && !unreadable.has(id) && !trashed.has(id)), {
-          onBatch: () => {
+          changeTime: (id) => missing.get(id),
+          onProgress: () => {
             refreshProgressAt = Date.now();
           },
           stopped,
