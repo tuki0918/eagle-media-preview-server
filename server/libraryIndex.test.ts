@@ -335,6 +335,31 @@ test("library index asks again about a restored item whose old trash state was s
   }
 });
 
+test("library index keeps a restored item's new time when Eagle fails to answer, for the retry", async () => {
+  const libraryPath = await createLibrary(sampleItems);
+  const realNow = Date.now;
+  try {
+    await writeMtime(libraryPath, { A1: 1, B2: 1, C3: 1, D4: 1, all: 4 });
+    const source = eagleFromDisk(libraryPath);
+    const index = await readyIndex(libraryPath, { rescanIntervalMs: 60_000, source });
+    const sort = parseIndexSort("import", "");
+    assert.equal((await index.query({}, sort, 0, 10)).complete, true);
+    // D4's restore reaches mtime.json, but Eagle fails to answer that check.
+    source.state.down = true;
+    await writeMtime(libraryPath, { A1: 1, B2: 1, C3: 1, D4: 2, all: 4 });
+    assert.equal((await index.query({}, sort, 0, 10)).complete, false);
+    // The retry finds the old trash state still showing: not taken as the trash.
+    source.state.down = false;
+    assert.deepEqual(await index.query({}, sort, 0, 10), { complete: false, ids: ["A1", "C3", "B2"], total: 3 });
+    await writeItem(libraryPath, { ...sampleItems[3], isDeleted: false, lastModified: 2 });
+    Date.now = () => realNow() + 61_000;
+    assert.deepEqual(await index.query({}, sort, 0, 10), { complete: true, ids: ["D4", "A1", "C3", "B2"], total: 4 });
+  } finally {
+    Date.now = realNow;
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
 test("library index counts each metadata.json read as progress of an update", async () => {
   const trash = Array.from({ length: 30 }, (_, i) => ({ id: `Q${String(i).padStart(4, "0")}`, name: `trashed ${i}`, isDeleted: true }));
   const libraryPath = await createLibrary([sampleItems[0], ...trash]);

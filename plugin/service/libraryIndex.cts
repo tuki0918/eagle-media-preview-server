@@ -269,7 +269,9 @@ function createLibraryIndex(libraryPath: string, {
   let failedAt = 0;
   // Bumped by each build: answers for an earlier, abandoned build (a failed one being retried) are dropped.
   let buildRun = 0;
-  // Ids in mtime.json that Eagle didn't return, with the change time they were last asked about.
+  // Ids in mtime.json not in the index (Eagle didn't return them, or couldn't answer), with their
+  // latest change time seen there: kept until the item is held, so a retry still knows how recent
+  // trash state must be to count (see whyNotReturned).
   const missing = new Map<string, number>();
   // Ids Eagle didn't return whose metadata.json says they are in the trash. Eagle's item count
   // includes them, so they are counted against it; they are asked about again only when mtime.json
@@ -453,8 +455,8 @@ function createLibraryIndex(libraryPath: string, {
       if (mtime) {
         mtimeSignature = mtime.signature;
         noteEagleItemCount(mtime.values);
-        for (const id of [...trashed, ...unconfirmed]) {
-          if (id in mtime.values) missing.set(id, finiteNumber(mtime.values[id]));
+        for (const id of [...trashed, ...unconfirmed, ...unreadable]) {
+          if (!items.has(id) && id in mtime.values) missing.set(id, finiteNumber(mtime.values[id]));
         }
       }
       // Items the build couldn't see (a folder still syncing, say) leave the counts apart: check the
@@ -520,7 +522,8 @@ function createLibraryIndex(libraryPath: string, {
         changeTime: (id) => (id in values ? finiteNumber(values[id]) : missing.get(id)),
         onBatch: (batch) => {
           for (const id of batch) {
-            if (items.has(id) || unreadable.has(id)) missing.delete(id);
+            // Kept for one Eagle couldn't answer too: its retry may find stale trash state.
+            if (items.has(id)) missing.delete(id);
             else if (id in values) missing.set(id, finiteNumber(values[id]));
           }
         },
