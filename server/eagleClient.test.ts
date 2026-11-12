@@ -1124,6 +1124,28 @@ test("itemsByIds asks item/get for the ids and returns them in the given order, 
   assert.ok(body.fields.includes("id"));
 });
 
+test("sortIndexItems asks item/get for at most 1000 ids with only the fields the sort index uses", async () => {
+  const calls: RequestCall[] = [];
+  const client = createEagleClient({
+    baseUrl: "http://eagle.local:41595",
+    fetchImpl: async (url: string, init: { method?: string; body: string }) => {
+      calls.push({ url, init });
+      return jsonResponse({ status: "success", data: { data: [{ id: "C", name: "c" }], total: 1, offset: 0, limit: 1000 } });
+    },
+  });
+
+  assert.deepEqual(await client.sortIndexItems([]), []);
+  assert.equal(calls.length, 0);
+  const ids = Array.from({ length: 1200 }, (_, i) => `I${i}`);
+  // Eagle's answer is passed on as it is; ids it left out (in the trash, say) are simply missing.
+  assert.deepEqual(await client.sortIndexItems(ids), [{ id: "C", name: "c" }]);
+  assert.equal(calls[0].url, "http://eagle.local:41595/api/v2/item/get");
+  const body = JSON.parse(calls[0].init.body);
+  assert.deepEqual(body.ids, ids.slice(0, 1000));
+  assert.equal(body.limit, 1000);
+  assert.deepEqual(body.fields, ["id", "name", "ext", "width", "height", "size", "duration", "star", "btime", "mtime", "modificationTime", "lastModified", "tags", "folders", "isDeleted"]);
+});
+
 test("itemsByIds sends nothing for no ids and at most 1000 ids", async () => {
   const sent: number[] = [];
   const client = createEagleClient({

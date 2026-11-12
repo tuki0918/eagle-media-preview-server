@@ -4531,6 +4531,31 @@ test("uploads are logged with their type and size, not their name", async () => 
   }
 });
 
+// Answers Advanced Sort's index as Eagle's item/get by ids does, from the metadata.json files of the
+// library the client says is open: items in the trash and ids without metadata are left out. The
+// client's own sortIndexItems, if any, wins.
+function withSortIndex<T extends { libraryInfo(): Promise<unknown> }>(client: T) {
+  return {
+    async sortIndexItems(ids: string[]) {
+      const library = (await client.libraryInfo()) as { path?: string } | null;
+      const found: unknown[] = [];
+      for (const id of ids) {
+        let text: string;
+        try {
+          text = await readFile(join(String(library?.path || ""), "images", `${id}.info`, "metadata.json"), "utf8");
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+          throw error;
+        }
+        const raw = JSON.parse(text);
+        if (raw?.id === id && raw.isDeleted !== true) found.push(raw);
+      }
+      return found;
+    },
+    ...client,
+  };
+}
+
 const DEFAULT_SORT_ITEMS: Array<Record<string, unknown> & { id: string }> = [
   { id: "A1", name: "b-file", size: 300, modificationTime: 3 },
   { id: "B2", name: "a-file", size: 100, modificationTime: 1 },
@@ -4555,7 +4580,7 @@ test("experimental sort orders /api/items with the library index and fetches the
     port: 0,
     viewerPassword: "",
     experimentalSort: true,
-    eagleClient: {
+    eagleClient: withSortIndex({
       async appInfo() {
         return { version: "1.0.0" };
       },
@@ -4569,7 +4594,7 @@ test("experimental sort orders /api/items with the library index and fetches the
       async listItems() {
         throw new Error("listItems should not be used once the index is ready");
       },
-    },
+    }),
   });
 
   await viewer.start();
@@ -4607,7 +4632,7 @@ test("experimental sort counts a folder's item types from the library index with
     port: 0,
     viewerPassword: "",
     experimentalSort: true,
-    eagleClient: {
+    eagleClient: withSortIndex({
       async appInfo() {
         return { version: "1.0.0" };
       },
@@ -4620,7 +4645,7 @@ test("experimental sort counts a folder's item types from the library index with
       async itemExtensions() {
         throw new Error("itemExtensions should not be used once the index is ready");
       },
-    },
+    }),
   });
 
   await viewer.start();
@@ -4879,7 +4904,7 @@ test("experimental sort scans Eagle for item types right after an upload, before
   let scans = 0;
   const viewer = uploadViewer(async () => undefined, {
     experimentalSort: true,
-    eagleClient: {
+    eagleClient: withSortIndex({
       async appInfo() {
         return { version: "1.0.0" };
       },
@@ -4898,7 +4923,7 @@ test("experimental sort scans Eagle for item types right after an upload, before
         // Eagle already lists the uploaded PNG; mtime.json (and so the index) does not yet.
         return [{ ext: "jpg", count: 1 }, { ext: "png", count: 1 }];
       },
-    },
+    }),
   });
   await viewer.start();
   try {
@@ -4927,20 +4952,19 @@ test("experimental sort scans Eagle for item types right after an upload, before
   }
 });
 
-test("experimental sort scans Eagle for item types while the index is missing unreadable items", async () => {
+test("experimental sort scans Eagle for item types while Eagle couldn't answer the index for some items", async () => {
   const libraryPath = await createSortLibrary([
     { id: "A1", name: "a", ext: "jpg", folders: ["F1"] },
     { id: "B2", name: "b", ext: "png", folders: ["F1"] },
   ]);
-  // B2's folder is there but its metadata is not (yet), so the index can't count it.
-  await rm(join(libraryPath, "images", "B2.info", "metadata.json"));
+  let eagleBusy = false;
   const scopes: unknown[] = [];
   const viewer = createViewerServer({
     host: "127.0.0.1",
     port: 0,
     viewerPassword: "",
     experimentalSort: true,
-    eagleClient: {
+    eagleClient: withSortIndex({
       async appInfo() {
         return { version: "1.0.0" };
       },
@@ -4954,13 +4978,22 @@ test("experimental sort scans Eagle for item types while the index is missing un
         scopes.push(folderId);
         return [{ ext: "jpg", count: 1 }, { ext: "png", count: 1 }];
       },
-    },
+      async sortIndexItems(ids: string[]) {
+        if (eagleBusy) throw new Error("Eagle is busy");
+        return withSortIndex({ libraryInfo: async () => ({ path: libraryPath }) }).sortIndexItems(ids);
+      },
+    }),
   });
 
   await viewer.start();
   try {
     const origin = `http://127.0.0.1:${viewer.status().port}`;
     assert.equal((await (await fetch(`${origin}/api/items?sort=name`)).json()).sort.status, "ready");
+    // B2 changes, but Eagle doesn't answer the index for it; the next check (2 s later) leaves it
+    // unanswered, so the index can't count it.
+    eagleBusy = true;
+    await writeFile(join(libraryPath, "mtime.json"), JSON.stringify({ A1: 1, B2: 2, all: 2 }));
+    await new Promise((resolve) => setTimeout(resolve, 2100));
     assert.deepEqual(await (await fetch(`${origin}/api/item-types?folderId=F1`)).json(), {
       complete: true,
       items: [{ ext: "jpg", count: 1 }, { ext: "png", count: 1 }],
@@ -4982,7 +5015,7 @@ test("experimental sort says when its index is missing item folders, and scans E
     port: 0,
     viewerPassword: "",
     experimentalSort: true,
-    eagleClient: {
+    eagleClient: withSortIndex({
       async appInfo() {
         return { version: "1.0.0" };
       },
@@ -4996,7 +5029,7 @@ test("experimental sort says when its index is missing item folders, and scans E
         scopes.push(folderId);
         return [{ ext: "jpg", count: 1 }, { ext: "png", count: 1 }];
       },
-    },
+    }),
   });
 
   await viewer.start();
@@ -5048,7 +5081,7 @@ test("without experimentalSort, /api/items ignores sort and connect lists no fea
 const MANY_SORT_ITEMS = Array.from({ length: 300 }, (_, i) => ({ id: `N${String(i).padStart(4, "0")}`, name: `item ${i}` }));
 
 function sortTestClient(libraryPath: () => string, overrides: Record<string, unknown> = {}) {
-  return {
+  return withSortIndex({
     async appInfo() {
       return { version: "1.0.0" };
     },
@@ -5062,7 +5095,7 @@ function sortTestClient(libraryPath: () => string, overrides: Record<string, unk
       return { items: [{ id: "eagle-order" }], total: 1, offset: 0, limit: 30 };
     },
     ...overrides,
-  };
+  });
 }
 
 async function postJsonTo(url: string, origin: string, body: unknown = {}, headers: Record<string, string> = {}) {

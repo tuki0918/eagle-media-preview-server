@@ -6,7 +6,43 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 const require = createRequire(import.meta.url);
-const { createLibraryIndex, createLibraryIndexManager, parseIndexSort } = require("../dist/.generated/plugin-service/libraryIndex.cjs");
+const libraryIndexModule = require("../dist/.generated/plugin-service/libraryIndex.cjs");
+const { parseIndexSort } = libraryIndexModule;
+
+// Stands in for Eagle's item/get by ids: answers from each item's metadata.json, leaving out items in
+// the trash, ids without metadata, and metadata for another id, as Eagle does. A metadata.json that
+// can't be parsed fails the whole request, like Eagle not answering; so does `down`.
+function eagleFromDisk(libraryPath: string, state: { calls: string[][]; down?: boolean } = { calls: [] }) {
+  return {
+    state,
+    async fetchItems(ids: string[]) {
+      state.calls.push(ids);
+      if (state.down) throw new Error("Eagle is not answering");
+      const found: unknown[] = [];
+      for (const id of ids) {
+        let text: string;
+        try {
+          text = await readFile(join(libraryPath, "images", `${id}.info`, "metadata.json"), "utf8");
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+          throw error;
+        }
+        const raw = JSON.parse(text);
+        if (raw?.id === id && raw.isDeleted !== true) found.push(raw);
+      }
+      return found;
+    },
+  };
+}
+
+// Unpaced unless a test asks for pacing, so tests don't wait on the budget.
+function createLibraryIndex(libraryPath: string, options: Record<string, unknown> = {}) {
+  return libraryIndexModule.createLibraryIndex(libraryPath, { batchesPerSecond: Infinity, source: eagleFromDisk(libraryPath), ...options });
+}
+
+function createLibraryIndexManager(options: Record<string, unknown> = {}) {
+  return libraryIndexModule.createLibraryIndexManager({ batchesPerSecond: Infinity, sourceFor: (libraryPath: string) => eagleFromDisk(libraryPath), ...options });
+}
 
 interface TestItem {
   id: string;
@@ -120,12 +156,13 @@ test("library index counts the extensions in a folder, leaving trashed items out
 test("library index reports whether it covers every item", async () => {
   const libraryPath = await createLibrary(sampleItems);
   try {
+    // Eagle doesn't answer for B2 during the build.
     const metadataPath = join(libraryPath, "images", "B2.info", "metadata.json");
     const metadata = await readFile(metadataPath, "utf8");
-    await rm(metadataPath);
-    const index = await readyIndex(libraryPath);
+    await writeFile(metadataPath, "{");
+    const index = await readyIndex(libraryPath, { batchSize: 1 });
     assert.equal(index.coversAllItems(), false);
-    // Once the metadata is back, the next check reads it.
+    // Once Eagle answers, the next check gets it.
     await writeFile(metadataPath, metadata);
     await index.extensionCounts({});
     assert.equal(index.coversAllItems(), true);
@@ -163,6 +200,61 @@ test("library index trims extensions like Eagle's scan, for counts and the type 
     assert.deepEqual((await index.extensionCounts({})).items, [{ ext: "jpg", count: 2 }]);
     assert.equal((await index.query({ ext: "jpg" }, { key: "name", order: "asc" }, 0, 10)).total, 2);
   } finally {
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("library index counts items in the trash against Eagle's count", async () => {
+  const libraryPath = await createLibrary(sampleItems);
+  try {
+    // Eagle's "all" counts D4, which is in the trash: Eagle doesn't return it, but its folder is there.
+    await writeMtime(libraryPath, { A1: 1, B2: 1, C3: 1, D4: 1, all: 4 });
+    const index = await readyIndex(libraryPath);
+    assert.equal((await index.query({}, parseIndexSort("import", ""), 0, 10)).total, 3);
+    assert.equal(index.coversAllItems(), true);
+  } finally {
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("library index asks Eagle for a batch of ids at a time, and only for items that changed", async () => {
+  const libraryPath = await createLibrary(sampleItems);
+  try {
+    const source = eagleFromDisk(libraryPath);
+    const index = await readyIndex(libraryPath, { batchSize: 3, source, rescanIntervalMs: 60_000 });
+    assert.deepEqual(source.state.calls.map((ids) => ids.length), [3, 1]);
+    source.state.calls.length = 0;
+    await writeItem(libraryPath, { ...sampleItems[1], size: 1000, lastModified: 2 });
+    await writeMtime(libraryPath, { A1: 1, B2: 2, C3: 1, D4: 1 });
+    assert.deepEqual((await index.query({}, parseIndexSort("filesize", "desc"), 0, 10)).ids, ["B2", "A1", "C3"]);
+    assert.deepEqual(source.state.calls, [["B2"]]);
+  } finally {
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("library index fails a build Eagle answered nothing for, and keeps what it holds when Eagle stops answering later", async () => {
+  const libraryPath = await createLibrary(sampleItems);
+  const realNow = Date.now;
+  try {
+    const source = eagleFromDisk(libraryPath, { calls: [], down: true });
+    const index = createLibraryIndex(libraryPath, { refreshIntervalMs: 0, rescanIntervalMs: 0, source });
+    assert.equal(await index.whenReady(1000), false);
+    assert.equal(index.status, "failed");
+    source.state.down = false;
+    Date.now = () => realNow() + 31_000;
+    assert.equal(await index.whenReady(5000), true);
+    const sort = parseIndexSort("filesize", "desc");
+    assert.deepEqual((await index.query({}, sort, 0, 10)).ids, ["A1", "C3", "B2"]);
+    // An update Eagle doesn't answer keeps the items as they were, and is retried.
+    source.state.down = true;
+    await writeItem(libraryPath, { ...sampleItems[1], size: 1000, lastModified: 2 });
+    await writeMtime(libraryPath, { A1: 1, B2: 2, C3: 1, D4: 1 });
+    assert.deepEqual(await index.query({}, sort, 0, 10), { complete: false, ids: ["A1", "C3", "B2"], total: 3 });
+    source.state.down = false;
+    assert.deepEqual(await index.query({}, sort, 0, 10), { complete: true, ids: ["B2", "A1", "C3"], total: 3 });
+  } finally {
+    Date.now = realNow;
     await rm(libraryPath, { recursive: true, force: true });
   }
 });
@@ -354,7 +446,7 @@ test("library index stops a build when disposed", async () => {
   const items = Array.from({ length: 200 }, (_, i) => ({ id: `D${String(i).padStart(4, "0")}`, name: `item ${i}` }));
   const libraryPath = await createLibrary(items);
   try {
-    const index = createLibraryIndex(libraryPath, { concurrency: 1 });
+    const index = createLibraryIndex(libraryPath, { batchSize: 1 });
     assert.equal(await index.whenReady(0), false);
     index.dispose();
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -365,13 +457,13 @@ test("library index stops a build when disposed", async () => {
   }
 });
 
-test("library index reads at most readsPerSecond after the first second's worth", async () => {
+test("library index asks Eagle at most batchesPerSecond times after the first second's worth", async () => {
   const items = Array.from({ length: 30 }, (_, i) => ({ id: `R${String(i).padStart(4, "0")}`, name: `item ${i}` }));
   const libraryPath = await createLibrary(items);
   try {
-    // 20 reads right away, then the other 10 at 20 per second: about half a second.
+    // 20 requests of one item right away, then the other 10 at 20 per second: about half a second.
     const started = Date.now();
-    const index = createLibraryIndex(libraryPath, { readsPerSecond: 20 });
+    const index = createLibraryIndex(libraryPath, { batchSize: 1, batchesPerSecond: 20 });
     assert.equal(await index.whenReady(0), false);
     await new Promise((resolve) => setTimeout(resolve, 150));
     assert.equal(index.status, "building");
@@ -389,7 +481,7 @@ test("library index stops a paced build when disposed", async () => {
   const items = Array.from({ length: 30 }, (_, i) => ({ id: `P${String(i).padStart(4, "0")}`, name: `item ${i}` }));
   const libraryPath = await createLibrary(items);
   try {
-    const index = createLibraryIndex(libraryPath, { readsPerSecond: 10 });
+    const index = createLibraryIndex(libraryPath, { batchSize: 1, batchesPerSecond: 10 });
     assert.equal(await index.whenReady(0), false);
     await new Promise((resolve) => setTimeout(resolve, 100));
     index.dispose();
@@ -402,12 +494,12 @@ test("library index stops a paced build when disposed", async () => {
   }
 });
 
-// 30 items read at 20 a second: the build uses up the first second's worth, so an update of all
-// 30 then takes about 1.5 s.
+// 30 items asked for one at a time, 20 times a second: the build uses up the first second's worth,
+// so an update of all 30 then takes about 1.5 s.
 async function pacedLibraryWithBulkEdit(prefix: string) {
   const ids = Array.from({ length: 30 }, (_, i) => `${prefix}${String(i).padStart(4, "0")}`);
   const libraryPath = await createLibrary(ids.map((id, i) => ({ id, name: `a${String(i).padStart(2, "0")}` })));
-  const index = createLibraryIndex(libraryPath, { readsPerSecond: 20, refreshIntervalMs: 0, refreshWaitMs: 50, rescanIntervalMs: 60_000 });
+  const index = createLibraryIndex(libraryPath, { batchSize: 1, batchesPerSecond: 20, refreshIntervalMs: 0, refreshWaitMs: 50, rescanIntervalMs: 60_000 });
   assert.equal(await index.whenReady(5000), true);
   // A bulk edit reverses the name order of every item.
   for (const [i, id] of ids.entries()) await writeItem(libraryPath, { id, name: `b${String(29 - i).padStart(2, "0")}`, lastModified: 2 });
@@ -495,7 +587,7 @@ test("library index manager release stops a build in progress and a later reques
   const items = Array.from({ length: 200 }, (_, i) => ({ id: `M${String(i).padStart(4, "0")}`, name: `item ${i}` }));
   const libraryPath = await createLibrary(items);
   try {
-    const manager = createLibraryIndexManager({ concurrency: 1 });
+    const manager = createLibraryIndexManager({ batchSize: 1 });
     const first = manager.forLibrary(libraryPath);
     assert.equal(await first.whenReady(0), false);
     manager.release();
@@ -530,18 +622,18 @@ test("library index runs a rescan held back by the interval later, without anoth
   }
 });
 
-test("library index retries metadata it couldn't read, even when mtime.json doesn't change", async () => {
+test("library index asks again for items Eagle couldn't answer for, even when mtime.json doesn't change", async () => {
   const libraryPath = await createLibrary(sampleItems);
   try {
-    // Unreadable during the build: the item is left out at first, not forever.
+    // Not answered during the build: the item is left out at first, not forever.
     await writeFile(join(libraryPath, "images", "C3.info", "metadata.json"), "{\"id\":\"C3\",");
-    const index = await readyIndex(libraryPath);
+    const index = await readyIndex(libraryPath, { batchSize: 1 });
     const sort = parseIndexSort("filesize", "desc");
     assert.deepEqual((await index.query({}, sort, 0, 10)).ids, ["A1", "B2"]);
     await writeItem(libraryPath, sampleItems[2]);
     assert.deepEqual((await index.query({}, sort, 0, 10)).ids, ["A1", "C3", "B2"]);
 
-    // Unreadable after a change: the old data stays until the file can be read.
+    // Not answered after a change: the old data stays until Eagle answers.
     await writeFile(join(libraryPath, "images", "B2.info", "metadata.json"), "{\"id\":\"B2\",");
     await writeMtime(libraryPath, { A1: 1, B2: 2, C3: 1, D4: 1 });
     assert.deepEqual((await index.query({}, sort, 0, 10)).ids, ["A1", "C3", "B2"]);
@@ -552,27 +644,32 @@ test("library index retries metadata it couldn't read, even when mtime.json does
   }
 });
 
-test("library index keeps an item whose metadata.json is missing for a while but whose folder is still there", async () => {
+test("library index leaves out items Eagle stops returning, and asks about those with a folder again later", async () => {
   const libraryPath = await createLibrary(sampleItems);
+  const realNow = Date.now;
   try {
-    // During the build, C3's folder exists but its metadata.json hasn't synced yet.
-    await rm(join(libraryPath, "images", "C3.info", "metadata.json"));
-    const index = await readyIndex(libraryPath);
+    // During the build, Eagle doesn't return C3 yet (synced from another computer, not loaded yet).
+    const metadataPath = join(libraryPath, "images", "C3.info", "metadata.json");
+    await rm(metadataPath);
+    const index = await readyIndex(libraryPath, { rescanIntervalMs: 60_000 });
     const sort = parseIndexSort("filesize", "desc");
     assert.deepEqual((await index.query({}, sort, 0, 10)).ids, ["A1", "B2"]);
     await writeItem(libraryPath, sampleItems[2]);
-    // mtime.json is unchanged, yet C3 comes back.
+    // mtime.json is unchanged; C3 is asked about again only after rescanIntervalMs.
+    assert.deepEqual((await index.query({}, sort, 0, 10)).ids, ["A1", "B2"]);
+    Date.now = () => realNow() + 61_000;
     assert.deepEqual((await index.query({}, sort, 0, 10)).ids, ["A1", "C3", "B2"]);
 
-    // Later, a missing metadata.json in a folder that is still there keeps the item as it was.
-    await rm(join(libraryPath, "images", "B2.info", "metadata.json"));
-    await writeMtime(libraryPath, { A1: 1, B2: 2, C3: 1, D4: 1 });
+    // B2 goes to the trash: Eagle no longer returns it, and its folder stays.
+    await writeItem(libraryPath, { ...sampleItems[1], isDeleted: true, lastModified: 2 });
+    await writeMtime(libraryPath, { A1: 1, B2: 2, C3: 1, D4: 1, all: 4 });
+    assert.deepEqual(await index.query({}, sort, 0, 10), { complete: true, ids: ["A1", "C3"], total: 2 });
+    // Restored, it comes back.
+    await writeItem(libraryPath, { ...sampleItems[1], lastModified: 3 });
+    await writeMtime(libraryPath, { A1: 1, B2: 3, C3: 1, D4: 1, all: 4 });
     assert.deepEqual((await index.query({}, sort, 0, 10)).ids, ["A1", "C3", "B2"]);
-    // Only a removed folder removes the item.
-    await rm(join(libraryPath, "images", "B2.info"), { recursive: true });
-    await writeMtime(libraryPath, { A1: 1, B2: 3, C3: 1, D4: 1 });
-    assert.deepEqual((await index.query({}, sort, 0, 10)).ids, ["A1", "C3"]);
   } finally {
+    Date.now = realNow;
     await rm(libraryPath, { recursive: true, force: true });
   }
 });

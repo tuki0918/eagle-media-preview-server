@@ -1,10 +1,12 @@
 // Experimental: an in-memory index of one library's item metadata, built only when a viewer asks
 // for a sort order that Eagle's Web API can't give (`item/get` always answers newest-first).
 //
-// It reads `<library>/images/<id>.info/metadata.json` directly and stays current the way Eagle
-// itself does: `<library>/mtime.json` maps every item id to its last change, so a changed file
-// (checked with stat, at most every `refreshIntervalMs`) tells which items to read again. The index
-// decides only which ids match and in what order; callers fetch the items themselves from Eagle.
+// The ids come from the library folder (`<library>/images/<id>.info`), and their metadata from
+// Eagle's `item/get` by `ids`, a batch at a time: Eagle holds every item in memory, so no
+// metadata.json is opened. It stays current the way Eagle itself does: `<library>/mtime.json` maps
+// every item id to its last change, so a changed file (checked with stat, at most every
+// `refreshIntervalMs`) tells which items to ask for again. The index decides only which ids match
+// and in what order; callers fetch the items themselves from Eagle.
 const { readFile, readdir, stat } = require("fs").promises;
 const { join } = require("path");
 const { normalizeExtension, sortedExtensionCounts } = require("./eagleClient.cjs");
@@ -48,19 +50,30 @@ interface IndexedItem {
 
 type IndexStatus = "building" | "failed" | "idle" | "ready";
 
-interface LibraryIndexOptions {
-  /** How many metadata.json reads may be in flight at once. */
-  concurrency?: number;
+/** Where the index gets item metadata: Eagle's Web API for the library the index is for. */
+interface ItemSource {
   /**
-   * The most metadata.json reads per second, to spare the disk or NAS; Infinity turns it off. Up to
-   * one second's worth may be read at once, so small libraries and small updates aren't held back.
+   * The items Eagle holds for these ids (at most batchSize of them). Eagle leaves out items in the
+   * trash and ids it doesn't know. Rejects when Eagle can't answer, or now has another library open.
    */
-  readsPerSecond?: number;
+  fetchItems(ids: string[]): Promise<unknown[]>;
+}
+
+interface LibraryIndexOptions {
+  source: ItemSource;
+  /** How many ids one request to Eagle asks for; Eagle takes at most 1,000. */
+  batchSize?: number;
+  /**
+   * The most requests to Eagle per second, to spare Eagle (each one scans its whole item list);
+   * Infinity turns it off. Up to one second's worth may go at once, so small libraries and small
+   * updates aren't held back. Requests go one at a time.
+   */
+  batchesPerSecond?: number;
   /** How often a query may stat mtime.json for changes. */
   refreshIntervalMs?: number;
   /**
    * How long a query waits for an update in progress before answering from what the index holds;
-   * the update carries on in the background (a bulk edit of many items takes a while at readsPerSecond).
+   * the update carries on in the background (a bulk edit of many items takes a while at batchesPerSecond).
    */
   refreshWaitMs?: number;
   /** A full folder scan, when Eagle's item count disagrees with the index, runs at most this often. */
@@ -80,13 +93,13 @@ const DEFAULT_SORT_ORDER: Record<SortKey, SortOrder> = {
   rating: "asc",
   resolution: "asc",
 };
-// A few reads at a time are enough to keep the build moving, and leave the disk (and Node's file
-// threads, shared with the media the server streams) free for everything else.
-const DEFAULT_CONCURRENCY = 8;
-// 300,000 items take about 2.5 minutes at this rate (the unthrottled build took about 17 s on an SSD).
-// On Windows, Defender checks every file opened; at this rate it stays mostly quiet (no fan noise).
-const DEFAULT_READS_PER_SECOND = 2000;
-// Shortest pause between reads once the budget is spent; shorter timers aren't reliable.
+// Eagle's item/get takes at most 1,000 ids.
+const DEFAULT_BATCH_SIZE = 1000;
+// Each item/get copies and filters Eagle's whole item list in Eagle's window (about 13 ms for
+// 300,000 items on an M1, in a simulation of that code), so they are spread out: 300,000 items take
+// about 2.5 minutes at this rate, as long as the paced reads of metadata.json used to.
+const DEFAULT_BATCHES_PER_SECOND = 2;
+// Shortest pause between requests once the budget is spent; shorter timers aren't reliable.
 const MIN_PACING_PAUSE_MS = 10;
 const DEFAULT_REFRESH_INTERVAL_MS = 2000;
 const DEFAULT_REFRESH_WAIT_MS = 1000;
@@ -187,9 +200,9 @@ async function waitAtMost(promise: Promise<unknown>, ms: number) {
   }
 }
 
-// A token bucket: each read takes one token; tokens come back at `perSecond`, holding at most one
-// second's worth. Resolves when the caller may read.
-function createReadPacer(perSecond: number) {
+// A token bucket: each request takes one token; tokens come back at `perSecond`, holding at most one
+// second's worth. Resolves when the caller may send the request.
+function createPacer(perSecond: number) {
   if (!(perSecond > 0) || !Number.isFinite(perSecond)) return async () => {};
   const capacity = Math.max(1, perSecond);
   let tokens = capacity;
@@ -208,32 +221,19 @@ function createReadPacer(perSecond: number) {
   };
 }
 
-type ReadPacer = ReturnType<typeof createReadPacer>;
-
-async function mapWithConcurrency<T>(values: readonly T[], concurrency: number, pace: ReadPacer, task: (value: T) => Promise<void>, stopped: () => boolean = () => false) {
-  let next = 0;
-  const worker = async () => {
-    while (next < values.length && !stopped()) {
-      await pace(stopped);
-      if (stopped() || next >= values.length) break;
-      const value = values[next++];
-      await task(value);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, worker));
-}
-
 function createLibraryIndex(libraryPath: string, {
-  concurrency = DEFAULT_CONCURRENCY,
-  readsPerSecond = DEFAULT_READS_PER_SECOND,
+  source,
+  batchSize = DEFAULT_BATCH_SIZE,
+  batchesPerSecond = DEFAULT_BATCHES_PER_SECOND,
   refreshIntervalMs = DEFAULT_REFRESH_INTERVAL_MS,
   refreshWaitMs = DEFAULT_REFRESH_WAIT_MS,
   rescanIntervalMs = DEFAULT_RESCAN_INTERVAL_MS,
-}: LibraryIndexOptions = {}) {
+}: LibraryIndexOptions) {
   const imagesDir = join(libraryPath, "images");
   const mtimePath = join(libraryPath, "mtime.json");
-  // Shared by the build and later updates, so together they stay within readsPerSecond.
-  const pace = createReadPacer(readsPerSecond);
+  const size = Math.max(1, Math.min(DEFAULT_BATCH_SIZE, Math.trunc(batchSize) || DEFAULT_BATCH_SIZE));
+  // Shared by the build and later updates, so together they stay within batchesPerSecond.
+  const pace = createPacer(batchesPerSecond);
   const items = new Map<string, IndexedItem>();
   const strings = new Map<string, string>();
   const intern = (text: string) => {
@@ -245,8 +245,9 @@ function createLibraryIndex(libraryPath: string, {
   let status: IndexStatus = "idle";
   let building: Promise<void> | null = null;
   let refreshing: Promise<void> | null = null;
-  // When the update in progress last got somewhere (started, listed the folder, or read an item):
-  // a paced update reads many items a second, so a long pause means a stalled read (a NAS hang).
+  // When the update in progress last got somewhere (started, listed the folder, or got a batch):
+  // a paced update hears from Eagle every second or so, so a long pause means something hangs
+  // (Eagle busy, or a NAS listing).
   let refreshProgressAt = 0;
   let loaded = 0;
   let total = 0;
@@ -256,12 +257,17 @@ function createLibraryIndex(libraryPath: string, {
   let lastRescan = 0;
   let mtimeSignature = "";
   let failedAt = 0;
-  // Bumped by each build: reads from an earlier, abandoned build (a failed one being retried) are dropped.
+  // Bumped by each build: answers for an earlier, abandoned build (a failed one being retried) are dropped.
   let buildRun = 0;
-  // Ids in mtime.json without an item folder, with the change time they were last checked at.
+  // Ids in mtime.json that Eagle didn't return, with the change time they were last asked about.
   const missing = new Map<string, number>();
-  // Items whose metadata.json couldn't be read or parsed (Eagle mid-write, a NAS or sync hiccup).
-  // They are tried again at every check, whether or not mtime.json changed.
+  // Ids with an item folder that Eagle didn't return: in the trash, or not loaded by Eagle yet. Eagle's
+  // item count includes them, so they are counted against it; they are asked about again at most
+  // every rescanIntervalMs.
+  const absent = new Set<string>();
+  let lastAbsentCheck = 0;
+  // Ids Eagle couldn't answer for (a request failed). They are asked about again at every check,
+  // whether or not mtime.json changed.
   const unreadable = new Set<string>();
   // A folder rescan that was due but held back by rescanIntervalMs; it runs at a later check.
   let rescanPending = false;
@@ -271,45 +277,84 @@ function createLibraryIndex(libraryPath: string, {
   const queryCache = new Map<string, { ids: string[]; version: number }>();
   const extensionCache = new Map<string, { items: Array<{ count: number; ext: string }>; version: number }>();
 
-  /** Reads one item; resolves true when the index changed (an item set or dropped). */
-  async function readItem(id: string, run = buildRun): Promise<boolean> {
-    try {
-      const raw = JSON.parse(await readFile(join(imagesDir, `${id}.info`, "metadata.json"), "utf8"));
-      if (run !== buildRun) return false;
-      unreadable.delete(id);
-      if (!raw || typeof raw !== "object" || raw.id !== id) return false;
-      const name = typeof raw.name === "string" ? raw.name : "";
-      items.set(id, {
-        btime: finiteNumber(raw.btime),
-        duration: finiteNumber(raw.duration),
-        ext: intern(normalizeExtension(raw.ext)),
-        folders: stringList(raw.folders, intern),
-        height: finiteNumber(raw.height),
-        id,
-        isDeleted: raw.isDeleted === true,
-        lastModified: finiteNumber(raw.lastModified),
-        modificationTime: finiteNumber(raw.modificationTime),
-        mtime: finiteNumber(raw.mtime),
-        name,
-        size: finiteNumber(raw.size),
-        star: Math.max(0, Math.min(5, Math.trunc(finiteNumber(raw.star)))),
-        tags: stringList(raw.tags, intern),
-        width: finiteNumber(raw.width),
-      });
-      return true;
-    } catch (error) {
-      if (run !== buildRun) return false;
-      // An item whose folder is gone was removed. Any other failure, including a metadata.json that
-      // is missing from a folder still there (a NAS or sync delay), keeps what was read and is retried.
-      if ((error as NodeJS.ErrnoException)?.code === "ENOENT" && !(await itemFolderExists(id))) {
-        // Checked again after the await: an abandoned build must not touch the next one's state.
-        if (run !== buildRun) return false;
-        unreadable.delete(id);
-        return items.delete(id);
+  function indexedItem(id: string, raw: Record<string, unknown>): IndexedItem {
+    return {
+      btime: finiteNumber(raw.btime),
+      duration: finiteNumber(raw.duration),
+      ext: intern(normalizeExtension(raw.ext)),
+      folders: stringList(raw.folders, intern),
+      height: finiteNumber(raw.height),
+      id,
+      isDeleted: false,
+      lastModified: finiteNumber(raw.lastModified),
+      modificationTime: finiteNumber(raw.modificationTime),
+      mtime: finiteNumber(raw.mtime),
+      name: typeof raw.name === "string" ? raw.name : "",
+      size: finiteNumber(raw.size),
+      star: Math.max(0, Math.min(5, Math.trunc(finiteNumber(raw.star)))),
+      tags: stringList(raw.tags, intern),
+      width: finiteNumber(raw.width),
+    };
+  }
+
+  /**
+   * Asks Eagle for these items, a paced batch at a time, and resolves true when the index changed
+   * (an item set or dropped). An id Eagle doesn't return is dropped: if its folder is there (`listed`
+   * says the ids were just listed from the folder), it is in the trash or not loaded by Eagle yet,
+   * and is kept in `absent`. A batch Eagle couldn't answer keeps what was held and is retried.
+   */
+  async function readItems(ids: readonly string[], { listed = false, onBatch, run = buildRun, stopped }: {
+    listed?: boolean;
+    onBatch?: (batch: string[]) => void;
+    run?: number;
+    stopped: () => boolean;
+  }) {
+    let updated = false;
+    for (let start = 0; start < ids.length && !stopped(); start += size) {
+      await pace(stopped);
+      if (stopped()) break;
+      const batch = ids.slice(start, start + size);
+      let answered: unknown[] | null = null;
+      try {
+        answered = await source.fetchItems(batch);
+      } catch {
+        // Kept as it was and asked about again at the next check.
       }
-      if (run === buildRun) unreadable.add(id);
-      return false;
+      if (run !== buildRun) break;
+      if (!Array.isArray(answered)) {
+        for (const id of batch) unreadable.add(id);
+        onBatch?.(batch);
+        continue;
+      }
+      const found = new Map<string, Record<string, unknown>>();
+      for (const raw of answered) {
+        if (raw && typeof raw === "object" && typeof (raw as Record<string, unknown>).id === "string") {
+          found.set((raw as Record<string, unknown>).id as string, raw as Record<string, unknown>);
+        }
+      }
+      const notReturned: string[] = [];
+      for (const id of batch) {
+        unreadable.delete(id);
+        const raw = found.get(id);
+        if (raw && raw.isDeleted !== true) {
+          items.set(id, indexedItem(id, raw));
+          absent.delete(id);
+          updated = true;
+        } else {
+          if (items.delete(id)) updated = true;
+          notReturned.push(id);
+        }
+      }
+      const withFolder = listed ? notReturned.map(() => true) : await Promise.all(notReturned.map(itemFolderExists));
+      // Checked again after the await: an abandoned build must not touch the next one's state.
+      if (run !== buildRun) break;
+      notReturned.forEach((id, i) => {
+        if (withFolder[i]) absent.add(id);
+        else absent.delete(id);
+      });
+      onBatch?.(batch);
     }
+    return updated;
   }
 
   async function itemFolderExists(id: string) {
@@ -352,20 +397,30 @@ function createLibraryIndex(libraryPath: string, {
       const ids = await listItemIds();
       if (stopped()) return;
       total = ids.length;
-      await mapWithConcurrency(ids, concurrency, pace, async (id) => {
-        await readItem(id, run);
-        if (!stopped()) loaded += 1;
-      }, stopped);
+      await readItems(ids, {
+        listed: true,
+        onBatch: (batch) => {
+          if (!stopped()) loaded += batch.length;
+        },
+        run,
+        stopped,
+      });
       if (stopped()) return;
+      // Eagle not answering at all (another library open, say) is a failed build, retried later.
+      if (ids.length && unreadable.size === ids.length) throw new Error("Eagle returned none of the library's items");
       if (mtime) {
         mtimeSignature = mtime.signature;
         noteEagleItemCount(mtime.values);
+        for (const id of absent) {
+          if (id in mtime.values) missing.set(id, finiteNumber(mtime.values[id]));
+        }
       }
       // Items the build couldn't see (a folder still syncing, say) leave the counts apart: check the
       // folder again later, even if mtime.json doesn't change.
       if (mtime && countDisagrees()) rescanPending = true;
       lastRefreshCheck = Date.now();
       lastRescan = lastRefreshCheck;
+      lastAbsentCheck = lastRefreshCheck;
       version += 1;
       status = "ready";
     } catch (error) {
@@ -380,9 +435,10 @@ function createLibraryIndex(libraryPath: string, {
     return !refreshing && unreadable.size === 0 && !countDisagrees();
   }
 
-  // Eagle's own item count, "all" (0 included), against the items held.
+  // Eagle's own item count, "all" (0 included, trashed items included), against the items held and
+  // those in the trash.
   function countDisagrees() {
-    return eagleItemCount !== null && eagleItemCount !== items.size;
+    return eagleItemCount !== null && eagleItemCount !== items.size + absent.size;
   }
 
   function noteEagleItemCount(values: Record<string, unknown>) {
@@ -390,34 +446,44 @@ function createLibraryIndex(libraryPath: string, {
   }
 
   async function refresh() {
-    // A disposed index reads nothing more: the reads in flight are dropped (dispose bumps buildRun).
+    // A disposed index asks for nothing more: answers in flight are dropped (dispose bumps buildRun).
     const stopped = () => disposed;
     refreshProgressAt = Date.now();
     const mtime = await readMtimeFile();
     if (stopped()) return;
     refreshProgressAt = Date.now();
     const mtimeChanged = Boolean(mtime && mtime.signature !== mtimeSignature);
-    if (!mtimeChanged && !unreadable.size && !rescanPending) return;
+    // An item synced from another computer may reach Eagle only after mtime.json says so; asked
+    // about too early it looks like a trashed one, so those are asked about again now and then.
+    const absentDue = absent.size > 0 && Date.now() - lastAbsentCheck >= rescanIntervalMs;
+    if (!mtimeChanged && !unreadable.size && !rescanPending && !absentDue) return;
     const values = mtimeChanged ? mtime!.values : {};
     if (mtimeChanged) noteEagleItemCount(values);
     const changed = new Set<string>(unreadable);
+    if (absentDue) {
+      lastAbsentCheck = Date.now();
+      for (const id of absent) changed.add(id);
+    }
     for (const [id, value] of Object.entries(values)) {
       if (id === "all" || !ITEM_ID_PATTERN.test(id)) continue;
       const item = items.get(id);
       const changedAt = finiteNumber(value);
-      // Eagle leaves ids of removed items in mtime.json; skip those already found missing.
+      // Eagle leaves ids of removed items in mtime.json; skip those it didn't return last time.
       if (item ? changedAt > item.lastModified : missing.get(id) !== changedAt) changed.add(id);
     }
     // Only real changes bump the version: a file that keeps failing must not force a re-sort each time.
     let updated = false;
     try {
-      await mapWithConcurrency([...changed], concurrency, pace, async (id) => {
-        if (await readItem(id)) updated = true;
-        refreshProgressAt = Date.now();
-        if (stopped()) return;
-        if (items.has(id) || unreadable.has(id)) missing.delete(id);
-        else if (id in values) missing.set(id, finiteNumber(values[id]));
-      }, stopped);
+      if (await readItems([...changed], {
+        onBatch: (batch) => {
+          refreshProgressAt = Date.now();
+          for (const id of batch) {
+            if (items.has(id) || unreadable.has(id)) missing.delete(id);
+            else if (id in values) missing.set(id, finiteNumber(values[id]));
+          }
+        },
+        stopped,
+      })) updated = true;
       if (stopped()) return;
       // Eagle rescans the folder when its item count disagrees; permanent deletes show up only there.
       // A rescan held back by the interval is remembered, so it still happens without another change.
@@ -435,11 +501,17 @@ function createLibraryIndex(libraryPath: string, {
         for (const id of unreadable) {
           if (!present.has(id)) unreadable.delete(id);
         }
-        // Unreadable items were already tried at the start of this check.
-        await mapWithConcurrency([...present].filter((id) => !items.has(id) && !unreadable.has(id)), concurrency, pace, async (id) => {
-          if (await readItem(id)) updated = true;
-          refreshProgressAt = Date.now();
-        }, stopped);
+        for (const id of absent) {
+          if (!present.has(id)) absent.delete(id);
+        }
+        // Unreadable items were already asked about at the start of this check.
+        if (await readItems([...present].filter((id) => !items.has(id) && !unreadable.has(id)), {
+          listed: true,
+          onBatch: () => {
+            refreshProgressAt = Date.now();
+          },
+          stopped,
+        })) updated = true;
         if (stopped()) return;
         // Folders still syncing arrive later without touching mtime.json: keep rescanning, at the
         // interval, until the index holds as many items as Eagle counts.
@@ -493,8 +565,8 @@ function createLibraryIndex(libraryPath: string, {
 
     /**
      * False while the index may be missing items or hold old ones: an update is still being read
-     * (see refreshIfDue), some metadata could not be read, or it holds a different number of items
-     * than Eagle counts (an item folder not synced yet, say). Reflects the last check, so ask right
+     * (see refreshIfDue), Eagle couldn't answer for some items, or it holds a different number of
+     * items than Eagle counts (an item folder not synced yet, say). Reflects the last check, so ask right
      * after query() or extensionCounts(), which check first.
      */
     coversAllItems() {
@@ -585,11 +657,12 @@ function createLibraryIndex(libraryPath: string, {
 
     dispose() {
       disposed = true;
-      // Reads still in flight (a build or an update) see a newer run and drop what they read.
+      // Requests still in flight (a build or an update) see a newer run and drop their answers.
       buildRun += 1;
       items.clear();
       strings.clear();
       missing.clear();
+      absent.clear();
       unreadable.clear();
       sortedCache.clear();
       queryCache.clear();
@@ -600,9 +673,11 @@ function createLibraryIndex(libraryPath: string, {
 
 type LibraryIndex = ReturnType<typeof createLibraryIndex>;
 
-interface LibraryIndexManagerOptions extends LibraryIndexOptions {
+interface LibraryIndexManagerOptions extends Omit<LibraryIndexOptions, "source"> {
   /** An index nobody has queried for this long is dropped to give the memory back. */
   idleMs?: number;
+  /** Where an index for this library gets item metadata (see ItemSource). */
+  sourceFor: (libraryPath: string) => ItemSource;
 }
 
 const DEFAULT_IDLE_MS = 30 * 60 * 1000;
@@ -614,7 +689,7 @@ function libraryKey(libraryPath: string) {
 
 // Holds the index for the library open in Eagle: a different path replaces it, and an unused one
 // is released after `idleMs`, to be rebuilt by the next sorted request.
-function createLibraryIndexManager({ idleMs = DEFAULT_IDLE_MS, ...indexOptions }: LibraryIndexManagerOptions = {}) {
+function createLibraryIndexManager({ idleMs = DEFAULT_IDLE_MS, sourceFor, ...indexOptions }: LibraryIndexManagerOptions) {
   let current: { index: LibraryIndex; path: string } | null = null;
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -630,7 +705,7 @@ function createLibraryIndexManager({ idleMs = DEFAULT_IDLE_MS, ...indexOptions }
       const path = libraryKey(libraryPath);
       if (current?.path !== path) {
         release();
-        current = { index: createLibraryIndex(path, indexOptions), path };
+        current = { index: createLibraryIndex(path, { ...indexOptions, source: sourceFor(path) }), path };
       }
       if (idleTimer) clearTimeout(idleTimer);
       idleTimer = null;
