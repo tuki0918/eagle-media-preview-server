@@ -7,18 +7,21 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-11-12
+
 ### Added
 
 - List view: a **Columns** button to show or hide columns, and a compact layout for narrow screens.
 
 ### Changed
 
-- Advanced Sort now scans the library in the background as soon as the server starts (and again when Eagle opens another library), instead of on the first sort. The viewer stays usable meanwhile: only the Sort menu is disabled, showing "Preparing sort…" with the progress, and it turns on by itself once the scan is done. The plugin panel shows the scan as a progress bar under Server Status. The index is kept while the server runs.
-- The Advanced Sort scan now gets item details from Eagle, 1,000 items per request and two requests a second, instead of opening every item's `metadata.json` (it used to read 64 files at a time, as fast as possible); only items Eagle leaves out, such as those in the trash, are still read from disk. This spares the disk or NAS, and on Windows keeps Microsoft Defender, which checked every file the scan opened, from loading the CPU. A library of 300,000 items now takes about 2.5 minutes instead of about 20 seconds (100,000 items: about 50 seconds); libraries of up to 2,000 items are unaffected. Large updates (a bulk edit in Eagle) are fetched at the same pace in the background: a sorted request waits for them at most 1 second, then answers, marked incomplete, from what the index holds until the update is done. Browsing a sorted list during such an update can show an item twice or miss one once the update ends.
+- Advanced Sort: the menu now picks what to sort by, and the buttons beside it pick the direction, as in Eagle. Rating, file size, resolution, and duration now start highest, largest, or longest first.
+- Advanced Sort now scans the library in the background when the server starts and when Eagle opens another library, instead of on the first sort. The viewer stays usable meanwhile; the Sort menu turns on once the scan is done, and the plugin panel shows its progress.
+- The Advanced Sort scan now gets item details from Eagle instead of opening every item's file. This spares the disk or NAS and, on Windows, keeps Microsoft Defender from loading the CPU, but large libraries take longer to scan (about 2.5 minutes for 300,000 items). After a large bulk edit in Eagle, a sorted list may briefly show an item twice or miss one while the changes are being read.
 
 ### Removed
 
-- Removed the viewer's **Cancel** button for the Advanced Sort scan (and `POST /api/sort-index/cancel`). The scan now runs in the background without blocking the viewer; to avoid it, turn Advanced Sort off.
+- Removed the Cancel button for the Advanced Sort scan. To avoid the scan, turn Advanced Sort off.
 
 ## [0.7.2] - 2026-11-10
 
@@ -396,7 +399,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 - Initial release of Eagle Media Preview Server.
 
-[Unreleased]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.7.2...HEAD
+[Unreleased]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.7.3...HEAD
+[0.7.3]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.6.3...v0.7.0
