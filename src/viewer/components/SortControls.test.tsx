@@ -1,3 +1,4 @@
+import { act } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { JSDOM } from "jsdom";
 import { afterEach, describe, expect, test, vi } from "vitest";
@@ -20,6 +21,34 @@ describe("experimental sort controls", () => {
     expect(trigger?.disabled).toBe(true);
     expect(trigger?.getAttribute("aria-label")).toBe("Sort (experimental): Preparing sort… 40%");
     for (const button of doc.querySelectorAll<HTMLButtonElement>("#sortDirection button")) expect(button.disabled).toBe(true);
+  });
+
+  test("doesn't open the sort menu while the server prepares its index", async () => {
+    // Browsers still deliver pointerdown to a disabled button, and the menu opens on pointerdown.
+    async function pressSort(props: { sortAvailable?: boolean; sortPreparing?: string }, how: "keyboard" | "pointer") {
+      const dom = new JSDOM('<!doctype html><div id="root"></div>', { url: "http://localhost" });
+      for (const name of ["window", "document", "navigator", "Node", "HTMLElement", "CustomEvent"] as const) {
+        vi.stubGlobal(name, name === "window" ? dom.window : dom.window[name]);
+      }
+      vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+      const { createRoot } = await import("react-dom/client");
+      const root = createRoot(dom.window.document.querySelector("#root")!);
+      await act(async () => root.render(<AdvancedFilters filtersOpen selectedSort="name" {...props} />));
+      const trigger = dom.window.document.querySelector<HTMLButtonElement>("#sortSelect")!;
+      await act(async () => {
+        trigger.dispatchEvent(how === "pointer"
+          ? new dom.window.MouseEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 })
+          : new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
+      });
+      const state = trigger.getAttribute("data-state");
+      await act(async () => root.unmount());
+      return state;
+    }
+
+    for (const how of ["pointer", "keyboard"] as const) {
+      expect(await pressSort({ sortPreparing: "Preparing sort… 40%" }, how)).toBe("closed");
+      expect(await pressSort({ sortAvailable: true }, how)).toBe("open");
+    }
   });
 
   test("shows the sort menu only when the server offers it", () => {

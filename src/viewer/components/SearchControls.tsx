@@ -253,7 +253,9 @@ function FilterMenu({
 }) {
   return (
     <DropdownMenu modal={false} onOpenChange={onOpenChange}>
-      <DropdownMenuTrigger asChild>
+      {/* The trigger needs `disabled` itself: it opens on pointerdown, which browsers still deliver
+          to a disabled button, and checks only its own prop. */}
+      <DropdownMenuTrigger asChild disabled={disabled}>
         <button
           id={id}
           type="button"

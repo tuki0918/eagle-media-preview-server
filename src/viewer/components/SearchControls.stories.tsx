@@ -63,6 +63,15 @@ export const AdvancedFiltersWithSort: Story = {
   ),
 };
 
+// The server is still scanning: the sort menu and its direction buttons can't be used yet.
+export const AdvancedFiltersPreparingSort: Story = {
+  render: () => (
+    <div className={`${storyCanvasClassName} search-panel`}>
+      <AdvancedFilters filtersOpen hasActiveFilters sortPreparing="Preparing sort… 40%" selectedRating="3" />
+    </div>
+  ),
+};
+
 export const TagSearchPanel: Story = {
   render: () => (
     <div className={storyCanvasClassName}>
