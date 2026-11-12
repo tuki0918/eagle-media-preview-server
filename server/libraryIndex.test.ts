@@ -1,6 +1,6 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { chmod, mkdtemp, mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -96,6 +96,72 @@ test("library index filters with Eagle's item/get semantics", async () => {
     // Every tag must be present.
     assert.deepEqual(await ids({ tags: ["cat", "cute"] }), ["A1"]);
     assert.deepEqual(await ids({ keywords: "IMG" }), ["A1", "B2"]);
+  } finally {
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("library index counts the extensions in a folder, leaving trashed items out", async () => {
+  const libraryPath = await createLibrary([...sampleItems, { id: "E5", name: "clip", ext: "MP4", folders: ["F1"] }]);
+  try {
+    const index = await readyIndex(libraryPath);
+    assert.deepEqual(await index.extensionCounts({}), [{ ext: "jpg", count: 1 }, { ext: "mp4", count: 1 }, { ext: "png", count: 2 }]);
+    assert.deepEqual(await index.extensionCounts({ folderId: "F1" }), [{ ext: "mp4", count: 1 }, { ext: "png", count: 2 }]);
+    assert.deepEqual(await index.extensionCounts({ isUnfiled: true }), [{ ext: "jpg", count: 1 }]);
+    assert.deepEqual(await index.extensionCounts({ isUntagged: true }), [{ ext: "mp4", count: 1 }, { ext: "png", count: 1 }]);
+    // A confirmed edit shows in the next count.
+    index.noteItem({ id: "B2", isDeleted: true });
+    assert.deepEqual(await index.extensionCounts({}), [{ ext: "mp4", count: 1 }, { ext: "png", count: 2 }]);
+  } finally {
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("library index reports whether it covers every item", async () => {
+  const libraryPath = await createLibrary(sampleItems);
+  try {
+    const metadataPath = join(libraryPath, "images", "B2.info", "metadata.json");
+    const metadata = await readFile(metadataPath, "utf8");
+    await rm(metadataPath);
+    const index = await readyIndex(libraryPath);
+    assert.equal(index.coversAllItems(), false);
+    // Once the metadata is back, the next check reads it.
+    await writeFile(metadataPath, metadata);
+    await index.extensionCounts({});
+    assert.equal(index.coversAllItems(), true);
+  } finally {
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("library index does not cover every item while Eagle counts more items than are on disk", async () => {
+  const items: TestItem[] = [{ id: "K1", name: "one", ext: "jpg" }];
+  const libraryPath = await createLibrary(items);
+  try {
+    // Eagle counts K2 too, but its folder hasn't synced yet.
+    await writeMtime(libraryPath, { K1: 1, K2: 1, all: 2 });
+    const index = await readyIndex(libraryPath);
+    await index.extensionCounts({});
+    assert.equal(index.coversAllItems(), false);
+    // It still doesn't after the folder is listed again with K2 still missing.
+    await index.extensionCounts({});
+    assert.equal(index.coversAllItems(), false);
+
+    // The folder arrives without mtime.json changing; the next rescan still picks it up.
+    await writeItem(libraryPath, { id: "K2", name: "two", ext: "png" });
+    assert.deepEqual(await index.extensionCounts({}), [{ ext: "jpg", count: 1 }, { ext: "png", count: 1 }]);
+    assert.equal(index.coversAllItems(), true);
+  } finally {
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("library index trims extensions like Eagle's scan, for counts and the type filter alike", async () => {
+  const libraryPath = await createLibrary([{ id: "T1", name: "spaced", ext: " JPG " }, { id: "T2", name: "plain", ext: "jpg" }]);
+  try {
+    const index = await readyIndex(libraryPath);
+    assert.deepEqual(await index.extensionCounts({}), [{ ext: "jpg", count: 2 }]);
+    assert.equal((await index.query({ ext: "jpg" }, { key: "name", order: "asc" }, 0, 10)).total, 2);
   } finally {
     await rm(libraryPath, { recursive: true, force: true });
   }

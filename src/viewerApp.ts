@@ -144,6 +144,15 @@ let sortReloadPending = false;
 // While the server builds its index, a sorted list is asked for again this often.
 const SORT_INDEXING_RETRY_MS = 1500;
 let itemTypesState: "idle" | "loading" | "loaded" = "idle";
+// The type menu lists what the open folder holds, so its extensions belong to this folder.
+let itemTypesFolderId = "";
+// Where the items on screen start; tiles add pages after it, so 0 means they run from the first item.
+let loadedItemsOffset = 0;
+// Set when the items on screen may not be the whole list, so they can't be taken as the folder's
+// contents: items were added or removed while tiles loaded more (a later page repeats an item or
+// reports another total, so pages shifted), a page came back empty before the total was reached, or
+// the server sorted them with an index that is missing items.
+let loadedItemsTruncated = false;
 let allFoldersTotalRequestId = 0;
 let uncategorizedTotal = 0;
 let untaggedTotal = 0;
@@ -558,6 +567,7 @@ function clearViewerSessionState() {
   availableExts = [];
   itemTypesRequestId += 1;
   itemTypesState = "idle";
+  itemTypesFolderId = "";
   resetViewerResults({ resetOffset: true });
   renderMessage("");
   resetTagList();
@@ -833,15 +843,51 @@ async function loadFolders() {
   }
 }
 
+// Another folder holds other extensions: forget the ones found so far, so the menu asks again.
+function syncItemTypesFolder() {
+  if (itemTypesFolderId === state.folderId) return;
+  itemTypesFolderId = state.folderId;
+  itemTypesRequestId += 1;
+  itemTypesState = "idle";
+  availableExts = [];
+  renderSearchControlButtons();
+}
+
+// Items were added or edited: the extensions found may be out of date, so the menu asks again when it
+// next opens (or the reloaded list, if it shows the whole folder, gives them).
+function forgetItemTypes() {
+  itemTypesRequestId += 1;
+  itemTypesState = "idle";
+  renderSearchControlButtons();
+}
+
+// A folder shown in full with no other filter already holds all its extensions, so the menu needs
+// no request. Any other filter (the type itself included) narrows the items, so those lists keep
+// what was found for the folder.
+function useLoadedItemTypes() {
+  if (state.smartFolderId || state.query || state.tags.length || state.ext || state.rating !== "") return;
+  if (loadedItemsOffset !== 0 || loadedItemsTruncated || state.items.length < state.total) return;
+  syncItemTypesFolder();
+  const exts = [...new Set(state.items.map((item) => String(item.ext || "").trim().toLowerCase()).filter(Boolean))]
+    .sort((left, right) => left.localeCompare(right));
+  const changed = itemTypesState !== "loaded" || exts.join("\n") !== availableExts.join("\n");
+  itemTypesRequestId += 1;
+  itemTypesState = "loaded";
+  availableExts = exts;
+  if (changed) renderSearchControlButtons();
+}
+
 async function loadItemTypes() {
+  syncItemTypesFolder();
   if (itemTypesState !== "idle") return;
   const requestId = ++itemTypesRequestId;
   itemTypesState = "loading";
   renderSearchControlButtons();
+  const query = itemTypesFolderId ? `?${new URLSearchParams({ folderId: itemTypesFolderId }).toString()}` : "";
   try {
     // The server answers with the extensions found so far until its scan is complete.
     for (;;) {
-      const data = await getJson<{ complete?: boolean; items?: Array<{ ext?: string }> }>("/api/item-types");
+      const data = await getJson<{ complete?: boolean; items?: Array<{ ext?: string }> }>(`/api/item-types${query}`);
       if (requestId !== itemTypesRequestId) return;
       availableExts = (data.items || []).map((entry) => String(entry.ext || "").toLowerCase()).filter(Boolean);
       if (data.complete !== false) break;
@@ -876,6 +922,7 @@ async function loadItems({ append = false }: LoadItemsOptions = {}) {
     return;
   }
   const requestId = ++state.requestId;
+  syncItemTypesFolder();
   if (append) {
     state.tilesLoadingMore = true;
   } else {
@@ -941,6 +988,7 @@ async function loadItems({ append = false }: LoadItemsOptions = {}) {
       }
     }
     const items = data.items || [];
+    const previousTotal = state.total;
     state.total = Number(data.total || 0);
     if (!append && !hasActiveFilters(state)) {
       const previousAllFoldersTotal = allFoldersTotal;
@@ -949,11 +997,20 @@ async function loadItems({ append = false }: LoadItemsOptions = {}) {
     } else if (!append) {
       loadAllFoldersTotal();
     }
+    if (!append) loadedItemsTruncated = false;
+    if (data.sort?.complete === false) loadedItemsTruncated = true;
+    if (append) {
+      const shown = new Set(state.items.map((item) => String(item.id || "")));
+      if (state.total !== previousTotal || items.some((item) => shown.has(String(item.id || "")))) loadedItemsTruncated = true;
+    }
     if (append && !items.length) {
+      if (state.items.length < state.total) loadedItemsTruncated = true;
       state.total = state.items.length;
     }
     state.items = append ? [...state.items, ...items] : items;
+    if (!append) loadedItemsOffset = Number(params.get("offset") || 0);
     state.tilesLoadingMore = false;
+    useLoadedItemTypes();
     if (append) {
       render();
     } else {
@@ -1040,7 +1097,7 @@ function refreshAfterUploads() {
       // Set here because loadAllFoldersTotal keeps a total it already has.
       allFoldersTotal = total;
       pickerTagOverview = null;
-      renderSearchControlButtons();
+      forgetItemTypes();
       void loadFolders();
       void loadSmartFolders();
       void loadShortcutCounts();
@@ -1308,6 +1365,7 @@ function renderSearchControlButtons() {
     uploadMaxBytes,
     availableExts,
     availableExtsLoading: itemTypesState === "loading",
+    availableExtsLoaded: itemTypesState === "loaded",
     tagsTotal,
     uncategorizedTotal,
     untaggedTotal,
@@ -1530,6 +1588,7 @@ async function setItemTrash(item: EagleItem, isDeleted: boolean) {
     const savedIsDeleted = typeof data.isDeleted === "boolean" ? data.isDeleted : isDeleted;
     item.isDeleted = savedIsDeleted;
     updateItemInState(itemId, { isDeleted: savedIsDeleted });
+    forgetItemTypes();
     showSuccessToast(savedIsDeleted ? "Moved to trash" : "Restored from trash", {
       description: savedIsDeleted ? "Item was moved to trash." : "Item was restored from trash.",
     });
@@ -1569,6 +1628,7 @@ async function savePreviewMetadata(item: EagleItem, { tags, folders }: { tags: s
     Object.assign(item, patch);
     updateItemInState(itemId, patch);
     removeItemIfOutsideCurrentFolderFilter(item);
+    forgetItemTypes();
     applyMetadataFolderCountChanges(previousFolderIds, patch.folders);
     render();
     await loadFolders();

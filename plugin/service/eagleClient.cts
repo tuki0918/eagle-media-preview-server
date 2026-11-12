@@ -182,6 +182,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object";
 }
 
+/** An item's extension as the viewer lists and filters it: trimmed and lower-cased. */
+function normalizeExtension(value: unknown) {
+  return String(value || "").trim().toLowerCase();
+}
+
+/** Extension counts in extension order, the order the type menu lists them in. */
+function sortedExtensionCounts(counts: ReadonlyMap<string, number>) {
+  return [...counts.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([ext, count]) => ({ ext, count }));
+}
+
 function positiveInteger(value: unknown, fallback: number) {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
@@ -521,29 +533,35 @@ function createEagleClient(options: EagleClientOptions = {}) {
       return page.items[0] ?? null;
     },
 
-    async itemExtensions({ maxItems = MAX_EXTENSION_SCAN_ITEMS, onProgress }: {
+    // Counts the extensions of every item in the scope: one folder, the unfiled or untagged items, or
+    // (with no scope) the whole library.
+    // `shouldStop` is asked before each further page; when it answers true the scan rejects.
+    async itemExtensions({ folderId, isUnfiled = false, isUntagged = false, maxItems = MAX_EXTENSION_SCAN_ITEMS, onProgress, shouldStop }: {
+      folderId?: string | null;
+      isUnfiled?: boolean;
+      isUntagged?: boolean;
       maxItems?: number;
       onProgress?: (extensions: Array<{ count: number; ext: string }>) => void;
+      shouldStop?: () => boolean;
     } = {}) {
+      const scope = isUnfiled ? { isUnfiled: true } : isUntagged ? { isUntagged: true } : folderId ? { folders: [folderId] } : {};
       const counts = new Map<string, number>();
-      const sortedCounts = () => [...counts.entries()]
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([ext, count]) => ({ ext, count }));
       for (let offset = 0; offset < maxItems; offset += EXTENSION_SCAN_PAGE_SIZE) {
+        if (offset > 0 && shouldStop?.()) throw new Error("The item type scan was stopped");
         const page = normalizePaginatedResponse(
           await request("/api/v2/item/get", {
             method: "POST",
-            body: { offset, limit: EXTENSION_SCAN_PAGE_SIZE, fields: ["ext"] },
+            body: { ...scope, offset, limit: EXTENSION_SCAN_PAGE_SIZE, fields: ["ext"] },
           }),
         );
         for (const item of page.items) {
-          const ext = isRecord(item) ? String(item.ext || "").trim().toLowerCase() : "";
+          const ext = isRecord(item) ? normalizeExtension(item.ext) : "";
           if (ext) counts.set(ext, (counts.get(ext) || 0) + 1);
         }
         if (page.items.length < EXTENSION_SCAN_PAGE_SIZE || offset + page.items.length >= page.total) break;
-        onProgress?.(sortedCounts());
+        onProgress?.(sortedExtensionCounts(counts));
       }
-      return sortedCounts();
+      return sortedExtensionCounts(counts);
     },
 
     async itemById(id: string) {
@@ -799,4 +817,4 @@ function resolveLibraryItemDir(libraryPath: string, itemId: unknown) {
   if (relativePath.startsWith("..") || isAbsolute(relativePath)) return "";
   return itemDir;
 }
-module.exports = { EagleRequestError, ITEM_FIELDS, clampLimit, normalizeOffset, normalizeStringArray, createEagleClient, createEagleLibrarySwitcher, normalizePaginatedResponse, parseRatingFilter, unwrapData, pathFromFileValue, resolveLibraryItemFile };
+module.exports = { EagleRequestError, ITEM_FIELDS, clampLimit, normalizeExtension, normalizeOffset, normalizeStringArray, createEagleClient, createEagleLibrarySwitcher, normalizePaginatedResponse, parseRatingFilter, unwrapData, pathFromFileValue, resolveLibraryItemFile, sortedExtensionCounts };

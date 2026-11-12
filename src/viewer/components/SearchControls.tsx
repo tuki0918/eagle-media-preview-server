@@ -40,6 +40,7 @@ import { TagSuggestions } from "./TagSuggestions";
 interface SearchControlsProps {
   availableExts?: readonly string[];
   availableExtsLoading?: boolean;
+  availableExtsLoaded?: boolean;
   filtersOpen?: boolean;
   hasActiveFilters?: boolean;
   hasResettableFilters?: boolean;
@@ -99,6 +100,7 @@ export function SearchControls({
       <AdvancedFilters
         availableExts={state.availableExts}
         availableExtsLoading={state.availableExtsLoading}
+        availableExtsLoaded={state.availableExtsLoaded}
         filtersOpen={displayFiltersOpen}
         hasActiveFilters={displayHasActiveFilters}
         hasResettableFilters={displayHasResettableFilters}
@@ -180,6 +182,7 @@ function focusInputById(id: string) {
 export function AdvancedFilters({
   availableExts = [],
   availableExtsLoading = false,
+  availableExtsLoaded = false,
   filtersOpen = false,
   hasActiveFilters = false,
   hasResettableFilters = hasActiveFilters,
@@ -189,8 +192,8 @@ export function AdvancedFilters({
   sortPreparing = "",
   selectedSort = "",
   selectedOrder = "",
-}: Pick<SearchControlsProps, "availableExts" | "availableExtsLoading" | "filtersOpen" | "hasActiveFilters" | "hasResettableFilters" | "selectedExt" | "selectedRating" | "sortAvailable" | "sortPreparing" | "selectedSort" | "selectedOrder">) {
-  const extOptions = mediaTypeOptions(availableExts, selectedExt, availableExtsLoading);
+}: Pick<SearchControlsProps, "availableExts" | "availableExtsLoading" | "availableExtsLoaded" | "filtersOpen" | "hasActiveFilters" | "hasResettableFilters" | "selectedExt" | "selectedRating" | "sortAvailable" | "sortPreparing" | "selectedSort" | "selectedOrder">) {
+  const extOptions = mediaTypeOptions(availableExts, selectedExt, availableExtsLoading, availableExtsLoaded);
   // The sort menu stays in place while the server prepares its index, disabled.
   const sortShown = sortAvailable || Boolean(sortPreparing);
   return (
@@ -425,10 +428,11 @@ function RatingFilterLabel({ rating }: { rating: number }) {
   );
 }
 
-// Only offer extensions that exist in the library (fetched the first time the menu opens). While
-// they load the menu grows as they are found; if they fail it falls back to the defaults.
-function mediaTypeOptions(availableExts: readonly string[], selectedExt: string, loading = false): readonly string[] {
-  const options = availableExts.length ? [...availableExts] : loading ? [] : [...MEDIA_TYPE_OPTIONS];
+// Only offer extensions that exist in the folder (fetched the first time the menu opens). While
+// they load the menu grows as they are found; a folder found to hold none offers only "All types";
+// if they fail (or were never asked for) it falls back to the defaults.
+export function mediaTypeOptions(availableExts: readonly string[], selectedExt: string, loading = false, loaded = false): readonly string[] {
+  const options = availableExts.length ? [...availableExts] : loading || loaded ? [] : [...MEDIA_TYPE_OPTIONS];
   if (selectedExt && !options.includes(selectedExt)) options.push(selectedExt);
   return options;
 }

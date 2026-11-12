@@ -11,6 +11,8 @@ export interface SearchControlsState {
   availableExts?: readonly string[];
   /** True while the library's extensions are being fetched. */
   availableExtsLoading?: boolean;
+  /** True once the extensions are known, so an empty list means there are none (not that they failed). */
+  availableExtsLoaded?: boolean;
   filtersOpen: boolean;
   folders: readonly EagleFolder[];
   hasActiveFilters: boolean;

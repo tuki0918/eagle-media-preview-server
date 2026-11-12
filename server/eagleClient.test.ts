@@ -107,6 +107,51 @@ test("listItems uses V2 item/get with limited fields and offset", async () => {
   });
 });
 
+test("itemExtensions scans only the requested folder", async () => {
+  const calls: RequestCall[] = [];
+  const client = createEagleClient({
+    baseUrl: "http://eagle.local:41595",
+    token: "secret-token",
+    fetchImpl: async (url: string, init: { method?: string; body: string }) => {
+      calls.push({ url, init });
+      return jsonResponse({ status: "success", data: { data: [{ ext: "JPG" }, { ext: "png" }, { ext: "jpg" }], total: 3 } });
+    },
+  });
+
+  assert.deepEqual(await client.itemExtensions({ folderId: "F1" }), [{ ext: "jpg", count: 2 }, { ext: "png", count: 1 }]);
+  await client.itemExtensions({ isUnfiled: true });
+  await client.itemExtensions({ isUntagged: true });
+  await client.itemExtensions();
+  const bodies = calls.map((call) => JSON.parse(call.init.body));
+  assert.deepEqual(bodies[0], { folders: ["F1"], offset: 0, limit: 1000, fields: ["ext"] });
+  assert.equal(bodies[1].isUnfiled, true);
+  assert.equal(bodies[2].isUntagged, true);
+  assert.deepEqual(bodies[3], { offset: 0, limit: 1000, fields: ["ext"] });
+});
+
+test("itemExtensions stops before the next page once asked to", async () => {
+  let pages = 0;
+  let stop = false;
+  const client = createEagleClient({
+    baseUrl: "http://eagle.local:41595",
+    token: "secret-token",
+    fetchImpl: async () => {
+      pages += 1;
+      return jsonResponse({ status: "success", data: { data: Array.from({ length: 1000 }, () => ({ ext: " JPG " })), total: 5000 } });
+    },
+  });
+
+  await assert.rejects(client.itemExtensions({
+    onProgress: (counts: Array<{ count: number; ext: string }>) => {
+      // Extensions are trimmed as well as lower-cased.
+      assert.deepEqual(counts, [{ ext: "jpg", count: 1000 * pages }]);
+      if (pages === 2) stop = true;
+    },
+    shouldStop: () => stop,
+  }), /stopped/);
+  assert.equal(pages, 2);
+});
+
 test("listItems omits rating when the filter is not specified", async () => {
   const calls: RequestCall[] = [];
   const client = createEagleClient({

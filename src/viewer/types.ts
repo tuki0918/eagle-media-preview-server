@@ -120,8 +120,11 @@ export interface LoadSmartFoldersResponse {
 export interface LoadItemsResponse {
   items?: EagleItem[];
   total?: number;
-  /** Sent for sorted requests; until "ready" the items are in Eagle's order. */
-  sort?: { status?: "failed" | "indexing" | "ready"; loaded?: number; total?: number };
+  /**
+   * Sent for sorted requests; until "ready" the items are in Eagle's order. `complete: false` means
+   * the server's index is missing some items, so the list may be short.
+   */
+  sort?: { complete?: boolean; status?: "failed" | "indexing" | "ready"; loaded?: number; total?: number };
 }
 
 export interface TagSuggestionApiItem {

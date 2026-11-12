@@ -7,6 +7,7 @@
 // decides only which ids match and in what order; callers fetch the items themselves from Eagle.
 const { readFile, readdir, stat } = require("fs").promises;
 const { join } = require("path");
+const { normalizeExtension, sortedExtensionCounts } = require("./eagleClient.cjs");
 
 type SortKey = "btime" | "duration" | "ext" | "filesize" | "import" | "mtime" | "name" | "rating" | "resolution";
 type SortOrder = "asc" | "desc";
@@ -140,7 +141,7 @@ function matchesFilter(item: IndexedItem, filter: IndexFilter) {
 
 function normalizeFilter(filter: IndexFilter): IndexFilter {
   return {
-    ext: filter.ext ? String(filter.ext).toLowerCase() : "",
+    ext: normalizeExtension(filter.ext),
     folderId: filter.folderId || "",
     isUnfiled: Boolean(filter.isUnfiled),
     isUntagged: Boolean(filter.isUntagged),
@@ -196,8 +197,11 @@ function createLibraryIndex(libraryPath: string, {
   const unreadable = new Set<string>();
   // A folder rescan that was due but held back by rescanIntervalMs; it runs at a later check.
   let rescanPending = false;
+  // Eagle's own item count from mtime.json ("all"), or null when it doesn't say.
+  let eagleItemCount: number | null = null;
   const sortedCache = new Map<string, { items: IndexedItem[]; version: number }>();
   const queryCache = new Map<string, { ids: string[]; version: number }>();
+  const extensionCache = new Map<string, { items: Array<{ count: number; ext: string }>; version: number }>();
 
   /** Reads one item; resolves true when the index changed (an item set or dropped). */
   async function readItem(id: string, run = buildRun): Promise<boolean> {
@@ -210,7 +214,7 @@ function createLibraryIndex(libraryPath: string, {
       items.set(id, {
         btime: finiteNumber(raw.btime),
         duration: finiteNumber(raw.duration),
-        ext: intern(String(raw.ext || "").toLowerCase()),
+        ext: intern(normalizeExtension(raw.ext)),
         folders: stringList(raw.folders, intern),
         height: finiteNumber(raw.height),
         id,
@@ -285,10 +289,13 @@ function createLibraryIndex(libraryPath: string, {
         if (!stopped()) loaded += 1;
       }, stopped);
       if (stopped()) return;
-      if (mtime) mtimeSignature = mtime.signature;
+      if (mtime) {
+        mtimeSignature = mtime.signature;
+        noteEagleItemCount(mtime.values);
+      }
       // Items the build couldn't see (a folder still syncing, say) leave the counts apart: check the
       // folder again later, even if mtime.json doesn't change.
-      if (mtime && countDisagrees(mtime.values)) rescanPending = true;
+      if (mtime && countDisagrees()) rescanPending = true;
       lastRefreshCheck = Date.now();
       lastRescan = lastRefreshCheck;
       version += 1;
@@ -302,8 +309,12 @@ function createLibraryIndex(libraryPath: string, {
   }
 
   // Eagle's own item count, "all" (0 included), against the items held.
-  function countDisagrees(values: Record<string, unknown>) {
-    return typeof values.all === "number" && Number.isFinite(values.all) && values.all !== items.size;
+  function countDisagrees() {
+    return eagleItemCount !== null && eagleItemCount !== items.size;
+  }
+
+  function noteEagleItemCount(values: Record<string, unknown>) {
+    eagleItemCount = typeof values.all === "number" && Number.isFinite(values.all) ? values.all : null;
   }
 
   async function refresh() {
@@ -311,6 +322,7 @@ function createLibraryIndex(libraryPath: string, {
     const mtimeChanged = Boolean(mtime && mtime.signature !== mtimeSignature);
     if (!mtimeChanged && !unreadable.size && !rescanPending) return;
     const values = mtimeChanged ? mtime!.values : {};
+    if (mtimeChanged) noteEagleItemCount(values);
     const changed = new Set<string>(unreadable);
     for (const [id, value] of Object.entries(values)) {
       if (id === "all" || !ITEM_ID_PATTERN.test(id)) continue;
@@ -329,13 +341,12 @@ function createLibraryIndex(libraryPath: string, {
       });
       // Eagle rescans the folder when its item count disagrees; permanent deletes show up only there.
       // A rescan held back by the interval is remembered, so it still happens without another change.
-      if (mtimeChanged && countDisagrees(values)) rescanPending = true;
+      if (mtimeChanged && countDisagrees()) rescanPending = true;
       const now = Date.now();
       if (rescanPending && now - lastRescan >= rescanIntervalMs) {
         lastRescan = now;
-        // Cleared only once the folder could be listed, so a failed listing is tried again later.
+        // Settled only once the folder could be listed, so a failed listing is tried again later.
         const present = new Set(await listItemIds());
-        rescanPending = false;
         for (const id of items.keys()) {
           if (!present.has(id) && items.delete(id)) updated = true;
         }
@@ -346,6 +357,9 @@ function createLibraryIndex(libraryPath: string, {
         await mapWithConcurrency([...present].filter((id) => !items.has(id) && !unreadable.has(id)), concurrency, async (id) => {
           if (await readItem(id)) updated = true;
         });
+        // Folders still syncing arrive later without touching mtime.json: keep rescanning, at the
+        // interval, until the index holds as many items as Eagle counts.
+        rescanPending = countDisagrees();
       }
       if (mtimeChanged) mtimeSignature = mtime!.signature;
     } finally {
@@ -353,6 +367,17 @@ function createLibraryIndex(libraryPath: string, {
       // listing error, say); otherwise the next check sees nothing new and the cache stays stale.
       if (updated) version += 1;
     }
+  }
+
+  // At most every refreshIntervalMs, checks mtime.json for changes; callers wait for a check in progress.
+  async function refreshIfDue() {
+    if (Date.now() - lastRefreshCheck >= refreshIntervalMs) {
+      lastRefreshCheck = Date.now();
+      refreshing ??= refresh().finally(() => {
+        refreshing = null;
+      });
+    }
+    if (refreshing) await refreshing.catch(() => {});
   }
 
   function sortedItems(sort: IndexSort) {
@@ -372,6 +397,15 @@ function createLibraryIndex(libraryPath: string, {
 
     progress() {
       return { loaded, total };
+    },
+
+    /**
+     * False while the index may be missing items: some metadata could not be read, or it holds a
+     * different number of items than Eagle counts (an item folder not synced yet, say). Reflects the
+     * last check, so ask right after query() or extensionCounts(), which check first.
+     */
+    coversAllItems() {
+      return unreadable.size === 0 && !countDisagrees();
     },
 
     /** Starts building on first use; resolves true once ready, or false if `waitMs` passes first. */
@@ -398,13 +432,7 @@ function createLibraryIndex(libraryPath: string, {
 
     /** Matching ids for one page, in the requested order. Call only once ready. */
     async query(filter: IndexFilter, sort: IndexSort, offset: number, limit: number) {
-      if (Date.now() - lastRefreshCheck >= refreshIntervalMs) {
-        lastRefreshCheck = Date.now();
-        refreshing ??= refresh().finally(() => {
-          refreshing = null;
-        });
-      }
-      if (refreshing) await refreshing.catch(() => {});
+      await refreshIfDue();
       const normalized = normalizeFilter(filter);
       const cacheKey = JSON.stringify([normalized, sort]);
       let ids = queryCache.get(cacheKey)?.version === version ? queryCache.get(cacheKey)!.ids : null;
@@ -423,6 +451,27 @@ function createLibraryIndex(libraryPath: string, {
         queryCache.set(cacheKey, entry);
       }
       return { ids: ids.slice(offset, offset + limit), total: ids.length };
+    },
+
+    /**
+     * How many items of each extension match the filter (in extension order, like Eagle's scan).
+     * Call only once ready.
+     */
+    async extensionCounts(filter: IndexFilter) {
+      await refreshIfDue();
+      const normalized = normalizeFilter(filter);
+      const cacheKey = JSON.stringify(normalized);
+      const cached = extensionCache.get(cacheKey);
+      if (cached?.version === version) return cached.items;
+      const counts = new Map<string, number>();
+      for (const item of items.values()) {
+        if (item.ext && matchesFilter(item, normalized)) counts.set(item.ext, (counts.get(item.ext) || 0) + 1);
+      }
+      const result: Array<{ count: number; ext: string }> = sortedExtensionCounts(counts);
+      extensionCache.delete(cacheKey);
+      extensionCache.set(cacheKey, { items: result, version });
+      while (extensionCache.size > MAX_CACHED_QUERIES) extensionCache.delete(extensionCache.keys().next().value!);
+      return result;
     },
 
     /** Applies an item Eagle just returned from an edit, so the next query sees it right away. */
@@ -451,6 +500,7 @@ function createLibraryIndex(libraryPath: string, {
       unreadable.clear();
       sortedCache.clear();
       queryCache.clear();
+      extensionCache.clear();
     },
   };
 }

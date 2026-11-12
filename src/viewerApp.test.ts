@@ -393,7 +393,8 @@ describe("viewer app data refresh", () => {
       if (url === "/api/auth/status") return jsonResponse({ authenticated: true, required: false });
       if (url === "/api/connect" && options?.method === "POST") return jsonResponse({ app: { version: "1.0" }, library: { id: "lib-a", name: "A" } });
       if (url === "/api/folders" || url === "/api/smart-folders") return jsonResponse({ items: [] });
-      if (url.startsWith("/api/items?")) return jsonResponse({ items: [], total: 0 });
+      // More items than the first page holds, so the extensions have to come from the server.
+      if (url.startsWith("/api/items?")) return jsonResponse({ items: [], total: 5000 });
       if (url.startsWith("/api/item-types")) {
         itemTypeAnswers += 1;
         if (itemTypeAnswers === 1) return jsonResponse({ complete: false, items: [{ ext: "JPG", count: 1000 }] });
@@ -429,6 +430,147 @@ describe("viewer app data refresh", () => {
     openMediaTypes();
     // One request for the partial answer, one more until the scan completed.
     expect(itemTypeCalls()).toHaveLength(2);
+  });
+
+  test("asks for the open folder's extensions, and again in another folder", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/auth/status") return jsonResponse({ authenticated: true, required: false });
+      if (url === "/api/connect" && options?.method === "POST") return jsonResponse({ app: { version: "1.0" }, library: { id: "lib-a", name: "A" } });
+      if (url === "/api/folders" || url === "/api/smart-folders") return jsonResponse({ items: [] });
+      if (url.startsWith("/api/items?")) return jsonResponse({ items: [{ id: "item-1", ext: "jpg" }], total: 5000 });
+      if (url === "/api/item-types?folderId=folder-a") return jsonResponse({ complete: true, items: [{ ext: "png", count: 4000 }] });
+      if (url === "/api/item-types?folderId=folder-b") return jsonResponse({ complete: true, items: [{ ext: "mp4", count: 5000 }] });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: fetchMock });
+
+    const { initViewer } = await import("./viewerApp");
+    const { changeFolder, changeMediaType, openMediaTypes, submitConnection } = await import("./viewer/shellActions");
+    const { getLoginConnectState } = await import("./viewer/loginConnectState");
+    const { getShellView } = await import("./viewer/shellVisibility");
+    const { getSearchControlsState } = await import("./viewer/searchControlsState");
+    initViewer();
+    await vi.waitFor(() => expect(getLoginConnectState().authenticated).toBe(true));
+    submitConnection({ currentTarget: document.querySelector<HTMLFormElement>("#connectForm")!, preventDefault: () => {} });
+    await vi.waitFor(() => expect(getShellView()).toBe("viewer"));
+
+    changeFolder({ currentTarget: { value: "folder-a" } });
+    openMediaTypes();
+    await vi.waitFor(() => expect(getSearchControlsState().availableExts).toEqual(["png"]));
+    // Picking a type narrows the items but not the folder, so the menu keeps the folder's extensions.
+    changeMediaType("png");
+    openMediaTypes();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(getSearchControlsState().availableExts).toEqual(["png"]);
+
+    changeFolder({ currentTarget: { value: "folder-b" } });
+    await vi.waitFor(() => expect(getSearchControlsState().availableExts).toEqual([]));
+    openMediaTypes();
+    await vi.waitFor(() => expect(getSearchControlsState().availableExts).toEqual(["mp4"]));
+    const itemTypeCalls = fetchMock.mock.calls.map(([url]) => String(url)).filter((url) => url.startsWith("/api/item-types"));
+    expect(itemTypeCalls).toEqual(["/api/item-types?folderId=folder-a", "/api/item-types?folderId=folder-b"]);
+  });
+
+  test("lists a folder's extensions from its items once all of them are shown without other filters", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/auth/status") return jsonResponse({ authenticated: true, required: false });
+      if (url === "/api/connect" && options?.method === "POST") return jsonResponse({ app: { version: "1.0" }, library: { id: "lib-a", name: "A" } });
+      if (url === "/api/folders" || url === "/api/smart-folders") return jsonResponse({ items: [] });
+      if (url.startsWith("/api/items?")) {
+        const params = new URLSearchParams(url.slice(url.indexOf("?") + 1));
+        if (params.get("ext") === "png") return jsonResponse({ items: [{ id: "item-2", ext: "png" }], total: 1 });
+        return jsonResponse({ items: [{ id: "item-1", ext: "JPG" }, { id: "item-2", ext: "png" }, { id: "item-3", ext: "jpg" }], total: 3 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: fetchMock });
+
+    const { initViewer } = await import("./viewerApp");
+    const { changeFolder, changeMediaType, openMediaTypes, submitConnection } = await import("./viewer/shellActions");
+    const { getLoginConnectState } = await import("./viewer/loginConnectState");
+    const { getShellView } = await import("./viewer/shellVisibility");
+    const { getSearchControlsState } = await import("./viewer/searchControlsState");
+    initViewer();
+    await vi.waitFor(() => expect(getLoginConnectState().authenticated).toBe(true));
+    submitConnection({ currentTarget: document.querySelector<HTMLFormElement>("#connectForm")!, preventDefault: () => {} });
+    await vi.waitFor(() => expect(getShellView()).toBe("viewer"));
+
+    changeFolder({ currentTarget: { value: "folder-a" } });
+    await vi.waitFor(() => expect(getSearchControlsState().availableExts).toEqual(["jpg", "png"]));
+    changeMediaType("png");
+    openMediaTypes();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(getSearchControlsState().availableExts).toEqual(["jpg", "png"]);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith("/api/item-types"))).toBe(false);
+  });
+
+  test("asks for the folder's extensions again after an upload, even with a type selected", async () => {
+    let uploaded = false;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/auth/status") return jsonResponse({ authenticated: true, required: false });
+      if (url === "/api/connect" && options?.method === "POST") return jsonResponse({ app: { version: "1.0" }, library: { id: "lib-a", name: "A" } });
+      if (url === "/api/folders" || url === "/api/smart-folders") return jsonResponse({ items: [] });
+      if (url.startsWith("/api/items?")) return jsonResponse({ items: [{ id: "item-1", ext: "jpg" }], total: 5000 });
+      if (url === "/api/item-types?folderId=folder-a") {
+        return jsonResponse({ complete: true, items: uploaded ? [{ ext: "jpg", count: 1 }, { ext: "png", count: 1 }] : [{ ext: "jpg", count: 1 }] });
+      }
+      return jsonResponse({ items: [], total: 0 });
+    });
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: fetchMock });
+
+    const { initViewer } = await import("./viewerApp");
+    const { changeFolder, changeMediaType, openMediaTypes, submitConnection, uploadsFinished } = await import("./viewer/shellActions");
+    const { getLoginConnectState } = await import("./viewer/loginConnectState");
+    const { getShellView } = await import("./viewer/shellVisibility");
+    const { getSearchControlsState } = await import("./viewer/searchControlsState");
+    initViewer();
+    await vi.waitFor(() => expect(getLoginConnectState().authenticated).toBe(true));
+    submitConnection({ currentTarget: document.querySelector<HTMLFormElement>("#connectForm")!, preventDefault: () => {} });
+    await vi.waitFor(() => expect(getShellView()).toBe("viewer"));
+
+    changeFolder({ currentTarget: { value: "folder-a" } });
+    openMediaTypes();
+    await vi.waitFor(() => expect(getSearchControlsState().availableExts).toEqual(["jpg"]));
+    changeMediaType("jpg");
+
+    // The later checks for the new item wait on timers; keep them from running past this test.
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    uploaded = true;
+    uploadsFinished();
+    await vi.waitFor(() => expect(getSearchControlsState().availableExtsLoaded).toBe(false));
+    openMediaTypes();
+    await vi.waitFor(() => expect(getSearchControlsState().availableExts).toEqual(["jpg", "png"]));
+  });
+
+  test("knows an empty folder holds no types, without asking the server", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/auth/status") return jsonResponse({ authenticated: true, required: false });
+      if (url === "/api/connect" && options?.method === "POST") return jsonResponse({ app: { version: "1.0" }, library: { id: "lib-a", name: "A" } });
+      if (url === "/api/folders" || url === "/api/smart-folders") return jsonResponse({ items: [] });
+      if (url.startsWith("/api/items?")) return jsonResponse({ items: [], total: 0 });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: fetchMock });
+
+    const { initViewer } = await import("./viewerApp");
+    const { changeFolder, openMediaTypes, submitConnection } = await import("./viewer/shellActions");
+    const { getLoginConnectState } = await import("./viewer/loginConnectState");
+    const { getShellView } = await import("./viewer/shellVisibility");
+    const { getSearchControlsState } = await import("./viewer/searchControlsState");
+    initViewer();
+    await vi.waitFor(() => expect(getLoginConnectState().authenticated).toBe(true));
+    submitConnection({ currentTarget: document.querySelector<HTMLFormElement>("#connectForm")!, preventDefault: () => {} });
+    await vi.waitFor(() => expect(getShellView()).toBe("viewer"));
+
+    changeFolder({ currentTarget: { value: "empty-folder" } });
+    await vi.waitFor(() => expect(getSearchControlsState()).toMatchObject({ availableExts: [], availableExtsLoaded: true }));
+    openMediaTypes();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith("/api/item-types"))).toBe(false);
   });
 
   test("shows the offline page on startup when the open library is not shared", async () => {
@@ -1208,6 +1350,93 @@ describe("viewer app experimental sort", () => {
         expect(new Set(ids).size).toBe(ids.length);
         expect(ids.some((id) => String(id).startsWith("s"))).toBe(false);
       });
+    } finally {
+      delete (globalThis as { IntersectionObserver?: unknown }).IntersectionObserver;
+    }
+  });
+
+  test("asks the server for the extensions when loading more tiles stops short of the total", async () => {
+    history.replaceState(null, "", "/viewer?view=tiles");
+    const observers: Array<(entries: Array<{ isIntersecting: boolean }>) => void> = [];
+    Object.defineProperty(globalThis, "IntersectionObserver", { configurable: true, value: class {
+      constructor(callback: (entries: Array<{ isIntersecting: boolean }>) => void) {
+        observers.push(callback);
+      }
+      observe() {}
+      disconnect() {}
+    } });
+    // Eagle says the list holds 5 items, but the page after the first comes back empty.
+    const { listRequests, requests } = serveViewer({
+      items: (params) => Number(params.get("offset")) === 0
+        ? { items: [{ id: "a", ext: "jpg" }, { id: "b", ext: "png" }], total: 5 }
+        : { items: [], total: 5 },
+    });
+    try {
+      const { getResultSurfaceState, shellActions } = await connectViewer();
+      await vi.waitFor(() => expect(getResultSurfaceState().kind).toBe("list"));
+      await vi.waitFor(() => expect(observers.length).toBeGreaterThan(0));
+      observers.at(-1)!([{ isIntersecting: true }]);
+      await vi.waitFor(() => expect(listRequests().some((request) => new URLSearchParams(request.url.split("?")[1]).get("offset") === "2")).toBe(true));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      // The two items shown are not the whole list, so the menu can't be built from them.
+      shellActions.openMediaTypes();
+      await vi.waitFor(() => expect(requests.some((request) => request.url.startsWith("/api/item-types"))).toBe(true));
+    } finally {
+      delete (globalThis as { IntersectionObserver?: unknown }).IntersectionObserver;
+    }
+  });
+
+  test("asks the server for the extensions when the sorted list may be missing items", async () => {
+    history.replaceState(null, "", "/viewer?sort=name");
+    // Every item the index holds is shown, but the server says its index is missing some.
+    const { requests } = serveViewer({
+      features: { sort: true },
+      items: () => ({ items: [{ id: "a", ext: "jpg" }], total: 1, sort: { status: "ready", complete: false } }),
+    });
+    const { getResultSurfaceState, shellActions } = await connectViewer();
+    await vi.waitFor(() => {
+      const surface = getResultSurfaceState();
+      expect(surface.kind === "list" && surface.items.map((item) => item.id)).toEqual(["a"]);
+    });
+    shellActions.openMediaTypes();
+    await vi.waitFor(() => expect(requests.some((request) => request.url.startsWith("/api/item-types"))).toBe(true));
+  });
+
+  test.each([
+    // An item added at the top pushes B into the next page.
+    { name: "repeats an item", nextPage: { items: [{ id: "b", ext: "png" }], total: 3 } },
+    // C was removed, so the next page skips ahead; the item count still adds up.
+    { name: "reports another total", nextPage: { items: [{ id: "d", ext: "png" }], total: 3 } },
+  ])("asks the server for the extensions when a later tile page $name", async ({ nextPage }) => {
+    history.replaceState(null, "", "/viewer?view=tiles");
+    const observers: Array<(entries: Array<{ isIntersecting: boolean }>) => void> = [];
+    Object.defineProperty(globalThis, "IntersectionObserver", { configurable: true, value: class {
+      constructor(callback: (entries: Array<{ isIntersecting: boolean }>) => void) {
+        observers.push(callback);
+      }
+      observe() {}
+      disconnect() {}
+    } });
+    const firstTotal = nextPage.items[0].id === "b" ? 3 : 4;
+    const { listRequests, requests } = serveViewer({
+      items: (params) => Number(params.get("offset")) === 0
+        ? { items: [{ id: "a", ext: "jpg" }, { id: "b", ext: "png" }], total: firstTotal }
+        : nextPage,
+    });
+    try {
+      const { getResultSurfaceState, shellActions } = await connectViewer();
+      await vi.waitFor(() => expect(getResultSurfaceState().kind).toBe("list"));
+      await vi.waitFor(() => expect(observers.length).toBeGreaterThan(0));
+      observers.at(-1)!([{ isIntersecting: true }]);
+      await vi.waitFor(() => expect(listRequests().some((request) => new URLSearchParams(request.url.split("?")[1]).get("offset") === "2")).toBe(true));
+      await vi.waitFor(() => {
+        const surface = getResultSurfaceState();
+        expect(surface.kind === "list" && surface.items.length).toBe(3);
+      });
+
+      shellActions.openMediaTypes();
+      await vi.waitFor(() => expect(requests.some((request) => request.url.startsWith("/api/item-types"))).toBe(true));
     } finally {
       delete (globalThis as { IntersectionObserver?: unknown }).IntersectionObserver;
     }

@@ -3256,7 +3256,7 @@ test("createViewerServer forwards untagged item menu filter to Eagle", async () 
 
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), { items: [{ id: "untagged", tags: [] }], total: 1, offset: 0, limit: 30 });
-    assert.equal(calls[0].folderId, undefined);
+    assert.ok(!calls[0].folderId);
     assert.equal(calls[0].isUntagged, true);
   } finally {
     await viewer.stop();
@@ -3411,6 +3411,124 @@ test("createViewerServer answers a slow item type scan with the extensions found
     finishScan([{ ext: "jpg", count: 1000 }, { ext: "pdf", count: 2 }]);
     assert.deepEqual(await (await pending).json(), { complete: true, items: [{ ext: "jpg", count: 1000 }, { ext: "pdf", count: 2 }] });
     assert.equal(scans, 1);
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer scans the item types of the requested folder only", async () => {
+  const scopes: unknown[] = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    viewerPassword: "",
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/tmp/Test.library", name: "Test Library" };
+      },
+      async itemExtensions({ folderId, isUnfiled, isUntagged }: { folderId?: string; isUnfiled?: boolean; isUntagged?: boolean } = {}) {
+        scopes.push({ folderId, isUnfiled, isUntagged });
+        return [{ ext: folderId || (isUnfiled ? "unfiled" : isUntagged ? "untagged" : "all"), count: 1 }];
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const types = async (query: string) => (await (await fetch(`${origin}/api/item-types${query}`)).json()).items;
+    assert.deepEqual(await types("?folderId=F1"), [{ ext: "F1", count: 1 }]);
+    assert.deepEqual(await types("?folderId=__uncategorized__"), [{ ext: "unfiled", count: 1 }]);
+    assert.deepEqual(await types("?folderId=__untagged__"), [{ ext: "untagged", count: 1 }]);
+    assert.deepEqual(await types(""), [{ ext: "all", count: 1 }]);
+    // Each folder keeps its own cached scan.
+    assert.deepEqual(await types("?folderId=F1"), [{ ext: "F1", count: 1 }]);
+    assert.deepEqual(scopes, [
+      { folderId: "F1", isUnfiled: false, isUntagged: false },
+      { folderId: "", isUnfiled: true, isUntagged: false },
+      { folderId: "", isUnfiled: false, isUntagged: true },
+      { folderId: "", isUnfiled: false, isUntagged: false },
+    ]);
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer stops a folder's item type scan once it is dropped from the cache", async () => {
+  const stops = new Map<string, () => boolean>();
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    viewerPassword: "",
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/tmp/Test.library", name: "Test Library" };
+      },
+      itemExtensions({ folderId, shouldStop }: { folderId?: string; shouldStop?: () => boolean } = {}) {
+        stops.set(String(folderId), shouldStop!);
+        // Never finishes, like a scan of a very large folder.
+        return new Promise(() => {});
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    // 33 folders: one more than the cache keeps, so the first folder's scan is dropped.
+    await Promise.all(Array.from({ length: 33 }, (_, i) => fetch(`${origin}/api/item-types?folderId=F${i}`).then((res) => res.json())));
+    assert.equal(stops.size, 33);
+    const stopped = [...stops.entries()].filter(([, shouldStop]) => shouldStop()).map(([folderId]) => folderId);
+    assert.equal(stopped.length, 1);
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer keeps no item types read across a library switch", async () => {
+  const scans: Array<{ finish: (items: Array<{ count: number; ext: string }>) => void; shouldStop: () => boolean }> = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    viewerPassword: "",
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/tmp/A.library", name: "A" };
+      },
+      itemExtensions({ onProgress, shouldStop }: { onProgress?: (items: Array<{ count: number; ext: string }>) => void; shouldStop?: () => boolean } = {}) {
+        onProgress?.([{ ext: "jpg", count: 1000 }]);
+        return new Promise((resolve) => {
+          scans.push({ finish: resolve, shouldStop: shouldStop! });
+        });
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    assert.deepEqual(await (await fetch(`${origin}/api/item-types?folderId=F1`)).json(), { complete: false, items: [{ ext: "jpg", count: 1000 }] });
+    // Library A is switched away from and back while its scan runs; the rest of the scan read B.
+    viewer.notifyLibraryChanged();
+    assert.equal(scans[0].shouldStop(), true);
+    scans[0].finish([{ ext: "mp4", count: 5 }]);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // A starts over instead of answering with B's extensions.
+    const pending = fetch(`${origin}/api/item-types?folderId=F1`);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(scans.length, 2);
+    scans[1].finish([{ ext: "jpg", count: 1200 }]);
+    assert.deepEqual(await (await pending).json(), { complete: true, items: [{ ext: "jpg", count: 1200 }] });
   } finally {
     await viewer.stop();
   }
@@ -4020,6 +4138,68 @@ test("uploads stream the file to disk and hand its path to Eagle", async () => {
   }
 });
 
+test("edits and uploads drop the item type scans, and scans right after an upload are not kept", async () => {
+  let scans = 0;
+  const uploadedPaths: string[] = [];
+  const viewer = uploadViewer(async () => undefined, {
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/tmp/Test.library", name: "Test Library" };
+      },
+      async addItemFromPath(input: { path: string }) {
+        uploadedPaths.push(input.path);
+        return undefined;
+      },
+      async updateItemMetadata(id: string, patch: { tags?: string[] }) {
+        return { id, tags: patch.tags };
+      },
+      async itemExtensions() {
+        scans += 1;
+        return [{ ext: "jpg", count: scans }];
+      },
+    },
+  });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const cookie = await loginCookie(origin, "admin", "admin");
+    const types = async () => {
+      const response = await fetch(`${origin}/api/item-types?folderId=F1`, { headers: { Cookie: cookie } });
+      assert.equal(response.status, 200);
+      return response.json();
+    };
+    await types();
+    await types();
+    assert.equal(scans, 1);
+
+    const edited = await fetch(`${origin}/api/items/ITEM1/metadata`, {
+      method: "POST",
+      headers: { Cookie: cookie, Origin: origin, "Content-Type": "application/json" },
+      body: JSON.stringify({ tags: ["new"] }),
+    });
+    assert.equal(edited.status, 200);
+    await types();
+    await types();
+    assert.equal(scans, 2);
+
+    const uploaded = await fetch(`${origin}/api/uploads?${new URLSearchParams({ name: "new.png", folderId: "F1" })}`, {
+      method: "POST",
+      headers: { Cookie: cookie, Origin: origin, "Content-Type": "application/octet-stream" },
+      body: "image-bytes",
+    });
+    assert.equal(uploaded.status, 201);
+    // Eagle may not list the new item yet, so each request scans again for a while.
+    assert.deepEqual(await types(), { complete: true, items: [{ ext: "jpg", count: 3 }] });
+    assert.deepEqual(await types(), { complete: true, items: [{ ext: "jpg", count: 4 }] });
+  } finally {
+    await viewer.stop();
+    for (const path of uploadedPaths) await rm(path, { force: true });
+  }
+});
+
 test("the configured upload limit is enforced, and only users who may upload are told it", async () => {
   let calls = 0;
   const viewer = uploadViewer(async () => {
@@ -4409,6 +4589,191 @@ test("experimental sort orders /api/items with the library index and fetches the
     assert.deepEqual(bySizeDesc.items, [{ id: "C3" }]);
     assert.equal(bySizeDesc.total, 3);
     assert.deepEqual(requestedIds.at(-1), ["C3"]);
+  } finally {
+    await viewer.stop();
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("experimental sort counts a folder's item types from the library index without scanning Eagle", async () => {
+  const libraryPath = await createSortLibrary([
+    { id: "A1", name: "a", ext: "jpg", folders: ["F1"] },
+    { id: "B2", name: "b", ext: "png", folders: ["F1"] },
+    { id: "C3", name: "c", ext: "mp4", folders: [] },
+  ]);
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    viewerPassword: "",
+    experimentalSort: true,
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: libraryPath, name: "Sort" };
+      },
+      async itemsByIds(ids: string[]) {
+        return ids.map((id) => ({ id }));
+      },
+      async itemExtensions() {
+        throw new Error("itemExtensions should not be used once the index is ready");
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    // A sorted request waits for the index, so it is ready afterwards.
+    assert.equal((await (await fetch(`${origin}/api/items?sort=name`)).json()).sort.status, "ready");
+    assert.deepEqual(await (await fetch(`${origin}/api/item-types?folderId=F1`)).json(), {
+      complete: true,
+      items: [{ ext: "jpg", count: 1 }, { ext: "png", count: 1 }],
+    });
+    assert.deepEqual(await (await fetch(`${origin}/api/item-types?folderId=__uncategorized__`)).json(), {
+      complete: true,
+      items: [{ ext: "mp4", count: 1 }],
+    });
+  } finally {
+    await viewer.stop();
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("experimental sort scans Eagle for item types right after an upload, before mtime.json lists the item", async () => {
+  const libraryPath = await createSortLibrary([{ id: "A1", name: "a", ext: "jpg", folders: ["F1"] }]);
+  const uploadedPaths: string[] = [];
+  let scans = 0;
+  const viewer = uploadViewer(async () => undefined, {
+    experimentalSort: true,
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: libraryPath, name: "Sort" };
+      },
+      async itemsByIds(ids: string[]) {
+        return ids.map((id) => ({ id }));
+      },
+      async addItemFromPath(input: { path: string }) {
+        uploadedPaths.push(input.path);
+        return undefined;
+      },
+      async itemExtensions() {
+        scans += 1;
+        // Eagle already lists the uploaded PNG; mtime.json (and so the index) does not yet.
+        return [{ ext: "jpg", count: 1 }, { ext: "png", count: 1 }];
+      },
+    },
+  });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const cookie = await loginCookie(origin, "admin", "admin");
+    const types = async () => (await fetch(`${origin}/api/item-types?folderId=F1`, { headers: { Cookie: cookie } })).json();
+    const sorted = async () => (await (await fetch(`${origin}/api/items?sort=name&folderId=F1`, { headers: { Cookie: cookie } })).json()).sort;
+    assert.deepEqual(await sorted(), { status: "ready" });
+    assert.deepEqual(await types(), { complete: true, items: [{ ext: "jpg", count: 1 }] });
+    assert.equal(scans, 0);
+
+    const uploaded = await fetch(`${origin}/api/uploads?${new URLSearchParams({ name: "new.png", folderId: "F1" })}`, {
+      method: "POST",
+      headers: { Cookie: cookie, Origin: origin, "Content-Type": "application/octet-stream" },
+      body: "image-bytes",
+    });
+    assert.equal(uploaded.status, 201);
+    // The sorted list may still miss the new item, so the viewer must not take its types from it.
+    assert.deepEqual(await sorted(), { status: "ready", complete: false });
+    assert.deepEqual(await types(), { complete: true, items: [{ ext: "jpg", count: 1 }, { ext: "png", count: 1 }] });
+    assert.equal(scans, 1);
+  } finally {
+    await viewer.stop();
+    await rm(libraryPath, { recursive: true, force: true });
+    for (const path of uploadedPaths) await rm(path, { force: true });
+  }
+});
+
+test("experimental sort scans Eagle for item types while the index is missing unreadable items", async () => {
+  const libraryPath = await createSortLibrary([
+    { id: "A1", name: "a", ext: "jpg", folders: ["F1"] },
+    { id: "B2", name: "b", ext: "png", folders: ["F1"] },
+  ]);
+  // B2's folder is there but its metadata is not (yet), so the index can't count it.
+  await rm(join(libraryPath, "images", "B2.info", "metadata.json"));
+  const scopes: unknown[] = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    viewerPassword: "",
+    experimentalSort: true,
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: libraryPath, name: "Sort" };
+      },
+      async itemsByIds(ids: string[]) {
+        return ids.map((id) => ({ id }));
+      },
+      async itemExtensions({ folderId }: { folderId?: string } = {}) {
+        scopes.push(folderId);
+        return [{ ext: "jpg", count: 1 }, { ext: "png", count: 1 }];
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    assert.equal((await (await fetch(`${origin}/api/items?sort=name`)).json()).sort.status, "ready");
+    assert.deepEqual(await (await fetch(`${origin}/api/item-types?folderId=F1`)).json(), {
+      complete: true,
+      items: [{ ext: "jpg", count: 1 }, { ext: "png", count: 1 }],
+    });
+    assert.deepEqual(scopes, ["F1"]);
+  } finally {
+    await viewer.stop();
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("experimental sort says when its index is missing item folders, and scans Eagle for item types", async () => {
+  const libraryPath = await createSortLibrary([{ id: "A1", name: "a", ext: "jpg", folders: ["F1"] }]);
+  // Eagle counts a second item whose folder isn't on disk yet.
+  await writeFile(join(libraryPath, "mtime.json"), JSON.stringify({ A1: 1, B2: 1, all: 2 }));
+  const scopes: unknown[] = [];
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    viewerPassword: "",
+    experimentalSort: true,
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: libraryPath, name: "Sort" };
+      },
+      async itemsByIds(ids: string[]) {
+        return ids.map((id) => ({ id }));
+      },
+      async itemExtensions({ folderId }: { folderId?: string } = {}) {
+        scopes.push(folderId);
+        return [{ ext: "jpg", count: 1 }, { ext: "png", count: 1 }];
+      },
+    },
+  });
+
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const sorted = await (await fetch(`${origin}/api/items?sort=name`)).json();
+    assert.deepEqual(sorted.sort, { status: "ready", complete: false });
+    assert.deepEqual((await (await fetch(`${origin}/api/item-types?folderId=F1`)).json()).items, [{ ext: "jpg", count: 1 }, { ext: "png", count: 1 }]);
+    assert.deepEqual(scopes, ["F1"]);
   } finally {
     await viewer.stop();
     await rm(libraryPath, { recursive: true, force: true });

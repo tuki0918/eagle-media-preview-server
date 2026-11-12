@@ -1,7 +1,8 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { JSDOM } from "jsdom";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { AdvancedFilters } from "./SearchControls";
+import { AdvancedFilters, mediaTypeOptions } from "./SearchControls";
+import { MEDIA_TYPE_OPTIONS } from "../shellConfig";
 
 function parse(html: string) {
   return new JSDOM(html).window.document;
@@ -51,4 +52,15 @@ describe("experimental sort controls", () => {
     expect(plain.children[1].className).not.toContain("col-span");
   });
 
+});
+
+describe("type menu options", () => {
+  test("offers only All types for a folder found to hold none, but the defaults when the types are unknown", () => {
+    expect(mediaTypeOptions([], "", false, true)).toEqual([]);
+    expect(mediaTypeOptions([], "", true, false)).toEqual([]);
+    expect(mediaTypeOptions([], "", false, false)).toEqual([...MEDIA_TYPE_OPTIONS]);
+    expect(mediaTypeOptions(["png"], "", false, true)).toEqual(["png"]);
+    // The chosen type stays offered so it can be seen and changed.
+    expect(mediaTypeOptions([], "mp4", false, true)).toEqual(["mp4"]);
+  });
 });
