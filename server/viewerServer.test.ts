@@ -1,9 +1,10 @@
+import { execFileSync } from "node:child_process";
 import { connect } from "node:net";
-import { test } from "vitest";
+import { test, vi } from "vitest";
 import assert from "node:assert/strict";
 import { once } from "node:events";
-import { createReadStream } from "node:fs";
-import { mkdir, readFile, stat, truncate, writeFile, utimes, rm } from "node:fs/promises";
+import { constants as fsConstants, createReadStream } from "node:fs";
+import { mkdir, open, readFile, stat, truncate, writeFile, utimes, rm } from "node:fs/promises";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { createRequire } from "node:module";
@@ -4640,6 +4641,237 @@ test("experimental sort counts a folder's item types from the library index with
     await rm(libraryPath, { recursive: true, force: true });
   }
 });
+
+test("experimental sort stops a type scan of Eagle started during the build once the index answers", async () => {
+  // Large enough that the build, paced at 2,000 reads a second, is still running at the first request.
+  const items = Array.from({ length: 4000 }, (_, i) => ({ id: `T${String(i).padStart(5, "0")}`, name: `n${i}`, ext: i % 2 ? "jpg" : "png" }));
+  const libraryPath = await createSortLibrary(items);
+  let pages = 0;
+  let stopped = false;
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    viewerPassword: "",
+    experimentalSort: true,
+    sortIndexWaitMs: 0,
+    eagleClient: sortTestClient(() => libraryPath, {
+      // A slow Eagle: one page every 50 ms, far longer than the test.
+      async itemExtensions({ onProgress, shouldStop }: { onProgress?: (items: Array<{ count: number; ext: string }>) => void; shouldStop?: () => boolean } = {}) {
+        for (let page = 0; page < 2000; page += 1) {
+          if (page > 0 && shouldStop?.()) {
+            stopped = true;
+            throw new Error("The item type scan was stopped");
+          }
+          pages += 1;
+          onProgress?.([{ ext: "jpg", count: page + 1 }]);
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        return [];
+      },
+    }),
+  });
+
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    // The type menu opened during the build: Eagle is scanned.
+    assert.equal((await (await fetch(`${origin}/api/item-types`)).json()).complete, false);
+    assert.ok(pages > 0);
+    await waitForSortIndex(() => viewer.status().sortIndex);
+    // Once ready, the index answers, and the scan of Eagle stops at its next page.
+    assert.deepEqual(await (await fetch(`${origin}/api/item-types`)).json(), {
+      complete: true,
+      items: [{ ext: "jpg", count: 2000 }, { ext: "png", count: 2000 }],
+    });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.equal(stopped, true);
+    const pagesAfterStop = pages;
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.equal(pages, pagesAfterStop);
+  } finally {
+    await viewer.stop();
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+}, 30_000);
+
+test("experimental sort waits for a bulk index refresh without starting an Eagle type scan", async () => {
+  // Even a full token bucket cannot read 6,000 items within the one-second request wait.
+  const items = Array.from({ length: 6000 }, (_, i) => ({ id: `T${i}`, name: `item ${i}` }));
+  const libraryPath = await createSortLibrary(items);
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    viewerPassword: "",
+    experimentalSort: true,
+    eagleClient: sortTestClient(() => libraryPath, {
+      async itemExtensions() {
+        throw new Error("A bulk index refresh should not start a separate type scan");
+      },
+    }),
+  });
+
+  try {
+    await viewer.start();
+    await vi.waitFor(() => assert.equal(viewer.status().sortIndex?.status, "ready"), { timeout: 10_000 });
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const types = async () => {
+      const response = await fetch(`${origin}/api/item-types`);
+      assert.equal(response.status, 200);
+      return response.json();
+    };
+    assert.deepEqual(await types(), { complete: true, items: [{ ext: "png", count: 6000 }] });
+    await writeFile(join(libraryPath, "images", "T0.info", "metadata.json"), JSON.stringify({ ...items[0], ext: "jpg", lastModified: 2 }));
+    await writeFile(join(libraryPath, "mtime.json"), JSON.stringify({ ...Object.fromEntries(items.map(({ id }) => [id, 2])), all: items.length }));
+    // Refreshes check mtime.json at most once every two seconds.
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    assert.deepEqual(await types(), { complete: false, items: [{ ext: "png", count: 6000 }] });
+    await vi.waitFor(async () => assert.deepEqual(await types(), {
+      complete: true,
+      items: [{ ext: "jpg", count: 1 }, { ext: "png", count: 5999 }],
+    }), { timeout: 10_000 });
+  } finally {
+    await viewer.stop();
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+}, 30_000);
+
+test("experimental sort scans Eagle for the types of a folder not counted before a bulk index refresh", async () => {
+  // Even a full token bucket cannot read 6,000 items within the one-second request wait.
+  const items = Array.from({ length: 6000 }, (_, i) => ({ id: `T${i}`, name: `item ${i}` }));
+  const libraryPath = await createSortLibrary(items);
+  let scans = 0;
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    viewerPassword: "",
+    experimentalSort: true,
+    eagleClient: sortTestClient(() => libraryPath, {
+      async itemExtensions() {
+        scans += 1;
+        return [{ ext: "png", count: 6000 }];
+      },
+    }),
+  });
+
+  try {
+    await viewer.start();
+    await vi.waitFor(() => assert.equal(viewer.status().sortIndex?.status, "ready"), { timeout: 10_000 });
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    // A bulk edit, before any viewer counted the types: the index has no counts to stand in.
+    await writeFile(join(libraryPath, "mtime.json"), JSON.stringify({ ...Object.fromEntries(items.map(({ id }) => [id, 2])), all: items.length }));
+    // Refreshes check mtime.json at most once every two seconds.
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    assert.deepEqual(await (await fetch(`${origin}/api/item-types`)).json(), { complete: true, items: [{ ext: "png", count: 6000 }] });
+    assert.equal(scans, 1);
+  } finally {
+    await viewer.stop();
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+}, 30_000);
+
+// A named pipe stands in for a read that hangs (a NAS that stops answering): reading it blocks
+// until something writes to it.
+// Writes to a named pipe standing in for a stuck metadata.json, so the read waiting on it finishes.
+// A non-blocking open fails (and nothing is written) when nothing is reading it.
+async function releaseStalledRead(path: string, id: string) {
+  const pipe = await open(path, fsConstants.O_WRONLY | fsConstants.O_NONBLOCK).catch(() => null);
+  if (!pipe) return;
+  await pipe.write(JSON.stringify({ id, name: id, ext: "png", tags: [], folders: [], lastModified: 2 }));
+  await pipe.close();
+}
+
+test.skipIf(process.platform === "win32")("experimental sort scans Eagle for item types once an index refresh stalls, and keeps that scan's result", async () => {
+  const libraryPath = await createSortLibrary();
+  const stalled = ["A1", "B2"].map((id) => ({ id, path: join(libraryPath, "images", `${id}.info`, "metadata.json") }));
+  let scans = 0;
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    viewerPassword: "",
+    experimentalSort: true,
+    sortIndexStallMs: 1500,
+    eagleClient: sortTestClient(() => libraryPath, {
+      // Eagle also lists a JPG the stuck update hasn't read yet.
+      async itemExtensions() {
+        scans += 1;
+        return [{ ext: "jpg", count: 1 }, { ext: "png", count: 2 }];
+      },
+    }),
+  });
+
+  try {
+    await viewer.start();
+    await waitForSortIndex(() => viewer.status().sortIndex);
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const types = async () => (await fetch(`${origin}/api/item-types`)).json();
+    assert.deepEqual(await types(), { complete: true, items: [{ ext: "png", count: 3 }] });
+    for (const { path } of stalled) {
+      await rm(path);
+      execFileSync("mkfifo", [path]);
+    }
+    await writeFile(join(libraryPath, "mtime.json"), JSON.stringify({ A1: 2, B2: 2, C3: 1, all: 3 }));
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    // The update is stuck on A1 and B2: at first the earlier counts stand in, and Eagle isn't scanned.
+    assert.deepEqual(await types(), { complete: false, items: [{ ext: "png", count: 3 }] });
+    assert.equal(scans, 0);
+    // Without progress for longer than sortIndexStallMs, Eagle is scanned instead.
+    const eagleTypes = { complete: true, items: [{ ext: "jpg", count: 1 }, { ext: "png", count: 2 }] };
+    assert.deepEqual(await types(), eagleTypes);
+    assert.equal(scans, 1);
+    // The update gets going again (A1 is read) but isn't done (B2 is still stuck): Eagle's finished
+    // scan keeps answering, rather than the counts from before the update.
+    await releaseStalledRead(stalled[0].path, "A1");
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.deepEqual(await types(), eagleTypes);
+    assert.equal(scans, 1);
+  } finally {
+    for (const { id, path } of stalled) await releaseStalledRead(path, id);
+    await viewer.stop();
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+}, 30_000);
+
+test.skipIf(process.platform === "win32")("experimental sort keeps answering from a running Eagle type scan while the index refreshes", async () => {
+  const libraryPath = await createSortLibrary();
+  const stalledPath = join(libraryPath, "images", "A1.info", "metadata.json");
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    viewerPassword: "",
+    experimentalSort: true,
+    eagleClient: sortTestClient(() => libraryPath, {
+      // A slow Eagle that has found one JPG so far.
+      async itemExtensions({ onProgress, shouldStop }: { onProgress?: (items: Array<{ count: number; ext: string }>) => void; shouldStop?: () => boolean } = {}) {
+        onProgress?.([{ ext: "jpg", count: 1 }]);
+        while (!shouldStop?.()) await new Promise((resolve) => setTimeout(resolve, 50));
+        throw new Error("The item type scan was stopped");
+      },
+    }),
+  });
+
+  try {
+    await viewer.start();
+    await waitForSortIndex(() => viewer.status().sortIndex);
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const types = async () => (await fetch(`${origin}/api/item-types`)).json();
+    // The index's counts are cached.
+    assert.deepEqual(await types(), { complete: true, items: [{ ext: "png", count: 3 }] });
+    // Eagle counts an item the index can't see, so the viewer gets Eagle's scan, still running.
+    await writeFile(join(libraryPath, "mtime.json"), JSON.stringify({ A1: 1, B2: 1, C3: 1, all: 4 }));
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    assert.deepEqual(await types(), { complete: false, items: [{ ext: "jpg", count: 1 }] });
+    // An update then gets stuck: the viewer keeps what Eagle's scan found, not the index's old counts.
+    await rm(stalledPath);
+    execFileSync("mkfifo", [stalledPath]);
+    await writeFile(join(libraryPath, "mtime.json"), JSON.stringify({ A1: 2, B2: 1, C3: 1, all: 4 }));
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    assert.deepEqual(await types(), { complete: false, items: [{ ext: "jpg", count: 1 }] });
+  } finally {
+    await releaseStalledRead(stalledPath, "A1");
+    await viewer.stop();
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+}, 30_000);
 
 test("experimental sort scans Eagle for item types right after an upload, before mtime.json lists the item", async () => {
   const libraryPath = await createSortLibrary([{ id: "A1", name: "a", ext: "jpg", folders: ["F1"] }]);

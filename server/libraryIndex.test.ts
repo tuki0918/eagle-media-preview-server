@@ -105,13 +105,13 @@ test("library index counts the extensions in a folder, leaving trashed items out
   const libraryPath = await createLibrary([...sampleItems, { id: "E5", name: "clip", ext: "MP4", folders: ["F1"] }]);
   try {
     const index = await readyIndex(libraryPath);
-    assert.deepEqual(await index.extensionCounts({}), [{ ext: "jpg", count: 1 }, { ext: "mp4", count: 1 }, { ext: "png", count: 2 }]);
-    assert.deepEqual(await index.extensionCounts({ folderId: "F1" }), [{ ext: "mp4", count: 1 }, { ext: "png", count: 2 }]);
-    assert.deepEqual(await index.extensionCounts({ isUnfiled: true }), [{ ext: "jpg", count: 1 }]);
-    assert.deepEqual(await index.extensionCounts({ isUntagged: true }), [{ ext: "mp4", count: 1 }, { ext: "png", count: 1 }]);
+    assert.deepEqual((await index.extensionCounts({})).items, [{ ext: "jpg", count: 1 }, { ext: "mp4", count: 1 }, { ext: "png", count: 2 }]);
+    assert.deepEqual((await index.extensionCounts({ folderId: "F1" })).items, [{ ext: "mp4", count: 1 }, { ext: "png", count: 2 }]);
+    assert.deepEqual((await index.extensionCounts({ isUnfiled: true })).items, [{ ext: "jpg", count: 1 }]);
+    assert.deepEqual((await index.extensionCounts({ isUntagged: true })).items, [{ ext: "mp4", count: 1 }, { ext: "png", count: 1 }]);
     // A confirmed edit shows in the next count.
     index.noteItem({ id: "B2", isDeleted: true });
-    assert.deepEqual(await index.extensionCounts({}), [{ ext: "mp4", count: 1 }, { ext: "png", count: 2 }]);
+    assert.deepEqual((await index.extensionCounts({})).items, [{ ext: "mp4", count: 1 }, { ext: "png", count: 2 }]);
   } finally {
     await rm(libraryPath, { recursive: true, force: true });
   }
@@ -149,7 +149,7 @@ test("library index does not cover every item while Eagle counts more items than
 
     // The folder arrives without mtime.json changing; the next rescan still picks it up.
     await writeItem(libraryPath, { id: "K2", name: "two", ext: "png" });
-    assert.deepEqual(await index.extensionCounts({}), [{ ext: "jpg", count: 1 }, { ext: "png", count: 1 }]);
+    assert.deepEqual((await index.extensionCounts({})).items, [{ ext: "jpg", count: 1 }, { ext: "png", count: 1 }]);
     assert.equal(index.coversAllItems(), true);
   } finally {
     await rm(libraryPath, { recursive: true, force: true });
@@ -160,7 +160,7 @@ test("library index trims extensions like Eagle's scan, for counts and the type 
   const libraryPath = await createLibrary([{ id: "T1", name: "spaced", ext: " JPG " }, { id: "T2", name: "plain", ext: "jpg" }]);
   try {
     const index = await readyIndex(libraryPath);
-    assert.deepEqual(await index.extensionCounts({}), [{ ext: "jpg", count: 2 }]);
+    assert.deepEqual((await index.extensionCounts({})).items, [{ ext: "jpg", count: 2 }]);
     assert.equal((await index.query({ ext: "jpg" }, { key: "name", order: "asc" }, 0, 10)).total, 2);
   } finally {
     await rm(libraryPath, { recursive: true, force: true });
@@ -485,7 +485,7 @@ test("library index stops an update in progress when disposed and holds nothing 
     index.dispose();
     await new Promise((resolve) => setTimeout(resolve, 2000));
     assert.equal((await index.query({}, sort, 0, 100)).total, 0);
-    assert.deepEqual(await index.extensionCounts({}), []);
+    assert.deepEqual((await index.extensionCounts({})).items, []);
   } finally {
     await rm(libraryPath, { recursive: true, force: true });
   }

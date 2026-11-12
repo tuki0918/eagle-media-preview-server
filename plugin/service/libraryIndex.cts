@@ -245,6 +245,9 @@ function createLibraryIndex(libraryPath: string, {
   let status: IndexStatus = "idle";
   let building: Promise<void> | null = null;
   let refreshing: Promise<void> | null = null;
+  // When the update in progress last got somewhere (started, listed the folder, or read an item):
+  // a paced update reads many items a second, so a long pause means a stalled read (a NAS hang).
+  let refreshProgressAt = 0;
   let loaded = 0;
   let total = 0;
   let version = 0;
@@ -389,8 +392,10 @@ function createLibraryIndex(libraryPath: string, {
   async function refresh() {
     // A disposed index reads nothing more: the reads in flight are dropped (dispose bumps buildRun).
     const stopped = () => disposed;
+    refreshProgressAt = Date.now();
     const mtime = await readMtimeFile();
     if (stopped()) return;
+    refreshProgressAt = Date.now();
     const mtimeChanged = Boolean(mtime && mtime.signature !== mtimeSignature);
     if (!mtimeChanged && !unreadable.size && !rescanPending) return;
     const values = mtimeChanged ? mtime!.values : {};
@@ -408,6 +413,7 @@ function createLibraryIndex(libraryPath: string, {
     try {
       await mapWithConcurrency([...changed], concurrency, pace, async (id) => {
         if (await readItem(id)) updated = true;
+        refreshProgressAt = Date.now();
         if (stopped()) return;
         if (items.has(id) || unreadable.has(id)) missing.delete(id);
         else if (id in values) missing.set(id, finiteNumber(values[id]));
@@ -421,6 +427,7 @@ function createLibraryIndex(libraryPath: string, {
         lastRescan = now;
         // Settled only once the folder could be listed, so a failed listing is tried again later.
         const present = new Set(await listItemIds());
+        refreshProgressAt = Date.now();
         if (stopped()) return;
         for (const id of items.keys()) {
           if (!present.has(id) && items.delete(id)) updated = true;
@@ -431,6 +438,7 @@ function createLibraryIndex(libraryPath: string, {
         // Unreadable items were already tried at the start of this check.
         await mapWithConcurrency([...present].filter((id) => !items.has(id) && !unreadable.has(id)), concurrency, pace, async (id) => {
           if (await readItem(id)) updated = true;
+          refreshProgressAt = Date.now();
         }, stopped);
         if (stopped()) return;
         // Folders still syncing arrive later without touching mtime.json: keep rescanning, at the
@@ -534,15 +542,18 @@ function createLibraryIndex(libraryPath: string, {
     },
 
     /**
-     * How many items of each extension match the filter (in extension order, like Eagle's scan).
-     * Call only once ready.
+     * Counts by extension and the state of the index at the time of the count. While an update is
+     * read, gives the counts cached before it (null when there are none) and how long the update
+     * has gone without progress, so the caller can turn to Eagle instead. Call only once ready.
      */
     async extensionCounts(filter: IndexFilter) {
       await refreshIfDue();
       const normalized = normalizeFilter(filter);
       const cacheKey = JSON.stringify(normalized);
       const cached = extensionCache.get(cacheKey);
-      if (cached?.version === version) return cached.items;
+      if (refreshing) return { status: "refreshing" as const, items: cached?.items ?? null, stalledForMs: Date.now() - refreshProgressAt };
+      if (!coversAllItems()) return { status: "incomplete" as const, items: [] };
+      if (cached?.version === version) return { status: "complete" as const, items: cached.items };
       const counts = new Map<string, number>();
       for (const item of items.values()) {
         if (item.ext && matchesFilter(item, normalized)) counts.set(item.ext, (counts.get(item.ext) || 0) + 1);
@@ -551,7 +562,7 @@ function createLibraryIndex(libraryPath: string, {
       extensionCache.delete(cacheKey);
       extensionCache.set(cacheKey, { items: result, version });
       while (extensionCache.size > MAX_CACHED_QUERIES) extensionCache.delete(extensionCache.keys().next().value!);
-      return result;
+      return { status: "complete" as const, items: result };
     },
 
     /** Applies an item Eagle just returned from an edit, so the next query sees it right away. */

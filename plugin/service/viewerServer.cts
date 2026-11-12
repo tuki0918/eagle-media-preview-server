@@ -52,6 +52,8 @@ interface ViewerServerOptions {
   experimentalSort?: boolean;
   /** How long a sorted request waits for the index before answering with its progress. */
   sortIndexWaitMs?: number;
+  /** How long an index update may go without progress before item types are taken from Eagle. */
+  sortIndexStallMs?: number;
   uploadMaxBytes?: number;
   uploadRequestTimeoutMs?: number;
   uploadSweepIntervalMs?: number;
@@ -229,6 +231,7 @@ interface ApiContext {
    * so a request answered late never revives an index that stop() or a switch released.
    */
   sortIndexCheck: () => (libraryPath: string) => SortIndexState | null;
+  sortIndexStallMs: number;
   sortIndexWaitMs: number;
   /** Bumped whenever Eagle reports a library switch. */
   libraryGeneration: () => number;
@@ -264,6 +267,9 @@ const ITEM_TYPES_UPLOAD_SETTLE_MS = 15 * 1000;
 const itemTypesSettleUntil = new WeakMap<object, number>();
 // How long a sorted request waits for the index before answering in Eagle's order with progress.
 const SORT_INDEX_WAIT_MS = 1000;
+// An index update reads many items a second; one that gets nowhere for this long has stalled (a NAS
+// hang, say), so item types are taken from Eagle instead of waiting for it.
+const SORT_INDEX_STALL_MS = 15 * 1000;
 const LOGIN_FAILURE_LIMIT = 5;
 const LOGIN_FAILURE_MAX_ENTRIES = 500;
 const LOGIN_FAILURE_WINDOW_MS = 10 * 60 * 1000;
@@ -335,6 +341,7 @@ function createViewerServer({
   trustForwardedFor = false,
   experimentalSort = false,
   sortIndexWaitMs = SORT_INDEX_WAIT_MS,
+  sortIndexStallMs = SORT_INDEX_STALL_MS,
   uploadMaxBytes = MAX_UPLOAD_BYTES,
   uploadRequestTimeoutMs = UPLOAD_REQUEST_TIMEOUT_MS,
   uploadSweepIntervalMs = UPLOAD_SWEEP_INTERVAL_MS,
@@ -545,6 +552,7 @@ function createViewerServer({
           libraryId,
           sortIndexes,
           sortIndexCheck,
+          sortIndexStallMs,
           sortIndexWaitMs,
           libraryGeneration: () => libraryGeneration,
           uploadMaxBytes,
@@ -748,8 +756,9 @@ function createProtocolServer({ httpsCertPath = "", httpsEnabled = false, httpsK
   }, handler);
 }
 
-// Stops every type scan of this client and forgets their results: after a library switch, or an
-// edit that changes which items a folder (or the unfiled or untagged items) holds.
+// Stops every type scan of this client and forgets their results: after a library switch, an edit
+// that changes which items a folder (or the unfiled or untagged items) holds, or once Advanced
+// Sort's index answers instead.
 function dropItemTypeScans(client: object) {
   for (const scan of itemTypesCache.get(client)?.scans.values() ?? []) scan.stopped = true;
   itemTypesCache.delete(client);
@@ -764,6 +773,17 @@ function dropItemTypeScansAfterUpload(client: object) {
 // True while an upload settles: Eagle may list the new item before mtime.json (and so the index) does.
 function uploadSettling(client: object) {
   return Date.now() < (itemTypesSettleUntil.get(client) ?? 0);
+}
+
+// Whether a type scan of Eagle for this scope can answer: still running, or finished and not expired.
+function usableItemTypeScan(client: object, libraryPath: string, scope: FolderScope) {
+  const cache = itemTypesCache.get(client);
+  const scan = cache?.libraryPath === libraryPath ? cache.scans.get(itemTypesScanKey(scope)) : undefined;
+  return Boolean(scan && !scan.stopped && (!scan.complete || scan.expiresAt > Date.now()));
+}
+
+function itemTypesScanKey(scope: FolderScope) {
+  return JSON.stringify([scope.folderId, scope.isUnfiled, scope.isUntagged]);
 }
 
 // The folder (or the unfiled or untagged items) a request's folderId names.
@@ -785,6 +805,7 @@ async function cachedItemTypes(
   scope: FolderScope,
   sortIndexes: SortIndexManager | null,
   libraryGeneration: () => number,
+  sortIndexStallMs: number,
 ) {
   const admittedGeneration = libraryGeneration();
   const switched = () => libraryGeneration() !== admittedGeneration;
@@ -794,12 +815,30 @@ async function cachedItemTypes(
   const index = sortIndexes && libraryPath ? sortIndexes.loaded(libraryPath) : null;
   // Right after an upload, Eagle lists the new item before it records it in mtime.json, so the index
   // can still count the library without it; Eagle is scanned (and the scan not kept) meanwhile.
-  const settling = uploadSettling(session.client);
+  let settling = uploadSettling(session.client);
   if (index?.status === "ready" && !settling) {
-    const items = await index.extensionCounts(scope);
-    // Asked after the count, which checks the library first. An index missing items (unreadable
-    // metadata, a folder not synced yet) would leave types out, so Eagle is scanned instead.
-    if (index.coversAllItems()) return { complete: true, items };
+    const counts = await index.extensionCounts(scope);
+    // The count checks the library first, which can take a moment. Meanwhile Eagle may have opened
+    // another library, or an upload may have finished (and another request started a scan of Eagle
+    // to include the new item): the count is then out of date, and that scan must not be stopped.
+    if (switched()) throw new HttpError(409, LIBRARY_CHANGED_MESSAGE, "LIBRARY_CHANGED");
+    settling = uploadSettling(session.client);
+    // While an update is read, the counts from before it stand in, and the viewer asks again until
+    // it ends, so Eagle isn't scanned for nothing. Eagle is scanned after all when there are no such
+    // counts (this folder wasn't counted before; a bulk update can take minutes) or the update has
+    // stalled. A scan of Eagle already running or finished (and not expired) answers instead too: it
+    // is newer than those counts, and keeps what a viewer already shows from it.
+    if (!settling && counts.status === "refreshing" && counts.items && counts.stalledForMs < sortIndexStallMs && !usableItemTypeScan(session.client, libraryPath, scope)) {
+      return { complete: false, items: counts.items };
+    }
+    // If the update finished but metadata is still missing, use Eagle instead.
+    if (!settling && counts.status === "complete") {
+      // A scan of Eagle started before the index was ready (or while it was incomplete) would only
+      // keep paging through Eagle until abandoned; the index answers for every folder now. Scans
+      // are shared by every viewer of this server, so theirs stop too and they get the index next.
+      dropItemTypeScans(session.client);
+      return { complete: true, items: counts.items };
+    }
   }
   let cache = itemTypesCache.get(session.client);
   if (!cache || cache.libraryPath !== libraryPath) {
@@ -808,7 +847,7 @@ async function cachedItemTypes(
     itemTypesCache.set(session.client, cache);
   }
   const { scans } = cache;
-  const key = JSON.stringify([scope.folderId, scope.isUnfiled, scope.isUntagged]);
+  const key = itemTypesScanKey(scope);
   let scan = scans.get(key);
   if (!scan || scan.stopped || (scan.complete && scan.expiresAt <= Date.now())) {
     const nextScan: ItemTypesScan = {
@@ -878,7 +917,7 @@ async function cachedItemTypes(
   return { complete: scan.complete && !scan.stopped, items: scan.items };
 }
 
-async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { auth, confirmLibraryBeforeWrite, getSession, libraryAccess, libraryGeneration, libraryId, sortIndexes, sortIndexCheck, sortIndexWaitMs, uploadMaxBytes }: ApiContext & { auth: AuthContext }) {
+async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { auth, confirmLibraryBeforeWrite, getSession, libraryAccess, libraryGeneration, libraryId, sortIndexes, sortIndexCheck, sortIndexStallMs, sortIndexWaitMs, uploadMaxBytes }: ApiContext & { auth: AuthContext }) {
   const session = getSession();
 
   if (url.pathname === "/api/connect") {
@@ -999,7 +1038,7 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       sendMethodNotAllowed(res, ["GET"]);
       return;
     }
-    sendJson(res, 200, await cachedItemTypes(session, folderScope(url.searchParams.get("folderId")), sortIndexes, libraryGeneration));
+    sendJson(res, 200, await cachedItemTypes(session, folderScope(url.searchParams.get("folderId")), sortIndexes, libraryGeneration, sortIndexStallMs));
     return;
   }
 
