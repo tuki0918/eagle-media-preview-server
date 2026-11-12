@@ -49,9 +49,20 @@ interface IndexedItem {
 type IndexStatus = "building" | "failed" | "idle" | "ready";
 
 interface LibraryIndexOptions {
+  /** How many metadata.json reads may be in flight at once. */
   concurrency?: number;
+  /**
+   * The most metadata.json reads per second, to spare the disk or NAS; Infinity turns it off. Up to
+   * one second's worth may be read at once, so small libraries and small updates aren't held back.
+   */
+  readsPerSecond?: number;
   /** How often a query may stat mtime.json for changes. */
   refreshIntervalMs?: number;
+  /**
+   * How long a query waits for an update in progress before answering from what the index holds;
+   * the update carries on in the background (a bulk edit of many items takes a while at readsPerSecond).
+   */
+  refreshWaitMs?: number;
   /** A full folder scan, when Eagle's item count disagrees with the index, runs at most this often. */
   rescanIntervalMs?: number;
 }
@@ -69,8 +80,16 @@ const DEFAULT_SORT_ORDER: Record<SortKey, SortOrder> = {
   rating: "asc",
   resolution: "asc",
 };
-const DEFAULT_CONCURRENCY = 64;
+// A few reads at a time are enough to keep the build moving, and leave the disk (and Node's file
+// threads, shared with the media the server streams) free for everything else.
+const DEFAULT_CONCURRENCY = 8;
+// 300,000 items take about 2.5 minutes at this rate (the unthrottled build took about 17 s on an SSD).
+// On Windows, Defender checks every file opened; at this rate it stays mostly quiet (no fan noise).
+const DEFAULT_READS_PER_SECOND = 2000;
+// Shortest pause between reads once the budget is spent; shorter timers aren't reliable.
+const MIN_PACING_PAUSE_MS = 10;
 const DEFAULT_REFRESH_INTERVAL_MS = 2000;
+const DEFAULT_REFRESH_WAIT_MS = 1000;
 const DEFAULT_RESCAN_INTERVAL_MS = 60 * 1000;
 const MAX_CACHED_QUERIES = 8;
 const FAILED_RETRY_MS = 30 * 1000;
@@ -151,10 +170,52 @@ function normalizeFilter(filter: IndexFilter): IndexFilter {
   };
 }
 
-async function mapWithConcurrency<T>(values: readonly T[], concurrency: number, task: (value: T) => Promise<void>, stopped: () => boolean = () => false) {
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+// Resolves when `promise` settles or `ms` passes, whichever comes first.
+async function waitAtMost(promise: Promise<unknown>, ms: number) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      promise.catch(() => {}),
+      new Promise((resolve) => {
+        timer = setTimeout(resolve, ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// A token bucket: each read takes one token; tokens come back at `perSecond`, holding at most one
+// second's worth. Resolves when the caller may read.
+function createReadPacer(perSecond: number) {
+  if (!(perSecond > 0) || !Number.isFinite(perSecond)) return async () => {};
+  const capacity = Math.max(1, perSecond);
+  let tokens = capacity;
+  let last = Date.now();
+  return async function take(stopped: () => boolean = () => false) {
+    while (!stopped()) {
+      const now = Date.now();
+      tokens = Math.min(capacity, tokens + (Math.max(0, now - last) * perSecond) / 1000);
+      last = now;
+      if (tokens >= 1) {
+        tokens -= 1;
+        return;
+      }
+      await sleep(Math.max(MIN_PACING_PAUSE_MS, Math.ceil(((1 - tokens) * 1000) / perSecond)));
+    }
+  };
+}
+
+type ReadPacer = ReturnType<typeof createReadPacer>;
+
+async function mapWithConcurrency<T>(values: readonly T[], concurrency: number, pace: ReadPacer, task: (value: T) => Promise<void>, stopped: () => boolean = () => false) {
   let next = 0;
   const worker = async () => {
     while (next < values.length && !stopped()) {
+      await pace(stopped);
+      if (stopped() || next >= values.length) break;
       const value = values[next++];
       await task(value);
     }
@@ -164,11 +225,15 @@ async function mapWithConcurrency<T>(values: readonly T[], concurrency: number, 
 
 function createLibraryIndex(libraryPath: string, {
   concurrency = DEFAULT_CONCURRENCY,
+  readsPerSecond = DEFAULT_READS_PER_SECOND,
   refreshIntervalMs = DEFAULT_REFRESH_INTERVAL_MS,
+  refreshWaitMs = DEFAULT_REFRESH_WAIT_MS,
   rescanIntervalMs = DEFAULT_RESCAN_INTERVAL_MS,
 }: LibraryIndexOptions = {}) {
   const imagesDir = join(libraryPath, "images");
   const mtimePath = join(libraryPath, "mtime.json");
+  // Shared by the build and later updates, so together they stay within readsPerSecond.
+  const pace = createReadPacer(readsPerSecond);
   const items = new Map<string, IndexedItem>();
   const strings = new Map<string, string>();
   const intern = (text: string) => {
@@ -284,7 +349,7 @@ function createLibraryIndex(libraryPath: string, {
       const ids = await listItemIds();
       if (stopped()) return;
       total = ids.length;
-      await mapWithConcurrency(ids, concurrency, async (id) => {
+      await mapWithConcurrency(ids, concurrency, pace, async (id) => {
         await readItem(id, run);
         if (!stopped()) loaded += 1;
       }, stopped);
@@ -308,6 +373,10 @@ function createLibraryIndex(libraryPath: string, {
     }
   }
 
+  function coversAllItems() {
+    return !refreshing && unreadable.size === 0 && !countDisagrees();
+  }
+
   // Eagle's own item count, "all" (0 included), against the items held.
   function countDisagrees() {
     return eagleItemCount !== null && eagleItemCount !== items.size;
@@ -318,7 +387,10 @@ function createLibraryIndex(libraryPath: string, {
   }
 
   async function refresh() {
+    // A disposed index reads nothing more: the reads in flight are dropped (dispose bumps buildRun).
+    const stopped = () => disposed;
     const mtime = await readMtimeFile();
+    if (stopped()) return;
     const mtimeChanged = Boolean(mtime && mtime.signature !== mtimeSignature);
     if (!mtimeChanged && !unreadable.size && !rescanPending) return;
     const values = mtimeChanged ? mtime!.values : {};
@@ -334,11 +406,13 @@ function createLibraryIndex(libraryPath: string, {
     // Only real changes bump the version: a file that keeps failing must not force a re-sort each time.
     let updated = false;
     try {
-      await mapWithConcurrency([...changed], concurrency, async (id) => {
+      await mapWithConcurrency([...changed], concurrency, pace, async (id) => {
         if (await readItem(id)) updated = true;
+        if (stopped()) return;
         if (items.has(id) || unreadable.has(id)) missing.delete(id);
         else if (id in values) missing.set(id, finiteNumber(values[id]));
-      });
+      }, stopped);
+      if (stopped()) return;
       // Eagle rescans the folder when its item count disagrees; permanent deletes show up only there.
       // A rescan held back by the interval is remembered, so it still happens without another change.
       if (mtimeChanged && countDisagrees()) rescanPending = true;
@@ -347,6 +421,7 @@ function createLibraryIndex(libraryPath: string, {
         lastRescan = now;
         // Settled only once the folder could be listed, so a failed listing is tried again later.
         const present = new Set(await listItemIds());
+        if (stopped()) return;
         for (const id of items.keys()) {
           if (!present.has(id) && items.delete(id)) updated = true;
         }
@@ -354,9 +429,10 @@ function createLibraryIndex(libraryPath: string, {
           if (!present.has(id)) unreadable.delete(id);
         }
         // Unreadable items were already tried at the start of this check.
-        await mapWithConcurrency([...present].filter((id) => !items.has(id) && !unreadable.has(id)), concurrency, async (id) => {
+        await mapWithConcurrency([...present].filter((id) => !items.has(id) && !unreadable.has(id)), concurrency, pace, async (id) => {
           if (await readItem(id)) updated = true;
-        });
+        }, stopped);
+        if (stopped()) return;
         // Folders still syncing arrive later without touching mtime.json: keep rescanning, at the
         // interval, until the index holds as many items as Eagle counts.
         rescanPending = countDisagrees();
@@ -369,15 +445,23 @@ function createLibraryIndex(libraryPath: string, {
     }
   }
 
-  // At most every refreshIntervalMs, checks mtime.json for changes; callers wait for a check in progress.
+  // At most every refreshIntervalMs, checks mtime.json for changes. Callers wait for a check in
+  // progress up to refreshWaitMs, then go on with what the index holds while it finishes, and
+  // coversAllItems() is false until it does. Meanwhile `version` stays put on purpose: a query asked
+  // before keeps its cached order while the update is read, while a query not cached yet sees the
+  // items read so far. The update shows up in every query once it ends and bumps `version`; pages
+  // asked for after that come from the new order, so a viewer paging across that moment can see an
+  // item twice or miss one, as with any change in Eagle while paging (pages aren't pinned to a
+  // snapshot).
   async function refreshIfDue() {
+    if (disposed) return;
     if (Date.now() - lastRefreshCheck >= refreshIntervalMs) {
       lastRefreshCheck = Date.now();
       refreshing ??= refresh().finally(() => {
         refreshing = null;
       });
     }
-    if (refreshing) await refreshing.catch(() => {});
+    if (refreshing) await waitAtMost(refreshing, refreshWaitMs);
   }
 
   function sortedItems(sort: IndexSort) {
@@ -400,12 +484,13 @@ function createLibraryIndex(libraryPath: string, {
     },
 
     /**
-     * False while the index may be missing items: some metadata could not be read, or it holds a
-     * different number of items than Eagle counts (an item folder not synced yet, say). Reflects the
-     * last check, so ask right after query() or extensionCounts(), which check first.
+     * False while the index may be missing items or hold old ones: an update is still being read
+     * (see refreshIfDue), some metadata could not be read, or it holds a different number of items
+     * than Eagle counts (an item folder not synced yet, say). Reflects the last check, so ask right
+     * after query() or extensionCounts(), which check first.
      */
     coversAllItems() {
-      return unreadable.size === 0 && !countDisagrees();
+      return coversAllItems();
     },
 
     /** Starts building on first use; resolves true once ready, or false if `waitMs` passes first. */
@@ -416,21 +501,14 @@ function createLibraryIndex(libraryPath: string, {
         building = build();
         building.catch(() => {});
       }
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      try {
-        await Promise.race([
-          building.catch(() => {}),
-          new Promise((resolve) => {
-            timer = setTimeout(resolve, waitMs);
-          }),
-        ]);
-      } finally {
-        clearTimeout(timer);
-      }
+      await waitAtMost(building, waitMs);
       return (status as IndexStatus) === "ready";
     },
 
-    /** Matching ids for one page, in the requested order. Call only once ready. */
+    /**
+     * Matching ids for one page, in the requested order, and whether the index covered every item
+     * when the page was made (see coversAllItems). Call only once ready.
+     */
     async query(filter: IndexFilter, sort: IndexSort, offset: number, limit: number) {
       await refreshIfDue();
       const normalized = normalizeFilter(filter);
@@ -450,7 +528,9 @@ function createLibraryIndex(libraryPath: string, {
         queryCache.delete(cacheKey);
         queryCache.set(cacheKey, entry);
       }
-      return { ids: ids.slice(offset, offset + limit), total: ids.length };
+      // Taken with the page itself: an update that ends while the caller still works on the page
+      // must not make the page look complete.
+      return { complete: coversAllItems(), ids: ids.slice(offset, offset + limit), total: ids.length };
     },
 
     /**
@@ -494,6 +574,8 @@ function createLibraryIndex(libraryPath: string, {
 
     dispose() {
       disposed = true;
+      // Reads still in flight (a build or an update) see a newer run and drop what they read.
+      buildRun += 1;
       items.clear();
       strings.clear();
       missing.clear();

@@ -75,7 +75,7 @@ test("library index sorts like Eagle and leaves trashed items out", async () => 
     assert.deepEqual(await ids("filesize", "desc"), ["A1", "C3", "B2"]);
     assert.deepEqual(await ids("resolution"), ["A1", "C3", "B2"]);
     const page = await index.query({}, parseIndexSort("filesize", "asc"), 1, 1);
-    assert.deepEqual(page, { ids: ["C3"], total: 3 });
+    assert.deepEqual(page, { complete: true, ids: ["C3"], total: 3 });
   } finally {
     await rm(libraryPath, { recursive: true, force: true });
   }
@@ -365,6 +365,132 @@ test("library index stops a build when disposed", async () => {
   }
 });
 
+test("library index reads at most readsPerSecond after the first second's worth", async () => {
+  const items = Array.from({ length: 30 }, (_, i) => ({ id: `R${String(i).padStart(4, "0")}`, name: `item ${i}` }));
+  const libraryPath = await createLibrary(items);
+  try {
+    // 20 reads right away, then the other 10 at 20 per second: about half a second.
+    const started = Date.now();
+    const index = createLibraryIndex(libraryPath, { readsPerSecond: 20 });
+    assert.equal(await index.whenReady(0), false);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    assert.equal(index.status, "building");
+    assert.ok(index.progress().loaded >= 20 && index.progress().loaded < 30);
+    assert.equal(await index.whenReady(5000), true);
+    assert.ok(Date.now() - started >= 400);
+    assert.equal((await index.query({}, parseIndexSort("name", ""), 0, 100)).total, 30);
+    index.dispose();
+  } finally {
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("library index stops a paced build when disposed", async () => {
+  const items = Array.from({ length: 30 }, (_, i) => ({ id: `P${String(i).padStart(4, "0")}`, name: `item ${i}` }));
+  const libraryPath = await createLibrary(items);
+  try {
+    const index = createLibraryIndex(libraryPath, { readsPerSecond: 10 });
+    assert.equal(await index.whenReady(0), false);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    index.dispose();
+    const loaded = index.progress().loaded;
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    assert.notEqual(index.status, "ready");
+    assert.equal(index.progress().loaded, loaded);
+  } finally {
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+// 30 items read at 20 a second: the build uses up the first second's worth, so an update of all
+// 30 then takes about 1.5 s.
+async function pacedLibraryWithBulkEdit(prefix: string) {
+  const ids = Array.from({ length: 30 }, (_, i) => `${prefix}${String(i).padStart(4, "0")}`);
+  const libraryPath = await createLibrary(ids.map((id, i) => ({ id, name: `a${String(i).padStart(2, "0")}` })));
+  const index = createLibraryIndex(libraryPath, { readsPerSecond: 20, refreshIntervalMs: 0, refreshWaitMs: 50, rescanIntervalMs: 60_000 });
+  assert.equal(await index.whenReady(5000), true);
+  // A bulk edit reverses the name order of every item.
+  for (const [i, id] of ids.entries()) await writeItem(libraryPath, { id, name: `b${String(29 - i).padStart(2, "0")}`, lastModified: 2 });
+  await writeMtime(libraryPath, Object.fromEntries(ids.map((id) => [id, 2])));
+  return { ids, index, libraryPath };
+}
+
+test("library index answers from what it holds while a large update is still reading", async () => {
+  const { ids, index, libraryPath } = await pacedLibraryWithBulkEdit("U");
+  try {
+    const sort = parseIndexSort("name", "asc");
+    const started = Date.now();
+    const first = await index.query({}, sort, 0, 1);
+    assert.ok(Date.now() - started < 500);
+    // Items not read yet keep their old names ("a…"), which sort before the new ones ("b…").
+    assert.equal(first.total, 30);
+    assert.notDeepEqual(first.ids, [ids[29]]);
+    // Not complete while the update is still being read, even though the count still matches; the
+    // page says so itself, so an update ending later doesn't make it look complete.
+    assert.equal(first.complete, false);
+    assert.equal(index.coversAllItems(), false);
+    // The update carries on in the background and shows up once done.
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+    assert.deepEqual(await index.query({}, sort, 0, 1), { complete: true, ids: [ids[29]], total: 30 });
+    assert.equal(first.complete, false);
+    index.dispose();
+  } finally {
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("library index keeps a query's pages consistent while an update is read, and refreshes them after", async () => {
+  const { ids, index, libraryPath } = await pacedLibraryWithBulkEdit("C");
+  try {
+    const sort = parseIndexSort("name", "asc");
+    // The first page is answered while the update is being read; its order is cached.
+    const before = await index.query({}, sort, 0, 10);
+    assert.equal(index.coversAllItems(), false);
+    // Its next page comes from the same order, however much of the update has been read.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const page2 = await index.query({}, sort, 10, 10);
+    assert.equal(new Set([...before.ids, ...page2.ids]).size, 20);
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+    assert.deepEqual((await index.query({}, sort, 0, 1)).ids, [ids[29]]);
+    index.dispose();
+  } finally {
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+// Records a known limitation of the paced update: with no further change in Eagle, the update
+// ending in the background is enough to switch a query's order between two pages.
+test("library index switches a query's order between pages when an update ends in the background", async () => {
+  const { ids, index, libraryPath } = await pacedLibraryWithBulkEdit("X");
+  try {
+    const sort = parseIndexSort("name", "asc");
+    const page1 = await index.query({}, sort, 0, 10);
+    assert.equal(page1.complete, false);
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+    // Page 2 comes from the new order (b00 = ids[29] first), not from the order page 1 was cut from.
+    const page2 = await index.query({}, sort, 10, 10);
+    assert.equal(page2.complete, true);
+    assert.deepEqual(page2.ids, ids.slice(10, 20).reverse());
+    index.dispose();
+  } finally {
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("library index stops an update in progress when disposed and holds nothing afterwards", async () => {
+  const { index, libraryPath } = await pacedLibraryWithBulkEdit("S");
+  try {
+    const sort = parseIndexSort("name", "asc");
+    assert.equal((await index.query({}, sort, 0, 1)).total, 30);
+    index.dispose();
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    assert.equal((await index.query({}, sort, 0, 100)).total, 0);
+    assert.deepEqual(await index.extensionCounts({}), []);
+  } finally {
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
 test("library index manager release stops a build in progress and a later request starts a new index", async () => {
   const items = Array.from({ length: 200 }, (_, i) => ({ id: `M${String(i).padStart(4, "0")}`, name: `item ${i}` }));
   const libraryPath = await createLibrary(items);
@@ -485,7 +611,7 @@ test("library index treats an item count of 0 as a real count", async () => {
     assert.equal((await index.query({}, sort, 0, 10)).total, 1);
     await rm(join(libraryPath, "images", "ONLY.info"), { recursive: true });
     await writeMtime(libraryPath, { ONLY: 1, all: 0 });
-    assert.deepEqual(await index.query({}, sort, 0, 10), { ids: [], total: 0 });
+    assert.deepEqual(await index.query({}, sort, 0, 10), { complete: true, ids: [], total: 0 });
   } finally {
     await rm(libraryPath, { recursive: true, force: true });
   }

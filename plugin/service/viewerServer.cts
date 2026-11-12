@@ -967,9 +967,10 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
           tags,
         }, sort, offset, limit);
         const items = await session.client.itemsByIds(page.ids);
-        // An index missing items gives a short list; say so, so the viewer doesn't take it as whole.
-        // Right after an upload the index may not hold the new item yet either.
-        const sortState = index.coversAllItems() && !uploadSettling(session.client) ? { status: "ready" } : { status: "ready", complete: false };
+        // An index missing items, or still reading an update, gives a short or stale list; say so, so
+        // the viewer doesn't take it as whole. Judged when the page was made, not after fetching its
+        // items. Right after an upload the index may not hold the new item yet either.
+        const sortState = page.complete && !uploadSettling(session.client) ? { status: "ready" } : { status: "ready", complete: false };
         sendJson(res, 200, { items, total: page.total, offset, limit, sort: sortState });
         return;
       }
