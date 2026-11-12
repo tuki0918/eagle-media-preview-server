@@ -259,6 +259,61 @@ test("library index fails a build Eagle answered nothing for, and keeps what it 
   }
 });
 
+test("library index doesn't cover every item while Eagle leaves out one that isn't in the trash", async () => {
+  const libraryPath = await createLibrary([{ id: "S1", name: "one", ext: "jpg" }, { id: "S2", name: "two", ext: "png" }]);
+  const realNow = Date.now;
+  try {
+    await writeMtime(libraryPath, { S1: 1, S2: 1, all: 2 });
+    // S2 is on disk, but Eagle hasn't loaded it yet (synced from another computer).
+    let hidden = true;
+    const disk = eagleFromDisk(libraryPath);
+    const source = { async fetchItems(ids: string[]) {
+      const found = (await disk.fetchItems(ids)) as Array<{ id: string }>;
+      return hidden ? found.filter((item) => item.id !== "S2") : found;
+    } };
+    const index = await readyIndex(libraryPath, { rescanIntervalMs: 60_000, source });
+    const sort = parseIndexSort("name", "asc");
+    assert.deepEqual(await index.query({}, sort, 0, 10), { complete: false, ids: ["S1"], total: 1 });
+    assert.equal((await index.extensionCounts({})).status, "incomplete");
+    // Eagle loads it; mtime.json doesn't change, so it is asked about again after rescanIntervalMs.
+    hidden = false;
+    Date.now = () => realNow() + 61_000;
+    assert.deepEqual(await index.query({}, sort, 0, 10), { complete: true, ids: ["S1", "S2"], total: 2 });
+    assert.deepEqual(await index.extensionCounts({}), { status: "complete", items: [{ ext: "jpg", count: 1 }, { ext: "png", count: 1 }] });
+  } finally {
+    Date.now = realNow;
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
+test("library index asks about trashed items again only when mtime.json says they changed", async () => {
+  const trash = Array.from({ length: 20 }, (_, i) => ({ id: `Z${String(i).padStart(4, "0")}`, name: `trashed ${i}`, isDeleted: true }));
+  const libraryPath = await createLibrary([...sampleItems.slice(0, 3), ...trash]);
+  const realNow = Date.now;
+  try {
+    await writeMtime(libraryPath, { ...Object.fromEntries([...sampleItems.slice(0, 3), ...trash].map((item) => [item.id, 1])), all: 23 });
+    const source = eagleFromDisk(libraryPath);
+    const index = await readyIndex(libraryPath, { rescanIntervalMs: 60_000, source });
+    const sort = parseIndexSort("import", "");
+    assert.equal((await index.query({}, sort, 0, 10)).complete, true);
+    source.state.calls.length = 0;
+    // Minutes of browsing with nothing changed: Eagle isn't asked about the trash again.
+    for (const minutes of [2, 4, 6]) {
+      Date.now = () => realNow() + minutes * 60_000;
+      assert.deepEqual(await index.query({}, sort, 0, 10), { complete: true, ids: ["A1", "C3", "B2"], total: 3 });
+    }
+    assert.deepEqual(source.state.calls, []);
+    // A restored item changes in mtime.json and comes back.
+    await writeItem(libraryPath, { ...trash[0], isDeleted: false, lastModified: 2, modificationTime: 9 });
+    await writeMtime(libraryPath, { ...Object.fromEntries([...sampleItems.slice(0, 3), ...trash].map((item) => [item.id, 1])), Z0000: 2, all: 23 });
+    assert.deepEqual(await index.query({}, sort, 0, 10), { complete: true, ids: ["Z0000", "A1", "C3", "B2"], total: 4 });
+    assert.deepEqual(source.state.calls, [["Z0000"]]);
+  } finally {
+    Date.now = realNow;
+    await rm(libraryPath, { recursive: true, force: true });
+  }
+});
+
 test("library index picks up changes, additions, and permanent deletes through mtime.json", async () => {
   const libraryPath = await createLibrary(sampleItems);
   try {
@@ -653,7 +708,8 @@ test("library index leaves out items Eagle stops returning, and asks about those
     await rm(metadataPath);
     const index = await readyIndex(libraryPath, { rescanIntervalMs: 60_000 });
     const sort = parseIndexSort("filesize", "desc");
-    assert.deepEqual((await index.query({}, sort, 0, 10)).ids, ["A1", "B2"]);
+    // Not in the trash, as far as anyone can tell: the index doesn't claim to cover every item.
+    assert.deepEqual(await index.query({}, sort, 0, 10), { complete: false, ids: ["A1", "B2"], total: 2 });
     await writeItem(libraryPath, sampleItems[2]);
     // mtime.json is unchanged; C3 is asked about again only after rescanIntervalMs.
     assert.deepEqual((await index.query({}, sort, 0, 10)).ids, ["A1", "B2"]);

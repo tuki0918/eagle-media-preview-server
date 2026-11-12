@@ -69,6 +69,11 @@ interface LibraryIndexOptions {
    * updates aren't held back. Requests go one at a time.
    */
   batchesPerSecond?: number;
+  /**
+   * The most metadata.json reads per second, one at a time; Infinity turns pacing off. Only items
+   * Eagle didn't return are read, to tell those in the trash from those Eagle hasn't loaded yet.
+   */
+  metadataReadsPerSecond?: number;
   /** How often a query may stat mtime.json for changes. */
   refreshIntervalMs?: number;
   /**
@@ -99,6 +104,9 @@ const DEFAULT_BATCH_SIZE = 1000;
 // 300,000 items on an M1, in a simulation of that code), so they are spread out: 300,000 items take
 // about 2.5 minutes at this rate, as long as the paced reads of metadata.json used to.
 const DEFAULT_BATCHES_PER_SECOND = 2;
+// A trash of 20,000 items takes about 10 s to check once; at this rate Windows Defender, which checks
+// every file opened, stayed mostly quiet when the whole library was read this way.
+const DEFAULT_METADATA_READS_PER_SECOND = 2000;
 // Shortest pause between requests once the budget is spent; shorter timers aren't reliable.
 const MIN_PACING_PAUSE_MS = 10;
 const DEFAULT_REFRESH_INTERVAL_MS = 2000;
@@ -225,6 +233,7 @@ function createLibraryIndex(libraryPath: string, {
   source,
   batchSize = DEFAULT_BATCH_SIZE,
   batchesPerSecond = DEFAULT_BATCHES_PER_SECOND,
+  metadataReadsPerSecond = DEFAULT_METADATA_READS_PER_SECOND,
   refreshIntervalMs = DEFAULT_REFRESH_INTERVAL_MS,
   refreshWaitMs = DEFAULT_REFRESH_WAIT_MS,
   rescanIntervalMs = DEFAULT_RESCAN_INTERVAL_MS,
@@ -234,6 +243,7 @@ function createLibraryIndex(libraryPath: string, {
   const size = Math.max(1, Math.min(DEFAULT_BATCH_SIZE, Math.trunc(batchSize) || DEFAULT_BATCH_SIZE));
   // Shared by the build and later updates, so together they stay within batchesPerSecond.
   const pace = createPacer(batchesPerSecond);
+  const paceMetadataRead = createPacer(metadataReadsPerSecond);
   const items = new Map<string, IndexedItem>();
   const strings = new Map<string, string>();
   const intern = (text: string) => {
@@ -261,11 +271,16 @@ function createLibraryIndex(libraryPath: string, {
   let buildRun = 0;
   // Ids in mtime.json that Eagle didn't return, with the change time they were last asked about.
   const missing = new Map<string, number>();
-  // Ids with an item folder that Eagle didn't return: in the trash, or not loaded by Eagle yet. Eagle's
-  // item count includes them, so they are counted against it; they are asked about again at most
-  // every rescanIntervalMs.
-  const absent = new Set<string>();
-  let lastAbsentCheck = 0;
+  // Ids Eagle didn't return whose metadata.json says they are in the trash. Eagle's item count
+  // includes them, so they are counted against it; they are asked about again only when mtime.json
+  // says they changed (restored, say).
+  const trashed = new Set<string>();
+  // Ids with an item folder that Eagle didn't return for another reason: not loaded by Eagle yet
+  // (synced from another computer), or metadata missing or mid-write. The index may be missing them,
+  // so it doesn't cover every item while there are any; they are asked about again at most every
+  // rescanIntervalMs.
+  const unconfirmed = new Set<string>();
+  let lastUnconfirmedCheck = 0;
   // Ids Eagle couldn't answer for (a request failed). They are asked about again at every check,
   // whether or not mtime.json changed.
   const unreadable = new Set<string>();
@@ -299,12 +314,10 @@ function createLibraryIndex(libraryPath: string, {
 
   /**
    * Asks Eagle for these items, a paced batch at a time, and resolves true when the index changed
-   * (an item set or dropped). An id Eagle doesn't return is dropped: if its folder is there (`listed`
-   * says the ids were just listed from the folder), it is in the trash or not loaded by Eagle yet,
-   * and is kept in `absent`. A batch Eagle couldn't answer keeps what was held and is retried.
+   * (an item set or dropped). An id Eagle doesn't return is dropped, and its metadata.json tells
+   * why (see whyNotReturned). A batch Eagle couldn't answer keeps what was held and is retried.
    */
-  async function readItems(ids: readonly string[], { listed = false, onBatch, run = buildRun, stopped }: {
-    listed?: boolean;
+  async function readItems(ids: readonly string[], { onBatch, run = buildRun, stopped }: {
     onBatch?: (batch: string[]) => void;
     run?: number;
     stopped: () => boolean;
@@ -338,23 +351,41 @@ function createLibraryIndex(libraryPath: string, {
         const raw = found.get(id);
         if (raw && raw.isDeleted !== true) {
           items.set(id, indexedItem(id, raw));
-          absent.delete(id);
+          trashed.delete(id);
+          unconfirmed.delete(id);
           updated = true;
         } else {
           if (items.delete(id)) updated = true;
           notReturned.push(id);
         }
       }
-      const withFolder = listed ? notReturned.map(() => true) : await Promise.all(notReturned.map(itemFolderExists));
-      // Checked again after the await: an abandoned build must not touch the next one's state.
-      if (run !== buildRun) break;
-      notReturned.forEach((id, i) => {
-        if (withFolder[i]) absent.add(id);
-        else absent.delete(id);
-      });
+      for (const id of notReturned) {
+        await paceMetadataRead(stopped);
+        if (stopped()) return updated;
+        const reason = await whyNotReturned(id);
+        // Checked again after the await: an abandoned build must not touch the next one's state.
+        if (run !== buildRun) return updated;
+        if (reason === "trashed") trashed.add(id);
+        else trashed.delete(id);
+        if (reason === "unconfirmed") unconfirmed.add(id);
+        else unconfirmed.delete(id);
+      }
       onBatch?.(batch);
     }
     return updated;
+  }
+
+  // Why Eagle didn't return an item: its metadata.json says it is in the trash, or its folder is
+  // gone (removed), or anything else ("unconfirmed": not loaded by Eagle yet, metadata missing or
+  // mid-write). Only the trash is certain, so only it counts as covered.
+  async function whyNotReturned(id: string): Promise<"removed" | "trashed" | "unconfirmed"> {
+    try {
+      const raw = JSON.parse(await readFile(join(imagesDir, `${id}.info`, "metadata.json"), "utf8"));
+      return raw && raw.id === id && raw.isDeleted === true ? "trashed" : "unconfirmed";
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code === "ENOENT" && !(await itemFolderExists(id))) return "removed";
+      return "unconfirmed";
+    }
   }
 
   async function itemFolderExists(id: string) {
@@ -398,7 +429,6 @@ function createLibraryIndex(libraryPath: string, {
       if (stopped()) return;
       total = ids.length;
       await readItems(ids, {
-        listed: true,
         onBatch: (batch) => {
           if (!stopped()) loaded += batch.length;
         },
@@ -411,7 +441,7 @@ function createLibraryIndex(libraryPath: string, {
       if (mtime) {
         mtimeSignature = mtime.signature;
         noteEagleItemCount(mtime.values);
-        for (const id of absent) {
+        for (const id of [...trashed, ...unconfirmed]) {
           if (id in mtime.values) missing.set(id, finiteNumber(mtime.values[id]));
         }
       }
@@ -420,7 +450,7 @@ function createLibraryIndex(libraryPath: string, {
       if (mtime && countDisagrees()) rescanPending = true;
       lastRefreshCheck = Date.now();
       lastRescan = lastRefreshCheck;
-      lastAbsentCheck = lastRefreshCheck;
+      lastUnconfirmedCheck = lastRefreshCheck;
       version += 1;
       status = "ready";
     } catch (error) {
@@ -432,13 +462,13 @@ function createLibraryIndex(libraryPath: string, {
   }
 
   function coversAllItems() {
-    return !refreshing && unreadable.size === 0 && !countDisagrees();
+    return !refreshing && unreadable.size === 0 && unconfirmed.size === 0 && !countDisagrees();
   }
 
   // Eagle's own item count, "all" (0 included, trashed items included), against the items held and
-  // those in the trash.
+  // the other item folders Eagle didn't return.
   function countDisagrees() {
-    return eagleItemCount !== null && eagleItemCount !== items.size + absent.size;
+    return eagleItemCount !== null && eagleItemCount !== items.size + trashed.size + unconfirmed.size;
   }
 
   function noteEagleItemCount(values: Record<string, unknown>) {
@@ -454,15 +484,15 @@ function createLibraryIndex(libraryPath: string, {
     refreshProgressAt = Date.now();
     const mtimeChanged = Boolean(mtime && mtime.signature !== mtimeSignature);
     // An item synced from another computer may reach Eagle only after mtime.json says so; asked
-    // about too early it looks like a trashed one, so those are asked about again now and then.
-    const absentDue = absent.size > 0 && Date.now() - lastAbsentCheck >= rescanIntervalMs;
-    if (!mtimeChanged && !unreadable.size && !rescanPending && !absentDue) return;
+    // about too early it isn't returned, so unconfirmed ones are asked about again now and then.
+    const unconfirmedDue = unconfirmed.size > 0 && Date.now() - lastUnconfirmedCheck >= rescanIntervalMs;
+    if (!mtimeChanged && !unreadable.size && !rescanPending && !unconfirmedDue) return;
     const values = mtimeChanged ? mtime!.values : {};
     if (mtimeChanged) noteEagleItemCount(values);
     const changed = new Set<string>(unreadable);
-    if (absentDue) {
-      lastAbsentCheck = Date.now();
-      for (const id of absent) changed.add(id);
+    if (unconfirmedDue) {
+      lastUnconfirmedCheck = Date.now();
+      for (const id of unconfirmed) changed.add(id);
     }
     for (const [id, value] of Object.entries(values)) {
       if (id === "all" || !ITEM_ID_PATTERN.test(id)) continue;
@@ -501,12 +531,15 @@ function createLibraryIndex(libraryPath: string, {
         for (const id of unreadable) {
           if (!present.has(id)) unreadable.delete(id);
         }
-        for (const id of absent) {
-          if (!present.has(id)) absent.delete(id);
+        for (const id of [...trashed, ...unconfirmed]) {
+          if (!present.has(id)) {
+            trashed.delete(id);
+            unconfirmed.delete(id);
+          }
         }
-        // Unreadable items were already asked about at the start of this check.
-        if (await readItems([...present].filter((id) => !items.has(id) && !unreadable.has(id)), {
-          listed: true,
+        // Unreadable items were already asked about at the start of this check, and trashed ones
+        // are asked about once mtime.json says they changed.
+        if (await readItems([...present].filter((id) => !items.has(id) && !unreadable.has(id) && !trashed.has(id)), {
           onBatch: () => {
             refreshProgressAt = Date.now();
           },
@@ -565,8 +598,9 @@ function createLibraryIndex(libraryPath: string, {
 
     /**
      * False while the index may be missing items or hold old ones: an update is still being read
-     * (see refreshIfDue), Eagle couldn't answer for some items, or it holds a different number of
-     * items than Eagle counts (an item folder not synced yet, say). Reflects the last check, so ask right
+     * (see refreshIfDue), Eagle couldn't answer for some items or didn't return items that aren't in
+     * the trash, or it holds a different number of items than Eagle counts (an item folder not
+     * synced yet, say). Reflects the last check, so ask right
      * after query() or extensionCounts(), which check first.
      */
     coversAllItems() {
@@ -662,7 +696,8 @@ function createLibraryIndex(libraryPath: string, {
       items.clear();
       strings.clear();
       missing.clear();
-      absent.clear();
+      trashed.clear();
+      unconfirmed.clear();
       unreadable.clear();
       sortedCache.clear();
       queryCache.clear();

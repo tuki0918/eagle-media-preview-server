@@ -4668,7 +4668,8 @@ test("experimental sort counts a folder's item types from the library index with
 });
 
 test("experimental sort stops a type scan of Eagle started during the build once the index answers", async () => {
-  // Large enough that the build, paced at 2,000 reads a second, is still running at the first request.
+  // Large enough that the build, 1,000 items per request to Eagle at 2 requests a second, is still
+  // running at the first request.
   const items = Array.from({ length: 4000 }, (_, i) => ({ id: `T${String(i).padStart(5, "0")}`, name: `n${i}`, ext: i % 2 ? "jpg" : "png" }));
   const libraryPath = await createSortLibrary(items);
   let pages = 0;
@@ -4702,7 +4703,8 @@ test("experimental sort stops a type scan of Eagle started during the build once
     // The type menu opened during the build: Eagle is scanned.
     assert.equal((await (await fetch(`${origin}/api/item-types`)).json()).complete, false);
     assert.ok(pages > 0);
-    await waitForSortIndex(() => viewer.status().sortIndex);
+    // The build takes over a second; give it room when the whole suite runs at once.
+    await vi.waitFor(() => assert.equal(viewer.status().sortIndex?.status, "ready"), { timeout: 10_000 });
     // Once ready, the index answers, and the scan of Eagle stops at its next page.
     assert.deepEqual(await (await fetch(`${origin}/api/item-types`)).json(), {
       complete: true,
