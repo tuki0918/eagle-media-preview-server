@@ -111,6 +111,8 @@ interface AddItemFromPathInput {
 
 const MAX_ERROR_BODY_LENGTH = 240;
 const MAX_SMART_FOLDER_ITEMS_PAGE_SIZE = 1000;
+// What Advanced Sort's index sorts and filters by, and lastModified to compare with mtime.json.
+const SORT_INDEX_FIELDS = ["id", "name", "ext", "width", "height", "size", "duration", "star", "btime", "mtime", "modificationTime", "lastModified", "tags", "folders", "isDeleted"];
 const EXTENSION_SCAN_PAGE_SIZE = 1000;
 const MAX_EXTENSION_SCAN_ITEMS = 200_000;
 const TAG_OVERVIEW_PAGE_SIZE = 1000;
@@ -571,6 +573,19 @@ function createEagleClient(options: EagleClientOptions = {}) {
           body: { id, fields: ITEM_FIELDS },
         }),
       );
+    },
+
+    // For Advanced Sort's index: only the fields it needs, in Eagle's order. Eagle leaves out items in
+    // the trash and ids it doesn't know.
+    async sortIndexItems(ids: string[]) {
+      const wanted = ids.slice(0, MAX_SMART_FOLDER_ITEMS_PAGE_SIZE);
+      if (!wanted.length) return [];
+      return normalizePaginatedResponse(
+        await request("/api/v2/item/get", {
+          method: "POST",
+          body: { ids: wanted, fields: SORT_INDEX_FIELDS, offset: 0, limit: wanted.length },
+        }),
+      ).items;
     },
 
     // Eagle answers `ids` newest-first like any item/get, so the items come back in the given order.

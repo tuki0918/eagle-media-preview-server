@@ -173,6 +173,8 @@ interface EagleClient {
   addItemFromPath(input: { folderId?: string; name: string; path: string; tags?: string[] }): Promise<unknown>;
   itemById(id: string): Promise<EagleItem>;
   itemsByIds(ids: string[]): Promise<unknown[]>;
+  /** Advanced Sort's index reads item metadata with this (see sortIndexSource). */
+  sortIndexItems?(ids: string[]): Promise<unknown[]>;
   itemExtensions(options?: {
     folderId?: string | null;
     isUnfiled?: boolean;
@@ -267,8 +269,8 @@ const ITEM_TYPES_UPLOAD_SETTLE_MS = 15 * 1000;
 const itemTypesSettleUntil = new WeakMap<object, number>();
 // How long a sorted request waits for the index before answering in Eagle's order with progress.
 const SORT_INDEX_WAIT_MS = 1000;
-// An index update reads many items a second; one that gets nowhere for this long has stalled (a NAS
-// hang, say), so item types are taken from Eagle instead of waiting for it.
+// An index update hears from Eagle every second or so; one that gets nowhere for this long has
+// stalled (a NAS listing that hangs, say), so item types are taken from Eagle's scan instead.
 const SORT_INDEX_STALL_MS = 15 * 1000;
 const LOGIN_FAILURE_LIMIT = 5;
 const LOGIN_FAILURE_MAX_ENTRIES = 500;
@@ -395,7 +397,9 @@ function createViewerServer({
   const currentSession: EagleSession = createConnectionContext({ client: eagleClient });
   // With Advanced Sort on, the index is built in the background when the server starts (and after a
   // library switch) and kept while the server runs, so sorting is ready before anyone asks for it.
-  const sortIndexes: SortIndexManager | null = experimentalSort ? createLibraryIndexManager({ idleMs: Infinity }) : null;
+  const sortIndexes: SortIndexManager | null = experimentalSort
+    ? createLibraryIndexManager({ idleMs: Infinity, sourceFor: () => sortIndexSource(eagleClient, () => libraryGeneration) })
+    : null;
   const sortIndexCheck = () => {
     const admittedGeneration = libraryGeneration;
     return (libraryPath: string) => sortIndexes && state === "running" && admittedGeneration === libraryGeneration
@@ -754,6 +758,22 @@ function createProtocolServer({ httpsCertPath = "", httpsEnabled = false, httpsK
     cert: readFileSync(certPath),
     key: readFileSync(keyPath),
   }, handler);
+}
+
+// Item metadata for Advanced Sort's index, from Eagle. An index belongs to one library, and Eagle
+// answers for whichever library is open, so an answer is refused once Eagle reports a switch (the
+// index is released then anyway).
+function sortIndexSource(client: EagleClient, libraryGeneration: () => number) {
+  const generation = libraryGeneration();
+  return {
+    async fetchItems(ids: string[]) {
+      if (!client.sortIndexItems) throw new Error("This Eagle client can't list items for the sort index");
+      if (libraryGeneration() !== generation) throw new Error(LIBRARY_CHANGED_MESSAGE);
+      const items = await client.sortIndexItems(ids);
+      if (libraryGeneration() !== generation) throw new Error(LIBRARY_CHANGED_MESSAGE);
+      return items;
+    },
+  };
 }
 
 // Stops every type scan of this client and forgets their results: after a library switch, an edit
