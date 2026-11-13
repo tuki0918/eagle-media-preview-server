@@ -533,7 +533,7 @@ function createViewerServer({
           // A sign-in never depends on its log entry.
         }
       };
-      const auth = { authSessions, clientAddress: requestAddress, loginFailures, recordAuth, revokedAuthSessions, secureCookies: httpsEnabled, sessionMaxAgeSeconds, sessionSecret: resolvedSessionSecret, users: resolvedAuthUsers };
+      const auth = { authSessions, clientAddress: requestAddress, loginFailures, recordAuth, revokedAuthSessions, secureCookies: httpsEnabled, sessionMaxAgeSeconds, sessionSecret: resolvedSessionSecret, users: resolvedAuthUsers, readOnly: !currentSession.write };
       // A refused upload must not make this server read the rest of a large body before moving on.
       if (url.pathname === UPLOAD_PATH) res.setHeader("Connection", "close");
       if (!isTrustedUnsafeRequest(req, url, trustedCustomDomain)) {
@@ -976,7 +976,7 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       libraryStatus,
       error: app.status === "rejected" ? app.reason.message : null,
       // Changing the upload permission keeps sessions valid, so open viewers learn about it here.
-      permissions: permissionsForUser(authenticatedUser(req, auth), { authenticated: true }),
+      permissions: permissionsForUser(authenticatedUser(req, auth), { authenticated: true, readOnly: auth.readOnly }),
       uploadMaxBytes: hasUploadAccess(req, auth) ? uploadMaxBytes : undefined,
       // Lets open viewers enable sorting once the background index is ready. Asking also restarts
       // a failed build and follows a library switch.
@@ -1111,12 +1111,12 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       sendMethodNotAllowed(res, ["POST"]);
       return;
     }
+    const write = writableBackend(session, res);
+    if (!write) return;
     if (!hasRatingWriteAccess(req, auth)) {
       sendJson(res, 403, { error: RATING_WRITE_FORBIDDEN_MESSAGE });
       return;
     }
-    const write = writableBackend(session, res);
-    if (!write) return;
     const itemId = decodeURIComponent(starMatch[1]);
     const body = await readJson(req);
     const star = normalizeStar(body.star);
@@ -1137,12 +1137,12 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       sendMethodNotAllowed(res, ["POST"]);
       return;
     }
+    const write = writableBackend(session, res);
+    if (!write) return;
     if (!hasMetadataWriteAccess(req, auth)) {
       sendJson(res, 403, { error: METADATA_WRITE_FORBIDDEN_MESSAGE });
       return;
     }
-    const write = writableBackend(session, res);
-    if (!write) return;
     const itemId = decodeURIComponent(metadataMatch[1]);
     const body = await readJson(req);
     const metadataPatch = normalizeMetadataPatch(body);
@@ -1168,12 +1168,12 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       sendMethodNotAllowed(res, ["POST"]);
       return;
     }
+    const write = writableBackend(session, res);
+    if (!write) return;
     if (!hasAdminAccess(req, auth)) {
       sendJson(res, 403, { error: ADMIN_WRITE_FORBIDDEN_MESSAGE });
       return;
     }
-    const write = writableBackend(session, res);
-    if (!write) return;
     const itemId = decodeURIComponent(trashMatch[1]);
     const body = await readJson(req);
     if (typeof body.isDeleted !== "boolean") {
@@ -1195,12 +1195,12 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       sendMethodNotAllowed(res, ["POST"]);
       return;
     }
+    const write = writableBackend(session, res);
+    if (!write) return;
     if (!hasUploadAccess(req, auth)) {
       sendJson(res, 403, { error: UPLOAD_FORBIDDEN_MESSAGE });
       return;
     }
-    const write = writableBackend(session, res);
-    if (!write) return;
     const upload = parseUploadRequest(req, url, uploadMaxBytes);
     editedItems.set(res, { ext: upload.extension.slice(1), size: upload.size });
     void sweepUploads();
@@ -1265,6 +1265,8 @@ interface AuthContext {
   recordAuth?: (event: "login_failure" | "login_locked" | "login_success" | "logout", username: string, status: number) => void;
   sessionSecret: string;
   users: AuthUser[];
+  /** The backend can't change the library: nobody gets write permissions. */
+  readOnly?: boolean;
 }
 
 async function handleAuthRoutes(req: IncomingMessage, url: URL, res: ServerResponse, auth: AuthContext) {

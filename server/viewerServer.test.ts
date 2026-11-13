@@ -5452,7 +5452,7 @@ test("a health check answered after a library switch never brings back the previ
   }
 });
 
-test("a read-only backend refuses every write before reading the request, and still serves reads", async () => {
+test("a read-only backend grants no write permissions, refuses every write before reading the request, and still serves reads", async () => {
   const { createEagleApiBackend } = require("../dist/.generated/plugin-service/libraryBackend.cjs");
   const writes: string[] = [];
   const eagleBackend = createEagleApiBackend({
@@ -5496,6 +5496,12 @@ test("a read-only backend refuses every write before reading the request, and st
   try {
     const origin = `http://127.0.0.1:${viewer.status().port}`;
     const cookie = await loginCookie(origin, "admin", "admin");
+    const readOnlyPermissions = { manageLibrary: false, read: true, upload: false, writeMetadata: false, writeRating: false };
+    const authStatus = await fetch(`${origin}/api/auth/status`, { headers: { Cookie: cookie } });
+    assert.deepEqual((await authStatus.json()).permissions, readOnlyPermissions);
+    const health = await (await fetch(`${origin}/api/health`, { headers: { Cookie: cookie } })).json();
+    assert.deepEqual(health.permissions, readOnlyPermissions);
+    assert.equal(health.uploadMaxBytes, undefined);
     const folders = await fetch(`${origin}/api/folders`, { headers: { Cookie: cookie } });
     assert.equal(folders.status, 200);
     assert.deepEqual(await folders.json(), [{ id: "F1", name: "Folder" }]);
