@@ -509,6 +509,7 @@ function createFsBackend({
         loaded += 1;
       });
       lastRefreshCheck = Date.now();
+      noteMissingFolders(times, ids);
       // A folder still syncing when the library is read is looked for again later.
       rescanDue = countsDisagree(times);
       version += 1;
@@ -624,6 +625,23 @@ function createFsBackend({
       rescanDue = countsDisagree(lastTimes);
     }
     if (changed) version += 1;
+  }
+
+  // On the first read, ids mtime.json lists without a folder. Eagle keeps the ids of deleted items
+  // there for good, so most are old deletions, recorded as removed (skipped until their time
+  // changes). One changed within AWAIT_FOLDER_MS is likely still syncing (mtime.json arrived first),
+  // and is looked for again like one announced while running: Eagle's count can't tell when another
+  // item was deleted in the same sync.
+  function noteMissingFolders(times: Record<string, unknown> | null, ids: readonly string[]) {
+    if (!times) return;
+    const present = new Set(ids);
+    const now = Date.now();
+    for (const [id, value] of Object.entries(times)) {
+      if (id === "all" || !ITEM_ID_PATTERN.test(id) || present.has(id)) continue;
+      const time = Number(value);
+      removed.set(id, Number.isFinite(time) ? time : NaN);
+      if (Number.isFinite(time) && Math.abs(now - time) <= AWAIT_FOLDER_MS) awaiting.set(id, now);
+    }
   }
 
   // Whether Eagle's item count ("all" in mtime.json) differs from the items held (and those left out).

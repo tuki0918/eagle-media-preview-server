@@ -574,3 +574,22 @@ test("an item added while another is deleted, announced before its folder arrive
   await writeItem(libraryPath, { id: "N", name: "late", modificationTime: 700 });
   assert.deepEqual(names(await backend.listItems()), ["late", "banana", "cat photo"]);
 });
+
+test("started in the middle of a sync, it still finds an item whose folder arrives later", async () => {
+  const libraryPath = await createLibrary();
+  const now = Date.now();
+  const times = Object.fromEntries(ITEMS.map((item) => [item.id, item.modificationTime]));
+  // mtime.json has arrived: apple deleted, N added (changed just now), and Z deleted long ago. Only
+  // apple's folder is still there, so Eagle's count matches the folders.
+  await writeFile(join(libraryPath, "mtime.json"), JSON.stringify({ ...times, A: now, N: now, Z: 1000, all: ITEMS.length }));
+  const backend = createFsBackend({ libraryPath, refreshIntervalMs: 0, refreshWaitMs: 5000, rescanIntervalMs: 0, recheckIntervalMs: 0 });
+  assert.deepEqual(names(await backend.listItems()), ["banana", "cat photo", "apple"]);
+
+  // The sync finishes without another change to mtime.json.
+  await rm(join(libraryPath, "images", "A.info"), { recursive: true });
+  await writeItem(libraryPath, { id: "N", name: "late", modificationTime: 700 });
+  assert.deepEqual(names(await backend.listItems()), ["late", "banana", "cat photo"]);
+  // Z, deleted long ago, isn't looked for: a stray folder for it, which Eagle's count leaves out too, isn't read.
+  await writeItem(libraryPath, { id: "Z", name: "old", modificationTime: 50 });
+  assert.deepEqual(names(await backend.listItems()), ["late", "banana", "cat photo"]);
+});
