@@ -43,6 +43,7 @@ import {
 import { setLibraryFooterName } from "./viewer/libraryFooterState";
 import { getEagleStatus, setEagleStatus } from "./viewer/eagleStatusState";
 import { setLibraryName } from "./viewer/libraryNameState";
+import { getPickedLibraryId, refreshLibraryList, setPickedLibraryId } from "./viewer/libraryListState";
 import { showOfflinePage } from "./viewer/offlinePage";
 import {
   currentFetchLimit as getCurrentFetchLimit,
@@ -190,6 +191,7 @@ async function init() {
   await loadAuthStatus();
   setViewerShellActions({
     connect,
+    libraryChanged: changeLibrary,
     logout,
     urlPopped: () => {
       changeSearch.cancel();
@@ -319,9 +321,12 @@ async function connect(credentials?: { password: string; username: string }) {
       renderLoginConnect();
       setConnectMessage("Connecting", false);
     }
+    // A server serving several libraries opens the one picked last; others ignore the id here.
+    if (!currentLibraryId) setConnectedLibraryId(getPickedLibraryId());
     const data = await postJson<ConnectResponse>("/api/connect", {});
     serverReachable = true;
     showViewer(data);
+    void refreshLibraryList(currentLibraryId);
     await Promise.all([loadFolders(), loadSmartFolders(), loadItems(), loadAllFoldersTotal(), loadShortcutCounts()]);
   } catch (error) {
     if (signedInThisAttempt && handlePostLoginAuthError(error)) return;
@@ -345,6 +350,15 @@ async function connect(credentials?: { password: string; username: string }) {
   } finally {
     setConnectBusy(false);
   }
+}
+
+// Opens another library of a server that serves several: everything shown from the current one is
+// dropped, and the viewer connects again with the new library's id.
+function changeLibrary(libraryId: string) {
+  if (!libraryId || libraryId === currentLibraryId) return;
+  setPickedLibraryId(libraryId);
+  clearViewerSessionState();
+  void connect();
 }
 
 async function logout() {
