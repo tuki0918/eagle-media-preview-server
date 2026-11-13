@@ -2195,3 +2195,16 @@ test("the Advanced Sort progress keeps being asked for until the scan has starte
   await new Promise((resolve) => setTimeout(resolve, 1500));
   assert.equal(calls, settled);
 }, 15_000);
+
+test("the plugin package leaves out the standalone server's own modules, and nothing it ships needs them", async () => {
+  const viteConfig = await readFile(new URL("../vite.config.ts", import.meta.url), "utf8");
+  const pattern = viteConfig.match(/const STANDALONE_ONLY_MODULE = (\/.+\/);/)?.[1];
+  assert.ok(pattern, "vite.config.ts filters the standalone modules");
+  const standaloneOnly = ["fsBackend", "standalone", "standaloneConfig", "standaloneLog"];
+  const shipped = ["accessLog", "addressBlockList", "auth", "connection", "customDomain", "eagleClient", "libraryAccess", "libraryBackend", "libraryIndex", "media", "runtime", "static", "upload", "viewerServer"];
+  for (const name of shipped) {
+    const source = await readFile(new URL(`${name}.cjs`, generatedServiceUrl), "utf8");
+    for (const excluded of standaloneOnly) assert.doesNotMatch(source, new RegExp(`require\\("\\./${excluded}\\.cjs"\\)`), `${name}.cjs requires ${excluded}.cjs`);
+  }
+  for (const excluded of standaloneOnly) assert.match(viteConfig, new RegExp(`\\b${excluded}\\b`));
+});
