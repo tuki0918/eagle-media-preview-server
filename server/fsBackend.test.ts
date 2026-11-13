@@ -372,7 +372,7 @@ test("an item whose metadata can't be read is hidden, and tried again until it c
   assert.equal(await backend.isItemServable("A"), true);
 });
 
-test("serves nothing through an images folder that is a link to elsewhere", async () => {
+test("refuses a library whose images folder or metadata.json is a link to elsewhere", async () => {
   const { symlink, rename } = await import("node:fs/promises");
   const libraryPath = await createLibrary();
   // The whole images folder moved out, and a link left in its place.
@@ -380,9 +380,72 @@ test("serves nothing through an images folder that is a link to elsewhere", asyn
   await rename(join(libraryPath, "images"), outsideImages);
   await symlink(outsideImages, join(libraryPath, "images"));
   const backend = createFsBackend({ libraryPath });
-  assert.equal(await backend.isItemServable("A"), true);
-  assert.equal(await backend.resolveItemFile("A", "file"), "");
-  assert.equal(await backend.resolveItemFile("A", "thumb"), "");
+  await assert.rejects(backend.open(), /images leads outside the library/);
+  assert.equal(backend.state().status, "failed");
+
+  const other = await createLibrary();
+  const outsideMetadata = join(other, "..", "outside-metadata.json");
+  await rename(join(other, "metadata.json"), outsideMetadata);
+  await symlink(outsideMetadata, join(other, "metadata.json"));
+  await assert.rejects(createFsBackend({ libraryPath: other }).open(), /metadata\.json leads outside the library/);
+});
+
+test("never reads an item's metadata from outside the library", async () => {
+  const { symlink } = await import("node:fs/promises");
+  const libraryPath = await createLibrary();
+  // A metadata.json that is a link to a file elsewhere, claiming the same id.
+  const planted = join(libraryPath, "..", "planted.json");
+  await writeFile(planted, JSON.stringify({ ...ITEMS[0], annotation: "from outside" }));
+  const metadata = join(libraryPath, "images", "A.info", "metadata.json");
+  await rm(metadata);
+  await symlink(planted, metadata);
+  // An item folder that is a link to a folder elsewhere.
+  const elsewhere = join(libraryPath, "..", "elsewhere.info");
+  await mkdir(elsewhere);
+  await writeFile(join(elsewhere, "metadata.json"), JSON.stringify({ ...ITEMS[2], annotation: "from outside" }));
+  await rm(join(libraryPath, "images", "C.info"), { recursive: true });
+  await symlink(elsewhere, join(libraryPath, "images", "C.info"));
+
+  const backend = createFsBackend({ libraryPath, refreshIntervalMs: 0, refreshWaitMs: 5000 });
+  assert.deepEqual(await backend.itemById("A"), []);
+  assert.deepEqual(await backend.itemById("C"), []);
+  assert.deepEqual(names(await backend.listItems()), ["banana"]);
+  assert.deepEqual((await backend.searchItems({ query: "outside" })).items, []);
+  // Left out for good: a later change to mtime.json doesn't read them, and the library isn't listed again.
+  await writeMtime(libraryPath, ITEMS, { A: 101, C: 201 });
+  assert.deepEqual(names(await backend.listItems()), ["banana"]);
+});
+
+test.skipIf(process.platform === "win32")("items in a folder just locked leave cached lists at once", async () => {
+  const { execFileSync } = await import("node:child_process");
+  const { open } = await import("node:fs/promises");
+  const libraryPath = await createLibrary();
+  const backend = createFsBackend({ libraryPath, readConcurrency: 1, refreshIntervalMs: 0, refreshWaitMs: 50 });
+  assert.deepEqual(names(await backend.listItems()), ["banana", "cat photo", "apple"]);
+
+  // F1 (apple) is locked, and in the same update B's metadata read waits on a named pipe.
+  const locked = FOLDERS.map((folder) => (folder.id === "F1" ? { ...folder, password: "pw" } : folder));
+  await writeFile(join(libraryPath, "metadata.json"), JSON.stringify({ folders: locked, tagsGroups: [], applicationVersion: "4.0.0", modificationTime: 2 }));
+  const pipe = join(libraryPath, "images", "B.info", "metadata.json");
+  await rm(pipe);
+  execFileSync("mkfifo", [pipe]);
+  await writeMtime(libraryPath, ITEMS, { B: 350 });
+  try {
+    await backend.listItems();
+    let waited = 0;
+    while ((await backend.isItemServable("A")) && waited < 2000) {
+      await new Promise((resolveWait) => setTimeout(resolveWait, 20));
+      waited += 20;
+    }
+    assert.equal(await backend.isItemServable("A"), false);
+    // The update still waits on B, and the list already leaves out apple and cat photo (in F1's sub-folder).
+    assert.equal(await backend.isItemServable("C"), false);
+    assert.deepEqual(names(await backend.listItems()), ["banana"]);
+  } finally {
+    const writer = await open(pipe, "w");
+    await writer.write(JSON.stringify({ ...ITEMS[1], modificationTime: 350 }));
+    await writer.close();
+  }
 });
 
 // A named pipe as an item's metadata.json makes its read wait until the test writes to it, so an

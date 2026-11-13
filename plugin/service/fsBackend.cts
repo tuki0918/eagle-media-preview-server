@@ -223,6 +223,9 @@ function createFsBackend({
   // tries them again, whether or not mtime.json changed, and until one is read it is hidden and
   // its files aren't served: an edit (moving it to the trash, say) may be what was being written.
   const unconfirmed = new Set<string>();
+  // Items whose folder or metadata.json leads outside the library: never read, and counted when
+  // comparing with Eagle's item count, so they don't make every check list the folder again.
+  const outside = new Set<string>();
   // mtime.json as last read, for the times of items read again outside a change to it.
   let lastTimes: Record<string, unknown> | null = null;
   let library: Record<string, unknown> = {};
@@ -271,14 +274,37 @@ function createFsBackend({
     }
   }
 
+  // The library folder's real path, found when the library is first read. Every file read or
+  // served must really be where it is expected under it: a link anywhere on the way (the library's
+  // own files, `images`, an item folder, an item's metadata.json) could lead outside the library.
+  let realRoot = "";
+
+  class OutsideLibraryError extends Error {}
+
   async function readJson(path: string) {
     return JSON.parse(await readFile(path, "utf8"));
+  }
+
+  // Reads a JSON file of this library, only if its real path is exactly where `parts` say under the
+  // library folder. Rejects with OutsideLibraryError otherwise, and as readFile does when missing.
+  async function readLibraryJson(...parts: string[]) {
+    if (!realRoot) realRoot = await realpath(root);
+    const real = await realpath(join(root, ...parts));
+    if (real !== join(realRoot, ...parts)) throw new OutsideLibraryError(`${join(root, ...parts)} leads outside the library`);
+    return readJson(real);
   }
 
   // The library's own metadata.json: folders, smart folders, tag groups, and the format version.
   async function readLibraryMetadata() {
     const sig = await signature(metadataPath);
-    const value = await readJson(metadataPath);
+    let value: unknown;
+    try {
+      value = await readLibraryJson("metadata.json");
+    } catch (error) {
+      // A metadata.json that leads elsewhere isn't this library's: it is never read.
+      if (error instanceof OutsideLibraryError) throw new LibraryFormatError(error.message);
+      throw error;
+    }
     if (!isRecord(value)) throw new LibraryFormatError(`${metadataPath} is not a library metadata file`);
     const appVersion = typeof value.applicationVersion === "string" ? value.applicationVersion : "";
     const major = appVersion.split(".")[0];
@@ -297,7 +323,7 @@ function createFsBackend({
   async function readTagsFile() {
     const sig = await signature(tagsPath);
     try {
-      const value = await readJson(tagsPath);
+      const value = await readLibraryJson("tags.json");
       starredTags = isRecord(value) && Array.isArray(value.starredTags)
         ? value.starredTags.filter((tag): tag is string => typeof tag === "string")
         : [];
@@ -311,7 +337,7 @@ function createFsBackend({
     const sig = await signature(mtimePath);
     if (!sig) return null;
     try {
-      const value = await readJson(mtimePath);
+      const value = await readLibraryJson("mtime.json");
       signatures.mtime = sig;
       if (isRecord(value)) lastTimes = value;
       return isRecord(value) ? value : null;
@@ -355,7 +381,7 @@ function createFsBackend({
   // mid-write metadata: hidden and tried again at every check until read; see `unconfirmed`).
   async function readItem(id: string): Promise<"removed" | "set" | "unreadable"> {
     try {
-      const raw = await readJson(join(imagesDir, `${id}.info`, "metadata.json"));
+      const raw = await readLibraryJson("images", `${id}.info`, "metadata.json");
       if (!isRecord(raw) || raw.id !== id) return holdItem(id);
       unconfirmed.delete(id);
       items.set(id, { indexed: indexedItem(id, raw), raw });
@@ -363,20 +389,30 @@ function createFsBackend({
       changedNow();
       return "set";
     } catch (error) {
+      // An item whose folder or metadata leads outside the library is left out and not read again
+      // (until the library is read anew).
+      if (error instanceof OutsideLibraryError) {
+        outside.add(id);
+        return dropItem(id);
+      }
       if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
         try {
           if ((await stat(join(imagesDir, `${id}.info`))).isDirectory()) return holdItem(id);
         } catch {
-          items.delete(id);
-          readAt.delete(id);
-          unconfirmed.delete(id);
-          removed.add(id);
-          changedNow();
-          return "removed";
+          return dropItem(id);
         }
       }
       return holdItem(id);
     }
+  }
+
+  function dropItem(id: string): "removed" {
+    items.delete(id);
+    readAt.delete(id);
+    unconfirmed.delete(id);
+    removed.add(id);
+    changedNow();
+    return "removed";
   }
 
   function holdItem(id: string): "unreadable" {
@@ -411,7 +447,12 @@ function createFsBackend({
   async function build() {
     status = "building";
     try {
+      realRoot = await realpath(root);
       await readLibraryMetadata();
+      // Items are listed from `images`, which must be the library's own folder, not a link elsewhere.
+      if ((await realpath(imagesDir)) !== join(realRoot, "images")) {
+        throw new LibraryFormatError(`${imagesDir} leads outside the library, so the library isn't served`);
+      }
       await readTagsFile();
       const times = await readMtimeFile();
       const ids = await listItemIds();
@@ -419,6 +460,7 @@ function createFsBackend({
       readAt.clear();
       removed.clear();
       unconfirmed.clear();
+      outside.clear();
       loaded = 0;
       total = ids.length;
       await readItems(ids, times, () => {
@@ -463,6 +505,9 @@ function createFsBackend({
         await readLibraryMetadata();
         // Locked folders may have changed: which items are hidden is worked out again.
         for (const [id, stored] of items) stored.indexed = indexedItem(id, stored.raw);
+        // A folder just locked hides its items now: lists cached before must not show them while
+        // the rest of the update is read.
+        changedNow();
         changed = true;
       } catch (error) {
         // Mid-write: read again at the next check. A format change stops the backend.
@@ -495,7 +540,7 @@ function createFsBackend({
           changed = true;
         }
         const count = Number(times.all);
-        if (Number.isFinite(count) && count !== items.size) {
+        if (Number.isFinite(count) && count !== items.size + outside.size) {
           const ids = await listItemIds();
           const present = new Set(ids);
           for (const id of [...items.keys()]) {
@@ -506,7 +551,7 @@ function createFsBackend({
               changedNow();
             }
           }
-          const added = ids.filter((id) => !items.has(id));
+          const added = ids.filter((id) => !items.has(id) && !outside.has(id));
           if (added.length) await readItems(added, times);
           changed = true;
         }
@@ -813,7 +858,7 @@ function createFsBackend({
       try {
         // Measured from the library's own folder: `images` and the item folder must both really be
         // there, not links elsewhere (a link would make its target the allowed area).
-        const itemDir = join(await realpath(root), "images", `${stored.indexed.id}.info`);
+        const itemDir = join(realRoot || await realpath(root), "images", `${stored.indexed.id}.info`);
         const candidate = await resolveLibraryItemFile({ libraryPath: root, item: { id: stored.indexed.id, ext: stored.raw.ext }, kind });
         if (!candidate) return "";
         const real = await realpath(candidate);
