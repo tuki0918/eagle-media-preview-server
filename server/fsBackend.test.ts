@@ -614,10 +614,20 @@ test.skipIf(process.platform === "win32")("a folder gone between the first listi
   execFileSync("mkfifo", [pipe]);
   const backend = createFsBackend({ libraryPath, readConcurrency: 1, refreshIntervalMs: 0, refreshWaitMs: 5000, rescanIntervalMs: 0, recheckIntervalMs: 0 });
   const opening = backend.open();
-  await new Promise((resolveWait) => setTimeout(resolveWait, 50));
+  // Opening a pipe to write without waiting fails (ENXIO) until a reader has it open, so this
+  // succeeds only once the first metadata read has started: after the folder was listed.
+  const { constants } = await import("node:fs");
+  let writer: Awaited<ReturnType<typeof open>> | null = null;
+  for (let waited = 0; !writer; waited += 10) {
+    try {
+      writer = await open(pipe, constants.O_WRONLY | constants.O_NONBLOCK);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENXIO" || waited > 5000) throw error;
+      await new Promise((resolveWait) => setTimeout(resolveWait, 10));
+    }
+  }
   // The target's folder was listed, and goes away before its metadata is read.
   await rm(join(libraryPath, "images", `${target.id}.info`), { recursive: true });
-  const writer = await open(pipe, "w");
   await writer.write(JSON.stringify(blocker));
   await writer.close();
   await opening;
