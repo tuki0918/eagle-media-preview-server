@@ -87,6 +87,11 @@ interface FsBackendOptions {
   refreshIntervalMs?: number;
   /** How long a query waits for an update in progress before answering from what is held. */
   refreshWaitMs?: number;
+  /**
+   * How often items left out for leading outside the library are checked again, besides when their
+   * time in mtime.json changes: mtime.json can arrive (from a sync, say) before the real files do.
+   */
+  recheckIntervalMs?: number;
 }
 
 // Library format versions (the major part of `applicationVersion` in the library's metadata.json)
@@ -95,6 +100,7 @@ const KNOWN_MAJOR_VERSIONS = ["4"];
 const DEFAULT_READ_CONCURRENCY = 64;
 const DEFAULT_REFRESH_INTERVAL_MS = 2000;
 const DEFAULT_REFRESH_WAIT_MS = 1000;
+const DEFAULT_RECHECK_INTERVAL_MS = 60 * 1000;
 const FAILED_RETRY_MS = 30 * 1000;
 const ITEM_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const EMPTY_LIST: readonly string[] = Object.freeze([]);
@@ -198,6 +204,7 @@ function createFsBackend({
   readConcurrency = DEFAULT_READ_CONCURRENCY,
   refreshIntervalMs = DEFAULT_REFRESH_INTERVAL_MS,
   refreshWaitMs = DEFAULT_REFRESH_WAIT_MS,
+  recheckIntervalMs = DEFAULT_RECHECK_INTERVAL_MS,
 }: FsBackendOptions) {
   const root = String(libraryPath || "").trim().replace(/[\\/]+$/, "");
   if (!root) throw new Error("libraryPath is required");
@@ -229,6 +236,8 @@ function createFsBackend({
   // Items whose folder or metadata.json leads outside the library: never read, and counted when
   // comparing with Eagle's item count, so they don't make every check list the folder again.
   const outside = new Set<string>();
+  // When items in `outside` were last checked again regardless of mtime.json.
+  let lastOutsideCheck = Date.now();
   // mtime.json as last read, for the times of items read again outside a change to it.
   let lastTimes: Record<string, unknown> | null = null;
   let library: Record<string, unknown> = {};
@@ -532,6 +541,14 @@ function createFsBackend({
     // Items that couldn't be read last time, tried again at every check.
     if (unconfirmed.size) {
       await readItems([...unconfirmed], lastTimes);
+      changed = true;
+    }
+    // Items left out for leading outside the library, checked again now and then: the real files
+    // may arrive after mtime.json announced the change, and then nothing else would read them.
+    // Their real paths are checked again, so one still outside is simply left out again.
+    if (outside.size && Date.now() - lastOutsideCheck >= recheckIntervalMs) {
+      lastOutsideCheck = Date.now();
+      await readItems([...outside], lastTimes);
       changed = true;
     }
     const tagsSig = await signature(tagsPath);

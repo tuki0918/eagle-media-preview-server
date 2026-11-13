@@ -501,3 +501,32 @@ test.skipIf(process.platform === "win32")("an item hidden during a long update l
     await writer.close();
   }
 });
+
+test("an item still a link when its change arrives comes back once the real file does", async () => {
+  const { symlink } = await import("node:fs/promises");
+  const libraryPath = await createLibrary();
+  const planted = join(libraryPath, "..", "planted.json");
+  await writeFile(planted, JSON.stringify({ ...ITEMS[0], annotation: "from outside" }));
+  const metadata = join(libraryPath, "images", "A.info", "metadata.json");
+  const create = (recheckIntervalMs: number) => createFsBackend({ libraryPath, refreshIntervalMs: 0, refreshWaitMs: 5000, recheckIntervalMs });
+  const prompt = create(0);
+  const slow = create(60 * 60 * 1000);
+  assert.deepEqual(names(await prompt.listItems()), ["banana", "cat photo", "apple"]);
+  assert.deepEqual(names(await slow.listItems()), ["banana", "cat photo", "apple"]);
+
+  // mtime.json announces A's change while its metadata.json is still a link elsewhere.
+  await rm(metadata);
+  await symlink(planted, metadata);
+  await writeMtime(libraryPath, ITEMS, { A: 101 });
+  assert.deepEqual(names(await prompt.listItems()), ["banana", "cat photo"]);
+  assert.deepEqual(names(await slow.listItems()), ["banana", "cat photo"]);
+
+  // The real file arrives without another change to A's time; only another item changes.
+  await rm(metadata);
+  await writeFile(metadata, JSON.stringify(ITEMS[0]));
+  await writeMtime(libraryPath, ITEMS, { A: 101, B: 301 });
+  assert.deepEqual(names(await prompt.listItems()), ["banana", "cat photo", "apple"]);
+  assert.equal((await prompt.itemById("A"))[0].annotation, "crisp");
+  // Checked again only every recheckIntervalMs, so the other backend hasn't looked yet.
+  assert.deepEqual(names(await slow.listItems()), ["banana", "cat photo"]);
+});
