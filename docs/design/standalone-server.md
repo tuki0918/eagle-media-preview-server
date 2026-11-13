@@ -1,6 +1,6 @@
 # Standalone server: browse Eagle libraries without Eagle
 
-Status: **Proposal** (2026-11-13). P0 and P2 implemented, P1 implemented except the recorded parity tests (2026-11-13); P3 onward not started. What was built differently from this proposal is in [P1 as built](#p1-as-built) and [P2 as built](#p2-as-built).
+Status: **Proposal** (2026-11-13). P0 and P2 implemented, P1 implemented except the recorded parity tests (2026-11-13); P3 onward not started. What was built differently from this proposal is in [P1 as built](#p1-as-built), [P2 as built](#p2-as-built), and [Configuration and operation](#configuration-and-operation-as-built).
 
 ## 1. Background
 
@@ -278,6 +278,53 @@ node bin/eagle-media-server.cjs --library ~/Pictures/Photos.library --library /V
 - **Reading order.** The server listens at once and reads the libraries one at a time in the order given (flags first, then the config), not smallest first. A request for a library not read yet starts reading it at once and waits for it; for a very large library the first request can take as long as the read (about 16 s per 300,000 items on an SSD).
 - **Unreadable libraries.** A library that can't be read (a missing folder, an unknown format) answers `500` on its own routes and is retried at most every 30 seconds, when asked for again; the others keep working. A folder without `metadata.json` stops the server before it listens.
 - **Library info answers at once.** `FsBackend.libraryInfo()` and `appInfo()` no longer wait for the library to be read, so status checks stay quick.
+
+## Configuration and operation (as built)
+
+This replaces the `--config` file of P2, which was the plugin's settings format plus `libraries`.
+
+**settings.json is the base, and only read.** Users, roles, sign-in, the session secret, the block list, library protection (shared libraries and per-library users), and the default port, host, hostname, and HTTPS come from the plugin's `~/.eagle-media-preview-server/settings.json` (`--settings` for another). The plugin rewrites that file with only the fields it knows whenever its settings are saved, so nothing of the standalone server's is kept in it.
+
+Sharing the session secret is what makes switching seamless: sign-in cookies and library ids are both derived from it, so a viewer stays signed in and keeps its library when the plugin answers instead of the standalone server, or the other way round. To edit a library, stop the standalone server for it, open Eagle, and use the same URL.
+
+**standalone.json lists the servers** (`~/.eagle-media-preview-server/standalone.json`, `--config` for another):
+
+```jsonc
+{
+  "servers": [
+    { "libraries": ["~/Pictures/Photos.library"] },                               // settings.json's port: the plugin's URL
+    { "libraries": ["/Volumes/nas/Work.library"], "port": 41533, "customDomain": "work.local" },
+    { "libraries": ["/Volumes/nas/A.library", { "path": "/Volumes/nas/B.library", "name": "Archive" }], "port": 41534 }
+  ]
+}
+```
+
+- Each server is one listener. With one library, that library has its own URL; with several, the viewer's picker chooses among them (P2).
+- A server may set only `port`, `host`, `customDomain`, `httpsEnabled`, `httpsCertPath`, `httpsKeyPath`; anything else (users, say) is refused, so whoever may open a library is the same through Eagle or here. `port: 0` takes any free port.
+- Paths may start with `~/`; relative paths are relative to standalone.json.
+- Without standalone.json, the libraries the plugin shares (with library protection on) are served on settings.json's port. With neither, the command explains what to write and exits.
+- `--library` (with `--port`, `--host`) replaces the servers with one, for a quick run. Only a network `--host` given this way needs sign-in or `--allow-anonymous-lan`: an address in settings.json was chosen in the plugin (its Public Network switch), and is shown as a warning instead.
+- With library protection on in settings.json, a library it doesn't share is listed as "not shared" and not served.
+
+**Startup.** Each server listens on its own. One whose port is taken is reported as "port in use (the Eagle plugin may be running)" and skipped; the others run. The command exits only if no server could start. It prints, before anything else:
+
+```
+Eagle Media Server (standalone, read only)
+  Settings:   ~/.eagle-media-preview-server/settings.json (read only)
+  Servers:    ~/.eagle-media-preview-server/standalone.json
+  Sign-in:    required (2 users)
+  Access log: ~/.eagle-media-preview-server/standalone-access-log.jsonl (-f to stream it here)
+
+PORT    STATUS        URL                         LIBRARY   LIBRARY STATUS
+41532   port in use   http://studio.local:41532   Photos    -
+41533   running       http://work.local:41533     Work      reading
+41534   running       http://studio.local:41534   A         waiting to read
+                                                  Archive   not found (no metadata.json)
+```
+
+and the table again once every library is read. A library only on servers that didn't start isn't read.
+
+**Access log.** Written by default, in the plugin's format (`accessLog.cts`), to `~/.eagle-media-preview-server/standalone-access-log.jsonl` (`--access-log` for another): a file of its own, since the plugin may be writing its log at the same time. It records what the plugin's does (sign-ins, file views, failures, edits refused) plus `server_start`, `server_start_failed`, and `server_stop`; status polls and item lists only mark a device as connected, as in the plugin. `-f` streams entries below the table as they happen; `eagle-media-server logs [-f] [-n N]` prints the file from another terminal (useful when the server runs as a service), naming libraries from the current configuration.
 
 ## 11. Open questions
 
