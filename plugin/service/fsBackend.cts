@@ -360,6 +360,7 @@ function createFsBackend({
       unconfirmed.delete(id);
       items.set(id, { indexed: indexedItem(id, raw), raw });
       removed.delete(id);
+      changedNow();
       return "set";
     } catch (error) {
       if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
@@ -370,6 +371,7 @@ function createFsBackend({
           readAt.delete(id);
           unconfirmed.delete(id);
           removed.add(id);
+          changedNow();
           return "removed";
         }
       }
@@ -381,7 +383,14 @@ function createFsBackend({
     unconfirmed.add(id);
     const stored = items.get(id);
     if (stored) stored.indexed = indexedItem(id, stored.raw);
+    changedNow();
     return "unreadable";
+  }
+
+  // An item changed (read, hidden, or gone): answers cached before it are dropped at once, not when
+  // the whole update ends, so a list never shows an item its files are already refused for.
+  function changedNow() {
+    version += 1;
   }
 
   async function readItems(ids: readonly string[], times: Record<string, unknown> | null, onRead?: () => void) {
@@ -494,6 +503,7 @@ function createFsBackend({
               items.delete(id);
               readAt.delete(id);
               unconfirmed.delete(id);
+              changedNow();
             }
           }
           const added = ids.filter((id) => !items.has(id));
@@ -801,7 +811,9 @@ function createFsBackend({
       const stored = visibleItem(id);
       if (!stored) return "";
       try {
-        const itemDir = join(await realpath(imagesDir), `${stored.indexed.id}.info`);
+        // Measured from the library's own folder: `images` and the item folder must both really be
+        // there, not links elsewhere (a link would make its target the allowed area).
+        const itemDir = join(await realpath(root), "images", `${stored.indexed.id}.info`);
         const candidate = await resolveLibraryItemFile({ libraryPath: root, item: { id: stored.indexed.id, ext: stored.raw.ext }, kind });
         if (!candidate) return "";
         const real = await realpath(candidate);

@@ -371,3 +371,48 @@ test("an item whose metadata can't be read is hidden, and tried again until it c
   assert.deepEqual(names(await backend.listItems()), ["banana", "cat photo", "apple"]);
   assert.equal(await backend.isItemServable("A"), true);
 });
+
+test("serves nothing through an images folder that is a link to elsewhere", async () => {
+  const { symlink, rename } = await import("node:fs/promises");
+  const libraryPath = await createLibrary();
+  // The whole images folder moved out, and a link left in its place.
+  const outsideImages = join(libraryPath, "..", "outside-images");
+  await rename(join(libraryPath, "images"), outsideImages);
+  await symlink(outsideImages, join(libraryPath, "images"));
+  const backend = createFsBackend({ libraryPath });
+  assert.equal(await backend.isItemServable("A"), true);
+  assert.equal(await backend.resolveItemFile("A", "file"), "");
+  assert.equal(await backend.resolveItemFile("A", "thumb"), "");
+});
+
+// A named pipe as an item's metadata.json makes its read wait until the test writes to it, so an
+// update can be held half done.
+test.skipIf(process.platform === "win32")("an item hidden during a long update leaves cached lists at once", async () => {
+  const { execFileSync } = await import("node:child_process");
+  const { open } = await import("node:fs/promises");
+  const libraryPath = await createLibrary();
+  const backend = createFsBackend({ libraryPath, readConcurrency: 1, refreshIntervalMs: 0, refreshWaitMs: 50 });
+  assert.deepEqual(names(await backend.listItems()), ["banana", "cat photo", "apple"]);
+
+  await writeFile(join(libraryPath, "images", "A.info", "metadata.json"), '{"id": "A", "na');
+  const pipe = join(libraryPath, "images", "B.info", "metadata.json");
+  await rm(pipe);
+  execFileSync("mkfifo", [pipe]);
+  // mtime.json lists A before B, so A is read (and found unreadable) while B's read waits.
+  await writeFile(join(libraryPath, "mtime.json"), JSON.stringify({ A: 150, B: 350, C: 200, D: 400, L: 500, M: 600, all: 6 }));
+  try {
+    await backend.listItems();
+    let waited = 0;
+    while ((await backend.isItemServable("A")) && waited < 2000) {
+      await new Promise((resolveWait) => setTimeout(resolveWait, 20));
+      waited += 20;
+    }
+    assert.equal(await backend.isItemServable("A"), false);
+    // The update is still waiting on B, and the list already leaves A out.
+    assert.deepEqual(names(await backend.listItems()), ["banana", "cat photo"]);
+  } finally {
+    const writer = await open(pipe, "w");
+    await writer.write(JSON.stringify({ ...ITEMS[1], modificationTime: 350 }));
+    await writer.close();
+  }
+});
