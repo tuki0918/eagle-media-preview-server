@@ -225,6 +225,8 @@ interface LibraryBackend extends Omit<EagleClient, "addItemFromPath" | "updateIt
   sortIndexes?: SortIndexManager;
   /** False for an item whose file must not be served (in the trash, or in a locked folder). */
   isItemServable?(id: string): Promise<boolean>;
+  /** The only way this backend's files are found, confined to the library (see media.cts). */
+  resolveItemFile?(id: string, kind: "file" | "thumb"): Promise<string>;
   /** The library this backend always reads (a standalone backend); absent for Eagle's open library. */
   readonly libraryPath?: string;
   readonly name?: string;

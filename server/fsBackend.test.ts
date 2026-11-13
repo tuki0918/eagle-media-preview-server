@@ -303,3 +303,71 @@ test("the viewer server answers each request from the library its id names", asy
     await viewer.stop();
   }
 });
+
+test("serves only files inside the item's own folder, whatever its metadata says", async () => {
+  const { createViewerServer } = require("../dist/.generated/plugin-service/viewerServer.cjs");
+  const { symlink } = await import("node:fs/promises");
+  const libraryPath = await createLibrary();
+  const outside = join(libraryPath, "..", "secret.txt");
+  await writeFile(outside, "secret");
+  // Metadata pointing outside the library.
+  const pointed = join(libraryPath, "images", "A.info", "metadata.json");
+  await writeFile(pointed, JSON.stringify({ ...ITEMS[0], ext: "png", filePath: outside, fileURL: `file://${outside}`, thumbnailPath: outside, thumbnailURL: `file://${outside}` }));
+  // A link inside an item folder that leads outside.
+  await rm(join(libraryPath, "images", "B.info", "banana.jpg"));
+  await symlink(outside, join(libraryPath, "images", "B.info", "banana.jpg"));
+  // An item folder that is itself a link to a folder elsewhere.
+  const elsewhere = join(libraryPath, "..", "elsewhere.info");
+  await mkdir(elsewhere);
+  await writeFile(join(elsewhere, "metadata.json"), JSON.stringify({ ...ITEMS[2], ext: "png" }));
+  await writeFile(join(elsewhere, "cat photo.png"), "secret");
+  await rm(join(libraryPath, "images", "C.info"), { recursive: true });
+  await symlink(elsewhere, join(libraryPath, "images", "C.info"));
+
+  const backend = createFsBackend({ libraryPath });
+  const [item] = await backend.itemById("A");
+  for (const field of ["filePath", "fileURL", "thumbnailPath", "thumbnailURL"]) assert.equal(field in item, false, field);
+  const viewer = createViewerServer({ host: "127.0.0.1", port: 0, backend });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const health = await (await fetch(`${origin}/api/health`)).json();
+    const headers = { "X-Library-Id": health.library.id };
+    assert.equal(await (await fetch(`${origin}/api/items/A/file`, { headers })).text(), "file");
+    assert.equal(await (await fetch(`${origin}/api/items/A/thumb`, { headers })).text(), "thumb");
+    for (const path of ["/api/items/B/file", "/api/items/C/file", "/api/items/C/thumb"]) {
+      const response = await fetch(`${origin}${path}`, { headers });
+      assert.equal(response.status, 404, path);
+      assert.notEqual(await response.text(), "secret");
+    }
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("an item whose metadata can't be read is hidden, and tried again until it can", async () => {
+  const libraryPath = await createLibrary();
+  const backend = createFsBackend({ libraryPath, refreshIntervalMs: 0, refreshWaitMs: 5000 });
+  assert.deepEqual(names(await backend.listItems()), ["banana", "cat photo", "apple"]);
+  const metadata = join(libraryPath, "images", "A.info", "metadata.json");
+
+  // Eagle starts moving apple to the trash: mtime.json says it changed, its metadata is mid-write.
+  await writeFile(metadata, '{"id": "A", "name": "app');
+  await writeMtime(libraryPath, ITEMS, { A: 150 });
+  assert.deepEqual(names(await backend.listItems()), ["banana", "cat photo"]);
+  assert.equal(await backend.isItemServable("A"), false);
+  assert.equal(await backend.resolveItemFile("A", "file"), "");
+
+  // The write finishes without mtime.json changing again: it is read at the next check anyway.
+  await writeFile(metadata, JSON.stringify({ ...ITEMS[0], isDeleted: true, modificationTime: 100 }));
+  assert.deepEqual(names(await backend.listItems()), ["banana", "cat photo"]);
+  assert.equal(await backend.isItemServable("A"), false);
+
+  // Restored, again without a change to mtime.json the backend relies on.
+  await writeFile(metadata, '{"id": "A", "nam');
+  await writeMtime(libraryPath, ITEMS, { A: 160 });
+  assert.equal(await backend.isItemServable("A"), false);
+  await writeFile(metadata, JSON.stringify({ ...ITEMS[0], modificationTime: 100 }));
+  assert.deepEqual(names(await backend.listItems()), ["banana", "cat photo", "apple"]);
+  assert.equal(await backend.isItemServable("A"), true);
+});

@@ -7,8 +7,8 @@
 // What it answers follows Eagle's Web API (`item/get`, `item/query`, `folder/get`, `tag/get`, ...),
 // so the viewer can't tell the two backends apart. Folders with a password are never shown, and
 // neither is any item in one: reading the folder directly must not be a way around Eagle's lock.
-const { readFile, readdir, stat } = require("fs").promises;
-const { basename, join } = require("path");
+const { readFile, readdir, realpath, stat } = require("fs").promises;
+const { basename, isAbsolute, join, relative } = require("path");
 const {
   ITEM_FIELDS,
   TAG_COVER_FIELDS,
@@ -17,6 +17,7 @@ const {
   normalizeExtension,
   normalizeOffset,
   parseRatingFilter,
+  resolveLibraryItemFile,
   sortedExtensionCounts,
 } = require("./eagleClient.cjs");
 const { DEFAULT_SORT_ORDER, comparatorFor, finiteNumber, matchesFilter, normalizeFilter } = require("./libraryIndex.cjs");
@@ -98,6 +99,13 @@ const FAILED_RETRY_MS = 30 * 1000;
 const ITEM_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const EMPTY_LIST: readonly string[] = Object.freeze([]);
 const IMPORT_ORDER: IndexSort = { key: "import", order: "desc" };
+// Answers kept between changes: sorted lists, query and search results, folders, tags. Each query
+// result can hold every item, so only the most recently used are kept.
+const MAX_CACHED_ANSWERS = 16;
+// Paths in an item's metadata.json are never used: a library's metadata could point anywhere.
+// Files are found in the item's own folder instead (see resolveItemFile).
+const PATH_FIELDS = new Set(["fileURL", "filePath", "thumbnailPath", "thumbnailURL"]);
+const OUTPUT_ITEM_FIELDS: readonly string[] = ITEM_FIELDS.filter((field: string) => !PATH_FIELDS.has(field));
 
 class LibraryFormatError extends Error {
   constructor(message: string) {
@@ -211,6 +219,12 @@ function createFsBackend({
   const readAt = new Map<string, number>();
   // Items whose folder is gone. Eagle leaves their ids in mtime.json, so they are skipped there.
   const removed = new Set<string>();
+  // Items whose metadata.json couldn't be read at the last try (missing or mid-write). Each check
+  // tries them again, whether or not mtime.json changed, and until one is read it is hidden and
+  // its files aren't served: an edit (moving it to the trash, say) may be what was being written.
+  const unconfirmed = new Set<string>();
+  // mtime.json as last read, for the times of items read again outside a change to it.
+  let lastTimes: Record<string, unknown> | null = null;
   let library: Record<string, unknown> = {};
   let folders: unknown[] = [];
   let lockedFolders = new Set<string>();
@@ -227,13 +241,24 @@ function createFsBackend({
   let version = 0;
   let disposed = false;
   const signatures = { metadata: "", tags: "", mtime: "" };
-  const caches = new Map<string, { value: unknown; version: number }>();
+  // Holds answers for the current version only, most recently used last; a change drops them all.
+  const caches = new Map<string, unknown>();
+  let cachesVersion = version;
 
   function cached<T>(key: string, compute: () => T): T {
-    const entry = caches.get(key);
-    if (entry?.version === version) return entry.value as T;
+    if (cachesVersion !== version) {
+      caches.clear();
+      cachesVersion = version;
+    }
+    if (caches.has(key)) {
+      const value = caches.get(key) as T;
+      caches.delete(key);
+      caches.set(key, value);
+      return value;
+    }
     const value = compute();
-    caches.set(key, { value, version });
+    caches.set(key, value);
+    while (caches.size > MAX_CACHED_ANSWERS) caches.delete(caches.keys().next().value!);
     return value;
   }
 
@@ -288,6 +313,7 @@ function createFsBackend({
     try {
       const value = await readJson(mtimePath);
       signatures.mtime = sig;
+      if (isRecord(value)) lastTimes = value;
       return isRecord(value) ? value : null;
     } catch {
       // Mid-write: read again at the next check.
@@ -304,6 +330,7 @@ function createFsBackend({
   }
 
   function indexedItem(id: string, raw: Record<string, unknown>): IndexedItem {
+    const held = unconfirmed.has(id);
     const itemFolders = stringList(raw.folders, intern);
     return {
       btime: finiteNumber(raw.btime),
@@ -312,7 +339,7 @@ function createFsBackend({
       folders: itemFolders,
       height: finiteNumber(raw.height),
       id,
-      isDeleted: raw.isDeleted === true || itemFolders.some((folder) => lockedFolders.has(folder)),
+      isDeleted: held || raw.isDeleted === true || itemFolders.some((folder) => lockedFolders.has(folder)),
       lastModified: finiteNumber(raw.lastModified),
       modificationTime: finiteNumber(raw.modificationTime),
       mtime: finiteNumber(raw.mtime),
@@ -325,27 +352,36 @@ function createFsBackend({
   }
 
   // Reads one item: "set" (read), "removed" (its folder is gone), or "unreadable" (missing or
-  // mid-write metadata; kept as it was and read again at the next change).
+  // mid-write metadata: hidden and tried again at every check until read; see `unconfirmed`).
   async function readItem(id: string): Promise<"removed" | "set" | "unreadable"> {
     try {
       const raw = await readJson(join(imagesDir, `${id}.info`, "metadata.json"));
-      if (!isRecord(raw) || raw.id !== id) return "unreadable";
+      if (!isRecord(raw) || raw.id !== id) return holdItem(id);
+      unconfirmed.delete(id);
       items.set(id, { indexed: indexedItem(id, raw), raw });
       removed.delete(id);
       return "set";
     } catch (error) {
       if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
         try {
-          if ((await stat(join(imagesDir, `${id}.info`))).isDirectory()) return "unreadable";
+          if ((await stat(join(imagesDir, `${id}.info`))).isDirectory()) return holdItem(id);
         } catch {
           items.delete(id);
           readAt.delete(id);
+          unconfirmed.delete(id);
           removed.add(id);
           return "removed";
         }
       }
-      return "unreadable";
+      return holdItem(id);
     }
+  }
+
+  function holdItem(id: string): "unreadable" {
+    unconfirmed.add(id);
+    const stored = items.get(id);
+    if (stored) stored.indexed = indexedItem(id, stored.raw);
+    return "unreadable";
   }
 
   async function readItems(ids: readonly string[], times: Record<string, unknown> | null, onRead?: () => void) {
@@ -373,6 +409,7 @@ function createFsBackend({
       items.clear();
       readAt.clear();
       removed.clear();
+      unconfirmed.clear();
       loaded = 0;
       total = ids.length;
       await readItems(ids, times, () => {
@@ -428,6 +465,11 @@ function createFsBackend({
         }
       }
     }
+    // Items that couldn't be read last time, tried again at every check.
+    if (unconfirmed.size) {
+      await readItems([...unconfirmed], lastTimes);
+      changed = true;
+    }
     const tagsSig = await signature(tagsPath);
     if (tagsSig !== signatures.tags) {
       await readTagsFile();
@@ -451,6 +493,7 @@ function createFsBackend({
             if (!present.has(id)) {
               items.delete(id);
               readAt.delete(id);
+              unconfirmed.delete(id);
             }
           }
           const added = ids.filter((id) => !items.has(id));
@@ -497,7 +540,7 @@ function createFsBackend({
     return cached(`query:${JSON.stringify([normalized, sort])}`, () => visibleSorted(sort).filter((item) => matchesFilter(item, normalized)));
   }
 
-  function outputItems(list: readonly IndexedItem[], fields: readonly string[] = ITEM_FIELDS) {
+  function outputItems(list: readonly IndexedItem[], fields: readonly string[] = OUTPUT_ITEM_FIELDS) {
     return list.map((item) => project(items.get(item.id)!.raw, fields));
   }
 
@@ -734,18 +777,40 @@ function createFsBackend({
     async itemById(id: string) {
       await current();
       const stored = visibleItem(id);
-      return stored ? [project(stored.raw, ITEM_FIELDS)] : [];
+      return stored ? [project(stored.raw, OUTPUT_ITEM_FIELDS)] : [];
     },
 
     async itemsByIds(ids: string[]) {
       await current();
-      return ids.map((id) => visibleItem(id)).filter((stored): stored is StoredItem => stored !== null).map((stored) => project(stored.raw, ITEM_FIELDS));
+      return ids.map((id) => visibleItem(id)).filter((stored): stored is StoredItem => stored !== null).map((stored) => project(stored.raw, OUTPUT_ITEM_FIELDS));
     },
 
-    /** False for an item in the trash or in a locked folder, so its file is never served. */
+    /** False for an item in the trash, in a locked folder, or not read yet, so its file is never served. */
     async isItemServable(id: string) {
       await current();
       return visibleItem(id) !== null;
+    },
+
+    /**
+     * The file to serve for an item, or "" when there is none or it may not be served. Only a file
+     * whose real path (links resolved) is inside the item's own folder in this library's `images/`
+     * is served; the folder itself must be a real folder there, not a link elsewhere.
+     */
+    async resolveItemFile(id: string, kind: "file" | "thumb") {
+      await current();
+      const stored = visibleItem(id);
+      if (!stored) return "";
+      try {
+        const itemDir = join(await realpath(imagesDir), `${stored.indexed.id}.info`);
+        const candidate = await resolveLibraryItemFile({ libraryPath: root, item: { id: stored.indexed.id, ext: stored.raw.ext }, kind });
+        if (!candidate) return "";
+        const real = await realpath(candidate);
+        const inside = relative(itemDir, real);
+        if (!inside || inside.startsWith("..") || isAbsolute(inside)) return "";
+        return (await stat(real)).isFile() ? real : "";
+      } catch {
+        return "";
+      }
     },
 
     async itemExtensions(options: { folderId?: unknown; isUnfiled?: boolean; isUntagged?: boolean } = {}) {

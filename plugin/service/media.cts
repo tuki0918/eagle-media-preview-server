@@ -43,6 +43,11 @@ interface EagleItem {
 interface EagleMediaSession {
   /** When present and false, the item's files are not served at all. */
   isItemServable?(id: string): Promise<boolean>;
+  /**
+   * When present, the only way an item's file is found (a backend reading the library folder):
+   * paths from item metadata and Eagle's thumbnail lookup are not used.
+   */
+  resolveItemFile?(id: string, kind: MediaKind): Promise<string>;
   itemById(id: string): Promise<EagleItem | EagleItem[]>;
   legacyThumbnailPath(id: string): Promise<unknown>;
   libraryInfo(): Promise<{ path?: string } | null>;
@@ -226,6 +231,7 @@ async function resolveItemMediaPath(id: string, kind: MediaKind, session: EagleM
   } catch {
     // The library folder can still resolve the original by its stable item id.
   }
+  if (session.resolveItemFile) return { filePath: await session.resolveItemFile(id, kind), itemData };
   let filePath = "";
 
   if (kind === "thumb") {
