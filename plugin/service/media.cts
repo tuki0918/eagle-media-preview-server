@@ -41,6 +41,8 @@ interface EagleItem {
 }
 
 interface EagleMediaSession {
+  /** When present and false, the item's files are not served at all. */
+  isItemServable?(id: string): Promise<boolean>;
   itemById(id: string): Promise<EagleItem | EagleItem[]>;
   legacyThumbnailPath(id: string): Promise<unknown>;
   libraryInfo(): Promise<{ path?: string } | null>;
@@ -218,6 +220,7 @@ function parseInternetShortcutUrl(text: string) {
 
 async function resolveItemMediaPath(id: string, kind: MediaKind, session: EagleMediaSession) {
   let itemData: EagleItem = { id };
+  if (session.isItemServable && !(await session.isItemServable(id))) return { filePath: "", itemData };
   try {
     itemData = mediaItemById(await session.itemById(id), id);
   } catch {

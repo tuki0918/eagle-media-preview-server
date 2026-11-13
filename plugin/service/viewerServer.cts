@@ -216,6 +216,10 @@ interface LibraryBackend extends Omit<EagleClient, "addItemFromPath" | "updateIt
   lastLibraryInfo?: () => unknown;
   libraryInfo(): Promise<EagleLibraryInfo>;
   write?: Pick<EagleClient, "addItemFromPath" | "updateItemMetadata" | "updateItemStar" | "updateItemTrash">;
+  /** A backend that keeps every item in memory sorts by itself; otherwise Advanced Sort builds an index. */
+  sortIndexes?: SortIndexManager;
+  /** False for an item whose file must not be served (in the trash, or in a locked folder). */
+  isItemServable?(id: string): Promise<boolean>;
 }
 
 interface LibraryUser {
@@ -405,9 +409,9 @@ function createViewerServer({
   const currentSession: LibraryBackend = backend ?? createEagleApiBackend({ client: eagleClient });
   // With Advanced Sort on, the index is built in the background when the server starts (and after a
   // library switch) and kept while the server runs, so sorting is ready before anyone asks for it.
-  const sortIndexes: SortIndexManager | null = experimentalSort
+  const sortIndexes: SortIndexManager | null = currentSession.sortIndexes ?? (experimentalSort
     ? createLibraryIndexManager({ idleMs: Infinity, sourceFor: () => sortIndexSource(currentSession, () => libraryGeneration) })
-    : null;
+    : null);
   const sortIndexCheck = () => {
     const admittedGeneration = libraryGeneration;
     return (libraryPath: string) => sortIndexes && state === "running" && admittedGeneration === libraryGeneration

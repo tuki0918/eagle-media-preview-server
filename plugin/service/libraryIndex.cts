@@ -787,7 +787,11 @@ function createLibraryIndexManager({ idleMs = DEFAULT_IDLE_MS, sourceFor, ...ind
 module.exports = {
   DEFAULT_SORT_ORDER,
   SORT_KEYS,
+  comparatorFor,
   createLibraryIndex,
   createLibraryIndexManager,
+  finiteNumber,
+  matchesFilter,
+  normalizeFilter,
   parseIndexSort,
 };

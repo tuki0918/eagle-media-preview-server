@@ -1,0 +1,792 @@
+// A read-only LibraryBackend that reads an Eagle library folder directly, without Eagle
+// (docs/design/standalone-server.md, section 5). Every item's metadata.json is read once into
+// memory, then kept current the way Eagle keeps its own cache: `mtime.json` maps each item id to its
+// last change, so only items whose time changed are read again, and the `images/` folder is listed
+// again only when Eagle's item count ("all") disagrees.
+//
+// What it answers follows Eagle's Web API (`item/get`, `item/query`, `folder/get`, `tag/get`, ...),
+// so the viewer can't tell the two backends apart. Folders with a password are never shown, and
+// neither is any item in one: reading the folder directly must not be a way around Eagle's lock.
+const { readFile, readdir, stat } = require("fs").promises;
+const { basename, join } = require("path");
+const {
+  ITEM_FIELDS,
+  TAG_COVER_FIELDS,
+  clampLimit,
+  clampTagLimit,
+  normalizeExtension,
+  normalizeOffset,
+  parseRatingFilter,
+  sortedExtensionCounts,
+} = require("./eagleClient.cjs");
+const { DEFAULT_SORT_ORDER, comparatorFor, finiteNumber, matchesFilter, normalizeFilter } = require("./libraryIndex.cjs");
+
+type SortKey = "btime" | "duration" | "ext" | "filesize" | "import" | "mtime" | "name" | "rating" | "resolution";
+type SortOrder = "asc" | "desc";
+
+interface IndexSort {
+  key: SortKey;
+  order: SortOrder;
+}
+
+interface IndexFilter {
+  ext?: string | null;
+  folderId?: string | null;
+  isUnfiled?: boolean;
+  isUntagged?: boolean;
+  keywords?: string | null;
+  ratings?: number[];
+  tags?: string[];
+}
+
+/** What filtering and sorting read (the shape libraryIndex.cts works with). */
+interface IndexedItem {
+  btime: number;
+  duration: number;
+  ext: string;
+  folders: readonly string[];
+  height: number;
+  id: string;
+  /** In the trash, or in a folder with a password: never listed or served. */
+  isDeleted: boolean;
+  lastModified: number;
+  modificationTime: number;
+  mtime: number;
+  name: string;
+  size: number;
+  star: number;
+  tags: readonly string[];
+  width: number;
+}
+
+interface StoredItem {
+  indexed: IndexedItem;
+  /** The item's metadata.json as read. */
+  raw: Record<string, unknown>;
+}
+
+interface FolderRecord {
+  [key: string]: unknown;
+  children?: unknown;
+  id?: unknown;
+  password?: unknown;
+}
+
+type StoreStatus = "building" | "failed" | "idle" | "ready";
+
+interface FsBackendOptions {
+  libraryPath: string;
+  /** Shown to viewers; defaults to the folder name without `.library`. */
+  name?: string;
+  /** Serve a library last saved by an Eagle version this server doesn't know (see KNOWN_MAJOR_VERSIONS). */
+  allowUnknownFormat?: boolean;
+  /** How many metadata.json files are read at once while building. */
+  readConcurrency?: number;
+  /** How often a query may check mtime.json and the library's own files for changes. */
+  refreshIntervalMs?: number;
+  /** How long a query waits for an update in progress before answering from what is held. */
+  refreshWaitMs?: number;
+}
+
+// Library format versions (the major part of `applicationVersion` in the library's metadata.json)
+// this backend was checked against. Another one may have moved or renamed what is read here.
+const KNOWN_MAJOR_VERSIONS = ["4"];
+const DEFAULT_READ_CONCURRENCY = 64;
+const DEFAULT_REFRESH_INTERVAL_MS = 2000;
+const DEFAULT_REFRESH_WAIT_MS = 1000;
+const FAILED_RETRY_MS = 30 * 1000;
+const ITEM_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+const EMPTY_LIST: readonly string[] = Object.freeze([]);
+const IMPORT_ORDER: IndexSort = { key: "import", order: "desc" };
+
+class LibraryFormatError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "LibraryFormatError";
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function libraryNameFromPath(path: string) {
+  return basename(path).replace(/\.library$/i, "") || path;
+}
+
+function stringList(value: unknown, intern: (text: string) => string): readonly string[] {
+  const list = Array.isArray(value) ? value.filter((entry) => typeof entry === "string" && entry).map(intern) : [];
+  return list.length ? list : EMPTY_LIST;
+}
+
+function project(raw: Record<string, unknown>, fields: readonly string[]) {
+  const output: Record<string, unknown> = {};
+  for (const field of fields) {
+    if (raw[field] !== undefined) output[field] = raw[field];
+  }
+  return output;
+}
+
+function page<T>(items: T[], offset: number, limit: number) {
+  return { items: items.slice(offset, offset + limit), total: items.length, offset, limit };
+}
+
+function hasPassword(folder: FolderRecord) {
+  return typeof folder.password === "string" && folder.password !== "";
+}
+
+function folderChildren(folder: FolderRecord): FolderRecord[] {
+  return Array.isArray(folder.children) ? folder.children.filter(isRecord) : [];
+}
+
+// Folders with a password, and every folder inside one.
+function lockedFolderIds(folders: unknown[]) {
+  const ids = new Set<string>();
+  const walk = (list: FolderRecord[], locked: boolean) => {
+    for (const folder of list) {
+      const isLocked = locked || hasPassword(folder);
+      if (isLocked && typeof folder.id === "string") ids.add(folder.id);
+      walk(folderChildren(folder), isLocked);
+    }
+  };
+  walk(folders.filter(isRecord), false);
+  return ids;
+}
+
+// Eagle's search terms: words must all match, `-word` must not, `"two words"` matches as one, and
+// words joined by OR (or |) need only one to match. Case is ignored.
+function parseSearchQuery(query: string) {
+  const tokens = query.match(/-?"[^"]*"|\S+/g) || [];
+  const all: string[] = [];
+  const none: string[] = [];
+  const any: string[][] = [];
+  const clean = (token: string) => token.replace(/"/g, "").toLowerCase();
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token === "OR" || token === "|") continue;
+    if (token.startsWith("-") && token.length > 1) {
+      const word = clean(token.slice(1));
+      if (word) none.push(word);
+      continue;
+    }
+    const group = [clean(token)];
+    while (tokens[index + 1] === "OR" || tokens[index + 1] === "|") {
+      const next = tokens[index + 2];
+      if (next === undefined) break;
+      group.push(clean(next));
+      index += 2;
+    }
+    const words = group.filter(Boolean);
+    if (words.length > 1) any.push(words);
+    else if (words.length) all.push(words[0]);
+  }
+  return { all, any, none };
+}
+
+function createFsBackend({
+  libraryPath,
+  name,
+  allowUnknownFormat = false,
+  readConcurrency = DEFAULT_READ_CONCURRENCY,
+  refreshIntervalMs = DEFAULT_REFRESH_INTERVAL_MS,
+  refreshWaitMs = DEFAULT_REFRESH_WAIT_MS,
+}: FsBackendOptions) {
+  const root = String(libraryPath || "").trim().replace(/[\\/]+$/, "");
+  if (!root) throw new Error("libraryPath is required");
+  const libraryName = String(name || "").trim() || libraryNameFromPath(root);
+  const imagesDir = join(root, "images");
+  const metadataPath = join(root, "metadata.json");
+  const tagsPath = join(root, "tags.json");
+  const mtimePath = join(root, "mtime.json");
+
+  const items = new Map<string, StoredItem>();
+  const strings = new Map<string, string>();
+  const intern = (text: string) => {
+    const existing = strings.get(text);
+    if (existing !== undefined) return existing;
+    strings.set(text, text);
+    return text;
+  };
+  // Each item's time in mtime.json when it was last read; a different time means read it again.
+  const readAt = new Map<string, number>();
+  // Items whose folder is gone. Eagle leaves their ids in mtime.json, so they are skipped there.
+  const removed = new Set<string>();
+  let library: Record<string, unknown> = {};
+  let folders: unknown[] = [];
+  let lockedFolders = new Set<string>();
+  let starredTags: string[] = [];
+  let status: StoreStatus = "idle";
+  let lastError: Error | null = null;
+  let failedAt = 0;
+  let building: Promise<void> | null = null;
+  let refreshing: Promise<void> | null = null;
+  let lastRefreshCheck = 0;
+  let loaded = 0;
+  let total = 0;
+  // Bumped on every change, so cached answers are recomputed.
+  let version = 0;
+  let disposed = false;
+  const signatures = { metadata: "", tags: "", mtime: "" };
+  const caches = new Map<string, { value: unknown; version: number }>();
+
+  function cached<T>(key: string, compute: () => T): T {
+    const entry = caches.get(key);
+    if (entry?.version === version) return entry.value as T;
+    const value = compute();
+    caches.set(key, { value, version });
+    return value;
+  }
+
+  async function signature(path: string) {
+    try {
+      const info = await stat(path);
+      return `${info.mtimeMs}:${info.size}`;
+    } catch {
+      return "";
+    }
+  }
+
+  async function readJson(path: string) {
+    return JSON.parse(await readFile(path, "utf8"));
+  }
+
+  // The library's own metadata.json: folders, smart folders, tag groups, and the format version.
+  async function readLibraryMetadata() {
+    const sig = await signature(metadataPath);
+    const value = await readJson(metadataPath);
+    if (!isRecord(value)) throw new LibraryFormatError(`${metadataPath} is not a library metadata file`);
+    const appVersion = typeof value.applicationVersion === "string" ? value.applicationVersion : "";
+    const major = appVersion.split(".")[0];
+    if (!allowUnknownFormat && !KNOWN_MAJOR_VERSIONS.includes(major)) {
+      throw new LibraryFormatError(
+        `This library was saved by Eagle ${appVersion || "(unknown version)"}, a format this server hasn't been checked against. ` +
+        "Update the server, or start it with --allow-unknown-format to try anyway.",
+      );
+    }
+    library = value;
+    folders = Array.isArray(value.folders) ? value.folders : [];
+    lockedFolders = lockedFolderIds(folders);
+    signatures.metadata = sig;
+  }
+
+  async function readTagsFile() {
+    const sig = await signature(tagsPath);
+    try {
+      const value = await readJson(tagsPath);
+      starredTags = isRecord(value) && Array.isArray(value.starredTags)
+        ? value.starredTags.filter((tag): tag is string => typeof tag === "string")
+        : [];
+    } catch {
+      starredTags = [];
+    }
+    signatures.tags = sig;
+  }
+
+  async function readMtimeFile(): Promise<Record<string, unknown> | null> {
+    const sig = await signature(mtimePath);
+    if (!sig) return null;
+    try {
+      const value = await readJson(mtimePath);
+      signatures.mtime = sig;
+      return isRecord(value) ? value : null;
+    } catch {
+      // Mid-write: read again at the next check.
+      return null;
+    }
+  }
+
+  async function listItemIds() {
+    const entries: string[] = await readdir(imagesDir);
+    return entries
+      .filter((entry) => entry.endsWith(".info"))
+      .map((entry) => entry.slice(0, -".info".length))
+      .filter((id) => ITEM_ID_PATTERN.test(id));
+  }
+
+  function indexedItem(id: string, raw: Record<string, unknown>): IndexedItem {
+    const itemFolders = stringList(raw.folders, intern);
+    return {
+      btime: finiteNumber(raw.btime),
+      duration: finiteNumber(raw.duration),
+      ext: intern(normalizeExtension(raw.ext)),
+      folders: itemFolders,
+      height: finiteNumber(raw.height),
+      id,
+      isDeleted: raw.isDeleted === true || itemFolders.some((folder) => lockedFolders.has(folder)),
+      lastModified: finiteNumber(raw.lastModified),
+      modificationTime: finiteNumber(raw.modificationTime),
+      mtime: finiteNumber(raw.mtime),
+      name: typeof raw.name === "string" ? raw.name : "",
+      size: finiteNumber(raw.size),
+      star: Math.max(0, Math.min(5, Math.trunc(finiteNumber(raw.star)))),
+      tags: stringList(raw.tags, intern),
+      width: finiteNumber(raw.width),
+    };
+  }
+
+  // Reads one item: "set" (read), "removed" (its folder is gone), or "unreadable" (missing or
+  // mid-write metadata; kept as it was and read again at the next change).
+  async function readItem(id: string): Promise<"removed" | "set" | "unreadable"> {
+    try {
+      const raw = await readJson(join(imagesDir, `${id}.info`, "metadata.json"));
+      if (!isRecord(raw) || raw.id !== id) return "unreadable";
+      items.set(id, { indexed: indexedItem(id, raw), raw });
+      removed.delete(id);
+      return "set";
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
+        try {
+          if ((await stat(join(imagesDir, `${id}.info`))).isDirectory()) return "unreadable";
+        } catch {
+          items.delete(id);
+          readAt.delete(id);
+          removed.add(id);
+          return "removed";
+        }
+      }
+      return "unreadable";
+    }
+  }
+
+  async function readItems(ids: readonly string[], times: Record<string, unknown> | null, onRead?: () => void) {
+    let next = 0;
+    const worker = async () => {
+      while (next < ids.length && !disposed) {
+        const id = ids[next++];
+        const result = await readItem(id);
+        if (disposed) return;
+        const time = times ? Number(times[id]) : NaN;
+        if (result === "set" && Number.isFinite(time)) readAt.set(id, time);
+        onRead?.();
+      }
+    };
+    await Promise.all(Array.from({ length: Math.max(1, Math.min(readConcurrency, ids.length)) }, worker));
+  }
+
+  async function build() {
+    status = "building";
+    try {
+      await readLibraryMetadata();
+      await readTagsFile();
+      const times = await readMtimeFile();
+      const ids = await listItemIds();
+      items.clear();
+      readAt.clear();
+      removed.clear();
+      loaded = 0;
+      total = ids.length;
+      await readItems(ids, times, () => {
+        loaded += 1;
+      });
+      lastRefreshCheck = Date.now();
+      version += 1;
+      status = "ready";
+      lastError = null;
+    } catch (error) {
+      status = "failed";
+      failedAt = Date.now();
+      lastError = error instanceof Error ? error : new Error(String(error));
+      throw lastError;
+    }
+  }
+
+  function ensureBuilding() {
+    if (!building || (status === "failed" && Date.now() - failedAt >= FAILED_RETRY_MS)) {
+      building = build();
+      building.catch(() => {});
+    }
+    return building;
+  }
+
+  async function waitAtMost(promise: Promise<unknown>, ms: number) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([promise.catch(() => {}), new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, ms);
+      })]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async function refresh() {
+    let changed = false;
+    const metadataSig = await signature(metadataPath);
+    if (metadataSig && metadataSig !== signatures.metadata) {
+      try {
+        await readLibraryMetadata();
+        // Locked folders may have changed: which items are hidden is worked out again.
+        for (const [id, stored] of items) stored.indexed = indexedItem(id, stored.raw);
+        changed = true;
+      } catch (error) {
+        // Mid-write: read again at the next check. A format change stops the backend.
+        if (error instanceof LibraryFormatError) {
+          status = "failed";
+          lastError = error;
+          failedAt = Date.now();
+          return;
+        }
+      }
+    }
+    const tagsSig = await signature(tagsPath);
+    if (tagsSig !== signatures.tags) {
+      await readTagsFile();
+      changed = true;
+    }
+    const mtimeSig = await signature(mtimePath);
+    if (mtimeSig && mtimeSig !== signatures.mtime) {
+      const times = await readMtimeFile();
+      if (times) {
+        const stale = Object.keys(times).filter((id) => id !== "all" && ITEM_ID_PATTERN.test(id) && Number(times[id]) !== readAt.get(id));
+        const wanted = stale.filter((id) => !removed.has(id));
+        if (wanted.length) {
+          await readItems(wanted, times);
+          changed = true;
+        }
+        const count = Number(times.all);
+        if (Number.isFinite(count) && count !== items.size) {
+          const ids = await listItemIds();
+          const present = new Set(ids);
+          for (const id of [...items.keys()]) {
+            if (!present.has(id)) {
+              items.delete(id);
+              readAt.delete(id);
+            }
+          }
+          const added = ids.filter((id) => !items.has(id));
+          if (added.length) await readItems(added, times);
+          changed = true;
+        }
+      }
+    }
+    if (changed) version += 1;
+  }
+
+  // At most every refreshIntervalMs, checks the library for changes; waits for that at most
+  // refreshWaitMs, then answers from what is held while the update carries on.
+  async function current() {
+    await ensureBuilding();
+    if (status === "failed" && lastError) throw lastError;
+    if (!refreshing && Date.now() - lastRefreshCheck >= refreshIntervalMs) {
+      lastRefreshCheck = Date.now();
+      refreshing = refresh().finally(() => {
+        refreshing = null;
+      });
+      refreshing.catch(() => {});
+    }
+    if (refreshing) await waitAtMost(refreshing, refreshWaitMs);
+    if (status === "failed" && lastError) throw lastError;
+  }
+
+  function visibleSorted(sort: IndexSort): IndexedItem[] {
+    return cached(`sorted:${sort.key}:${sort.order}`, () => {
+      const list = [...items.values()].map((stored) => stored.indexed).filter((item) => !item.isDeleted);
+      list.sort(comparatorFor(sort.key));
+      if (sort.order !== DEFAULT_SORT_ORDER[sort.key]) list.reverse();
+      return list;
+    });
+  }
+
+  function visibleItem(id: string) {
+    const stored = items.get(String(id || ""));
+    return stored && !stored.indexed.isDeleted ? stored : null;
+  }
+
+  function filtered(filter: IndexFilter, sort: IndexSort = IMPORT_ORDER) {
+    const normalized = normalizeFilter(filter);
+    return cached(`query:${JSON.stringify([normalized, sort])}`, () => visibleSorted(sort).filter((item) => matchesFilter(item, normalized)));
+  }
+
+  function outputItems(list: readonly IndexedItem[], fields: readonly string[] = ITEM_FIELDS) {
+    return list.map((item) => project(items.get(item.id)!.raw, fields));
+  }
+
+  // Items directly in each folder, as Eagle counts them for `imageCount`.
+  function folderCounts() {
+    return cached("folderCounts", () => {
+      const counts = new Map<string, number>();
+      for (const item of visibleSorted(IMPORT_ORDER)) {
+        for (const folder of item.folders) counts.set(folder, (counts.get(folder) || 0) + 1);
+      }
+      return counts;
+    });
+  }
+
+  // The folder tree without locked folders, without password fields, and with item counts.
+  function visibleFolders() {
+    return cached("folders", () => {
+      const counts = folderCounts();
+      const map = (list: FolderRecord[]): Record<string, unknown>[] => list
+        .filter((folder) => !(typeof folder.id === "string" && lockedFolders.has(folder.id)))
+        .map((folder) => {
+          const { password: _password, passwordTips: _tips, children, ...rest } = folder;
+          return {
+            ...rest,
+            imageCount: typeof folder.id === "string" ? counts.get(folder.id) || 0 : 0,
+            children: map(folderChildren({ children })),
+          };
+        });
+      return map(folders.filter(isRecord));
+    });
+  }
+
+  function folderSearchText() {
+    return cached("folderText", () => {
+      const text = new Map<string, string>();
+      const walk = (list: FolderRecord[]) => {
+        for (const folder of list) {
+          if (typeof folder.id === "string" && !lockedFolders.has(folder.id)) {
+            text.set(folder.id, [folder.name, folder.description].filter((part) => typeof part === "string" && part).join(" "));
+          }
+          walk(folderChildren(folder));
+        }
+      };
+      walk(folders.filter(isRecord));
+      return text;
+    });
+  }
+
+  function tagGroups(): Record<string, unknown>[] {
+    return Array.isArray(library.tagsGroups) ? library.tagsGroups.filter(isRecord) : [];
+  }
+
+  function tagRecords() {
+    return cached("tags", () => {
+      const counts = new Map<string, number>();
+      for (const item of visibleSorted(IMPORT_ORDER)) {
+        for (const tag of item.tags) counts.set(tag, (counts.get(tag) || 0) + 1);
+      }
+      const groupsOf = new Map<string, string[]>();
+      for (const group of tagGroups()) {
+        if (typeof group.id !== "string" || !Array.isArray(group.tags)) continue;
+        for (const tag of group.tags) {
+          if (typeof tag === "string") groupsOf.set(tag, [...(groupsOf.get(tag) || []), group.id]);
+        }
+      }
+      const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+      return [...counts.entries()]
+        .sort(([left], [right]) => collator.compare(left, right))
+        .map(([tagName, count]) => ({ name: tagName, count, imageCount: count, groups: groupsOf.get(tagName) || [] }));
+    });
+  }
+
+  function searchText(item: IndexedItem) {
+    const raw = items.get(item.id)!.raw;
+    const folderText = folderSearchText();
+    const parts: unknown[] = [raw.name, raw.annotation, item.ext ? `.${item.ext}` : "", raw.url, ...item.tags];
+    for (const folder of item.folders) parts.push(folderText.get(folder));
+    if (Array.isArray(raw.comments)) {
+      for (const comment of raw.comments) if (isRecord(comment)) parts.push(comment.annotation);
+    }
+    return parts.filter((part) => typeof part === "string" && part).join(" ").toLowerCase();
+  }
+
+  function scopeFilter({ folderId, isUnfiled = false, isUntagged = false }: { folderId?: unknown; isUnfiled?: boolean; isUntagged?: boolean }): IndexFilter {
+    return isUnfiled ? { isUnfiled: true } : isUntagged ? { isUntagged: true } : folderId ? { folderId: String(folderId) } : {};
+  }
+
+  // A sort index over the items already in memory, shaped like libraryIndex.cts's, so the server's
+  // Advanced Sort (orders, filters, item types) works without asking Eagle anything.
+  const sortIndex = {
+    get status() {
+      return status;
+    },
+    progress() {
+      return { loaded, total };
+    },
+    coversAllItems() {
+      return true;
+    },
+    async whenReady(waitMs: number) {
+      if (status === "ready") return true;
+      await waitAtMost(ensureBuilding(), waitMs);
+      return (status as StoreStatus) === "ready";
+    },
+    async query(filter: IndexFilter, sort: IndexSort, offset: number, limit: number) {
+      await current();
+      const list = filtered(filter, sort);
+      return { complete: true, ids: list.slice(offset, offset + limit).map((item) => item.id), total: list.length };
+    },
+    async extensionCounts(filter: IndexFilter) {
+      await current();
+      const counts = new Map<string, number>();
+      for (const item of filtered(filter)) if (item.ext) counts.set(item.ext, (counts.get(item.ext) || 0) + 1);
+      return { status: "complete" as const, items: sortedExtensionCounts(counts) as Array<{ count: number; ext: string }> };
+    },
+    noteItem() {},
+    markStale() {
+      lastRefreshCheck = 0;
+    },
+    dispose() {},
+  };
+
+  const libraryKey = root;
+  const sortIndexes = {
+    forLibrary() {
+      return sortIndex;
+    },
+    loaded(path?: string) {
+      if (path !== undefined && String(path).replace(/[\\/]+$/, "") !== libraryKey) return null;
+      return status === "idle" ? null : sortIndex;
+    },
+    release() {},
+  };
+
+  return {
+    kind: "fs" as const,
+    sortIndexes,
+
+    /** Reads the whole library; rejects when it can't be read or its format isn't known. */
+    async open() {
+      await current();
+    },
+
+    async libraryInfo() {
+      await current();
+      return {
+        path: root,
+        name: libraryName,
+        applicationVersion: library.applicationVersion,
+        modificationTime: library.modificationTime,
+      };
+    },
+    lastLibraryInfo() {
+      return status === "ready" ? { path: root, name: libraryName } : null;
+    },
+    clearLibraryInfo() {},
+
+    // No Eagle behind this server; the viewer only needs to know the library is reachable.
+    async appInfo() {
+      await current();
+      return { standalone: true, platform: process.platform };
+    },
+
+    async folders() {
+      await current();
+      const tree = visibleFolders();
+      return { items: tree, total: tree.length, offset: 0, limit: tree.length };
+    },
+
+    // Smart folder rules are evaluated only by Eagle for now (design section 5.4).
+    async smartFolders() {
+      await current();
+      return { items: [], total: 0, offset: 0, limit: 0 };
+    },
+    async smartFolderItems() {
+      await current();
+      return { items: [], total: 0, offset: 0, limit: 0 };
+    },
+
+    // Eagle's item/get: newest first (date added). Several ratings are listed as consecutive
+    // groups, highest first and "no rating" last, as the Eagle client pages them.
+    async listItems({ offset = 0, limit = 30, folderId, isUntagged = false, isUnfiled = false, ext, rating, keywords, tags }: {
+      ext?: unknown;
+      folderId?: unknown;
+      isUnfiled?: boolean;
+      isUntagged?: boolean;
+      keywords?: unknown;
+      limit?: unknown;
+      offset?: unknown;
+      rating?: unknown;
+      tags?: unknown;
+    } = {}) {
+      await current();
+      const ratings: number[] = parseRatingFilter(rating);
+      const cleanTags = (Array.isArray(tags) ? tags : [tags]).map((tag) => String(tag || "").trim()).filter(Boolean);
+      const keywordText = Array.isArray(keywords) ? keywords.join(" ") : keywords ? String(keywords) : "";
+      let list = filtered({
+        ...scopeFilter({ folderId, isUnfiled, isUntagged }),
+        ext: ext ? String(ext) : "",
+        keywords: keywordText,
+        ratings,
+        tags: cleanTags,
+      });
+      if (ratings.length > 1) list = ratings.flatMap((value) => list.filter((item) => item.star === value));
+      const result = page(list, normalizeOffset(offset), clampLimit(limit));
+      return { ...result, items: outputItems(result.items) };
+    },
+
+    // Eagle's item/query, over the same text Eagle searches: name, notes, extension, URL, tags,
+    // folder names and descriptions, and comments.
+    async searchItems({ query, offset = 0, limit = 30 }: { limit?: unknown; offset?: unknown; query: string }) {
+      await current();
+      const terms = parseSearchQuery(String(query || ""));
+      const empty = !terms.all.length && !terms.any.length && !terms.none.length;
+      const list = cached(`search:${JSON.stringify(terms)}`, () => visibleSorted(IMPORT_ORDER).filter((item) => {
+        if (empty) return true;
+        const text = searchText(item);
+        return terms.all.every((word) => text.includes(word))
+          && terms.none.every((word) => !text.includes(word))
+          && terms.any.every((group) => group.some((word) => text.includes(word)));
+      }));
+      const result = page(list, normalizeOffset(offset), clampLimit(limit));
+      return { ...result, items: outputItems(result.items) };
+    },
+
+    // Eagle's item/get by id answers a list: the item, or nothing for one in the trash.
+    async itemById(id: string) {
+      await current();
+      const stored = visibleItem(id);
+      return stored ? [project(stored.raw, ITEM_FIELDS)] : [];
+    },
+
+    async itemsByIds(ids: string[]) {
+      await current();
+      return ids.map((id) => visibleItem(id)).filter((stored): stored is StoredItem => stored !== null).map((stored) => project(stored.raw, ITEM_FIELDS));
+    },
+
+    /** False for an item in the trash or in a locked folder, so its file is never served. */
+    async isItemServable(id: string) {
+      await current();
+      return visibleItem(id) !== null;
+    },
+
+    async itemExtensions(options: { folderId?: unknown; isUnfiled?: boolean; isUntagged?: boolean } = {}) {
+      await current();
+      const counts = new Map<string, number>();
+      for (const item of filtered(scopeFilter(options))) if (item.ext) counts.set(item.ext, (counts.get(item.ext) || 0) + 1);
+      return sortedExtensionCounts(counts);
+    },
+
+    // Thumbnails are found in the item's folder by the media code.
+    async legacyThumbnailPath() {
+      return "";
+    },
+
+    async listTags({ query = "", offset = 0, limit = 20 }: { limit?: unknown; offset?: unknown; query?: unknown } = {}) {
+      await current();
+      const search = String(query || "").trim().toLowerCase();
+      const list = search ? tagRecords().filter((tag) => tag.name.toLowerCase().includes(search)) : tagRecords();
+      return page(list, normalizeOffset(offset), clampTagLimit(limit));
+    },
+
+    async tagOverview() {
+      await current();
+      const tags = tagRecords();
+      const byName = new Map(tags.map((tag) => [tag.name, tag]));
+      return {
+        tags,
+        groups: tagGroups(),
+        starred: starredTags.map((tag) => byName.get(tag)).filter((tag) => tag !== undefined),
+      };
+    },
+
+    async tagCoverItem(tag: string) {
+      const tagName = String(tag || "").trim();
+      if (!tagName) throw new Error("tag is required");
+      await current();
+      const item = visibleSorted(IMPORT_ORDER).find((entry) => entry.tags.includes(tagName));
+      return item ? project(items.get(item.id)!.raw, TAG_COVER_FIELDS) : null;
+    },
+
+    async dispose() {
+      disposed = true;
+      items.clear();
+      strings.clear();
+      readAt.clear();
+      caches.clear();
+    },
+  };
+}
+
+module.exports = { KNOWN_MAJOR_VERSIONS, LibraryFormatError, createFsBackend, parseSearchQuery };
