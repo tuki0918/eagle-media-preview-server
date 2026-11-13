@@ -203,18 +203,20 @@ async function runStandalone(argv: string[], { log = console.log, lanAddresses =
       serverStatus[index] = "not started: no library to serve";
       continue;
     }
-    const viewer = createViewerServer({
-      ...config.common,
-      accessLog: recorder,
-      backends: served,
-      customDomain: server.customDomain,
-      host: server.host,
-      httpsCertPath: server.httpsCertPath,
-      httpsEnabled: server.httpsEnabled,
-      httpsKeyPath: server.httpsKeyPath,
-      port: server.port,
-    });
     try {
+      // Inside the try: with HTTPS on, the certificate and key are read here, and a missing one
+      // must skip only this server.
+      const viewer = createViewerServer({
+        ...config.common,
+        accessLog: recorder,
+        backends: served,
+        customDomain: server.customDomain,
+        host: server.host,
+        httpsCertPath: server.httpsCertPath,
+        httpsEnabled: server.httpsEnabled,
+        httpsKeyPath: server.httpsKeyPath,
+        port: server.port,
+      });
       await viewer.start();
       const port = viewer.status().boundPort || server.port;
       const url = buildAccessUrl({ customDomain: server.customDomain, host: server.host, httpsEnabled: server.httpsEnabled, port, lanAddresses });

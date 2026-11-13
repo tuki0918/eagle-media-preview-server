@@ -232,3 +232,25 @@ test("prints the last entries of the log file, then new ones as they are written
   assert.match(formatLogEntry({ at: 0, type: "system", event: "server_start", ip: "this computer", path: "http://localhost:1" }), /system\s+this computer\s+-\s+server_start {2}http:\/\/localhost:1/);
   await stat(filePath);
 });
+
+test("a server whose HTTPS certificate can't be read is skipped; the others run", async () => {
+  const dir = await workspace();
+  const photos = await createLibrary(dir, "Photos");
+  const work = await createLibrary(dir, "Work", "invoice");
+  const settingsPath = await writeSettings(dir);
+  const configPath = await writeConfig(dir, {
+    servers: [
+      { libraries: [photos], port: 0, httpsEnabled: true, httpsCertPath: join(dir, "missing-cert.pem"), httpsKeyPath: join(dir, "missing-key.pem") },
+      { libraries: [work], port: 0 },
+    ],
+  });
+  const lines: string[] = [];
+  const running = await runStandalone(["--settings", settingsPath, "--config", configPath, "--access-log", join(dir, "log.jsonl")], { log: (line: string) => lines.push(line), lanAddresses: [] });
+  try {
+    assert.equal(running.servers.length, 1);
+    assert.match(lines.join("\n"), /Server 1: not started: .*missing-cert\.pem/);
+    assert.match(lines.join("\n"), /running\s+http:\/\/localhost:\d+\s+Work/);
+  } finally {
+    await running.stop();
+  }
+});
