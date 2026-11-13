@@ -65,6 +65,11 @@ interface ViewerServerOptions {
   basicAuthUsername?: string;
   /** Where the library is read from; defaults to Eagle through `eagleClient`. */
   backend?: LibraryBackend;
+  /**
+   * Several libraries served at once (the standalone server). Each request is answered by the one
+   * its library id names; see selectSession.
+   */
+  backends?: LibraryBackend[];
   eagleClient?: EagleClient;
   host?: string;
   httpsCertPath?: string;
@@ -220,6 +225,13 @@ interface LibraryBackend extends Omit<EagleClient, "addItemFromPath" | "updateIt
   sortIndexes?: SortIndexManager;
   /** False for an item whose file must not be served (in the trash, or in a locked folder). */
   isItemServable?(id: string): Promise<boolean>;
+  /** The library this backend always reads (a standalone backend); absent for Eagle's open library. */
+  readonly libraryPath?: string;
+  readonly name?: string;
+  /** Starts reading the library; rejects when it can't be read. */
+  open?(): Promise<void>;
+  /** Where reading the library stands, without waiting for it. */
+  state?(): { error: string; loaded: number; status: string; total: number };
 }
 
 interface LibraryUser {
@@ -359,6 +371,7 @@ function createViewerServer({
   uploadSweepIntervalMs = UPLOAD_SWEEP_INTERVAL_MS,
   requestBodyTimeoutMs = REQUEST_BODY_TIMEOUT_MS,
   backend,
+  backends = [],
   eagleClient = createEagleClient(),
 }: ViewerServerOptions = {}) {
   let serverInstance: NetServer | null = null;
@@ -406,20 +419,35 @@ function createViewerServer({
   const libraryAccess: LibraryAccessPolicy = createLibraryAccessPolicy(sharedLibraries, resolvedAuthUsers.length ? libraryUserRules : []);
   const libraryId = (libraryPath: unknown) => libraryIdFor(libraryPath, resolvedSessionSecret);
   // Reads through Eagle unless a backend is given (a test, or later a server that reads the library folder).
-  const currentSession: LibraryBackend = backend ?? createEagleApiBackend({ client: eagleClient });
+  const multiLibrary = backends.length > 0;
+  const currentSession: LibraryBackend = multiLibrary ? backends[0] : backend ?? createEagleApiBackend({ client: eagleClient });
+  const sessions: LibraryBackend[] = multiLibrary ? backends : [currentSession];
+  const sessionIds = new Map(sessions.map((session) => [session, libraryId(session.libraryPath)]));
   // With Advanced Sort on, the index is built in the background when the server starts (and after a
   // library switch) and kept while the server runs, so sorting is ready before anyone asks for it.
   const sortIndexes: SortIndexManager | null = currentSession.sortIndexes ?? (experimentalSort
     ? createLibraryIndexManager({ idleMs: Infinity, sourceFor: () => sortIndexSource(currentSession, () => libraryGeneration) })
     : null);
-  const sortIndexCheck = () => {
+  const sortIndexesFor = (session: LibraryBackend) => session.sortIndexes ?? sortIndexes;
+  const sortIndexCheckFor = (manager: SortIndexManager | null) => () => {
     const admittedGeneration = libraryGeneration;
-    return (libraryPath: string) => sortIndexes && state === "running" && admittedGeneration === libraryGeneration
-      ? sortIndexState(sortIndexes, libraryPath)
+    return (libraryPath: string) => manager && state === "running" && admittedGeneration === libraryGeneration
+      ? sortIndexState(manager, libraryPath)
       : null;
   };
+  const sortIndexCheck = sortIndexCheckFor(sortIndexes);
   let sortWarmRun = 0;
   const warmSortIndex = async () => {
+    if (multiLibrary) {
+      // One at a time, in the order given, so the first library is ready soonest. A library asked
+      // for meanwhile starts reading at once; one that can't be read is retried when asked for.
+      const run = ++sortWarmRun;
+      for (const session of sessions) {
+        if (run !== sortWarmRun) return;
+        await session.open?.().catch(() => {});
+      }
+      return;
+    }
     if (!sortIndexes) return;
     const run = ++sortWarmRun;
     const check = sortIndexCheck();
@@ -431,10 +459,10 @@ function createViewerServer({
   let libraryGeneration = 0;
   // What was known when Eagle reported a switch; it stays readable until Eagle is asked again.
   let libraryInfoBeforeSwitch: unknown = null;
-  const trackLibrary = (res: ServerResponse, admittedLibraryId: string, admittedGeneration: number, user: LibraryUser | null) => {
+  const trackLibrary = (res: ServerResponse, session: LibraryBackend, admittedLibraryId: string, admittedGeneration: number, user: LibraryUser | null) => {
     // Only the id of a library this user may open is ever reported, even when a request is refused mid-way.
     const currentLibraryId = () => {
-      const library = currentSession.lastLibraryInfo?.() as EagleLibraryInfo | null | undefined;
+      const library = session.lastLibraryInfo?.() as EagleLibraryInfo | null | undefined;
       return library && libraryOpenFor(library.path, user) ? libraryId(library.path) : "";
     };
     libraryGuards.set(res, {
@@ -449,14 +477,26 @@ function createViewerServer({
     const status = libraryAccess.status(libraryPath, user);
     return status === "shared" || status === "unrestricted";
   };
-  const admitLibraryRequest = async (req: IncomingMessage, url: URL, res: ServerResponse, user: LibraryUser | null) => {
+  // The backend a request is for. With one library, always that one. With several, the one its
+  // library id names; without an id (health, connect, a first visit), or with one that names no
+  // library of this server (an id from before a restart), the first one this user may open.
+  // Pinned requests with an unknown id get null and are refused as a library change.
+  const selectSession = (req: IncomingMessage, url: URL, user: LibraryUser | null): LibraryBackend | null => {
+    if (!multiLibrary) return currentSession;
+    const requested = String(req.headers["x-library-id"] || url.searchParams.get("library") || "").trim();
+    const named = requested ? sessions.find((session) => sessionIds.get(session) === requested) : undefined;
+    if (named) return named;
+    if (requested && libraryPinFor(url.pathname) !== "none") return null;
+    return sessions.find((session) => libraryOpenFor(session.libraryPath, user)) ?? currentSession;
+  };
+  const admitLibraryRequest = async (req: IncomingMessage, url: URL, res: ServerResponse, user: LibraryUser | null, session: LibraryBackend = currentSession) => {
     const isHealth = url.pathname === "/api/health";
     const pin = libraryPinFor(url.pathname);
     const protectedLibraries = libraryAccess.status(null) !== "unrestricted";
     const admittedGeneration = libraryGeneration;
     let openLibrary: EagleLibraryInfo | null = null;
     try {
-      openLibrary = await currentSession.libraryInfo();
+      openLibrary = await session.libraryInfo();
     } catch (error) {
       // With protection on, a library that cannot be read is never served; health still answers.
       if (protectedLibraries && !isHealth) throw error;
@@ -484,7 +524,7 @@ function createViewerServer({
     }
     if (pin === "none") {
       // /api/connect waits for its body and then reads the library again, so its answer is guarded too.
-      if (openLibraryId) trackLibrary(res, openLibraryId, admittedGeneration, user);
+      if (openLibraryId) trackLibrary(res, session, openLibraryId, admittedGeneration, user);
       return true;
     }
     const expectedLibraryId = String(req.headers["x-library-id"] || url.searchParams.get("library") || "").trim();
@@ -501,14 +541,14 @@ function createViewerServer({
       sendJson(res, 409, { error: LIBRARY_CHANGED_MESSAGE, code: "LIBRARY_CHANGED" });
       return false;
     }
-    trackLibrary(res, openLibraryId, admittedGeneration, user);
+    trackLibrary(res, session, openLibraryId, admittedGeneration, user);
     return true;
   };
-  const confirmLibraryBeforeWrite = async (res: ServerResponse) => {
+  const confirmLibraryBeforeWrite = async (res: ServerResponse, session: LibraryBackend = currentSession) => {
     const guard = libraryGuards.get(res);
     if (!guard) return;
-    currentSession.clearLibraryInfo?.();
-    await currentSession.libraryInfo();
+    session.clearLibraryInfo?.();
+    await session.libraryInfo();
     if (!guard.stillOpen()) throw new HttpError(409, LIBRARY_CHANGED_MESSAGE, "LIBRARY_CHANGED");
   };
 
@@ -526,8 +566,10 @@ function createViewerServer({
       }
       // Stays on this computer, so it names the open library even when it isn't shared with this visitor.
       // No extra Eagle lookup for this: left empty when the last known library may no longer be open.
+      // The backend this request is for, once known (see selectSession).
+      let requestSession = currentSession;
       const logLibraryId = () => {
-        const library = currentSession.lastLibraryInfo?.() as EagleLibraryInfo | null | undefined;
+        const library = requestSession.lastLibraryInfo?.() as EagleLibraryInfo | null | undefined;
         return library && library !== libraryInfoBeforeSwitch ? libraryId(library.path) : "";
       };
       const recordAuth: AuthContext["recordAuth"] = (event, username, status) => {
@@ -551,23 +593,34 @@ function createViewerServer({
       if (url.pathname.startsWith("/api/")) {
         countRequest();
         if (await handleAuthRoutes(req, url, res, auth)) return;
+        const selected = selectSession(req, url, authenticatedUser(req, auth));
         if (url.pathname === "/api/library-status") {
-          await handleLibraryStatus(req, res, currentSession, libraryAccess, authenticatedUser(req, auth));
+          await handleLibraryStatus(req, res, selected ?? currentSession, libraryAccess, authenticatedUser(req, auth));
           return;
         }
         if (!isAuthorized(req, auth)) {
           sendAuthRequired(res);
           return;
         }
-        if (!(await admitLibraryRequest(req, url, res, authenticatedUser(req, auth)))) return;
+        if (url.pathname === "/api/libraries" && multiLibrary) {
+          handleLibraries(req, res, sessions, sessionIds, libraryAccess, authenticatedUser(req, auth));
+          return;
+        }
+        if (!selected) {
+          sendJson(res, 409, { error: LIBRARY_CHANGED_MESSAGE, code: "LIBRARY_CHANGED" });
+          return;
+        }
+        requestSession = selected;
+        if (!(await admitLibraryRequest(req, url, res, authenticatedUser(req, auth), selected))) return;
+        const selectedSortIndexes = sortIndexesFor(selected);
         await handleApi(req, url, res, {
           auth,
-          confirmLibraryBeforeWrite,
-          getSession: () => currentSession,
+          confirmLibraryBeforeWrite: (response: ServerResponse) => confirmLibraryBeforeWrite(response, selected),
+          getSession: () => selected,
           libraryAccess,
           libraryId,
-          sortIndexes,
-          sortIndexCheck,
+          sortIndexes: selectedSortIndexes,
+          sortIndexCheck: selectedSortIndexes === sortIndexes ? sortIndexCheck : sortIndexCheckFor(selectedSortIndexes),
           sortIndexStallMs,
           sortIndexWaitMs,
           libraryGeneration: () => libraryGeneration,
@@ -582,8 +635,14 @@ function createViewerServer({
           sendAuthRequired(res);
           return;
         }
-        if (!(await admitLibraryRequest(req, url, res, authenticatedUser(req, auth)))) return;
-        await streamItemMedia(decodeURIComponent(fileMatch[1]), "file", req, res, currentSession, libraryGuards.get(res)?.stillOpen);
+        const selected = selectSession(req, url, authenticatedUser(req, auth));
+        if (!selected) {
+          sendJson(res, 409, { error: LIBRARY_CHANGED_MESSAGE, code: "LIBRARY_CHANGED" });
+          return;
+        }
+        requestSession = selected;
+        if (!(await admitLibraryRequest(req, url, res, authenticatedUser(req, auth), selected))) return;
+        await streamItemMedia(decodeURIComponent(fileMatch[1]), "file", req, res, selected, libraryGuards.get(res)?.stillOpen);
         return;
       }
       await serveStatic(url.pathname, res, publicDir);
@@ -642,6 +701,7 @@ function createViewerServer({
     async stop() {
       sortWarmRun += 1;
       sortIndexes?.release();
+      for (const session of sessions) if (session.sortIndexes && session.sortIndexes !== sortIndexes) session.sortIndexes.release();
       if (uploadSweepTimer) clearInterval(uploadSweepTimer);
       uploadSweepTimer = null;
       if (!serverInstance || state === "stopped") {
@@ -717,6 +777,32 @@ function createViewerServer({
 
     server,
   };
+}
+
+// The libraries this server serves that this user may open, for the viewer's library picker. Only
+// ids and names are sent: paths reveal the host's directory layout. `status` says whether the
+// library has been read yet ("ready"), is being read ("building"), or can't be read ("failed").
+function handleLibraries(req: IncomingMessage, res: ServerResponse, sessions: LibraryBackend[], sessionIds: Map<LibraryBackend, string>, libraryAccess: LibraryAccessPolicy, user: LibraryUser | null) {
+  if (req.method !== "GET") {
+    sendMethodNotAllowed(res, ["GET"]);
+    return;
+  }
+  const libraries = sessions
+    .filter((session) => {
+      const status = libraryAccess.status(session.libraryPath, user);
+      return status === "shared" || status === "unrestricted";
+    })
+    .map((session) => {
+      const state = session.state?.();
+      const status = !state || state.status === "ready" ? "ready" : state.status === "failed" ? "failed" : "building";
+      return {
+        id: sessionIds.get(session) || "",
+        name: String(session.name || ""),
+        status,
+        ...(state && status === "building" ? { loaded: state.loaded, total: state.total } : {}),
+      };
+    });
+  sendJson(res, 200, { libraries });
 }
 
 // Public so the viewer can show the offline page before sign-in. It never names the library,

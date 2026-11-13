@@ -634,6 +634,8 @@ function createFsBackend({
 
   return {
     kind: "fs" as const,
+    libraryPath: root,
+    name: libraryName,
     sortIndexes,
 
     /** Reads the whole library; rejects when it can't be read or its format isn't known. */
@@ -641,8 +643,14 @@ function createFsBackend({
       await current();
     },
 
+    /** Where reading the library stands, without waiting for it. */
+    state() {
+      return { status, loaded, total, error: status === "failed" && lastError ? lastError.message : "" };
+    },
+
+    // Answers at once, even while the library is read: which library a request is for never
+    // waits on reading it, and status checks stay quick.
     async libraryInfo() {
-      await current();
       return {
         path: root,
         name: libraryName,
@@ -651,13 +659,12 @@ function createFsBackend({
       };
     },
     lastLibraryInfo() {
-      return status === "ready" ? { path: root, name: libraryName } : null;
+      return { path: root, name: libraryName };
     },
     clearLibraryInfo() {},
 
-    // No Eagle behind this server; the viewer only needs to know the library is reachable.
+    // No Eagle behind this server; the viewer only needs to know the server is reachable.
     async appInfo() {
-      await current();
       return { standalone: true, platform: process.platform };
     },
 

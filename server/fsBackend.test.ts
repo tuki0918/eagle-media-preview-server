@@ -188,6 +188,11 @@ test("refuses a library saved by an Eagle version it doesn't know, unless told t
 test("has no writes, and reports the library by its folder name", async () => {
   const libraryPath = await createLibrary();
   const backend = createFsBackend({ libraryPath });
+  // Which library this is is known before it is read.
+  assert.deepEqual(await backend.libraryInfo(), { path: libraryPath, name: "Test", applicationVersion: undefined, modificationTime: undefined });
+  assert.equal(backend.state().status, "idle");
+  await backend.open();
+  assert.deepEqual(backend.state(), { status: "ready", loaded: 6, total: 6, error: "" });
   assert.equal(backend.kind, "fs");
   assert.equal(backend.write, undefined);
   assert.deepEqual(await backend.libraryInfo(), { path: libraryPath, name: "Test", applicationVersion: "4.0.0", modificationTime: 1 });
@@ -224,6 +229,76 @@ test("the viewer server browses, sorts, and serves files from it, and never serv
       assert.equal((await fetch(`${origin}/api/items/${id}/thumb`, { headers })).status, 404);
       assert.equal((await fetch(`${origin}/file/${id}`, { headers })).status, 404);
     }
+  } finally {
+    await viewer.stop();
+  }
+});
+
+test("the viewer server answers each request from the library its id names", async () => {
+  const { createViewerServer, sha256 } = require("../dist/.generated/plugin-service/viewerServer.cjs");
+  const first = await createLibrary();
+  const secondPath = join(await mkdtemp(join(tmpdir(), "fs-backend-")), "Second.library");
+  libraries.push(secondPath);
+  await mkdir(join(secondPath, "images"), { recursive: true });
+  await writeFile(join(secondPath, "metadata.json"), JSON.stringify({ folders: [], tagsGroups: [], applicationVersion: "4.0.0" }));
+  const only: TestItem = { id: "Z", name: "zebra", modificationTime: 1 };
+  await writeItem(secondPath, only);
+  await writeMtime(secondPath, [only]);
+  const broken = join(await mkdtemp(join(tmpdir(), "fs-backend-")), "Broken.library");
+  libraries.push(broken);
+  await mkdir(broken, { recursive: true });
+  await writeFile(join(broken, "metadata.json"), JSON.stringify({ applicationVersion: "9.0.0" }));
+
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    authUsers: [
+      { username: "alice", passwordHash: sha256("a"), role: "viewer" },
+      { username: "bob", passwordHash: sha256("b"), role: "viewer" },
+    ],
+    sharedLibraries: [first, secondPath, broken],
+    libraryUserRules: [{ path: secondPath, users: ["alice"] }],
+    backends: [createFsBackend({ libraryPath: first }), createFsBackend({ libraryPath: secondPath }), createFsBackend({ libraryPath: broken })],
+  });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const login = async (username: string, password: string) => {
+      const response = await fetch(`${origin}/api/auth/login`, { method: "POST", headers: { "Content-Type": "application/json", Origin: origin }, body: JSON.stringify({ username, password }) });
+      return String(response.headers.get("set-cookie")).split(";")[0];
+    };
+    const alice = await login("alice", "a");
+    const bob = await login("bob", "b");
+    const get = (path: string, cookie: string, libraryId = "") => fetch(`${origin}${path}`, { headers: { Cookie: cookie, ...(libraryId ? { "X-Library-Id": libraryId } : {}) } });
+
+    // Each user sees only the libraries open to them; the one that can't be read says so.
+    const aliceList = (await (await get("/api/libraries", alice)).json()).libraries;
+    assert.deepEqual(aliceList.map((library: { name: string }) => library.name), ["Test", "Second", "Broken"]);
+    const bobList = (await (await get("/api/libraries", bob)).json()).libraries;
+    assert.deepEqual(bobList.map((library: { name: string }) => library.name), ["Test", "Broken"]);
+    const [testId, secondId, brokenId] = aliceList.map((library: { id: string }) => library.id);
+
+    // Without an id, health and connect answer for the first library.
+    const health = await (await get("/api/health", alice)).json();
+    assert.equal(health.library.id, testId);
+
+    const items = await get("/api/items", alice, secondId);
+    assert.equal(items.headers.get("x-library-id"), secondId);
+    assert.deepEqual(names(await items.json()), ["zebra"]);
+    assert.deepEqual(names(await (await get("/api/items", alice, testId)).json()), ["banana", "cat photo", "apple"]);
+    assert.equal(await (await get(`/api/items/Z/file?library=${secondId}`, alice)).text(), "file");
+    assert.equal((await get("/api/items/Z/file", alice, testId)).status, 404);
+
+    // Bob may not open the second library, even with its id.
+    assert.equal((await get("/api/items", bob, secondId)).status, 403);
+    // An id this server doesn't know: refused on library routes, ignored by health.
+    assert.equal((await get("/api/items", alice, "stale-id")).status, 409);
+    assert.equal((await (await get("/api/health", alice, "stale-id")).json()).library.id, testId);
+    // A library that can't be read fails on its own; the others keep working.
+    assert.equal((await get("/api/items", alice, brokenId)).status, 500);
+    const listed = (await (await get("/api/libraries", alice)).json()).libraries;
+    assert.deepEqual(listed.map((library: { status: string }) => library.status), ["ready", "ready", "failed"]);
+    assert.equal((await get("/api/items", alice, testId)).status, 200);
   } finally {
     await viewer.stop();
   }
