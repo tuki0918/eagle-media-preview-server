@@ -217,8 +217,11 @@ function createFsBackend({
   };
   // Each item's time in mtime.json when it was last read; a different time means read it again.
   const readAt = new Map<string, number>();
-  // Items whose folder is gone. Eagle leaves their ids in mtime.json, so they are skipped there.
-  const removed = new Set<string>();
+  // Items left out (their folder is gone, or it or their metadata.json leads outside the library),
+  // with their time in mtime.json when they were: Eagle leaves removed ids in mtime.json, so each
+  // is skipped there until its time changes, and then checked again (a folder synced back, or a
+  // link replaced by the real file, comes back without a restart).
+  const removed = new Map<string, number>();
   // Items whose metadata.json couldn't be read at the last try (missing or mid-write). Each check
   // tries them again, whether or not mtime.json changed, and until one is read it is hidden and
   // its files aren't served: an edit (moving it to the trash, say) may be what was being written.
@@ -384,13 +387,14 @@ function createFsBackend({
       const raw = await readLibraryJson("images", `${id}.info`, "metadata.json");
       if (!isRecord(raw) || raw.id !== id) return holdItem(id);
       unconfirmed.delete(id);
+      outside.delete(id);
       items.set(id, { indexed: indexedItem(id, raw), raw });
       removed.delete(id);
       changedNow();
       return "set";
     } catch (error) {
-      // An item whose folder or metadata leads outside the library is left out and not read again
-      // (until the library is read anew).
+      // An item whose folder or metadata leads outside the library is left out until its time in
+      // mtime.json changes (see `removed`).
       if (error instanceof OutsideLibraryError) {
         outside.add(id);
         return dropItem(id);
@@ -399,6 +403,7 @@ function createFsBackend({
         try {
           if ((await stat(join(imagesDir, `${id}.info`))).isDirectory()) return holdItem(id);
         } catch {
+          outside.delete(id);
           return dropItem(id);
         }
       }
@@ -410,12 +415,15 @@ function createFsBackend({
     items.delete(id);
     readAt.delete(id);
     unconfirmed.delete(id);
-    removed.add(id);
+    removed.set(id, NaN);
     changedNow();
     return "removed";
   }
 
   function holdItem(id: string): "unreadable" {
+    // Inside the library after all (mid-write, say): counted and tried again like any other.
+    outside.delete(id);
+    removed.delete(id);
     unconfirmed.add(id);
     const stored = items.get(id);
     if (stored) stored.indexed = indexedItem(id, stored.raw);
@@ -438,6 +446,8 @@ function createFsBackend({
         if (disposed) return;
         const time = times ? Number(times[id]) : NaN;
         if (result === "set" && Number.isFinite(time)) readAt.set(id, time);
+        // Remembered so it is skipped until its time changes; without a time, checked at every change.
+        if (result === "removed") removed.set(id, Number.isFinite(time) ? time : NaN);
         onRead?.();
       }
     };
@@ -534,7 +544,8 @@ function createFsBackend({
       const times = await readMtimeFile();
       if (times) {
         const stale = Object.keys(times).filter((id) => id !== "all" && ITEM_ID_PATTERN.test(id) && Number(times[id]) !== readAt.get(id));
-        const wanted = stale.filter((id) => !removed.has(id));
+        // Left-out items are checked again once their time has changed since they were left out.
+        const wanted = stale.filter((id) => !removed.has(id) || removed.get(id) !== Number(times[id]));
         if (wanted.length) {
           await readItems(wanted, times);
           changed = true;

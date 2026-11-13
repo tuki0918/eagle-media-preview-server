@@ -411,9 +411,31 @@ test("never reads an item's metadata from outside the library", async () => {
   assert.deepEqual(await backend.itemById("C"), []);
   assert.deepEqual(names(await backend.listItems()), ["banana"]);
   assert.deepEqual((await backend.searchItems({ query: "outside" })).items, []);
-  // Left out for good: a later change to mtime.json doesn't read them, and the library isn't listed again.
-  await writeMtime(libraryPath, ITEMS, { A: 101, C: 201 });
+  // A change to mtime.json for other items leaves them out without reading them again.
+  await writeMtime(libraryPath, ITEMS, { B: 301 });
   assert.deepEqual(names(await backend.listItems()), ["banana"]);
+
+  // The links are replaced by the real files, and Eagle records the change: both come back.
+  await rm(metadata);
+  await writeFile(metadata, JSON.stringify(ITEMS[0]));
+  await rm(join(libraryPath, "images", "C.info"));
+  await writeItem(libraryPath, ITEMS[2]);
+  await writeMtime(libraryPath, ITEMS, { A: 101, B: 301, C: 201 });
+  assert.deepEqual(names(await backend.listItems()), ["banana", "cat photo", "apple"]);
+  assert.deepEqual((await backend.itemById("A"))[0].annotation, "crisp");
+});
+
+test("a removed item whose folder comes back is read again once its time changes", async () => {
+  const libraryPath = await createLibrary();
+  const backend = createFsBackend({ libraryPath, refreshIntervalMs: 0, refreshWaitMs: 5000 });
+  await rm(join(libraryPath, "images", "B.info"), { recursive: true });
+  // Eagle keeps B's id in mtime.json; its time changes as it goes.
+  await writeMtime(libraryPath, ITEMS, { B: 310 });
+  assert.deepEqual(names(await backend.listItems()), ["cat photo", "apple"]);
+  // Synced back from another computer.
+  await writeItem(libraryPath, ITEMS[1]);
+  await writeMtime(libraryPath, ITEMS, { B: 320 });
+  assert.deepEqual(names(await backend.listItems()), ["banana", "cat photo", "apple"]);
 });
 
 test.skipIf(process.platform === "win32")("items in a folder just locked leave cached lists at once", async () => {
