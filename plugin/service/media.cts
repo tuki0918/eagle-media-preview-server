@@ -40,13 +40,9 @@ interface EagleItem {
   title?: unknown;
 }
 
-interface EagleMediaClient {
+interface EagleMediaSession {
   itemById(id: string): Promise<EagleItem | EagleItem[]>;
   legacyThumbnailPath(id: string): Promise<unknown>;
-}
-
-interface EagleMediaSession {
-  client: EagleMediaClient;
   libraryInfo(): Promise<{ path?: string } | null>;
 }
 
@@ -223,7 +219,7 @@ function parseInternetShortcutUrl(text: string) {
 async function resolveItemMediaPath(id: string, kind: MediaKind, session: EagleMediaSession) {
   let itemData: EagleItem = { id };
   try {
-    itemData = mediaItemById(await session.client.itemById(id), id);
+    itemData = mediaItemById(await session.itemById(id), id);
   } catch {
     // The library folder can still resolve the original by its stable item id.
   }
@@ -237,7 +233,7 @@ async function resolveItemMediaPath(id: string, kind: MediaKind, session: EagleM
     let unresolvedPath = thumbnailPath;
     if (!filePath) {
       try {
-        const legacyPath = pathFromFileValue(await session.client.legacyThumbnailPath(id));
+        const legacyPath = pathFromFileValue(await session.legacyThumbnailPath(id));
         unresolvedPath ||= legacyPath;
         filePath = await existingFilePath(legacyPath);
       } catch {
