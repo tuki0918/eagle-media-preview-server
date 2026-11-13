@@ -877,7 +877,11 @@ module.exports = {
   buildAccessUrl,
   createServerManager,
   createSettingsStore,
+  defaultSettingsPath,
   getLanAddresses,
   hashPassword,
+  libraryUserRules,
   normalizeSettings,
+  sharedLibraryPaths,
+  withLoadableCustomDomain,
 };
