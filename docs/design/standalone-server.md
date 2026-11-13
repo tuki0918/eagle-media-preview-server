@@ -1,6 +1,6 @@
 # Standalone server: browse Eagle libraries without Eagle
 
-Status: **Proposal** (2026-11-13). P0 implemented (2026-11-13); the rest is not.
+Status: **Proposal** (2026-11-13). P0 implemented, P1 implemented except the recorded parity tests (2026-11-13); P2 onward not started. What P1 does differently from this proposal is in [P1 as built](#p1-as-built).
 
 ## 1. Background
 
@@ -59,7 +59,7 @@ interface LibraryBackend {
   readonly writable: boolean;
 
   libraryInfo(): Promise<LibraryInfo>;          // name, path, applicationVersion
-  appInfo(): Promise<AppInfo | null>;           // null in standalone mode
+  appInfo(): Promise<AppInfo>;                  // { standalone: true, platform } in standalone mode
 
   folders(): Promise<Folder[]>;
   smartFolders(): Promise<SmartFolder[]>;
@@ -88,7 +88,7 @@ interface LibraryBackend {
 
 - The method set is exactly what `viewerServer.cts` calls today, so `EagleApiBackend` wraps `createEagleClient` and `createConnectionContext` with no change in behavior.
 - Write routes check `backend.write`. Without it they answer `403` with a `read_only` code, before reading the request body (P0). `/api/auth/status`, `/api/connect`, and `/api/health` will also report `permissions` without the write roles, so the viewer hides the edit and upload buttons as it does for Viewer users today (P1).
-- `appInfo()` returning `null` tells the viewer that no Eagle is behind the server. Nothing else in the viewer depends on Eagle being there.
+- `appInfo()` answers `{ standalone: true, platform }` in standalone mode. It can't be `null`: the viewer takes a missing app as "Eagle offline". Nothing else in the viewer depends on Eagle being there.
 
 ## 5. FsBackend: reading the library folder
 
@@ -213,22 +213,51 @@ Everything the plugin enforces applies unchanged: authentication and roles, libr
 - Writes are impossible, not just hidden: write routes aren't registered and `FsBackend` has no write methods.
 - Password-protected folders are hidden (5.5).
 - Only configured library paths are served; a library id that doesn't match one answers `404`, and file paths are confined to `<library>/images/<id>.info/`.
-- With no auth users configured, the server binds to `127.0.0.1` only, whatever `--host` says, unless `--allow-anonymous-lan` is given.
+- With no auth users configured, the server refuses to start on a non-loopback `--host` unless `--allow-anonymous-lan` is given (it listens on `127.0.0.1` by default).
 
 ## 10. Plan
 
 | Phase | Work | Done when |
 | --- | --- | --- |
 | P0 (done) | Extract `LibraryBackend` (`libraryBackend.cts`); `createEagleApiBackend` wraps today's client. No behavior change. | All existing tests pass; write routes go through `backend.write` and answer `403 read_only` without it. |
-| P1 | `FsBackend`, read only, one library: item store from `metadata.json`, queries in 5.3, files, password-protected folders, version gate. CLI entry. | Parity tests (recorded) pass for everything but smart folders and full-text search; `npx eagle-media-server --library <path>` serves the viewer without Eagle. |
+| P1 (done but parity tests) | `FsBackend`, read only, one library: item store from `metadata.json`, queries in 5.3, files, password-protected folders, version gate. CLI entry. | Parity tests (recorded) pass for everything but smart folders and full-text search; `npx eagle-media-server --library <path>` serves the viewer without Eagle. |
 | P2 | Multiple libraries: config, routing by library id, `/api/libraries`, the viewer's library picker, per-library build and availability. | Two viewers browse two libraries at once; library protection applies per library. |
 | P3 | Snapshots on disk; `mtime.json` polling tuned for network shares. | 300,000 items available within 2 s of a restart. |
 | P4 | Smart folder evaluator (first release set). | Parity tests pass for supported rules; unsupported ones are disabled, not wrong. |
 | P5 | Packaging: npm package, Docker image, service recipes; spec and README sections. | Runs on a Linux NAS in Docker with read-only mounts. |
 
+## P1 as built
+
+Code: `plugin/service/fsBackend.cts` (the backend), `plugin/service/standalone.cts` and `bin/eagle-media-server.cjs` (the command). Tests: `server/fsBackend.test.ts`, `server/standalone.test.ts`.
+
+```sh
+npm run build
+node bin/eagle-media-server.cjs --library ~/Pictures/Photos.library
+node bin/eagle-media-server.cjs --library /Volumes/nas/Photos.library --config ~/media-server.json
+```
+
+Checked with the ICON sample library (206 item folders, 201 shown): read in 0.1 s; the viewer browses folders, tags, sorting, previews, and files with Eagle closed, and shows ratings as read only.
+
+Differences from the proposal above:
+
+- **Sorting needs no index of Eagle's.** The backend keeps every item in memory, so it hands the server its own sort index (`backend.sortIndexes`, shaped like `libraryIndex.cts`'s). Advanced Sort and the type menu work in standalone mode without the setting, and nothing is read twice.
+- **Files are refused, not just hidden.** The media code asks `backend.isItemServable(id)` first; an item in the trash or in a locked folder answers `404` on `/api/items/<id>/file|thumb` and `/file/<id>`. (Through Eagle, a trashed item's file is still served from its folder, as before.)
+- **Locked folders.** An item in any locked folder (or one inside it) is hidden, even if it is also in an unlocked one. Password fields are stripped from every folder sent.
+- **Smart folders are not listed at all** until the evaluator (5.4) exists, rather than listed and disabled.
+- **Search** follows Eagle's `item/query` operators (all words, `-word`, `"phrase"`, `a OR b`) over name, notes, extension, URL, tags, folder names and descriptions, and comments. It doesn't search OCR text, camera, or font names.
+- **Folder `imageCount`** counts items directly in the folder. Whether Eagle's count includes sub-folders is still to be checked against Eagle (see 11).
+- **No state directory yet.** Sessions last until the server stops unless the config has a `sessionSecret`; there is no access log and no snapshot (P3).
+- **`--port 0`** picks any free port (for tests).
+
+Not done in P1:
+
+- **Recorded parity tests (7.2).** Recording needs Eagle running with the fixture library open; the shapes were taken from Eagle's own API code (`app/js/plugin/index.js`, `api-server-v2.js` in Eagle 4's `app.asar`) and the unit tests cover them, but no answer of Eagle's has been compared yet.
+- The viewer's offline hint still says to start the server in Eagle.
+
 ## 11. Open questions
 
 - **Item order inside a folder.** Eagle can order a folder by hand (`orderBy`/`sortIncrease` and per-item order in folder data). Check where that's stored and whether the API's folder order already reflects it; until then folders use the default order.
+- **Folder counts.** Whether Eagle's folder `imageCount` includes items in sub-folders; check against a live Eagle when recording parity tests.
 - **Search parity.** How far `item/query` goes beyond name, tags, annotation, and URL (OCR text? palette names?), and whether the gap matters to users.
 - **Eagle 5.** Whether it keeps the `images/<id>.info` layout. The version gate (7.1) makes this safe either way; the work is in updating the backend when it ships.
 - **Plugin using FsBackend.** Once parity holds, the plugin could read from disk too (faster, and no paused Eagle window on large libraries) while keeping writes on the API. Not part of this design.
