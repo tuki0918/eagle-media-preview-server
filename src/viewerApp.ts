@@ -44,6 +44,7 @@ import { setLibraryFooterName } from "./viewer/libraryFooterState";
 import { getEagleStatus, setEagleStatus } from "./viewer/eagleStatusState";
 import { setLibraryName } from "./viewer/libraryNameState";
 import { getPickedLibraryId, refreshLibraryList, setPickedLibraryId } from "./viewer/libraryListState";
+import { setServerReadOnly } from "./viewer/readOnlyState";
 import { showOfflinePage } from "./viewer/offlinePage";
 import {
   currentFetchLimit as getCurrentFetchLimit,
@@ -549,6 +550,7 @@ function showViewer(data: ConnectResponse) {
   setLibraryName(data.library?.name || "");
   currentLibraryId = data.library?.id || "";
   setConnectedLibraryId(currentLibraryId);
+  setServerReadOnly(data.readOnly === true);
   uploadMaxBytes = data.uploadMaxBytes;
   sortAvailable = data.features?.sort === true;
   // A sort from a bookmarked URL means nothing on a server without the experimental sort.
@@ -594,6 +596,7 @@ function clearViewerSessionState() {
   setLibraryName("");
   currentLibraryId = "";
   setConnectedLibraryId("");
+  setServerReadOnly(false);
   stopEagleStatusPolling();
   renderTagChips();
   renderSearchControlButtons();
@@ -817,6 +820,7 @@ async function performEagleStatusCheck() {
       return;
     }
     setEagleStatus(data.app ? "online" : "offline");
+    setServerReadOnly(data.readOnly === true);
     if (data.permissions) applyHealthPermissions(data);
     applySortIndex(data.sortIndex);
   } catch (error) {

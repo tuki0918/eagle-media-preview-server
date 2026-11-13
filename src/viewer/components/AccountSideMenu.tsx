@@ -9,6 +9,7 @@ import {
   FunnelIcon,
   InboxIcon,
   LayoutGridIcon,
+  LockIcon,
   LogOutIcon,
   MonitorIcon,
   MoonIcon,
@@ -47,6 +48,7 @@ import { displayFolderCount } from "../format";
 import { DEFAULT_DISPLAY_PREFERENCES, resetDisplaySettings, subscribeDisplaySettingsReset, type DisplayPreferences } from "../displayPreferences";
 import { getLibraryFooterName, subscribeLibraryFooterName } from "../libraryFooterState";
 import { getLibraryListState, refreshLibraryList, subscribeLibraryListState, type LibraryEntry } from "../libraryListState";
+import { getServerReadOnly, subscribeServerReadOnly } from "../readOnlyState";
 import { getLoginConnectState, subscribeLoginConnectState } from "../loginConnectState";
 import { getSearchControlsState, subscribeSearchControlsState } from "../searchControlsState";
 import { PAGE_SIZE_OPTIONS } from "../shellConfig";
@@ -78,6 +80,7 @@ export function AccountSideMenu() {
   const loginState = useSyncExternalStore(subscribeLoginConnectState, getLoginConnectState, getLoginConnectState);
   const eagleStatus = useSyncExternalStore(subscribeEagleStatus, getEagleStatus, getEagleStatus);
   const searchState = useSyncExternalStore(subscribeSearchControlsState, getSearchControlsState, getSearchControlsState);
+  const readOnly = useSyncExternalStore(subscribeServerReadOnly, getServerReadOnly, getServerReadOnly);
   const username = loginState.user?.username?.trim();
   const roleLabel = authRoleLabel(loginState.user?.role, searchState.canUpload);
   const roleDescription = authRoleDescription(loginState.user?.role, searchState.canUpload);
@@ -111,7 +114,8 @@ export function AccountSideMenu() {
           clearFolderFilter();
         }}
       >
-        <SidebarHeader className="flex-row items-center gap-1 p-3 pb-1 pt-[calc(14px+env(safe-area-inset-top))]">
+        {/* relative: on phones the library picker's menu spans the header, not just its button. */}
+        <SidebarHeader className="relative flex-row items-center gap-1 p-3 pb-1 pt-[calc(14px+env(safe-area-inset-top))]">
           <SidebarMenu className="flex-1">
             <SidebarMenuItem>
               <SidebarMenuButton
@@ -140,6 +144,10 @@ export function AccountSideMenu() {
                   </span>
                   <span className="grid min-w-0 group-data-[collapsible=icon]:hidden">
                     <span className="truncate text-sm font-semibold leading-tight text-sidebar-foreground">{libraryName}</span>
+                    {readOnly ? (
+                      // Text only: the sidebar header is narrow on desktop, and the account menu explains it.
+                      <span id="readOnlyBadge" className="truncate text-xs leading-tight text-muted-foreground">Read only</span>
+                    ) : null}
                   </span>
                 </button>
               </SidebarMenuButton>
@@ -149,6 +157,7 @@ export function AccountSideMenu() {
           {signedIn ? (
             <AccountDropdown
               onOpenPreferences={() => setPreferencesOpen(true)}
+              readOnly={readOnly}
               disabled={loginState.disabled}
               roleDescription={roleDescription}
               roleLabel={roleLabel}
@@ -159,6 +168,7 @@ export function AccountSideMenu() {
           ) : (
             <AccountDropdown
               onOpenPreferences={() => setPreferencesOpen(true)}
+              readOnly={readOnly}
               disabled={loginState.disabled}
               roleDescription=""
               roleLabel={GUEST_ROLE_LABEL}
@@ -1044,6 +1054,7 @@ function folderNavIcon(icon: FolderNavIconName) {
 
 function AccountDropdown({
   onOpenPreferences,
+  readOnly = false,
   disabled,
   roleDescription,
   roleLabel,
@@ -1052,6 +1063,8 @@ function AccountDropdown({
   username,
 }: {
   onOpenPreferences: () => void;
+  /** The server can't change the library, so the role's editing rights don't apply here. */
+  readOnly?: boolean;
   disabled: boolean;
   roleDescription: string;
   roleLabel: string;
@@ -1131,6 +1144,12 @@ function AccountDropdown({
                 <RoleChip description={roleDescription} label={displayRole} />
               </div>
             </div>
+            {readOnly ? (
+              <p id="readOnlyNotice" className="m-0 mb-1.5 flex gap-2 rounded-lg bg-muted px-2.5 py-2 text-xs leading-snug text-muted-foreground [&_svg]:mt-px [&_svg]:size-3.5 [&_svg]:shrink-0">
+                <LockIcon aria-hidden="true" />
+                <span>This server is read only: you can browse and preview, but ratings, tags, trash, and uploads are turned off for every account.</span>
+              </p>
+            ) : null}
             <div className="-mx-1.5 my-1 h-px bg-border" />
             <button
               type="button"
@@ -1205,7 +1224,8 @@ function LibraryPicker() {
 
   return (
     <SidebarMenu className="w-auto shrink-0">
-      <SidebarMenuItem ref={containerRef}>
+      {/* static on phones: the menu then spans the header (see SidebarHeader) instead of hanging off the button. */}
+      <SidebarMenuItem ref={containerRef} className={isMobile ? "static" : undefined}>
         <button
           id="libraryPickerButton"
           type="button"
@@ -1229,7 +1249,7 @@ function LibraryPicker() {
             aria-labelledby="libraryPickerButton"
             className={
               isMobile
-                ? "absolute right-0 top-full z-50 mt-2 w-64 rounded-2xl border border-border bg-popover p-1.5 text-popover-foreground shadow-[0_18px_48px_-16px_rgba(15,23,42,0.35)]"
+                ? "absolute inset-x-3 top-full z-50 mt-1 rounded-2xl border border-border bg-popover p-1.5 text-popover-foreground shadow-[0_18px_48px_-16px_rgba(15,23,42,0.35)]"
                 : "absolute left-full top-0 z-50 ml-3 w-72 rounded-2xl border border-border bg-popover p-1.5 text-popover-foreground shadow-[0_18px_48px_-16px_rgba(15,23,42,0.35)]"
             }
             onClick={(event) => event.stopPropagation()}

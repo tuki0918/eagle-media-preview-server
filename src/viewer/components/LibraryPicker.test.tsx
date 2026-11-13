@@ -6,6 +6,7 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AccountSideMenu } from "./AccountSideMenu";
 import { getLibraryListState, setLibraryListState, type LibraryListState } from "../libraryListState";
+import { setServerReadOnly } from "../readOnlyState";
 import * as actions from "../shellActions";
 
 async function withSideMenu(list: LibraryListState, run: (ui: { container: Element; fetchCalls: string[] }) => Promise<void>) {
@@ -67,5 +68,20 @@ test("lists the server's libraries and opens the one picked", async () => {
     await act(async () => { container.querySelectorAll<HTMLButtonElement>('#libraryPickerMenu [role="menuitemradio"]')[1].click(); });
     expect(change).toHaveBeenCalledWith("b");
     expect(container.querySelector("#libraryPickerMenu")).toBeNull();
+  });
+});
+
+test("a read-only server says so under the library name and in the account menu", async () => {
+  await withSideMenu({ currentId: "a", libraries: [{ id: "a", name: "Photos", status: "ready" }] }, async ({ container }) => {
+    expect(container.querySelector("#readOnlyBadge")).toBeNull();
+    await act(async () => { setServerReadOnly(true); });
+    try {
+      expect(container.querySelector("#readOnlyBadge")?.textContent).toBe("Read only");
+      await act(async () => { container.querySelector<HTMLButtonElement>("#authAccountLabel")!.click(); });
+      expect(container.querySelector("#readOnlyNotice")?.textContent).toContain("ratings, tags, trash, and uploads are turned off for every account");
+    } finally {
+      await act(async () => { setServerReadOnly(false); });
+    }
+    expect(container.querySelector("#readOnlyBadge")).toBeNull();
   });
 });

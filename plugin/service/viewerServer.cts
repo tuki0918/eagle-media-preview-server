@@ -1067,6 +1067,7 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       library: libraryStatus === "shared" ? publicLibraryInfo(libraryInfo, libraryId) : null,
       libraryStatus,
       error: app.status === "rejected" ? app.reason.message : null,
+      ...(session.write ? {} : { readOnly: true }),
       // Changing the upload permission keeps sessions valid, so open viewers learn about it here.
       permissions: permissionsForUser(authenticatedUser(req, auth), { authenticated: true, readOnly: auth.readOnly }),
       uploadMaxBytes: hasUploadAccess(req, auth) ? uploadMaxBytes : undefined,
@@ -1666,6 +1667,8 @@ async function handleConnect(req: IncomingMessage, res: ServerResponse, session:
     sendJson(res, 200, {
       app,
       library: publicLibraryInfo(library, libraryId),
+      // Nothing can be changed through this server, whatever the user's role (the standalone server).
+      ...(session.write ? {} : { readOnly: true }),
       uploadMaxBytes,
       ...(checkSortIndex ? { features: { sort: true }, ...sortIndexField(library?.path ? checkSortIndex(String(library.path)) : null) } : {}),
     });

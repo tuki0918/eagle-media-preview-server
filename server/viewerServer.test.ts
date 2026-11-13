@@ -500,6 +500,9 @@ test("createViewerServer allows metadata writes when editing is enabled for an a
         writeRating: true,
       },
     });
+    // Through Eagle the library can be changed, so nothing says otherwise.
+    const health = await (await fetch(`${origin}/api/health`, { headers: { Cookie: cookie } })).json();
+    assert.equal("readOnly" in health, false);
 
     const response = await fetch(`${origin}/api/items/ITEM123/metadata`, {
       method: "POST",
@@ -5502,6 +5505,10 @@ test("a read-only backend grants no write permissions, refuses every write befor
     const health = await (await fetch(`${origin}/api/health`, { headers: { Cookie: cookie } })).json();
     assert.deepEqual(health.permissions, readOnlyPermissions);
     assert.equal(health.uploadMaxBytes, undefined);
+    // Said outright, so the viewer can tell an admin why editing is gone.
+    assert.equal(health.readOnly, true);
+    const connect = await (await fetch(`${origin}/api/connect`, { method: "POST", headers: { Cookie: cookie, Origin: origin, "Content-Type": "application/json" }, body: "{}" })).json();
+    assert.equal(connect.readOnly, true);
     const folders = await fetch(`${origin}/api/folders`, { headers: { Cookie: cookie } });
     assert.equal(folders.status, 200);
     assert.deepEqual(await folders.json(), [{ id: "F1", name: "Folder" }]);

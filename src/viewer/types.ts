@@ -71,6 +71,8 @@ export interface ConnectResponse {
   };
   /** Sent only to users who may upload. */
   uploadMaxBytes?: number;
+  /** The server can't change the library (the standalone server): everyone may only browse. */
+  readOnly?: boolean;
   /** Optional server features; `sort` is the experimental sort. */
   features?: { sort?: boolean };
   /** With the experimental sort, how far the server's background index of this library has got. */
