@@ -558,3 +558,19 @@ test("lists the images folder again at most every rescanIntervalMs", async () =>
   await writeFile(join(libraryPath, "mtime.json"), JSON.stringify({ ...times, B: 301, all: ITEMS.length + 2 }));
   assert.deepEqual(names(await backend.listItems()), ["first", "banana", "cat photo", "apple"]);
 });
+
+test("an item added while another is deleted, announced before its folder arrives, still shows up", async () => {
+  const libraryPath = await createLibrary();
+  const backend = createFsBackend({ libraryPath, refreshIntervalMs: 0, refreshWaitMs: 5000, rescanIntervalMs: 0, recheckIntervalMs: 0 });
+  assert.deepEqual(names(await backend.listItems()), ["banana", "cat photo", "apple"]);
+  const times = Object.fromEntries(ITEMS.map((item) => [item.id, item.modificationTime]));
+
+  // A sync deletes apple and adds N. mtime.json arrives first; Eagle's count stays the same.
+  await writeFile(join(libraryPath, "mtime.json"), JSON.stringify({ ...times, A: 101, N: 700, all: ITEMS.length }));
+  assert.deepEqual(names(await backend.listItems()), ["banana", "cat photo", "apple"]);
+
+  // Then apple's folder goes and N's arrives; mtime.json doesn't change again.
+  await rm(join(libraryPath, "images", "A.info"), { recursive: true });
+  await writeItem(libraryPath, { id: "N", name: "late", modificationTime: 700 });
+  assert.deepEqual(names(await backend.listItems()), ["late", "banana", "cat photo"]);
+});

@@ -88,8 +88,9 @@ interface FsBackendOptions {
   /** How long a query waits for an update in progress before answering from what is held. */
   refreshWaitMs?: number;
   /**
-   * How often items left out for leading outside the library are checked again, besides when their
-   * time in mtime.json changes: mtime.json can arrive (from a sync, say) before the real files do.
+   * How often items left out for leading outside the library, and items mtime.json announced whose
+   * folder wasn't there yet, are checked again, besides when their time in mtime.json changes:
+   * mtime.json can arrive (from a sync, say) before the real files do.
    */
   recheckIntervalMs?: number;
   /**
@@ -107,6 +108,9 @@ const DEFAULT_REFRESH_INTERVAL_MS = 2000;
 const DEFAULT_REFRESH_WAIT_MS = 1000;
 const DEFAULT_RECHECK_INTERVAL_MS = 60 * 1000;
 const DEFAULT_RESCAN_INTERVAL_MS = 60 * 1000;
+// How long an item mtime.json announced, but whose folder isn't there, is looked for again. Eagle
+// keeps the ids of deleted items in mtime.json, so one that never arrives is given up on.
+const AWAIT_FOLDER_MS = 60 * 60 * 1000;
 const FAILED_RETRY_MS = 30 * 1000;
 const ITEM_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const EMPTY_LIST: readonly string[] = Object.freeze([]);
@@ -250,6 +254,11 @@ function createFsBackend({
   // an item folder still syncing can arrive later without mtime.json changing again.
   let rescanDue = false;
   let lastRescan = 0;
+  // Items mtime.json announced whose folder wasn't there (a sync delivering mtime.json first), with
+  // when that was seen. Each is looked for again every recheckIntervalMs for up to AWAIT_FOLDER_MS:
+  // its folder may arrive without mtime.json changing again, and Eagle's item count may not tell
+  // (another item deleted in the same sync).
+  const awaiting = new Map<string, number>();
   // mtime.json as last read, for the times of items read again outside a change to it.
   let lastTimes: Record<string, unknown> | null = null;
   let library: Record<string, unknown> = {};
@@ -492,6 +501,7 @@ function createFsBackend({
       removed.clear();
       unconfirmed.clear();
       outside.clear();
+      awaiting.clear();
       rescanDue = false;
       loaded = 0;
       total = ids.length;
@@ -558,12 +568,17 @@ function createFsBackend({
       await readItems([...unconfirmed], lastTimes);
       changed = true;
     }
-    // Items left out for leading outside the library, checked again now and then: the real files
-    // may arrive after mtime.json announced the change, and then nothing else would read them.
-    // Their real paths are checked again, so one still outside is simply left out again.
-    if (outside.size && Date.now() - lastOutsideCheck >= recheckIntervalMs) {
+    // Items left out for leading outside the library, and items announced whose folder hadn't
+    // arrived, checked again now and then: the real files may arrive after mtime.json announced the
+    // change, and then nothing else would read them. Real paths are checked again, so one still
+    // outside (or still missing) is simply left out again.
+    if ((outside.size || awaiting.size) && Date.now() - lastOutsideCheck >= recheckIntervalMs) {
       lastOutsideCheck = Date.now();
-      await readItems([...outside], lastTimes);
+      for (const [id, since] of awaiting) if (Date.now() - since > AWAIT_FOLDER_MS) awaiting.delete(id);
+      await readItems([...new Set([...outside, ...awaiting.keys()])], lastTimes);
+      for (const id of [...awaiting.keys()]) if (items.has(id) || outside.has(id)) awaiting.delete(id);
+      // An item that arrived may make the counts disagree now (another one deleted meanwhile).
+      if (countsDisagree(lastTimes)) rescanDue = true;
       changed = true;
     }
     const tagsSig = await signature(tagsPath);
@@ -581,6 +596,11 @@ function createFsBackend({
         if (wanted.length) {
           await readItems(wanted, times);
           changed = true;
+          // Announced, but no folder yet: looked for again, and the folder listed once more, since
+          // a deletion in the same sync can leave Eagle's count matching what is held.
+          const missing = wanted.filter((id) => removed.has(id) && !outside.has(id));
+          for (const id of missing) if (!awaiting.has(id)) awaiting.set(id, Date.now());
+          if (missing.length) rescanDue = true;
         }
         if (countsDisagree(times)) rescanDue = true;
       }
@@ -599,6 +619,7 @@ function createFsBackend({
       }
       const added = ids.filter((id) => !items.has(id) && !outside.has(id));
       if (added.length) await readItems(added, lastTimes);
+      for (const id of [...awaiting.keys()]) if (items.has(id)) awaiting.delete(id);
       changed = true;
       rescanDue = countsDisagree(lastTimes);
     }
