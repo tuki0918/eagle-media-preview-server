@@ -54,7 +54,6 @@ test("listens on loopback by default, and refuses a network address with nobody 
   await assert.rejects(resolveServerSettings(parseArgs(["--library", "/a.library", "--host", "0.0.0.0"])), /without signing in/);
   assert.equal((await resolveServerSettings(parseArgs(["--library", "/a.library", "--host", "0.0.0.0", "--allow-anonymous-lan"]))).server.host, "0.0.0.0");
   await assert.rejects(resolveServerSettings(parseArgs([])), /--library is required/);
-  await assert.rejects(resolveServerSettings(parseArgs(["--library", "/a", "--library", "/b"])), /Only one --library/);
 });
 
 test("takes users from a config file in the plugin's settings format", async () => {
@@ -79,7 +78,9 @@ test("serves the library read only, without Eagle", async () => {
   const running = await runStandalone(["--library", libraryPath, "--port", "0"], { log: (line: string) => lines.push(line) });
   try {
     const port = running.viewer.status().port;
-    assert.match(lines.at(-1)!, new RegExp(`Serving "Photos" \\(read only\\) at http://127\\.0\\.0\\.1:${port}`));
+    assert.match(lines[0], new RegExp(`Serving "Photos" \\(read only\\) at http://127\\.0\\.0\\.1:${port}`));
+    await running.ready;
+    assert.match(lines[1], /Read "Photos": 1 items in/);
     const origin = `http://127.0.0.1:${port}`;
     const health = await (await fetch(`${origin}/api/health`)).json();
     assert.equal(health.library.name, "Photos");
@@ -101,5 +102,20 @@ test("serves the library read only, without Eagle", async () => {
 
 test("stops before listening when the library can't be read", async () => {
   const { dir } = await createLibrary();
-  await assert.rejects(runStandalone(["--library", join(dir, "Missing.library"), "--port", "0"], { log: () => {} }), /ENOENT/);
+  await assert.rejects(runStandalone(["--library", join(dir, "Missing.library"), "--port", "0"], { log: () => {} }), /Missing\.library is not an Eagle library/);
+});
+
+test("serves several libraries, takes their names and users from the config, and lists each folder once", async () => {
+  const { dir, libraryPath } = await createLibrary();
+  const other = join(dir, "Other.library");
+  const configPath = join(dir, "settings.json");
+  await writeFile(configPath, JSON.stringify({
+    authEnabled: true,
+    authUsers: [{ username: "alice", password: "correct horse", role: "viewer" }, { username: "bob", password: "battery staple", role: "viewer" }],
+    libraries: [libraryPath, { path: other, name: "Work", access: "selected", users: ["alice"] }],
+  }));
+  const settings = await resolveServerSettings(parseArgs(["--library", other, "--library", libraryPath, "--config", configPath]));
+  assert.deepEqual(settings.libraries.map((library: { name: string }) => library.name), ["Work", "Photos"]);
+  assert.deepEqual(settings.server.sharedLibraries, [other, libraryPath]);
+  assert.deepEqual(settings.server.libraryUserRules, [{ path: other, users: ["alice"] }]);
 });
