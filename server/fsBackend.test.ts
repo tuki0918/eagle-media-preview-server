@@ -530,3 +530,31 @@ test("an item still a link when its change arrives comes back once the real file
   // Checked again only every recheckIntervalMs, so the other backend hasn't looked yet.
   assert.deepEqual(names(await slow.listItems()), ["banana", "cat photo"]);
 });
+
+test("a folder that arrives after mtime.json, with no further change, is still found", async () => {
+  const libraryPath = await createLibrary();
+  const backend = createFsBackend({ libraryPath, refreshIntervalMs: 0, refreshWaitMs: 5000, rescanIntervalMs: 0 });
+  assert.deepEqual(names(await backend.listItems()), ["banana", "cat photo", "apple"]);
+  // mtime.json counts one more item than there are folders: N is still syncing.
+  const late: TestItem = { id: "N", name: "late", modificationTime: 700 };
+  await writeFile(join(libraryPath, "mtime.json"), JSON.stringify({ ...Object.fromEntries(ITEMS.map((item) => [item.id, item.modificationTime])), all: ITEMS.length + 1 }));
+  assert.deepEqual(names(await backend.listItems()), ["banana", "cat photo", "apple"]);
+  // Its folder arrives; mtime.json doesn't change again.
+  await writeItem(libraryPath, late);
+  assert.deepEqual(names(await backend.listItems()), ["late", "banana", "cat photo", "apple"]);
+});
+
+test("lists the images folder again at most every rescanIntervalMs", async () => {
+  const libraryPath = await createLibrary();
+  const backend = createFsBackend({ libraryPath, refreshIntervalMs: 0, refreshWaitMs: 5000, rescanIntervalMs: 60 * 60 * 1000 });
+  assert.deepEqual(names(await backend.listItems()), ["banana", "cat photo", "apple"]);
+  const times = Object.fromEntries(ITEMS.map((item) => [item.id, item.modificationTime]));
+  // A folder mtime.json doesn't name, and a count that disagrees: the first listing runs at once.
+  await writeItem(libraryPath, { id: "P", name: "first", modificationTime: 700 });
+  await writeFile(join(libraryPath, "mtime.json"), JSON.stringify({ ...times, all: ITEMS.length + 1 }));
+  assert.deepEqual(names(await backend.listItems()), ["first", "banana", "cat photo", "apple"]);
+  // Another one soon after waits for the interval, even though mtime.json changes again.
+  await writeItem(libraryPath, { id: "Q", name: "second", modificationTime: 800 });
+  await writeFile(join(libraryPath, "mtime.json"), JSON.stringify({ ...times, B: 301, all: ITEMS.length + 2 }));
+  assert.deepEqual(names(await backend.listItems()), ["first", "banana", "cat photo", "apple"]);
+});

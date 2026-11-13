@@ -92,6 +92,11 @@ interface FsBackendOptions {
    * time in mtime.json changes: mtime.json can arrive (from a sync, say) before the real files do.
    */
   recheckIntervalMs?: number;
+  /**
+   * A full listing of `images` (when Eagle's item count disagrees with what is held) runs at most
+   * this often. It costs about a second per 300,000 items, more on a NAS.
+   */
+  rescanIntervalMs?: number;
 }
 
 // Library format versions (the major part of `applicationVersion` in the library's metadata.json)
@@ -101,6 +106,7 @@ const DEFAULT_READ_CONCURRENCY = 64;
 const DEFAULT_REFRESH_INTERVAL_MS = 2000;
 const DEFAULT_REFRESH_WAIT_MS = 1000;
 const DEFAULT_RECHECK_INTERVAL_MS = 60 * 1000;
+const DEFAULT_RESCAN_INTERVAL_MS = 60 * 1000;
 const FAILED_RETRY_MS = 30 * 1000;
 const ITEM_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const EMPTY_LIST: readonly string[] = Object.freeze([]);
@@ -205,6 +211,7 @@ function createFsBackend({
   refreshIntervalMs = DEFAULT_REFRESH_INTERVAL_MS,
   refreshWaitMs = DEFAULT_REFRESH_WAIT_MS,
   recheckIntervalMs = DEFAULT_RECHECK_INTERVAL_MS,
+  rescanIntervalMs = DEFAULT_RESCAN_INTERVAL_MS,
 }: FsBackendOptions) {
   const root = String(libraryPath || "").trim().replace(/[\\/]+$/, "");
   if (!root) throw new Error("libraryPath is required");
@@ -238,6 +245,11 @@ function createFsBackend({
   const outside = new Set<string>();
   // When items in `outside` were last checked again regardless of mtime.json.
   let lastOutsideCheck = Date.now();
+  // A full listing of `images` is due (Eagle's item count disagrees with what is held), and when the
+  // last one ran. It runs at most every rescanIntervalMs, and stays due while the counts disagree:
+  // an item folder still syncing can arrive later without mtime.json changing again.
+  let rescanDue = false;
+  let lastRescan = 0;
   // mtime.json as last read, for the times of items read again outside a change to it.
   let lastTimes: Record<string, unknown> | null = null;
   let library: Record<string, unknown> = {};
@@ -480,12 +492,15 @@ function createFsBackend({
       removed.clear();
       unconfirmed.clear();
       outside.clear();
+      rescanDue = false;
       loaded = 0;
       total = ids.length;
       await readItems(ids, times, () => {
         loaded += 1;
       });
       lastRefreshCheck = Date.now();
+      // A folder still syncing when the library is read is looked for again later.
+      rescanDue = countsDisagree(times);
       version += 1;
       status = "ready";
       lastError = null;
@@ -567,25 +582,33 @@ function createFsBackend({
           await readItems(wanted, times);
           changed = true;
         }
-        const count = Number(times.all);
-        if (Number.isFinite(count) && count !== items.size + outside.size) {
-          const ids = await listItemIds();
-          const present = new Set(ids);
-          for (const id of [...items.keys()]) {
-            if (!present.has(id)) {
-              items.delete(id);
-              readAt.delete(id);
-              unconfirmed.delete(id);
-              changedNow();
-            }
-          }
-          const added = ids.filter((id) => !items.has(id) && !outside.has(id));
-          if (added.length) await readItems(added, times);
-          changed = true;
-        }
+        if (countsDisagree(times)) rescanDue = true;
       }
     }
+    if (rescanDue && Date.now() - lastRescan >= rescanIntervalMs) {
+      lastRescan = Date.now();
+      const ids = await listItemIds();
+      const present = new Set(ids);
+      for (const id of [...items.keys()]) {
+        if (!present.has(id)) {
+          items.delete(id);
+          readAt.delete(id);
+          unconfirmed.delete(id);
+          changedNow();
+        }
+      }
+      const added = ids.filter((id) => !items.has(id) && !outside.has(id));
+      if (added.length) await readItems(added, lastTimes);
+      changed = true;
+      rescanDue = countsDisagree(lastTimes);
+    }
     if (changed) version += 1;
+  }
+
+  // Whether Eagle's item count ("all" in mtime.json) differs from the items held (and those left out).
+  function countsDisagree(times: Record<string, unknown> | null) {
+    const count = Number(times?.all);
+    return Number.isFinite(count) && count !== items.size + outside.size;
   }
 
   // At most every refreshIntervalMs, checks the library for changes; waits for that at most
