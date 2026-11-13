@@ -509,7 +509,7 @@ function createFsBackend({
         loaded += 1;
       });
       lastRefreshCheck = Date.now();
-      noteMissingFolders(times, ids);
+      noteMissingFolders(times);
       // A folder still syncing when the library is read is looked for again later.
       rescanDue = countsDisagree(times);
       version += 1;
@@ -620,6 +620,8 @@ function createFsBackend({
       }
       const added = ids.filter((id) => !items.has(id) && !outside.has(id));
       if (added.length) await readItems(added, lastTimes);
+      // Listed, but gone before it was read: looked for again like any recently announced item.
+      noteMissingFolders(lastTimes, added);
       for (const id of [...awaiting.keys()]) if (items.has(id)) awaiting.delete(id);
       changed = true;
       rescanDue = countsDisagree(lastTimes);
@@ -632,15 +634,17 @@ function createFsBackend({
   // changes). One changed within AWAIT_FOLDER_MS is likely still syncing (mtime.json arrived first),
   // and is looked for again like one announced while running: Eagle's count can't tell when another
   // item was deleted in the same sync.
-  function noteMissingFolders(times: Record<string, unknown> | null, ids: readonly string[]) {
+  // An id counts as present only once it was read (or is held back as unreadable or outside): a
+  // folder listed but gone by the time its metadata was read is as missing as one never listed.
+  function noteMissingFolders(times: Record<string, unknown> | null, ids: Iterable<string> = Object.keys(times || {})) {
     if (!times) return;
-    const present = new Set(ids);
     const now = Date.now();
-    for (const [id, value] of Object.entries(times)) {
-      if (id === "all" || !ITEM_ID_PATTERN.test(id) || present.has(id)) continue;
-      const time = Number(value);
+    for (const id of ids) {
+      if (id === "all" || !ITEM_ID_PATTERN.test(id) || items.has(id) || unconfirmed.has(id) || outside.has(id)) continue;
+      const time = Number(times[id]);
+      if (!(id in times)) continue;
       removed.set(id, Number.isFinite(time) ? time : NaN);
-      if (Number.isFinite(time) && Math.abs(now - time) <= AWAIT_FOLDER_MS) awaiting.set(id, now);
+      if (Number.isFinite(time) && Math.abs(now - time) <= AWAIT_FOLDER_MS && !awaiting.has(id)) awaiting.set(id, now);
     }
   }
 

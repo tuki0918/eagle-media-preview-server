@@ -593,3 +593,37 @@ test("started in the middle of a sync, it still finds an item whose folder arriv
   await writeItem(libraryPath, { id: "Z", name: "old", modificationTime: 50 });
   assert.deepEqual(names(await backend.listItems()), ["late", "banana", "cat photo"]);
 });
+
+test.skipIf(process.platform === "win32")("a folder gone between the first listing and its read is looked for again", async () => {
+  const { execFileSync } = await import("node:child_process");
+  const { open, readdir } = await import("node:fs/promises");
+  const libraryPath = await createLibrary();
+  // Reads go one at a time in the folder's listing order (not always by name): the first item's
+  // read waits on a named pipe, and a shown item listed after it loses its folder meanwhile.
+  const order = (await readdir(join(libraryPath, "images"))).map((entry) => entry.replace(/\.info$/, ""));
+  const blocker = ITEMS.find((item) => item.id === order[0])!;
+  const target = ITEMS.find((item) => ["A", "B", "C"].includes(item.id) && order.indexOf(item.id) > 0)!;
+  const shown = (except = "") => ITEMS.filter((item) => ["A", "B", "C"].includes(item.id) && item.id !== except)
+    .sort((left, right) => right.modificationTime - left.modificationTime)
+    .map((item) => item.name);
+  const times = Object.fromEntries(ITEMS.map((item) => [item.id, item.modificationTime]));
+  // The target changed just now; Eagle's count is one less than the folders (another item deleted elsewhere).
+  await writeFile(join(libraryPath, "mtime.json"), JSON.stringify({ ...times, [target.id]: Date.now(), all: ITEMS.length - 1 }));
+  const pipe = join(libraryPath, "images", `${blocker.id}.info`, "metadata.json");
+  await rm(pipe);
+  execFileSync("mkfifo", [pipe]);
+  const backend = createFsBackend({ libraryPath, readConcurrency: 1, refreshIntervalMs: 0, refreshWaitMs: 5000, rescanIntervalMs: 0, recheckIntervalMs: 0 });
+  const opening = backend.open();
+  await new Promise((resolveWait) => setTimeout(resolveWait, 50));
+  // The target's folder was listed, and goes away before its metadata is read.
+  await rm(join(libraryPath, "images", `${target.id}.info`), { recursive: true });
+  const writer = await open(pipe, "w");
+  await writer.write(JSON.stringify(blocker));
+  await writer.close();
+  await opening;
+  assert.deepEqual(names(await backend.listItems()), shown(target.id));
+
+  // It comes back; Eagle's count matched what was held, so only looking for it again finds it.
+  await writeItem(libraryPath, target);
+  assert.deepEqual(names(await backend.listItems()), shown());
+});
