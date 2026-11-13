@@ -1,6 +1,6 @@
 # Standalone server: browse Eagle libraries without Eagle
 
-Status: **Proposal** (2026-11-13). P0 implemented, P1 implemented except the recorded parity tests (2026-11-13); P2 onward not started. What P1 does differently from this proposal is in [P1 as built](#p1-as-built).
+Status: **Proposal** (2026-11-13). P0 and P2 implemented, P1 implemented except the recorded parity tests (2026-11-13); P3 onward not started. What was built differently from this proposal is in [P1 as built](#p1-as-built) and [P2 as built](#p2-as-built).
 
 ## 1. Background
 
@@ -178,7 +178,7 @@ Each library gets one `FsBackend`, created at start and disposed at stop. Viewer
 
 ### 6.3 Resources
 
-Each library costs about 150 MB of memory per 300,000 items (measured for the sort index; the extra display fields add an estimated 30%). Backends are built one at a time at start, smallest first, so small libraries are browsable within seconds while a large one builds. A library still building answers with `sort.complete: false` and the viewer shows its progress, as Advanced Sort does today.
+Each library costs about 150 MB of memory per 300,000 items (measured for the sort index; the extra display fields add an estimated 30%). Backends are built one at a time at start, smallest first, so small libraries are browsable within seconds while a large one builds. A library still building answers with `sort.complete: false` and the viewer shows its progress, as Advanced Sort does today. (As built, see [P2 as built](#p2-as-built): read in the order given, and requests wait for the read.)
 
 A library that disappears (unmounted NAS) is marked unavailable and retried every 30 seconds; the others keep working.
 
@@ -221,7 +221,7 @@ Everything the plugin enforces applies unchanged: authentication and roles, libr
 | --- | --- | --- |
 | P0 (done) | Extract `LibraryBackend` (`libraryBackend.cts`); `createEagleApiBackend` wraps today's client. No behavior change. | All existing tests pass; write routes go through `backend.write` and answer `403 read_only` without it. |
 | P1 (done but parity tests) | `FsBackend`, read only, one library: item store from `metadata.json`, queries in 5.3, files, password-protected folders, version gate. CLI entry. | Parity tests (recorded) pass for everything but smart folders and full-text search; `npx eagle-media-server --library <path>` serves the viewer without Eagle. |
-| P2 | Multiple libraries: config, routing by library id, `/api/libraries`, the viewer's library picker, per-library build and availability. | Two viewers browse two libraries at once; library protection applies per library. |
+| P2 (done) | Multiple libraries: config, routing by library id, `/api/libraries`, the viewer's library picker, per-library build and availability. | Two viewers browse two libraries at once; library protection applies per library. |
 | P3 | Snapshots on disk; `mtime.json` polling tuned for network shares. | 300,000 items available within 2 s of a restart. |
 | P4 | Smart folder evaluator (first release set). | Parity tests pass for supported rules; unsupported ones are disabled, not wrong. |
 | P5 | Packaging: npm package, Docker image, service recipes; spec and README sections. | Runs on a Linux NAS in Docker with read-only mounts. |
@@ -253,6 +253,31 @@ Not done in P1:
 
 - **Recorded parity tests (7.2).** Recording needs Eagle running with the fixture library open; the shapes were taken from Eagle's own API code (`app/js/plugin/index.js`, `api-server-v2.js` in Eagle 4's `app.asar`) and the unit tests cover them, but no answer of Eagle's has been compared yet.
 - The viewer's offline hint still says to start the server in Eagle.
+
+## P2 as built
+
+```sh
+node bin/eagle-media-server.cjs --library ~/Pictures/Photos.library --library /Volumes/nas/Work.library
+```
+
+```jsonc
+// --config: the plugin's settings format, plus "libraries"
+{
+  "authEnabled": true,
+  "authUsers": [{ "username": "alice", "password": "…", "role": "viewer" }],
+  "libraries": [
+    "/Users/me/Pictures/Photos.library",
+    { "path": "/Volumes/nas/Work.library", "name": "Work", "access": "selected", "users": ["alice"] }
+  ]
+}
+```
+
+- **Routing.** `createViewerServer({ backends })` takes several backends. `selectSession` picks one per request from `X-Library-Id` (or `?library=`). Health, connect, and library status without an id, or with an id the server doesn't know (from before a restart, say), answer for the first library the user may open. Other routes with an unknown id answer `409 LIBRARY_CHANGED`, which the viewer already handles. Everything after selection (library protection, per-user rules, the access log's library id, sorting, item types) works per library as it did for Eagle's one open library.
+- **`/api/libraries`** (multi-library servers only; others answer `404`) lists the libraries open to the signed-in user: `{ id, name, status: "ready" | "building" | "failed", loaded?, total? }`.
+- **Viewer.** A picker (⇅) next to the library name in the sidebar, shown when there are two or more. Picking a library drops what is shown and connects again with its id; the pick is kept in `localStorage` (`mediaLibrary.libraryId`) and sent with the next connect. A library that can't be read is listed but disabled; one being read shows its progress.
+- **Reading order.** The server listens at once and reads the libraries one at a time in the order given (flags first, then the config), not smallest first. A request for a library not read yet starts reading it at once and waits for it; for a very large library the first request can take as long as the read (about 16 s per 300,000 items on an SSD).
+- **Unreadable libraries.** A library that can't be read (a missing folder, an unknown format) answers `500` on its own routes and is retried at most every 30 seconds, when asked for again; the others keep working. A folder without `metadata.json` stops the server before it listens.
+- **Library info answers at once.** `FsBackend.libraryInfo()` and `appInfo()` no longer wait for the library to be read, so status checks stay quick.
 
 ## 11. Open questions
 

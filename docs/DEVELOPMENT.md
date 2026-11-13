@@ -41,4 +41,4 @@ npm run build
 node bin/eagle-media-server.cjs --library /path/to/Photos.library
 ```
 
-It listens on `127.0.0.1:41532` by default. `--config <file>` takes a settings file in the plugin's format (`~/.eagle-media-preview-server/settings.json`) for users, HTTPS, port, and host. Run `node bin/eagle-media-server.cjs --help` for every option.
+Repeat `--library` to serve several libraries at once; the viewer then shows a library picker. It listens on `127.0.0.1:41532` by default. `--config <file>` takes a settings file in the plugin's format (`~/.eagle-media-preview-server/settings.json`) for users, HTTPS, port, and host, and may list `libraries` (paths, or `{ path, name, access: "selected", users }`). Run `node bin/eagle-media-server.cjs --help` for every option.
