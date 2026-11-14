@@ -1186,7 +1186,7 @@ test("public UI exposes collapsible advanced filters, with sort only when the se
 });
 
 // The old `npm start` server, configured by environment variables, is gone. The standalone server
-// that reads library folders (bin/eagle-media-server.cjs) is a different thing and is documented.
+// that reads library folders (bin/eagle-media-server.cjs, run as `npm run standalone`) is a different thing and is documented.
 test("package no longer exposes the old npm start server", async () => {
   const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
   const readme = await readFile(new URL("../README.md", import.meta.url), "utf8");
@@ -1194,7 +1194,8 @@ test("package no longer exposes the old npm start server", async () => {
   assert.equal("start" in packageJson.scripts, false);
   await assert.rejects(() => access(new URL("../server/index.js", import.meta.url)));
   assert.doesNotMatch(readme, /npm start/);
-  assert.match(readme, /node bin\/eagle-media-server\.cjs/);
+  assert.match(readme, /npm run standalone/);
+  assert.equal(packageJson.scripts.standalone, "node bin/eagle-media-server.cjs");
   assert.doesNotMatch(readme, /VIEWER_PASSWORD=/);
   assert.doesNotMatch(readme, /VIEWER_PASSWORD_HASH=/);
   assert.doesNotMatch(readme, /REQUEST_LOG_ENABLED/);

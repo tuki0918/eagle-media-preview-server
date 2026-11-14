@@ -1,4 +1,5 @@
 // Captures the colored `npm run diagram` output as dark-mode PNGs for docs/ using headless Chrome.
+// Usage: node scripts/diagram-images.mjs [overview|architecture|standalone ...]   (no argument makes all)
 // Set CHROME_PATH when Chrome or Chromium is not installed in a standard location.
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -11,7 +12,11 @@ const root = fileURLToPath(new URL("..", import.meta.url));
 const IMAGES = [
   ["overview", "docs/architecture_overview.png"],
   ["architecture", "docs/architecture.png"],
+  ["standalone", "docs/architecture_standalone.png"],
 ];
+const requested = process.argv.slice(2);
+const unknown = requested.filter((view) => !IMAGES.some(([name]) => name === view));
+if (unknown.length) throw new Error(`Unknown diagram: ${unknown.join(", ")}`);
 
 // Cell metrics for 14px Menlo; the page is sized from them so the screenshot fits the diagram exactly.
 const CHAR_WIDTH = 8.43;
@@ -55,7 +60,7 @@ const { NO_COLOR, ...inheritedEnv } = process.env;
 const colorEnv = { ...inheritedEnv, FORCE_COLOR: "1" };
 const workDir = mkdtempSync(join(tmpdir(), "diagram-images-"));
 try {
-  for (const [view, output] of IMAGES) {
+  for (const [view, output] of IMAGES.filter(([name]) => !requested.length || requested.includes(name))) {
     const ansi = execFileSync(process.execPath, [join(root, "scripts/diagram.mjs"), view], { env: colorEnv }).toString();
     const { width, height, html } = toHtml(ansi);
     const page = join(workDir, `${view}.html`);

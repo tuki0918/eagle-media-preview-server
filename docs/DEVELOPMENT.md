@@ -38,10 +38,10 @@ Serves libraries to the viewer without Eagle, read only. See [docs/design/standa
 
 ```sh
 npm run build
-node bin/eagle-media-server.cjs                                   # the servers in standalone.json
-node bin/eagle-media-server.cjs --library /path/to/Photos.library # or one server, from the command line
-node bin/eagle-media-server.cjs -f                                # and stream the access log here
-node bin/eagle-media-server.cjs logs -f                           # or follow it from another terminal
+npm run standalone                                       # the servers in standalone.json
+npm run standalone -- --library /path/to/Photos.library  # or one server, from the command line
+npm run standalone -- -f                                 # and stream the access log here
+npm run standalone -- logs -f                            # or follow it from another terminal
 ```
 
 It reads the plugin's `~/.eagle-media-preview-server/settings.json` (never writes it) for users, sign-in, HTTPS, port, and hostname, so it answers at the plugin's address with the same sign-ins. `~/.eagle-media-preview-server/standalone.json` lists the servers to run; each may change only where it listens:
@@ -56,4 +56,4 @@ It reads the plugin's `~/.eagle-media-preview-server/settings.json` (never write
 }
 ```
 
-A server whose port is taken (the plugin is running in Eagle, say) is skipped; the others run. Advanced Sort is on or off as in the plugin (`experimentalSort` in settings.json). The access log goes to `~/.eagle-media-preview-server/standalone-access-log.jsonl`. Run `node bin/eagle-media-server.cjs --help` for every option.
+A server whose port is taken (the plugin is running in Eagle, say) is skipped; the others run. Advanced Sort is on or off as in the plugin (`experimentalSort` in settings.json). The access log goes to `~/.eagle-media-preview-server/standalone-access-log.jsonl`. Run `npm run standalone -- --help` for every option. Options go after `--`, which passes them on to `bin/eagle-media-server.cjs`.

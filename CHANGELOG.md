@@ -9,7 +9,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Added
 
-- Standalone server (experimental): `node bin/eagle-media-server.cjs` serves Eagle libraries to the viewer without Eagle running, read only. It uses the plugin's settings (users, sign-in, HTTPS, port, hostname) without changing them, so viewers reach it at the same address and stay signed in; `~/.eagle-media-preview-server/standalone.json` lists the servers to run, each with its libraries and, if wanted, its own port and hostname. It prints a status table at startup, skips a server whose port is in use (by the plugin, say), and writes an access log, which `-f` or `eagle-media-server logs -f` streams. See `docs/DEVELOPMENT.md`.
+- Standalone server (experimental): `npm run standalone` serves Eagle libraries to the viewer without Eagle running, read only. It uses the plugin's settings (users, sign-in, HTTPS, port, hostname) without changing them, so viewers reach it at the same address and stay signed in; `~/.eagle-media-preview-server/standalone.json` lists the servers to run, each with its libraries and, if wanted, its own port and hostname. It prints a status table at startup, skips a server whose port is in use (by the plugin, say), and writes an access log, which `npm run standalone -- -f` or `npm run standalone -- logs -f` streams. See `docs/DEVELOPMENT.md`.
 - Viewer: a library picker in the sidebar when the server serves several libraries.
 
 ### Changed

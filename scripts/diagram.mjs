@@ -1,5 +1,5 @@
-// Prints the architecture diagrams: a short user overview and the full architecture.
-// Usage: node scripts/diagram.mjs [overview|architecture]   (no argument prints both)
+// Prints the architecture diagrams: a short user overview, the full architecture, and the standalone server.
+// Usage: node scripts/diagram.mjs [overview|architecture|standalone]   (no argument prints all)
 // Plain-text output (NO_COLOR=1) is what the README copies.
 const useColor = process.env.NO_COLOR === undefined && (process.stdout.isTTY || process.env.FORCE_COLOR);
 
@@ -380,9 +380,76 @@ function drawArchitecture() {
   return render();
 }
 
+// ---------------------------------------------------------------- 3. standalone server (experimental)
+
+function drawStandalone() {
+  newCanvas(142, 40);
+  centerTitle("MEDIA PREVIEW SERVER  ·  standalone server (experimental)");
+
+  put(1, 2, "OTHER DEVICES", "cyan", true);
+  put(37, 2, "THE COMPUTER WITH THE LIBRARIES  (Eagle not needed)", "purple", true);
+  for (let y = 2; y <= 36; y += 1) put(34, y, "┊", "dim");
+  // The title sits between the connectors that cross its top edge.
+  group(36, 16, 106, 21, "FILES", "yellow", 84);
+  // Several libraries, on any drive: one server can serve them all.
+  group(108, 18, 32, 18, "EAGLE LIBRARIES", "yellow");
+  // Read once at start, then kept current; what Eagle hides stays hidden.
+  ["scans every images/*.info/", "then follows mtime.json", "hides trash, locked folders"].forEach((text, i) => put(110, 19 + i, text, "gray"));
+
+  box(1, 6, 30, 7, {
+    title: "BROWSER / PWA",
+    color: "cyan",
+    lines: ["browse, search, filter", "view, play, slideshow", "pick a library", [g("(when it serves several)")]],
+  });
+  put(50, 4, "npm run standalone", "gray");
+  box(50, 6, 34, 7, {
+    title: "STANDALONE SERVER",
+    color: "blue",
+    lines: ["checks sign-in and roles", "serves the listed libraries", "streams media files", [no, w("no edits: read only")], [g("same port as the plugin")]],
+  });
+  box(38, 19, 32, 6, {
+    title: "SETTINGS FILE",
+    color: "yellow",
+    lines: ["settings.json", [g("the plugin's users, sign-in,")], [g("HTTPS, port, hostname")], [g("read, never written")]],
+  });
+  box(73, 19, 32, 6, {
+    title: "SERVER LIST",
+    color: "yellow",
+    lines: ["standalone.json (optional)", [g("servers, their libraries,")], [g("ports and hostnames")], [g("without it: shared libraries")]],
+  });
+  box(73, 27, 32, 5, {
+    title: "ACCESS LOG",
+    color: "yellow",
+    lines: ["standalone-access-log.jsonl", [g("-f prints it as it grows")], [g("logs -f follows it")]],
+  });
+  for (const [index, [name, drive]] of [["Photos.library", "internal disk"], ["Work.library", "external SSD"], ["Archive.library", "NAS (SMB, AFP, NFS)"]].entries()) {
+    box(110, 23 + index * 4, 28, 4, { title: name, color: "yellow", lines: [drive, [g("originals and metadata")]] });
+  }
+  // Off to the side, connected to nothing: browsing works with Eagle closed.
+  box(109, 3, 30, 5, {
+    title: "EAGLE APP",
+    color: "dim",
+    lines: [[g("not needed to browse")], [g("edits, uploads and trash")], [g("need the plugin in Eagle")]],
+  });
+
+  connector([[31, 9], [49, 9]], "cyan", { start: true });
+  put(33, 8, " HTTP(S) :41532 ", "gray");
+  put(32, 10, " pages, API, media", "gray");
+  connector([[84, 8], [124, 8], [124, 17]], "blue", { label: "reads the folders directly" });
+  connector([[84, 11], [106, 11], [106, 29], [105, 29]], "yellow", { label: "writes" });
+  connector([[56, 13], [56, 18]], "yellow");
+  put(58, 15, "reads", "gray");
+  connector([[78, 13], [78, 18]], "yellow");
+  put(80, 15, "reads", "gray");
+
+  putLine(1, 38, [g("settings.json, standalone.json and the access log are in "), w("~/.eagle-media-preview-server/"), g(".")]);
+  putLine(1, 39, [g("A server whose port is in use (by the plugin, say) is skipped. Browsers talk only to the standalone server.")]);
+  return render();
+}
+
 // ---------------------------------------------------------------- main
 
-const VIEWS = { overview: drawOverview, architecture: drawArchitecture };
+const VIEWS = { overview: drawOverview, architecture: drawArchitecture, standalone: drawStandalone };
 const requested = process.argv.slice(2).filter((arg) => arg in VIEWS);
 const output = (requested.length ? requested : Object.keys(VIEWS)).map((name) => VIEWS[name]().join("\n"));
 // A heavy rule with blank lines on both sides separates the views.
