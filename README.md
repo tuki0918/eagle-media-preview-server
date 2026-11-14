@@ -212,6 +212,14 @@ A shares one project library with B for a review, then stops the server. B only 
 
 Diagram sources are in [docs/use-cases](docs/use-cases).
 
+## Architecture
+
+![Media Preview Server overview](docs/architecture_overview.png)
+
+The preview server, plugin window, and settings file come from this plugin, not from Eagle itself; the plugin runs the server inside Eagle. Browsers on other devices talk only to that preview server. They never get direct access to Eagle's own API or the library folder.
+
+For the detailed architecture, access control, and file protection, see [Runtime Model in EAGLE_PLUGIN_SPEC.md](docs/EAGLE_PLUGIN_SPEC.md#runtime-model).
+
 ## Standalone Server (experimental)
 
 The standalone server lets the viewer browse Eagle libraries **without Eagle running**. It reads the library folders directly, and can serve several libraries at once; the viewer then shows a library picker.
@@ -234,14 +242,6 @@ node bin/eagle-media-server.cjs --library ~/Pictures/Photos.library --library /V
 ```
 
 For options, `standalone.json`, and the access log, see [Standalone server in DEVELOPMENT.md](docs/DEVELOPMENT.md#standalone-server-experimental). For how it works, see [the design doc](docs/design/standalone-server.md).
-
-## Architecture
-
-![Media Preview Server overview](docs/architecture_overview.png)
-
-The preview server, plugin window, and settings file come from this plugin, not from Eagle itself; the plugin runs the server inside Eagle. Browsers on other devices talk only to that preview server. They never get direct access to Eagle's own API or the library folder.
-
-For the detailed architecture, access control, and file protection, see [Runtime Model in EAGLE_PLUGIN_SPEC.md](docs/EAGLE_PLUGIN_SPEC.md#runtime-model).
 
 ## Details
 
