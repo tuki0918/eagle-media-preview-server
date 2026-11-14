@@ -683,3 +683,72 @@ test("with Advanced Sort off, the type menu still follows the library's changes 
     await viewer.stop();
   }
 });
+
+test("an announced item whose folder never arrives is looked for for an hour, then given up on", async () => {
+  const libraryPath = await createLibrary();
+  let clock = Date.now();
+  const times = Object.fromEntries(ITEMS.map((item) => [item.id, item.modificationTime]));
+  // Rescans are held off, so only looking for the item itself can find it.
+  const backend = createFsBackend({ libraryPath, refreshIntervalMs: 0, refreshWaitMs: 5000, rescanIntervalMs: Infinity, now: () => clock });
+  await backend.open();
+
+  // mtime.json announces N just now; its folder doesn't arrive. Eagle's count already matches.
+  await writeFile(join(libraryPath, "mtime.json"), JSON.stringify({ ...times, N: clock, all: ITEMS.length }));
+  await backend.listItems();
+  assert.deepEqual(backend.stats(), { items: 6, cachedAnswers: backend.stats().cachedAnswers, unreadable: 0, gone: 1, lookedFor: 1, outside: 0 });
+
+  // Still looked for after 59 minutes.
+  clock += 59 * 60 * 1000;
+  await backend.listItems();
+  assert.equal(backend.stats().lookedFor, 1);
+
+  // Given up on after the hour; it stays left out as gone.
+  clock += 2 * 60 * 1000;
+  await backend.listItems();
+  assert.equal(backend.stats().lookedFor, 0);
+  assert.equal(backend.stats().gone, 1);
+
+  // Its folder arriving now isn't noticed, as nothing looks for it any more ...
+  await writeItem(libraryPath, { id: "N", name: "late", modificationTime: 700 });
+  clock += 2 * 60 * 1000;
+  assert.deepEqual(names(await backend.listItems()), ["banana", "cat photo", "apple"]);
+  // ... until mtime.json says it changed again.
+  await writeFile(join(libraryPath, "mtime.json"), JSON.stringify({ ...times, N: clock, all: ITEMS.length + 1 }));
+  assert.deepEqual(names(await backend.listItems()), ["late", "banana", "cat photo", "apple"]);
+  assert.equal(backend.stats().gone, 0);
+});
+
+test("an announced item whose folder arrives within the hour is found without another change", async () => {
+  const libraryPath = await createLibrary();
+  let clock = Date.now();
+  const times = Object.fromEntries(ITEMS.map((item) => [item.id, item.modificationTime]));
+  const backend = createFsBackend({ libraryPath, refreshIntervalMs: 0, refreshWaitMs: 5000, rescanIntervalMs: Infinity, now: () => clock });
+  await backend.open();
+  await writeFile(join(libraryPath, "mtime.json"), JSON.stringify({ ...times, N: clock, all: ITEMS.length }));
+  await backend.listItems();
+  await writeItem(libraryPath, { id: "N", name: "late", modificationTime: 700 });
+  // Looked for again once the recheck interval (a minute) has passed.
+  clock += 30 * 1000;
+  assert.deepEqual(names(await backend.listItems()), ["banana", "cat photo", "apple"]);
+  clock += 31 * 1000;
+  assert.deepEqual(names(await backend.listItems()), ["late", "banana", "cat photo", "apple"]);
+  assert.equal(backend.stats().lookedFor, 0);
+});
+
+test("keeps at most maxCachedAnswers answers, and drops them all on a change", async () => {
+  const libraryPath = await createLibrary();
+  const backend = createFsBackend({ libraryPath, refreshIntervalMs: 0, refreshWaitMs: 5000 });
+  await backend.open();
+  for (let index = 0; index < 40; index += 1) await backend.searchItems({ query: `word${index}` });
+  assert.equal(backend.stats().cachedAnswers, 16);
+
+  const small = createFsBackend({ libraryPath, refreshIntervalMs: 0, refreshWaitMs: 5000, maxCachedAnswers: 3 });
+  for (let index = 0; index < 10; index += 1) await small.searchItems({ query: `word${index}` });
+  assert.equal(small.stats().cachedAnswers, 3);
+
+  // An item changes: what was cached before is dropped, not kept beside the new answers.
+  await writeItem(libraryPath, { ...ITEMS[0], name: "green apple" });
+  await writeMtime(libraryPath, ITEMS, { A: 101 });
+  assert.deepEqual(names(await backend.listItems()), ["banana", "cat photo", "green apple"]);
+  assert.ok(backend.stats().cachedAnswers < 16, `${backend.stats().cachedAnswers} cached answers`);
+});
