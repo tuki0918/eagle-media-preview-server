@@ -212,6 +212,21 @@ A shares one project library with B for a review, then stops the server. B only 
 
 Diagram sources are in [docs/use-cases](docs/use-cases).
 
+## Standalone Server (experimental)
+
+The standalone server lets the viewer browse Eagle libraries **without Eagle running**. It reads the library folders directly, and can serve several libraries at once; the viewer then shows a library picker.
+
+- **Read only.** Starring, editing, uploading, and moving to the trash need the plugin in Eagle.
+- **Same users and address as the plugin.** It reads the plugin's `settings.json` (users, sign-in, HTTPS, port, and hostname) and never writes it. A server whose port is in use, by the running plugin for example, is skipped.
+- **Limits.** Smart folders aren't shown, each start reads the whole library (about 16 s per 300,000 items), and it runs with Node.js from this repository; there's no app or installer yet.
+
+```sh
+npm run build
+node bin/eagle-media-server.cjs --library ~/Pictures/Photos.library --library /Volumes/nas/Work.library
+```
+
+With no arguments, it runs the servers listed in `~/.eagle-media-preview-server/standalone.json`, or, without that file, serves the libraries the plugin shares. For options, `standalone.json`, and the access log, see [Standalone server in DEVELOPMENT.md](docs/DEVELOPMENT.md#standalone-server-experimental). For how it works, see [the design doc](docs/design/standalone-server.md).
+
 ## Architecture
 
 ![Media Preview Server overview](docs/architecture_overview.png)
@@ -238,7 +253,7 @@ See [store_description.md](docs/promo/store_description.md) for the Eagle plugin
 
 #### Limitations
 
-The displayed content depends on the Eagle library opened by the Eagle app running on the server side.
+The displayed content depends on the Eagle library opened by the Eagle app running on the server side. The [standalone server](#standalone-server-experimental) instead serves the libraries it is given, read only.
 
 These are planned, but on hold until the Eagle API supports them:
 
