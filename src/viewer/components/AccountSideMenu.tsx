@@ -187,7 +187,10 @@ export function AccountSideMenu() {
           </FolderNavigationScrollArea>
         </SidebarContent>
 
-        <SidebarFooter className="p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
+        {/* The bottom padding centers the filter row on the item list's slideshow and view buttons
+            (ViewerDock): 40px + the safe area up on phones, 48px from 720px wide, where the buttons
+            ignore the safe area. The floating sidebar (md) already sits 10px up. */}
+        <SidebarFooter className="p-2 pb-[calc(22px+env(safe-area-inset-bottom))] min-[720px]:pb-[30px] md:pb-5">
           {/* The account button sits at the end of the filter row, at the bottom like most apps' account menus. */}
           <div className="flex items-center gap-1 pl-1">
             <form

@@ -137,7 +137,8 @@ export function PreviewInfoActions() {
   const previewInfoState = useSyncExternalStore(subscribePreviewInfoState, getPreviewInfoState, getPreviewInfoState);
   if (!actionsVisible) return null;
   return (
-    <div id="previewActions" className="preview-info-actions sticky bottom-0 z-[1] -mx-5 mt-auto border-t border-border bg-card px-5 pb-[calc(16px+env(safe-area-inset-bottom))] pt-4 max-[540px]:static desktop:pb-[calc(24px+env(safe-area-inset-bottom))]">
+    // Beside the image, the buttons line up with its zoom toolbar, which sits 24px up without the safe area.
+    <div id="previewActions" className="preview-info-actions sticky bottom-0 z-[1] -mx-5 mt-auto border-t border-border bg-card px-5 pb-[calc(16px+env(safe-area-inset-bottom))] pt-4 max-[540px]:static desktop:pb-6">
       {previewInfoState ? <PreviewActions key={String(previewInfoState.item.id || "")} canEditMetadata={previewInfoState.canEditMetadata} canManageLibrary={previewInfoState.canManageLibrary} item={previewInfoState.item} onToggleTrash={previewInfoState.onToggleTrash} /> : null}
     </div>
   );
