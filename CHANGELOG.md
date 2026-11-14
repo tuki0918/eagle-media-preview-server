@@ -16,6 +16,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 - The offline hints now name both the plugin and the standalone server.
 
+### Security
+
+- With library protection on, the plugin now asks Eagle again which library is open before answering a read. Right after Eagle switched libraries, and before the plugin was told, a viewer could get a few seconds of answers (lists, folders, previews) from the newly opened library even if it wasn't shared or that user may not open it.
+
 ## [0.7.3] - 2026-11-12
 
 ### Added

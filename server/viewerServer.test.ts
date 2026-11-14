@@ -4,7 +4,7 @@ import { test, vi } from "vitest";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { constants as fsConstants, createReadStream } from "node:fs";
-import { mkdir, open, readFile, stat, truncate, writeFile, utimes, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, open, readFile, stat, truncate, writeFile, utimes, rm } from "node:fs/promises";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { createRequire } from "node:module";
@@ -2194,6 +2194,129 @@ test("createViewerServer limits a shared library to its users on every request",
   }
 });
 
+test("createViewerServer never answers from a library Eagle switched to before the plugin heard of it", async () => {
+  // Eagle has switched to Secret, but the plugin hasn't been told yet and still holds Work's info
+  // (cached for a few seconds). What Eagle reads now comes from Secret, which alice may not open.
+  let openLibrary = "/Users/me/Work.library";
+  const tempDir = await mkdtemp(join(tmpdir(), "eagle-switch-"));
+  const secretFile = join(tempDir, "secret.jpg");
+  await writeFile(secretFile, "secret bytes");
+  const inSecret = () => openLibrary.includes("Secret");
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    authUsers: [
+      { username: "alice", passwordHash: sha256("a"), role: "viewer" },
+      { username: "owner", passwordHash: sha256("o"), role: "admin" },
+    ],
+    sharedLibraries: ["/Users/me/Work.library", "/Users/me/Secret.library"],
+    libraryUserRules: [{ path: "/Users/me/Secret.library", users: ["owner"] }],
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: openLibrary, name: inSecret() ? "Secret" : "Work" };
+      },
+      async listItems() {
+        return [{ id: inSecret() ? "S1" : "W1", name: inSecret() ? "secret-plan" : "work-note" }];
+      },
+      async folders() {
+        return { items: [{ id: "F1", name: inSecret() ? "secret-folder" : "work-folder" }], total: 1, offset: 0, limit: 1 };
+      },
+      async itemById(id: string) {
+        return inSecret() ? { id, ext: "jpg", filePath: secretFile } : { id, ext: "jpg" };
+      },
+    },
+  });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const alice = (await loginCookie(origin, "alice", "a")).split(";")[0];
+    const health = await fetch(`${origin}/api/health`, { headers: { Cookie: alice } });
+    const workId = health.headers.get("x-library-id");
+    assert.ok(workId);
+    const headers = { Cookie: alice, "X-Library-Id": workId };
+
+    const before = await fetch(`${origin}/api/items?offset=0&limit=10`, { headers });
+    assert.equal(before.status, 200);
+    assert.match(await before.text(), /work-note/);
+
+    for (const route of ["/api/items?offset=0&limit=10", "/api/folders", "/file/S1"]) {
+      // Work is open and known to the plugin; then Eagle switches without telling it yet.
+      openLibrary = "/Users/me/Work.library";
+      viewer.notifyLibraryChanged();
+      assert.equal((await fetch(`${origin}/api/health`, { headers: { Cookie: alice } })).headers.get("x-library-id"), workId);
+      openLibrary = "/Users/me/Secret.library";
+      const response = await fetch(`${origin}${route}${route.startsWith("/file/") ? `?library=${workId}` : ""}`, { headers });
+      const body = await response.text();
+      assert.equal(response.status, 409, `${route}: ${body}`);
+      assert.doesNotMatch(body, /secret/, route);
+      // The id of a library alice may not open is never handed out.
+      assert.equal(response.headers.get("x-library-id"), null, route);
+    }
+  } finally {
+    await viewer.stop();
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("createViewerServer tells nothing through errors from a library Eagle switched to before the plugin heard of it", async () => {
+  // As above, but reading Secret fails or finds no file: neither the error nor a 404 may reach alice.
+  let openLibrary = "/Users/me/Work.library";
+  const inSecret = () => openLibrary.includes("Secret");
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    authUsers: [
+      { username: "alice", passwordHash: sha256("a"), role: "viewer" },
+      { username: "owner", passwordHash: sha256("o"), role: "admin" },
+    ],
+    sharedLibraries: ["/Users/me/Work.library", "/Users/me/Secret.library"],
+    libraryUserRules: [{ path: "/Users/me/Secret.library", users: ["owner"] }],
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: openLibrary, name: inSecret() ? "Secret" : "Work" };
+      },
+      async folders() {
+        if (inSecret()) throw new Error("secret-folder is locked");
+        return { items: [], total: 0, offset: 0, limit: 0 };
+      },
+      async itemById(id: string) {
+        return { id, ext: "jpg", filePath: `/nonexistent/${inSecret() ? "secret" : "work"}-${id}.jpg` };
+      },
+    },
+  });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const alice = (await loginCookie(origin, "alice", "a")).split(";")[0];
+    const workId = (await fetch(`${origin}/api/health`, { headers: { Cookie: alice } })).headers.get("x-library-id");
+    assert.ok(workId);
+    const headers = { Cookie: alice, "X-Library-Id": workId };
+
+    // Without a switch, the same requests fail as usual.
+    assert.equal((await fetch(`${origin}/file/MISSING?library=${workId}`, { headers })).status, 404);
+
+    for (const route of ["/api/folders", `/file/MISSING?library=${workId}`]) {
+      openLibrary = "/Users/me/Work.library";
+      viewer.notifyLibraryChanged();
+      assert.equal((await fetch(`${origin}/api/health`, { headers: { Cookie: alice } })).headers.get("x-library-id"), workId);
+      openLibrary = "/Users/me/Secret.library";
+      const response = await fetch(`${origin}${route}`, { headers });
+      const body = await response.text();
+      assert.equal(response.status, 409, `${route}: ${body}`);
+      assert.doesNotMatch(body, /secret/, route);
+      assert.equal(response.headers.get("x-library-id"), null, route);
+    }
+  } finally {
+    await viewer.stop();
+  }
+});
+
 test("createViewerServer reports library sharing publicly without naming the library", async () => {
   let openLibrary = "/Users/me/Shared.library";
   let libraryInfoCalls = 0;
@@ -3377,6 +3500,146 @@ test("createViewerServer serves cached item types for the current library", asyn
     assert.equal(second.status, 200);
     assert.equal(scans, 1);
   } finally {
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer keeps no item types read from a library Eagle switched to before the plugin heard of it", async () => {
+  let openLibrary = "/Users/me/Work.library";
+  const inSecret = () => openLibrary.includes("Secret");
+  let releaseScan = null as (() => void) | null;
+  let clock = 0;
+  const now = Date.now;
+  vi.spyOn(Date, "now").mockImplementation(() => now() + clock);
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    authUsers: [
+      { username: "alice", passwordHash: sha256("a"), role: "viewer" },
+      { username: "owner", passwordHash: sha256("o"), role: "admin" },
+    ],
+    sharedLibraries: ["/Users/me/Work.library", "/Users/me/Secret.library"],
+    libraryUserRules: [{ path: "/Users/me/Secret.library", users: ["owner"] }],
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: openLibrary, name: inSecret() ? "Secret" : "Work" };
+      },
+      async itemExtensions({ onProgress }: { onProgress?: (items: Array<{ count: number; ext: string }>) => void }) {
+        if (releaseScan === null) {
+          // Pages read while Secret is open, before the plugin hears of the switch.
+          await new Promise<void>((resolve) => { releaseScan = resolve; });
+        }
+        const items = inSecret() ? [{ ext: "secretext", count: 7 }] : [{ ext: "jpg", count: 3 }];
+        onProgress?.(items);
+        return items;
+      },
+    },
+  });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const alice = (await loginCookie(origin, "alice", "a")).split(";")[0];
+    const workId = (await fetch(`${origin}/api/health`, { headers: { Cookie: alice } })).headers.get("x-library-id");
+    assert.ok(workId);
+    const headers = { Cookie: alice, "X-Library-Id": workId };
+    const backToWork = async () => {
+      openLibrary = "/Users/me/Work.library";
+      clock += 10_000; // the plugin's library info expires, still without a switch notice
+    };
+
+    // A scan starts in Work; Eagle switches to Secret while it runs and back before anyone is told.
+    const pending = fetch(`${origin}/api/item-types`, { headers });
+    while (!releaseScan) await new Promise((resolve) => setTimeout(resolve, 5));
+    openLibrary = "/Users/me/Secret.library";
+    releaseScan!();
+    const during = await pending;
+    assert.equal(during.status, 409);
+    assert.doesNotMatch(await during.text(), /secretext/);
+    await backToWork();
+    const afterScan = await fetch(`${origin}/api/item-types`, { headers });
+    assert.equal(afterScan.status, 200);
+    assert.doesNotMatch(await afterScan.text(), /secretext/);
+
+    // Asked while Secret is open: refused, and no scan of Secret is kept for Work.
+    openLibrary = "/Users/me/Secret.library";
+    const refused = await fetch(`${origin}/api/item-types?folderId=F1`, { headers });
+    assert.equal(refused.status, 409);
+    await backToWork();
+    const afterRefused = await fetch(`${origin}/api/item-types?folderId=F1`, { headers });
+    assert.equal(afterRefused.status, 200);
+    assert.doesNotMatch(await afterRefused.text(), /secretext/);
+  } finally {
+    vi.restoreAllMocks();
+    await viewer.stop();
+  }
+});
+
+test("createViewerServer keeps no item types when a slow library check found another library", async () => {
+  // The check after the Secret pages is slow; Eagle is back in Work when the scan finishes, so the
+  // final check alone would pass. It must wait for the slow one, which saw Secret.
+  let openLibrary = "/Users/me/Work.library";
+  const inSecret = () => openLibrary.includes("Secret");
+  let releaseScan = null as (() => void) | null;
+  let finishScan = null as (() => void) | null;
+  let answerSlowCheck = null as (() => void) | null;
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    authUsers: [
+      { username: "alice", passwordHash: sha256("a"), role: "viewer" },
+      { username: "owner", passwordHash: sha256("o"), role: "admin" },
+    ],
+    sharedLibraries: ["/Users/me/Work.library", "/Users/me/Secret.library"],
+    libraryUserRules: [{ path: "/Users/me/Secret.library", users: ["owner"] }],
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        const info = { path: openLibrary, name: inSecret() ? "Secret" : "Work" };
+        if (inSecret() && !answerSlowCheck) await new Promise<void>((resolve) => { answerSlowCheck = resolve; });
+        return info;
+      },
+      async itemExtensions({ onProgress }: { onProgress?: (items: Array<{ count: number; ext: string }>) => void }) {
+        await new Promise<void>((resolve) => { releaseScan = resolve; });
+        onProgress?.([{ ext: "secretext", count: 7 }]);
+        await new Promise<void>((resolve) => { finishScan = resolve; });
+        return [{ ext: "secretext", count: 7 }];
+      },
+    },
+  });
+  await viewer.start();
+  const waitFor = async (ready: () => unknown) => {
+    while (!ready()) await new Promise((resolve) => setTimeout(resolve, 5));
+  };
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const alice = (await loginCookie(origin, "alice", "a")).split(";")[0];
+    const workId = (await fetch(`${origin}/api/health`, { headers: { Cookie: alice } })).headers.get("x-library-id");
+    assert.ok(workId);
+    const headers = { Cookie: alice, "X-Library-Id": workId };
+
+    const first = fetch(`${origin}/api/item-types`, { headers });
+    await waitFor(() => releaseScan);
+    openLibrary = "/Users/me/Secret.library";
+    releaseScan!();
+    await waitFor(() => answerSlowCheck);
+    openLibrary = "/Users/me/Work.library";
+    await waitFor(() => finishScan);
+    finishScan!();
+    // While the slow check is still held, the scan answers as unfinished, without what it read.
+    for (const response of [await first, await fetch(`${origin}/api/item-types`, { headers })]) {
+      assert.equal(response.status, 200);
+      assert.deepEqual(await response.json(), { complete: false, items: [] });
+    }
+    answerSlowCheck!();
+    const after = await fetch(`${origin}/api/item-types`, { headers });
+    assert.doesNotMatch(await after.text(), /secretext/);
+  } finally {
+    answerSlowCheck?.();
     await viewer.stop();
   }
 });

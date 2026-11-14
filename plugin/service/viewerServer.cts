@@ -319,6 +319,10 @@ class HttpError extends Error {
 interface LibraryGuard {
   currentLibraryId(): string;
   stillOpen(): boolean;
+  // With library protection on: asks Eagle again which library is open, once, after the answer
+  // was read and before it is sent. The cached info can lag a switch by a few seconds, while Eagle
+  // already answers from the new library, which this user may not be allowed to open.
+  confirmOpen?: () => Promise<unknown>;
 }
 
 // Pinned requests remember which library they were admitted for; sendJson and media streaming
@@ -463,7 +467,32 @@ function createViewerServer({
   let libraryGeneration = 0;
   // What was known when Eagle reported a switch; it stays readable until Eagle is asked again.
   let libraryInfoBeforeSwitch: unknown = null;
-  const trackLibrary = (res: ServerResponse, session: LibraryBackend, admittedLibraryId: string, admittedGeneration: number, user: LibraryUser | null) => {
+  // Asks Eagle which library is open now, per backend. A caller shares a request only with one that
+  // started after it asked, so the answer always comes from after the caller's own reads.
+  const freshInfoBySession = new WeakMap<LibraryBackend, { asking: Promise<unknown> | null; next: Promise<unknown> | null }>();
+  const freshLibraryInfo = (session: LibraryBackend): Promise<unknown> => {
+    let fresh = freshInfoBySession.get(session);
+    if (!fresh) {
+      fresh = { asking: null, next: null };
+      freshInfoBySession.set(session, fresh);
+    }
+    const state = fresh;
+    if (!state.asking) {
+      session.clearLibraryInfo?.();
+      const asking = Promise.resolve(session.libraryInfo());
+      state.asking = asking;
+      asking.then(() => {}, () => {}).then(() => {
+        if (state.asking === asking) state.asking = null;
+      });
+      return asking;
+    }
+    state.next ??= state.asking.then(() => {}, () => {}).then(() => {
+      state.next = null;
+      return freshLibraryInfo(session);
+    });
+    return state.next;
+  };
+  const trackLibrary = (res: ServerResponse, session: LibraryBackend, admittedLibraryId: string, admittedGeneration: number, user: LibraryUser | null, confirm: boolean) => {
     // Only the id of a library this user may open is ever reported, even when a request is refused mid-way.
     const currentLibraryId = () => {
       const library = session.lastLibraryInfo?.() as EagleLibraryInfo | null | undefined;
@@ -472,8 +501,12 @@ function createViewerServer({
     libraryGuards.set(res, {
       currentLibraryId,
       stillOpen: () => admittedGeneration === libraryGeneration && currentLibraryId() === admittedLibraryId,
+      ...(confirm ? { confirmOpen: () => freshLibraryInfo(session) } : {}),
     });
   };
+  // Only Eagle's open library can change under a request; a standalone backend always reads the
+  // library it was given, so its answers need no second look.
+  const confirmOpenLibrary = (session: LibraryBackend, protectedLibraries: boolean) => protectedLibraries && !session.libraryPath;
   // One snapshot of the open library decides sharing, the id check, and the X-Library-Id header.
   // The switch generation is read before that snapshot, so a switch at any point (between checks,
   // or while Eagle answers) fails closed instead of admitting the new library.
@@ -528,7 +561,7 @@ function createViewerServer({
     }
     if (pin === "none") {
       // /api/connect waits for its body and then reads the library again, so its answer is guarded too.
-      if (openLibraryId) trackLibrary(res, session, openLibraryId, admittedGeneration, user);
+      if (openLibraryId) trackLibrary(res, session, openLibraryId, admittedGeneration, user, confirmOpenLibrary(session, protectedLibraries));
       return true;
     }
     const expectedLibraryId = String(req.headers["x-library-id"] || url.searchParams.get("library") || "").trim();
@@ -545,7 +578,7 @@ function createViewerServer({
       sendJson(res, 409, { error: LIBRARY_CHANGED_MESSAGE, code: "LIBRARY_CHANGED" });
       return false;
     }
-    trackLibrary(res, session, openLibraryId, admittedGeneration, user);
+    trackLibrary(res, session, openLibraryId, admittedGeneration, user, confirmOpenLibrary(session, protectedLibraries));
     return true;
   };
   const confirmLibraryBeforeWrite = async (res: ServerResponse, session: LibraryBackend = currentSession) => {
@@ -646,7 +679,7 @@ function createViewerServer({
         }
         requestSession = selected;
         if (!(await admitLibraryRequest(req, url, res, authenticatedUser(req, auth), selected))) return;
-        await streamItemMedia(decodeURIComponent(fileMatch[1]), "file", req, res, selected, libraryGuards.get(res)?.stillOpen);
+        await streamItemMedia(decodeURIComponent(fileMatch[1]), "file", req, res, selected, () => confirmLibraryStillOpen(res));
         return;
       }
       await serveStatic(url.pathname, res, publicDir);
@@ -897,6 +930,11 @@ function uploadSettling(client: object) {
   return Date.now() < (itemTypesSettleUntil.get(client) ?? 0);
 }
 
+// Whether a new type scan of Eagle must start: none, a stopped one, or one whose result expired.
+function needsItemTypeScan(scan: ItemTypesScan | undefined) {
+  return !scan || scan.stopped || (scan.complete && scan.expiresAt <= Date.now());
+}
+
 // Whether a type scan of Eagle for this scope can answer: still running, or finished and not expired.
 function usableItemTypeScan(client: object, libraryPath: string, scope: FolderScope) {
   const cache = itemTypesCache.get(client);
@@ -962,6 +1000,21 @@ async function cachedItemTypes(
       return { complete: true, items: counts.items };
     }
   }
+  const key = itemTypesScanKey(scope);
+  // The library info above may be a few seconds old, and Eagle can switch without the plugin hearing
+  // of it yet: what a scan reads is kept only once Eagle confirms it still has this library open.
+  const libraryStillOpen = async () => {
+    if (switched()) return false;
+    if (session.libraryPath) return true;
+    session.clearLibraryInfo?.();
+    const info = await Promise.resolve(session.libraryInfo()).catch(() => null);
+    return !switched() && String((info as { path?: unknown } | null)?.path || "") === libraryPath;
+  };
+  const cached = itemTypesCache.get(session);
+  const reusable = cached?.libraryPath === libraryPath ? cached.scans.get(key) : undefined;
+  if (needsItemTypeScan(reusable) && !(await libraryStillOpen())) {
+    throw new HttpError(409, LIBRARY_CHANGED_MESSAGE, "LIBRARY_CHANGED");
+  }
   let cache = itemTypesCache.get(session);
   if (!cache || cache.libraryPath !== libraryPath) {
     for (const stale of cache?.scans.values() ?? []) stale.stopped = true;
@@ -969,9 +1022,8 @@ async function cachedItemTypes(
     itemTypesCache.set(session, cache);
   }
   const { scans } = cache;
-  const key = itemTypesScanKey(scope);
   let scan = scans.get(key);
-  if (!scan || scan.stopped || (scan.complete && scan.expiresAt <= Date.now())) {
+  if (!scan || needsItemTypeScan(scan)) {
     const nextScan: ItemTypesScan = {
       complete: false,
       expiresAt: Infinity,
@@ -980,33 +1032,63 @@ async function cachedItemTypes(
       stopped: false,
       value: Promise.resolve([]),
     };
+    const forget = () => {
+      if (scans.get(key) === nextScan) scans.delete(key);
+    };
+    // Read from another library: nothing it found is kept or shown, running or finished.
+    const discard = () => {
+      Object.assign(nextScan, { complete: false, items: [], stopped: true });
+      forget();
+    };
+    // Every check of the library runs after the one before it, and one that fails fails all after it:
+    // a quick check can't vouch for pages an earlier, slower check found were read from another library.
+    let checks: Promise<boolean> = Promise.resolve(true);
+    const confirmInOrder = () => {
+      checks = checks.then((open) => open && !nextScan.stopped && libraryStillOpen());
+      return checks;
+    };
+    // Progress is shown only once Eagle confirms the library it was read from; one check at a time,
+    // each covering the pages read before it.
+    let pendingItems: ItemExtension[] | null = null;
+    let confirming = false;
+    const publishProgress = () => {
+      if (confirming || !pendingItems) return;
+      const seen = pendingItems;
+      pendingItems = null;
+      confirming = true;
+      void confirmInOrder().then((open) => {
+        confirming = false;
+        if (!open) {
+          discard();
+          return;
+        }
+        if (!nextScan.complete && !nextScan.stopped) nextScan.items = seen;
+        publishProgress();
+      });
+    };
     nextScan.value = session.itemExtensions({
       ...scope,
       onProgress: (items) => {
-        if (!nextScan.complete && !switched()) nextScan.items = items;
+        if (nextScan.complete || nextScan.stopped || switched()) return;
+        pendingItems = items;
+        publishProgress();
       },
       shouldStop: () => {
         if (switched() || Date.now() - nextScan.lastRequestedAt > ITEM_TYPES_ABANDONED_MS) nextScan.stopped = true;
         return nextScan.stopped;
       },
+    }).then(async (items) => {
+      // The last pages may have come from the library opened since; drop the result, also when any
+      // progress check before this one failed. A scan dropped after an edit was already replaced.
+      if (nextScan.stopped || !(await confirmInOrder()) || nextScan.stopped) {
+        discard();
+        return [];
+      }
+      // Answered once either way; a scan started while an upload settles is scanned again next time.
+      Object.assign(nextScan, { complete: true, expiresAt: settling ? 0 : Date.now() + ITEM_TYPES_CACHE_MS, items });
+      return items;
     });
-    const forget = () => {
-      if (scans.get(key) === nextScan) scans.delete(key);
-    };
-    nextScan.value.then(
-      (items) => {
-        // The last pages may have come from the library opened since; drop the result. A scan
-        // dropped after an edit was already replaced.
-        if (switched() || nextScan.stopped) {
-          nextScan.stopped = true;
-          forget();
-          return;
-        }
-        // Answered once either way; a scan started while an upload settles is scanned again next time.
-        Object.assign(nextScan, { complete: true, expiresAt: settling ? 0 : Date.now() + ITEM_TYPES_CACHE_MS, items });
-      },
-      forget,
-    );
+    nextScan.value.catch(forget);
     scan = nextScan;
   }
   scan.lastRequestedAt = Date.now();
@@ -1342,7 +1424,7 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
 
   const mediaMatch = url.pathname.match(/^\/api\/items\/([^/]+)\/(thumb|file)$/);
   if (mediaMatch) {
-    await streamItemMedia(decodeURIComponent(mediaMatch[1]), mediaMatch[2], req, res, session, libraryGuards.get(res)?.stillOpen);
+    await streamItemMedia(decodeURIComponent(mediaMatch[1]), mediaMatch[2], req, res, session, () => confirmLibraryStillOpen(res));
     return;
   }
 
@@ -1740,17 +1822,58 @@ function publicLibraryInfo(library: EagleLibraryInfo | null | undefined, library
   return library ? { id: libraryId(library.path), name: String(library.name || "") } : null;
 }
 
+// Responses whose answer waits for Eagle to confirm the open library; nothing else is sent on them.
+const confirmingResponses = new WeakSet<ServerResponse>();
+
+// Whether the library a request was admitted for is still open, asking Eagle again first when the
+// guard calls for it. Media streaming awaits this before sending a file.
+async function confirmLibraryStillOpen(res: ServerResponse) {
+  const guard = libraryGuards.get(res);
+  if (!guard) return true;
+  if (guard.confirmOpen) {
+    const confirmOpen = guard.confirmOpen;
+    guard.confirmOpen = undefined;
+    await confirmOpen();
+  }
+  if (guard.stillOpen()) return true;
+  reportOpenLibrary(res, guard);
+  return false;
+}
+
+// After a switch: names the library open now, or none when this user may not open it.
+function reportOpenLibrary(res: ServerResponse, guard: LibraryGuard) {
+  const currentLibraryId = guard.currentLibraryId();
+  if (currentLibraryId) res.setHeader("X-Library-Id", currentLibraryId);
+  else res.removeHeader("X-Library-Id");
+}
+
 function sendJson(res: ServerResponse, status: number, body: unknown) {
+  if (confirmingResponses.has(res) || res.headersSent) return;
+  const guard = libraryGuards.get(res);
+  // Errors are confirmed too: their message or status may come from reading the new library.
+  if (guard?.confirmOpen && !isLibraryChanged(status, body)) {
+    confirmingResponses.add(res);
+    void confirmLibraryStillOpen(res).then(
+      () => writeJson(res, status, body),
+      () => writeJson(res, 502, { error: "Unable to reach Eagle API" }),
+    );
+    return;
+  }
+  writeJson(res, status, body);
+}
+
+function isLibraryChanged(status: number, body: unknown) {
+  return status === 409 && (body as { code?: unknown } | null)?.code === "LIBRARY_CHANGED";
+}
+
+function writeJson(res: ServerResponse, status: number, body: unknown) {
   const guard = libraryGuards.get(res);
   if (guard && !guard.stillOpen()) {
-    // Eagle switched libraries while this request was in progress: report the new id and never
-    // send a successful answer that may come from the new library.
-    const currentLibraryId = guard.currentLibraryId();
-    if (currentLibraryId) res.setHeader("X-Library-Id", currentLibraryId);
-    if (status < 400) {
-      status = 409;
-      body = { error: LIBRARY_CHANGED_MESSAGE, code: "LIBRARY_CHANGED" };
-    }
+    // Eagle switched libraries while this request was in progress: report the new id (or none, when
+    // this user may not open it) and send nothing that may come from the new library, success or error.
+    reportOpenLibrary(res, guard);
+    status = 409;
+    body = { error: LIBRARY_CHANGED_MESSAGE, code: "LIBRARY_CHANGED" };
   }
   res.writeHead(status, {
     ...securityHeaders,

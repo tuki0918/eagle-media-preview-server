@@ -59,31 +59,27 @@ interface ByteRange {
 }
 
 // `stillOpen` re-checks, right before anything is sent, that the library the request was admitted
-// for is still the one open in Eagle.
-async function streamItemMedia(id: string, kind: MediaKind, req: IncomingMessage, res: ServerResponse, session: EagleMediaSession, stillOpen?: () => boolean) {
+// for is still the one open in Eagle (asking Eagle again when library protection is on).
+async function streamItemMedia(id: string, kind: MediaKind, req: IncomingMessage, res: ServerResponse, session: EagleMediaSession, stillOpen?: () => boolean | Promise<boolean>) {
   if (!["GET", "HEAD"].includes(req.method || "GET")) {
     sendMethodNotAllowed(res, ["GET", "HEAD"]);
     return;
   }
 
   const { filePath, itemData } = await resolveItemMediaPath(id, kind, session);
+  const info = filePath ? await safeStat(filePath) : null;
 
+  // Checked before a missing file is reported too, so a 404 never tells what another library holds.
+  if (stillOpen && !(await stillOpen())) {
+    sendJson(res, 409, { error: "The library open in Eagle has changed", code: "LIBRARY_CHANGED" });
+    return;
+  }
   if (!filePath) {
     sendJson(res, 404, { error: "Media path is unavailable from Eagle" });
     return;
   }
-
-  const info = await safeStat(filePath);
-  if (!info) {
+  if (!info?.isFile()) {
     sendJson(res, 404, { error: "Media file is unavailable" });
-    return;
-  }
-  if (!info.isFile()) {
-    sendJson(res, 404, { error: "Media file is unavailable" });
-    return;
-  }
-  if (stillOpen && !stillOpen()) {
-    sendJson(res, 409, { error: "The library open in Eagle has changed", code: "LIBRARY_CHANGED" });
     return;
   }
   if (kind === "file") {
