@@ -295,6 +295,10 @@ class HttpError extends Error {
 interface LibraryGuard {
   currentLibraryId(): string;
   stillOpen(): boolean;
+  // With library protection on: asks Eagle again which library is open, once, after the answer
+  // was read and before it is sent. The cached info can lag a switch by a few seconds, while Eagle
+  // already answers from the new library, which this user may not be allowed to open.
+  confirmOpen?: () => Promise<unknown>;
 }
 
 // Pinned requests remember which library they were admitted for; sendJson and media streaming
@@ -419,7 +423,27 @@ function createViewerServer({
   let libraryGeneration = 0;
   // What was known when Eagle reported a switch; it stays readable until Eagle is asked again.
   let libraryInfoBeforeSwitch: unknown = null;
-  const trackLibrary = (res: ServerResponse, admittedLibraryId: string, admittedGeneration: number, user: LibraryUser | null) => {
+  // Asks Eagle which library is open now. A caller shares a request only with one that started
+  // after it asked, so the answer always comes from after the caller's own reads.
+  let freshInfo: Promise<unknown> | null = null;
+  let nextFreshInfo: Promise<unknown> | null = null;
+  const freshLibraryInfo = (): Promise<unknown> => {
+    if (!freshInfo) {
+      currentSession.clearLibraryInfo?.();
+      const asking = Promise.resolve(currentSession.libraryInfo());
+      freshInfo = asking;
+      asking.then(() => {}, () => {}).then(() => {
+        if (freshInfo === asking) freshInfo = null;
+      });
+      return asking;
+    }
+    nextFreshInfo ??= freshInfo.then(() => {}, () => {}).then(() => {
+      nextFreshInfo = null;
+      return freshLibraryInfo();
+    });
+    return nextFreshInfo;
+  };
+  const trackLibrary = (res: ServerResponse, admittedLibraryId: string, admittedGeneration: number, user: LibraryUser | null, confirm: boolean) => {
     // Only the id of a library this user may open is ever reported, even when a request is refused mid-way.
     const currentLibraryId = () => {
       const library = currentSession.lastLibraryInfo?.() as EagleLibraryInfo | null | undefined;
@@ -428,6 +452,7 @@ function createViewerServer({
     libraryGuards.set(res, {
       currentLibraryId,
       stillOpen: () => admittedGeneration === libraryGeneration && currentLibraryId() === admittedLibraryId,
+      ...(confirm ? { confirmOpen: freshLibraryInfo } : {}),
     });
   };
   // One snapshot of the open library decides sharing, the id check, and the X-Library-Id header.
@@ -472,7 +497,7 @@ function createViewerServer({
     }
     if (pin === "none") {
       // /api/connect waits for its body and then reads the library again, so its answer is guarded too.
-      if (openLibraryId) trackLibrary(res, openLibraryId, admittedGeneration, user);
+      if (openLibraryId) trackLibrary(res, openLibraryId, admittedGeneration, user, protectedLibraries);
       return true;
     }
     const expectedLibraryId = String(req.headers["x-library-id"] || url.searchParams.get("library") || "").trim();
@@ -489,7 +514,7 @@ function createViewerServer({
       sendJson(res, 409, { error: LIBRARY_CHANGED_MESSAGE, code: "LIBRARY_CHANGED" });
       return false;
     }
-    trackLibrary(res, openLibraryId, admittedGeneration, user);
+    trackLibrary(res, openLibraryId, admittedGeneration, user, protectedLibraries);
     return true;
   };
   const confirmLibraryBeforeWrite = async (res: ServerResponse) => {
@@ -571,7 +596,7 @@ function createViewerServer({
           return;
         }
         if (!(await admitLibraryRequest(req, url, res, authenticatedUser(req, auth)))) return;
-        await streamItemMedia(decodeURIComponent(fileMatch[1]), "file", req, res, currentSession, libraryGuards.get(res)?.stillOpen);
+        await streamItemMedia(decodeURIComponent(fileMatch[1]), "file", req, res, currentSession, () => confirmLibraryStillOpen(res));
         return;
       }
       await serveStatic(url.pathname, res, publicDir);
@@ -1223,7 +1248,7 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
 
   const mediaMatch = url.pathname.match(/^\/api\/items\/([^/]+)\/(thumb|file)$/);
   if (mediaMatch) {
-    await streamItemMedia(decodeURIComponent(mediaMatch[1]), mediaMatch[2], req, res, session, libraryGuards.get(res)?.stillOpen);
+    await streamItemMedia(decodeURIComponent(mediaMatch[1]), mediaMatch[2], req, res, session, () => confirmLibraryStillOpen(res));
     return;
   }
 
@@ -1609,13 +1634,51 @@ function publicLibraryInfo(library: EagleLibraryInfo | null | undefined, library
   return library ? { id: libraryId(library.path), name: String(library.name || "") } : null;
 }
 
+// Responses whose answer waits for Eagle to confirm the open library; nothing else is sent on them.
+const confirmingResponses = new WeakSet<ServerResponse>();
+
+// Whether the library a request was admitted for is still open, asking Eagle again first when the
+// guard calls for it. Media streaming awaits this before sending a file.
+async function confirmLibraryStillOpen(res: ServerResponse) {
+  const guard = libraryGuards.get(res);
+  if (!guard) return true;
+  if (guard.confirmOpen) {
+    const confirmOpen = guard.confirmOpen;
+    guard.confirmOpen = undefined;
+    await confirmOpen();
+  }
+  if (guard.stillOpen()) return true;
+  reportOpenLibrary(res, guard);
+  return false;
+}
+
+// After a switch: names the library open now, or none when this user may not open it.
+function reportOpenLibrary(res: ServerResponse, guard: LibraryGuard) {
+  const currentLibraryId = guard.currentLibraryId();
+  if (currentLibraryId) res.setHeader("X-Library-Id", currentLibraryId);
+  else res.removeHeader("X-Library-Id");
+}
+
 function sendJson(res: ServerResponse, status: number, body: unknown) {
+  if (confirmingResponses.has(res) || res.headersSent) return;
+  const guard = libraryGuards.get(res);
+  if (guard?.confirmOpen && status < 400) {
+    confirmingResponses.add(res);
+    void confirmLibraryStillOpen(res).then(
+      () => writeJson(res, status, body),
+      () => writeJson(res, 502, { error: "Unable to reach Eagle API" }),
+    );
+    return;
+  }
+  writeJson(res, status, body);
+}
+
+function writeJson(res: ServerResponse, status: number, body: unknown) {
   const guard = libraryGuards.get(res);
   if (guard && !guard.stillOpen()) {
-    // Eagle switched libraries while this request was in progress: report the new id and never
-    // send a successful answer that may come from the new library.
-    const currentLibraryId = guard.currentLibraryId();
-    if (currentLibraryId) res.setHeader("X-Library-Id", currentLibraryId);
+    // Eagle switched libraries while this request was in progress: report the new id (or none, when
+    // this user may not open it) and never send a successful answer that may come from the new library.
+    reportOpenLibrary(res, guard);
     if (status < 400) {
       status = 409;
       body = { error: LIBRARY_CHANGED_MESSAGE, code: "LIBRARY_CHANGED" };

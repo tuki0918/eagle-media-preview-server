@@ -56,8 +56,8 @@ interface ByteRange {
 }
 
 // `stillOpen` re-checks, right before anything is sent, that the library the request was admitted
-// for is still the one open in Eagle.
-async function streamItemMedia(id: string, kind: MediaKind, req: IncomingMessage, res: ServerResponse, session: EagleMediaSession, stillOpen?: () => boolean) {
+// for is still the one open in Eagle (asking Eagle again when library protection is on).
+async function streamItemMedia(id: string, kind: MediaKind, req: IncomingMessage, res: ServerResponse, session: EagleMediaSession, stillOpen?: () => boolean | Promise<boolean>) {
   if (!["GET", "HEAD"].includes(req.method || "GET")) {
     sendMethodNotAllowed(res, ["GET", "HEAD"]);
     return;
@@ -79,7 +79,7 @@ async function streamItemMedia(id: string, kind: MediaKind, req: IncomingMessage
     sendJson(res, 404, { error: "Media file is unavailable" });
     return;
   }
-  if (stillOpen && !stillOpen()) {
+  if (stillOpen && !(await stillOpen())) {
     sendJson(res, 409, { error: "The library open in Eagle has changed", code: "LIBRARY_CHANGED" });
     return;
   }

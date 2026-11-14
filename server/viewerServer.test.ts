@@ -4,7 +4,7 @@ import { test, vi } from "vitest";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { constants as fsConstants, createReadStream } from "node:fs";
-import { mkdir, open, readFile, stat, truncate, writeFile, utimes, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, open, readFile, stat, truncate, writeFile, utimes, rm } from "node:fs/promises";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { createRequire } from "node:module";
@@ -2188,6 +2188,73 @@ test("createViewerServer limits a shared library to its users on every request",
     assert.equal((await connect(bob)).status, 403);
   } finally {
     await viewer.stop();
+  }
+});
+
+test("createViewerServer never answers from a library Eagle switched to before the plugin heard of it", async () => {
+  // Eagle has switched to Secret, but the plugin hasn't been told yet and still holds Work's info
+  // (cached for a few seconds). What Eagle reads now comes from Secret, which alice may not open.
+  let openLibrary = "/Users/me/Work.library";
+  const tempDir = await mkdtemp(join(tmpdir(), "eagle-switch-"));
+  const secretFile = join(tempDir, "secret.jpg");
+  await writeFile(secretFile, "secret bytes");
+  const inSecret = () => openLibrary.includes("Secret");
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    authUsers: [
+      { username: "alice", passwordHash: sha256("a"), role: "viewer" },
+      { username: "owner", passwordHash: sha256("o"), role: "admin" },
+    ],
+    sharedLibraries: ["/Users/me/Work.library", "/Users/me/Secret.library"],
+    libraryUserRules: [{ path: "/Users/me/Secret.library", users: ["owner"] }],
+    eagleClient: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: openLibrary, name: inSecret() ? "Secret" : "Work" };
+      },
+      async listItems() {
+        return [{ id: inSecret() ? "S1" : "W1", name: inSecret() ? "secret-plan" : "work-note" }];
+      },
+      async folders() {
+        return { items: [{ id: "F1", name: inSecret() ? "secret-folder" : "work-folder" }], total: 1, offset: 0, limit: 1 };
+      },
+      async itemById(id: string) {
+        return inSecret() ? { id, ext: "jpg", filePath: secretFile } : { id, ext: "jpg" };
+      },
+    },
+  });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const alice = (await loginCookie(origin, "alice", "a")).split(";")[0];
+    const health = await fetch(`${origin}/api/health`, { headers: { Cookie: alice } });
+    const workId = health.headers.get("x-library-id");
+    assert.ok(workId);
+    const headers = { Cookie: alice, "X-Library-Id": workId };
+
+    const before = await fetch(`${origin}/api/items?offset=0&limit=10`, { headers });
+    assert.equal(before.status, 200);
+    assert.match(await before.text(), /work-note/);
+
+    for (const route of ["/api/items?offset=0&limit=10", "/api/folders", "/file/S1"]) {
+      // Work is open and known to the plugin; then Eagle switches without telling it yet.
+      openLibrary = "/Users/me/Work.library";
+      viewer.notifyLibraryChanged();
+      assert.equal((await fetch(`${origin}/api/health`, { headers: { Cookie: alice } })).headers.get("x-library-id"), workId);
+      openLibrary = "/Users/me/Secret.library";
+      const response = await fetch(`${origin}${route}${route.startsWith("/file/") ? `?library=${workId}` : ""}`, { headers });
+      const body = await response.text();
+      assert.equal(response.status, 409, `${route}: ${body}`);
+      assert.doesNotMatch(body, /secret/, route);
+      // The id of a library alice may not open is never handed out.
+      assert.equal(response.headers.get("x-library-id"), null, route);
+    }
+  } finally {
+    await viewer.stop();
+    await rm(tempDir, { recursive: true, force: true });
   }
 });
 
