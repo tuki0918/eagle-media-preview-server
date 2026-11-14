@@ -3,6 +3,8 @@ import type { ViewerMode } from "./types";
 
 export interface ViewerShellActions {
   connect: (credentials?: { password: string; username: string }) => void;
+  /** Opens another library this server serves. */
+  libraryChanged: (libraryId: string) => void;
   logout: () => void;
   urlPopped: () => void;
   searchChanged: (query: string) => void;
@@ -38,6 +40,7 @@ const noop = () => {};
 
 let actions: ViewerShellActions = {
   connect: noop,
+  libraryChanged: noop,
   logout: noop,
   urlPopped: noop,
   searchChanged: noop,
@@ -93,6 +96,10 @@ export function uploadsFinished() {
 
 export function submitLogout() {
   actions.logout();
+}
+
+export function changeLibrary(libraryId: string) {
+  actions.libraryChanged(libraryId);
 }
 
 export function handleUrlPop() {

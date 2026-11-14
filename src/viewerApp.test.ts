@@ -472,6 +472,50 @@ describe("viewer app data refresh", () => {
     expect(itemTypeCalls).toEqual(["/api/item-types?folderId=folder-a", "/api/item-types?folderId=folder-b"]);
   });
 
+  test.each([
+    ["the standalone server", { standalone: true, platform: "darwin" }, 2],
+    ["the plugin", { version: "4.0.0" }, 1],
+  ])("on %s, opening the type menu again asks for the extensions again", async (_label, app, expectedCalls) => {
+    let exts = ["jpg"];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/auth/status") return jsonResponse({ authenticated: true, required: false });
+      if (url === "/api/connect" && options?.method === "POST") return jsonResponse({ app, library: { id: "lib-a", name: "A" } });
+      if (url === "/api/folders" || url === "/api/smart-folders") return jsonResponse({ items: [] });
+      if (url.startsWith("/api/items?")) return jsonResponse({ items: [{ id: "item-1", ext: "jpg" }], total: 5000 });
+      if (url === "/api/item-types") return jsonResponse({ complete: true, items: exts.map((ext) => ({ ext, count: 1 })) });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: fetchMock });
+
+    const { initViewer } = await import("./viewerApp");
+    const { openMediaTypes, submitConnection } = await import("./viewer/shellActions");
+    const { getLoginConnectState } = await import("./viewer/loginConnectState");
+    const { getShellView } = await import("./viewer/shellVisibility");
+    const { getSearchControlsState } = await import("./viewer/searchControlsState");
+    initViewer();
+    await vi.waitFor(() => expect(getLoginConnectState().authenticated).toBe(true));
+    submitConnection({ currentTarget: document.querySelector<HTMLFormElement>("#connectForm")!, preventDefault: () => {} });
+    await vi.waitFor(() => expect(getShellView()).toBe("viewer"));
+
+    openMediaTypes();
+    await vi.waitFor(() => expect(getSearchControlsState().availableExts).toEqual(["jpg"]));
+    // A PDF reaches the library from elsewhere (Eagle on another computer, a sync).
+    exts = ["jpg", "pdf"];
+    openMediaTypes();
+    // The known types stay shown (no loading state) while they are asked for again.
+    expect(getSearchControlsState().availableExtsLoaded).toBe(true);
+    const itemTypeCalls = () => fetchMock.mock.calls.filter(([url]) => String(url).startsWith("/api/item-types"));
+    if (expectedCalls === 2) {
+      // Waits for the answer itself: the new type appears once the second request has come back.
+      await vi.waitFor(() => expect(getSearchControlsState().availableExts).toEqual(["jpg", "pdf"]));
+    } else {
+      // Nothing is asked: the menu reuses what it has, decided before any request could be sent.
+      expect(getSearchControlsState().availableExts).toEqual(["jpg"]);
+    }
+    expect(itemTypeCalls()).toHaveLength(expectedCalls);
+  });
+
   test("lists a folder's extensions from its items once all of them are shown without other filters", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
       const url = String(input);

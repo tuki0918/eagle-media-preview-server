@@ -1,0 +1,347 @@
+# Standalone server: browse Eagle libraries without Eagle
+
+Status: P0, P1 (except the recorded parity tests), and P2 implemented (2026-11-13); P3 onward not started.
+
+Sections 1–10 are the proposal as written before the change; "the plugin" and "before this change" there describe the server as it was. Where the code turned out differently, a short **As built** note says so, and the sections after 10 describe it: [P1 as built](#p1-as-built), [P2 as built](#p2-as-built), and [Configuration and operation](#configuration-and-operation-as-built).
+
+## 1. Background
+
+The preview server runs as an Eagle plugin and reads everything through Eagle's Web API. Two limits of Eagle come with it:
+
+- **Eagle must be running.** Closing Eagle (or the computer it runs on going to sleep) stops the viewer.
+- **One library at a time.** Eagle answers only for the library it has open, so the viewer can show one library, and switching libraries in the viewer switches the library open in Eagle on the host computer.
+
+Third-party mobile apps for Eagle avoid both by reading the library folder directly. The Advanced Sort index (`libraryIndex.cts`, see [large-library-index.md](large-library-index.md)) already reads the same folder (`images/`, `mtime.json`, `metadata.json`) and keeps itself current as Eagle does. This design takes that further: a **read-only** server that browses one or more libraries straight from disk, as a CLI or background service, with or without Eagle.
+
+## 2. Goals and non-goals
+
+Goals:
+
+- Serve one or more libraries without Eagle running, on macOS, Windows, and Linux (including a NAS, in Docker).
+- Serve several libraries at once, each viewer choosing which one to browse, without switching anything on the host.
+- Keep the viewer, the HTTP API, authentication, library protection, and the access log the same as the plugin's.
+- Stay in step with Eagle as it changes (Eagle 5 in particular): find out quickly and loudly when the library format changes.
+
+Non-goals:
+
+- **No writes.** No upload, rating, tag, folder, or trash edits in standalone mode. Eagle keeps its library in memory and writes it back, so a second writer would lose edits or corrupt the library. Write features stay with the plugin.
+- No thumbnail generation. Items get the thumbnails Eagle made; an item without one shows the file itself or a type icon, as the viewer already does for `noThumbnail` items.
+- Not a replacement for the plugin. The plugin stays the default way to run the server; standalone is a second way to run the same server.
+
+## 3. Overview
+
+```
+              ┌──────────────────────────── viewerServer (unchanged API) ────────────────────────────┐
+              │ auth · library protection · access log · /api/* · /file/* · static viewer           │
+              └───────────────────────────────┬──────────────────────────────────────────────────────┘
+                                              │ LibraryBackend (per library)
+                     ┌────────────────────────┴────────────────────────┐
+           EagleApiBackend (plugin)                         FsBackend (standalone)
+           the existing eagleClient + Eagle                 library folder on disk
+           read + write, one library                        read only, any number of libraries
+```
+
+Two entry points share one server:
+
+| | Plugin (unchanged) | Standalone (new) |
+| --- | --- | --- |
+| Started by | Eagle (`plugin/app.tsx`, service mode) | `eagle-media-server` CLI, launchd/systemd/Windows service, Docker |
+| Backend | `EagleApiBackend` | `FsBackend` |
+| Libraries | The one open in Eagle (switchable) | All configured, at the same time |
+| Writes | Yes (by role) | No |
+| Settings | `~/.eagle-media-preview-server/settings.json` | The plugin's `settings.json`, only read, plus `standalone.json` for the servers (as built; see [Configuration and operation](#configuration-and-operation-as-built)) |
+
+## 4. The backend seam
+
+Before this change, `viewerServer.cts` called `session.client.*` (an `eagleClient`) and `session.libraryInfo()`. That set of calls becomes an interface:
+
+```ts
+interface LibraryBackend {
+  readonly kind: "eagle-api" | "fs";
+  readonly writable: boolean;
+
+  libraryInfo(): Promise<LibraryInfo>;          // name, path, applicationVersion
+  appInfo(): Promise<AppInfo>;                  // { standalone: true, platform } in standalone mode
+
+  folders(): Promise<Folder[]>;
+  smartFolders(): Promise<SmartFolder[]>;
+  listItems(options: ListItemsOptions): Promise<Page<Item>>;
+  searchItems(options: SearchItemsOptions): Promise<Page<Item>>;
+  smartFolderItems(options: SmartFolderItemsOptions): Promise<Page<Item>>;
+  itemsByIds(ids: string[]): Promise<Item[]>;
+  sortIndexItems(ids: string[]): Promise<Item[]>;
+  itemExtensions(options: ItemExtensionsOptions): Promise<ExtensionCount[]>;
+  listTags(options: ListTagsOptions): Promise<Page<Tag>>;
+  tagOverview(): Promise<TagOverview>;
+  tagCoverItem(tag: string): Promise<Item | null>;
+  resolveItemFile(item: Item, kind: "file" | "thumb"): Promise<string | null>;
+
+  // Present only when writable.
+  write?: {
+    addItemFromPath(input: AddItemFromPathInput): Promise<unknown>;
+    updateItemStar(id: string, star: unknown): Promise<unknown>;
+    updateItemMetadata(id: string, input: UpdateMetadataInput): Promise<unknown>;
+    updateItemTrash(id: string, isDeleted: boolean): Promise<unknown>;
+  };
+
+  dispose(): Promise<void>;
+}
+```
+
+- The method set is exactly what `viewerServer.cts` called before this change, so `EagleApiBackend` wraps `createEagleClient` and `createConnectionContext` with no change in behavior.
+- **As built** (`viewerServer.cts`, `libraryBackend.cts`): there is no `writable` flag; a backend is read only when it has no `write`. A standalone backend also has `libraryPath`, `name`, `open()`, `state()`, its own `sortIndexes`, `isItemServable(id)`, and `resolveItemFile(id, kind)`, the only way its files are found.
+- Write routes check `backend.write`. Without it they answer `403` with a `read_only` code, before reading the request body (P0). `/api/auth/status`, `/api/connect`, and `/api/health` will also report `permissions` without the write roles, so the viewer hides the edit and upload buttons as it does for Viewer users (P1). **As built**, `/api/connect` and `/api/health` also say `readOnly: true`, and the viewer shows Read only under the library name and explains it in the account menu.
+- `appInfo()` answers `{ standalone: true, platform }` in standalone mode. It can't be `null`: the viewer takes a missing app as "Eagle offline". Nothing else in the viewer depends on Eagle being there.
+
+## 5. FsBackend: reading the library folder
+
+### 5.1 Files read
+
+Checked against Eagle 4.0 (`applicationVersion: "4.0.0"`, the ICON test library):
+
+| File | Holds | Used for |
+| --- | --- | --- |
+| `<library>/metadata.json` | `folders`, `smartFolders`, `quickAccess`, `tagsGroups`, `modificationTime`, `applicationVersion` | Folders, smart folders, tag groups, format check |
+| `<library>/tags.json` | `historyTags`, `starredTags` | Starred tags; the tag list itself comes from items |
+| `<library>/mtime.json` | `{ <id>: <change time>, ..., all: <count> }` | Change detection (as `libraryIndex.cts` already does) |
+| `<library>/images/<id>.info/metadata.json` | `id`, `name`, `ext`, `size`, `width`, `height`, `btime`, `mtime`, `modificationTime`, `lastModified`, `tags`, `folders`, `isDeleted`, `url`, `annotation`, `palettes`, and when set `star`, `duration`, `noThumbnail` | Every item field the viewer shows |
+| `<library>/images/<id>.info/<name>.<ext>` | The file | `/file/<id>`, `/api/items/<id>/file` |
+| `<library>/images/<id>.info/<name>_thumbnail.png` | The thumbnail, when Eagle made one | `/api/items/<id>/thumb` |
+
+Never read: `backup/`, `saved-filters.json`, and Eagle's own cache under its user data folder (`library-caches/*.txt`). The cache is Eagle-internal, keyed by a hash of the library path, and can change in any release.
+
+### 5.2 The item store
+
+`libraryIndex.cts` becomes the core of `FsBackend`, with one change: in standalone mode there is no Eagle to fetch metadata from, so every item's metadata comes from its `metadata.json`.
+
+**As built:** `FsBackend` keeps its own store and shares only `libraryIndex.cts`'s filter and sort helpers. There is no snapshot yet (P3), no read pacing, and no `--gentle` option: the first read is unpaced, 64 files at a time. Every file it reads, and every file it serves, must really be inside the library (see [P1 as built](#p1-as-built)).
+
+- **Build.** List `images/`, read every `metadata.json` (async, 64 at a time, measured at 15.8 s for 300,000 items with a warm cache), and keep them in the existing columnar store plus the fields the viewer shows (`annotation`, `url`, `palettes`). Trashed items (`isDeleted`) are kept to match Eagle's `all` count and are never returned.
+- **Snapshot.** Save the store to `<state dir>/libraries/<library id>/index.v1.bin` (outside the library, never inside it) and load it at start (measured at 0.69 s for 300,000 items), then reconcile with `mtime.json`: only items newer than the snapshot are read again. A snapshot whose format version, library path, or `applicationVersion` doesn't match is discarded.
+- **Updates.** Watch `mtime.json` (poll its `mtime`/`size` every few seconds; file-system events are unreliable on network shares) and reread only the items it reports changed. A disagreeing `all` count triggers a rescan of `images/`, as `libraryIndex.cts` does: at most once a minute (`rescanIntervalMs`), and again each minute while the counts still disagree, since an item folder still syncing can arrive without `mtime.json` changing again. An item `mtime.json` announces whose folder isn't there yet is looked for again each minute for up to an hour, and also schedules a rescan, because a deletion in the same sync can leave the counts matching. On the first read, ids `mtime.json` lists without a folder are matched against the folders too: Eagle keeps deleted ids there for good, so only those changed within the last hour are looked for; the rest are taken as deleted. An item that couldn't be read is hidden and tried again at every check; one whose folder or metadata leads outside the library is left out and checked again when its time changes and once a minute (`recheckIntervalMs`). Root `metadata.json` and `tags.json` are reread when their `mtime` changes.
+- **Pacing** (proposed, not built). Reads paced as `libraryIndex.cts` paces its metadata reads (a token bucket, 2,000 a second) so a NAS or Windows Defender isn't hammered, with the initial build unpaced unless `--gentle` is set.
+- **Half-written files.** Eagle may be writing a `metadata.json` while it is read. A file that fails to parse keeps the last good copy (or stays missing) and is retried on the next update, as `libraryIndex.cts` already does. **As built**, the item is hidden, and its files refused, until it reads cleanly, since the edit being written may be a move to the trash.
+
+### 5.3 Queries
+
+Each query the viewer makes is answered from the store, following what the Eagle API does, so both backends return the same pages (checked by the tests in 7):
+
+| Viewer request | FsBackend |
+| --- | --- |
+| All items, folder, unfiled, untagged, type, rating, tags | Filter the store; default order is Eagle's `item/get` order (`modificationTime`, newest first). Advanced Sort keys work for every library, with no setting needed. **As built**: only with Advanced Sort on (`experimentalSort` in `settings.json`), as in the plugin |
+| Folder item counts | Counted from the store. **As built**: items directly in the folder; whether Eagle's `imageCount` includes sub-folders is still to be checked |
+| Search | Name, tags, annotation, and URL, case-insensitive, all words must match. Close to, but not exactly, Eagle's full-text `item/query`; documented as such. **As built**: Eagle's operators (`-word`, `"phrase"`, `a OR b`), also over the extension, folder names and descriptions, and comments |
+| Smart folders | Rules evaluated by our own engine (5.4). **As built**: not listed yet |
+| Tags, tag overview, tag cover | Counted from the store; starred tags and groups from `tags.json` and `metadata.json` |
+| Item types | Counted from the store; no Eagle scan needed |
+
+### 5.4 Smart folders
+
+Smart folder rules (`conditions[].rules[]` with `property`, `method`, `value`, combined by `match` and `boolean`) were only evaluated by Eagle before this change. `FsBackend` gets its own evaluator, phased in (P4, not started):
+
+1. **First release:** the properties that map to stored fields (`rating`, `tags`, `folders`, `type`/`ext`, `name`, `annotation`, `url`, `width`, `height`, `size`, `duration`, the date properties). A smart folder using any rule the evaluator doesn't know is listed but disabled in the viewer, with "Not supported without Eagle", never shown with wrong results.
+2. **Later:** colors (`palettes`) and the remaining properties, each added only with a parity test against Eagle.
+
+### 5.5 Password-protected folders
+
+Folders can have a `password` in the library's `metadata.json`. Eagle hides their contents until unlocked. `FsBackend` must never be the way around that:
+
+- A folder with a non-empty `password` is not listed, and items in it (or in a sub-folder of it) are left out of every list, search, count, tag, and smart folder result, and refused by `/file` and `/thumb`.
+- The password is never compared, logged, or sent to the viewer. Unlocking is out of scope.
+
+### 5.6 Files
+
+`/file/<id>` and `/api/items/<id>/thumb|file` keep the plugin's path checks (`resolveLibraryItemFile`: the resolved path must stay inside `<library>/images/<id>.info/`, no symlinks out). An item in the trash or in a password-protected folder answers `404`.
+
+**As built**, stricter for the standalone server: paths in an item's metadata are never used or sent, and a file is served only if its real path, with links resolved, is inside `<library real path>/images/<id>.info`.
+
+## 6. Multiple libraries
+
+### 6.1 Configuration
+
+Proposed: the standalone config uses the plugin's settings file format with one addition, the libraries to serve. (**As built**, this was replaced: the plugin's `settings.json` is only read, and `standalone.json` lists servers; see [Configuration and operation](#configuration-and-operation-as-built).)
+
+```jsonc
+{
+  "port": 41595,
+  "libraries": [
+    { "path": "/Volumes/nas/Photos.library" },
+    { "path": "/Users/me/Design.library", "name": "Design", "access": "selected", "users": ["alice"] }
+  ]
+  // auth users, HTTPS, public network, block list ... as in the plugin
+}
+```
+
+`libraries` is the same list library protection already uses (`normalizeSharedLibraries`), so per-library users work unchanged. In standalone mode only the listed libraries are served; there is no "library open in Eagle".
+
+### 6.2 Routing
+
+Each library gets one `FsBackend`, created at start and disposed at stop. Viewers already send the id of the library they connected to (`libraryIdFor`, an HMAC of the path) as the `X-Library-Id` header, or `?library=` on media URLs. Before this change the server only checked it against the library open in Eagle; standalone mode uses it to pick the backend:
+
+- `/api/*`, `/file/*`, and `/api/items/<id>/thumb|file` are answered by the backend the id names. An id that names no library, or one the user may not open, answers as a library mismatch (`409 LIBRARY_CHANGED`) or `library_denied` does in the plugin.
+- A new `/api/libraries` lists the libraries the user may open (id and name only, never the path).
+- The viewer gets a library picker (before this change the library was switched only from the plugin panel on the host). Picking one changes only that viewer, not the host or other viewers. With one library, the picker is hidden.
+- A request without a library id gets the first library the user may open, so a bookmarked plugin URL keeps working.
+
+### 6.3 Resources
+
+Each library costs about 150 MB of memory per 300,000 items (measured for the sort index; the extra display fields add an estimated 30%). Backends are built one at a time at start, smallest first, so small libraries are browsable within seconds while a large one builds. A library still building answers with `sort.complete: false` and the viewer shows its progress, as Advanced Sort does. (As built, see [P2 as built](#p2-as-built): read in the order given, and requests wait for the read.)
+
+A library that disappears (unmounted NAS) is marked unavailable and retried every 30 seconds; the others keep working. (**As built**: retried at most every 30 seconds, when it is asked for.)
+
+## 7. Staying in step with Eagle
+
+The library format is undocumented. These keep it from drifting silently:
+
+1. **Version gate.** `FsBackend` reads `applicationVersion` from the library's `metadata.json` at start and on every change. Known major versions are served. An unknown major version (Eagle 5, for instance) is refused with a clear message unless `--allow-unknown-format` is set, in which case the viewer shows a banner. Item `metadata.json` fields are read defensively: unknown fields are ignored, a missing required field (`id`, `name`, `ext`) skips the item and is counted in `/api/health`. (**As built**: the refusal and `--allow-unknown-format` exist; the banner and the count in `/api/health` don't. An item whose metadata has no matching `id` is held back as unreadable.)
+2. **Parity tests** (not built yet). A test suite runs the same queries against both backends on a fixture library and requires the same results: folders, smart folders (supported rules), items in every filter and sort, tags, counts, file and thumbnail paths. Two modes:
+   - **Recorded (CI):** Eagle's API answers for the fixture library (the `sample-eagles` repository) are recorded once and committed; `FsBackend` runs against the fixture in CI without Eagle.
+   - **Live (by hand):** with Eagle running and the fixture library open, the suite asks Eagle directly. Run this on every new Eagle release, and re-record when it passes.
+3. **Format notes** (not written yet). A section in `EAGLE_PLUGIN_SPEC.md` lists every file and field the backend relies on, with the Eagle versions they were checked against. A new Eagle release is supported when the live suite passes and that table is updated.
+4. **Fallback.** On a computer where Eagle runs, the plugin stays available. If a format change breaks `FsBackend`, users go back to the plugin until it's fixed; nothing in the library has been touched.
+
+## 8. Running it
+
+Proposed:
+
+```sh
+npx eagle-media-server --config ~/media-server.json
+npx eagle-media-server --library ~/Photos.library --library /Volumes/nas/Design.library --port 41595
+```
+
+**As built**, the package isn't published, so it runs from the repository after `npm run build`, as `node bin/eagle-media-server.cjs` (see [Configuration and operation](#configuration-and-operation-as-built)). Service recipes, the `Dockerfile`, and `--state-dir` are P5 and P3; the access log goes to `~/.eagle-media-preview-server/standalone-access-log.jsonl`, and the session secret comes from `settings.json`.
+
+- **Package.** The service code (`plugin/service/*.cts`, built to `dist/.generated/plugin-service`) plus the built viewer (`dist/`) and a small `bin/eagle-media-server.cjs`. No Eagle or Electron APIs are used outside `plugin/app.tsx`, so the service code already runs under plain Node 20+.
+- **Background service.** Documented recipes for launchd (`~/Library/LaunchAgents`), systemd (user unit), and Windows (Task Scheduler at log on), plus a `Dockerfile` (library folders mounted read-only: `-v /share/Photos.library:/libraries/Photos.library:ro`).
+- **State.** Snapshots, the access log, and the session secret go to `--state-dir` (default `~/.eagle-media-preview-server/standalone/`), never into a library.
+- **Read-only mount.** `FsBackend` never opens a library file for writing; Docker and NAS setups are encouraged to mount libraries read-only to make that certain.
+- **Same computer as Eagle.** Running both is safe (the standalone server only reads), but each needs its own port.
+
+## 9. Security
+
+Everything the plugin enforces applies unchanged: authentication and roles, library protection, the block list, HTTPS, the access log. Additional for standalone:
+
+- Writes are impossible, not just hidden: `FsBackend` has no write methods, and the write routes answer `403 read_only` before reading the request.
+- Password-protected folders are hidden (5.5).
+- Only configured library paths are served; a library id that doesn't match one answers `409 LIBRARY_CHANGED` (health and connect answer for the first library instead), and file paths are confined to `<library>/images/<id>.info/`.
+- With no auth users configured, the server refuses to start on a non-loopback `--host` unless `--allow-anonymous-lan` is given (it listens on `127.0.0.1` by default).
+
+## 10. Plan
+
+| Phase | Work | Done when |
+| --- | --- | --- |
+| P0 (done) | Extract `LibraryBackend` (`libraryBackend.cts`); `createEagleApiBackend` wraps the existing client. No behavior change. | All existing tests pass; write routes go through `backend.write` and answer `403 read_only` without it. |
+| P1 (done but parity tests) | `FsBackend`, read only, one library: item store from `metadata.json`, queries in 5.3, files, password-protected folders, version gate. CLI entry. | Parity tests (recorded) pass for everything but smart folders and full-text search; `npx eagle-media-server --library <path>` serves the viewer without Eagle. |
+| P2 (done) | Multiple libraries: config, routing by library id, `/api/libraries`, the viewer's library picker, per-library build and availability. | Two viewers browse two libraries at once; library protection applies per library. |
+| P3 | Snapshots on disk; `mtime.json` polling tuned for network shares. | 300,000 items available within 2 s of a restart. |
+| P4 | Smart folder evaluator (first release set). | Parity tests pass for supported rules; unsupported ones are disabled, not wrong. |
+| P5 | Packaging: npm package, Docker image, service recipes; spec and README sections. | Runs on a Linux NAS in Docker with read-only mounts. |
+
+## P1 as built
+
+Code: `plugin/service/fsBackend.cts` (the backend), `plugin/service/standalone.cts` and `bin/eagle-media-server.cjs` (the command). Tests: `server/fsBackend.test.ts`, `server/standalone.test.ts`.
+
+```sh
+npm run build
+node bin/eagle-media-server.cjs --library ~/Pictures/Photos.library
+```
+
+Checked with the ICON sample library (206 item folders, 201 shown): read in 0.1 s; the viewer browses folders, tags, sorting, previews, and files with Eagle closed, and shows ratings as read only.
+
+Differences from the proposal above:
+
+- **Sorting needs no index of Eagle's.** The backend keeps every item in memory, so it hands the server its own sort index (`backend.sortIndexes`, shaped like `libraryIndex.cts`'s). Advanced Sort works in standalone mode without an index of Eagle's, and nothing is read twice. (Later: it is offered only with Advanced Sort on, `experimentalSort` in `settings.json`, as in the plugin; the library is read in full either way, since lists, filters, and search need it. The type menu counts from memory in both cases.)
+- **Files are refused, not just hidden.** The media code asks `backend.isItemServable(id)` first; an item in the trash or in a locked folder answers `404` on `/api/items/<id>/file|thumb` and `/file/<id>`. (Through Eagle, a trashed item's file is still served from its folder, as before.)
+- **Locked folders.** An item in any locked folder (or one inside it) is hidden, even if it is also in an unlocked one. Password fields are stripped from every folder sent.
+- **Smart folders are not listed at all** until the evaluator (5.4) exists, rather than listed and disabled.
+- **Search** follows Eagle's `item/query` operators (all words, `-word`, `"phrase"`, `a OR b`) over name, notes, extension, URL, tags, folder names and descriptions, and comments. It doesn't search OCR text, camera, or font names.
+- **Folder `imageCount`** counts items directly in the folder. Whether Eagle's count includes sub-folders is still to be checked against Eagle (see 11).
+- **No state directory yet**, and no snapshot (P3). (Later: the session secret and access log came with [Configuration and operation](#configuration-and-operation-as-built).)
+- **`--port 0`** picks any free port (for tests).
+
+Not done in P1:
+
+- **Recorded parity tests (7.2).** Recording needs Eagle running with the fixture library open; the shapes were taken from Eagle's own API code (`app/js/plugin/index.js`, `api-server-v2.js` in Eagle 4's `app.asar`) and the unit tests cover them, but no answer of Eagle's has been compared yet.
+- The viewer's offline hint still said to start the server in Eagle. (Later fixed: it names both kinds of server.)
+
+## P2 as built
+
+```sh
+node bin/eagle-media-server.cjs --library ~/Pictures/Photos.library --library /Volumes/nas/Work.library
+```
+
+Superseded by [Configuration and operation](#configuration-and-operation-as-built), which replaced this `--config` format:
+
+```jsonc
+// --config (P2 only): the plugin's settings format, plus "libraries"
+{
+  "authEnabled": true,
+  "authUsers": [{ "username": "alice", "password": "…", "role": "viewer" }],
+  "libraries": [
+    "/Users/me/Pictures/Photos.library",
+    { "path": "/Volumes/nas/Work.library", "name": "Work", "access": "selected", "users": ["alice"] }
+  ]
+}
+```
+
+- **Routing.** `createViewerServer({ backends })` takes several backends. `selectSession` picks one per request from `X-Library-Id` (or `?library=`). Health, connect, and library status without an id, or with an id the server doesn't know (from before a restart, say), answer for the first library the user may open. Other routes with an unknown id answer `409 LIBRARY_CHANGED`, which the viewer already handles. Everything after selection (library protection, per-user rules, the access log's library id, sorting, item types) works per library as it did for Eagle's one open library.
+- **`/api/libraries`** (multi-library servers only; others answer `404`) lists the libraries open to the signed-in user: `{ id, name, status: "ready" | "building" | "failed", loaded?, total? }`.
+- **Viewer.** A picker (⇅) next to the library name in the sidebar, shown when there are two or more. Picking a library drops what is shown and connects again with its id; the pick is kept in `localStorage` (`mediaLibrary.libraryId`) and sent with the next connect. A library that can't be read is listed but disabled; one being read shows its progress.
+- **Reading order.** The server listens at once and reads the libraries one at a time in the order listed, not smallest first. A request for a library not read yet starts reading it at once and waits for it; for a very large library the first request can take as long as the read (about 16 s per 300,000 items on an SSD).
+- **Unreadable libraries.** A library that can't be read (a missing folder, an unknown format) answers `500` on its own routes and is retried at most every 30 seconds, when asked for again; the others keep working. A folder without `metadata.json` is listed as "not found" and not served (later; in P2 it stopped the server).
+- **Library info answers at once.** `FsBackend.libraryInfo()` and `appInfo()` no longer wait for the library to be read, so status checks stay quick.
+
+## Configuration and operation (as built)
+
+This replaces the `--config` file of P2, which was the plugin's settings format plus `libraries`.
+
+**settings.json is the base, and only read.** Users, roles, sign-in, the session secret, the block list, library protection (shared libraries and per-library users), and the default port, host, hostname, and HTTPS come from the plugin's `~/.eagle-media-preview-server/settings.json` (`--settings` for another). The plugin rewrites that file with only the fields it knows whenever its settings are saved, so nothing of the standalone server's is kept in it.
+
+Sharing the session secret is what makes switching seamless: sign-in cookies and library ids are both derived from it, so a viewer stays signed in and keeps its library when the plugin answers instead of the standalone server, or the other way round. To edit a library, stop the standalone server for it, open Eagle, and use the same URL.
+
+**standalone.json lists the servers** (`~/.eagle-media-preview-server/standalone.json`, `--config` for another):
+
+```jsonc
+{
+  "servers": [
+    { "libraries": ["~/Pictures/Photos.library"] },                               // settings.json's port: the plugin's URL
+    { "libraries": ["/Volumes/nas/Work.library"], "port": 41533, "customDomain": "work.local" },
+    { "libraries": ["/Volumes/nas/A.library", { "path": "/Volumes/nas/B.library", "name": "Archive" }], "port": 41534 }
+  ]
+}
+```
+
+- Each server is one listener. With one library, that library has its own URL; with several, the viewer's picker chooses among them (P2).
+- A server may set only `port`, `host`, `customDomain`, `httpsEnabled`, `httpsCertPath`, `httpsKeyPath`; anything else (users, say) is refused, so whoever may open a library is the same through Eagle or here. `port: 0` takes any free port.
+- Paths may start with `~/`; relative paths are relative to standalone.json.
+- Without standalone.json, the libraries the plugin shares (with library protection on) are served on settings.json's port. With neither, the command explains what to write and exits.
+- `--library` (with `--port`, `--host`) replaces the servers with one, for a quick run. Only a network `--host` given this way needs sign-in or `--allow-anonymous-lan`: an address in settings.json was chosen in the plugin (its Public Network switch), and is shown as a warning instead.
+- With library protection on in settings.json, a library it doesn't share is listed as "not shared" and not served.
+
+**Startup.** Each server listens on its own. One whose port is taken is reported as "port in use (the Eagle plugin may be running)" and skipped; the others run. The command exits only if no server could start. It prints, before anything else:
+
+```
+Eagle Media Server (standalone, read only)
+  Settings:   ~/.eagle-media-preview-server/settings.json (read only)
+  Servers:    ~/.eagle-media-preview-server/standalone.json
+  Sign-in:    required (2 users)
+  Access log: ~/.eagle-media-preview-server/standalone-access-log.jsonl (-f to stream it here)
+
+PORT    STATUS        URL                         LIBRARY   LIBRARY STATUS
+41532   port in use   http://studio.local:41532   Photos    -
+41533   running       http://work.local:41533     Work      reading
+41534   running       http://studio.local:41534   A         waiting to read
+                                                  Archive   not found (no metadata.json)
+```
+
+and the table again once every library is read. A library only on servers that didn't start isn't read.
+
+**Access log.** Written by default, in the plugin's format (`accessLog.cts`), to `~/.eagle-media-preview-server/standalone-access-log.jsonl` (`--access-log` for another): a file of its own, since the plugin may be writing its log at the same time. It records what the plugin's does (sign-ins, file views, failures, edits refused) plus `server_start`, `server_start_failed`, and `server_stop`; status polls and item lists only mark a device as connected, as in the plugin. `-f` streams entries below the table as they happen; `eagle-media-server logs [-f] [-n N]` prints the file from another terminal (useful when the server runs as a service), naming libraries from the current configuration.
+
+## 11. Open questions
+
+- **Item order inside a folder.** Eagle can order a folder by hand (`orderBy`/`sortIncrease` and per-item order in folder data). Check where that's stored and whether the API's folder order already reflects it; until then folders use the default order.
+- **Folder counts.** Whether Eagle's folder `imageCount` includes items in sub-folders; check against a live Eagle when recording parity tests.
+- **Search parity.** How far `item/query` goes beyond name, tags, annotation, and URL (OCR text? palette names?), and whether the gap matters to users.
+- **Eagle 5.** Whether it keeps the `images/<id>.info` layout. The version gate (7.1) makes this safe either way; the work is in updating the backend when it ships.
+- **Plugin using FsBackend.** Once parity holds, the plugin could read from disk too (faster, and no paused Eagle window on large libraries) while keeping writes on the API. Not part of this design.

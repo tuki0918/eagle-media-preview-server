@@ -2,12 +2,14 @@ import {
   CheckIcon,
   ChevronDownIcon,
   ChevronRightIcon,
+  ChevronsUpDownIcon,
   FolderCogIcon,
   FolderIcon,
   FolderOpenIcon,
   FunnelIcon,
   InboxIcon,
   LayoutGridIcon,
+  LockIcon,
   LogOutIcon,
   MonitorIcon,
   MoonIcon,
@@ -45,10 +47,12 @@ import { getEagleStatus, subscribeEagleStatus, type EagleStatus } from "../eagle
 import { displayFolderCount } from "../format";
 import { DEFAULT_DISPLAY_PREFERENCES, resetDisplaySettings, subscribeDisplaySettingsReset, type DisplayPreferences } from "../displayPreferences";
 import { getLibraryFooterName, subscribeLibraryFooterName } from "../libraryFooterState";
+import { getLibraryListState, refreshLibraryList, subscribeLibraryListState, type LibraryEntry } from "../libraryListState";
+import { getServerReadOnly, subscribeServerReadOnly } from "../readOnlyState";
 import { getLoginConnectState, subscribeLoginConnectState } from "../loginConnectState";
 import { getSearchControlsState, subscribeSearchControlsState } from "../searchControlsState";
 import { PAGE_SIZE_OPTIONS } from "../shellConfig";
-import { changeFolder, changePageSize, changeSmartFolder, openAllItems, openTags, submitLogout } from "../shellActions";
+import { changeFolder, changeLibrary, changePageSize, changeSmartFolder, openAllItems, openTags, submitLogout } from "../shellActions";
 import { getItemActionsVisible, setItemActionsVisible } from "../itemActionsVisibilityState";
 import { getSubfoldersVisible, setSubfoldersVisible } from "../subfolderVisibilityState";
 import { getThemeState, setThemePreference, type ThemePreference } from "../themeState";
@@ -76,6 +80,7 @@ export function AccountSideMenu() {
   const loginState = useSyncExternalStore(subscribeLoginConnectState, getLoginConnectState, getLoginConnectState);
   const eagleStatus = useSyncExternalStore(subscribeEagleStatus, getEagleStatus, getEagleStatus);
   const searchState = useSyncExternalStore(subscribeSearchControlsState, getSearchControlsState, getSearchControlsState);
+  const readOnly = useSyncExternalStore(subscribeServerReadOnly, getServerReadOnly, getServerReadOnly);
   const username = loginState.user?.username?.trim();
   const roleLabel = authRoleLabel(loginState.user?.role, searchState.canUpload);
   const roleDescription = authRoleDescription(loginState.user?.role, searchState.canUpload);
@@ -109,7 +114,8 @@ export function AccountSideMenu() {
           clearFolderFilter();
         }}
       >
-        <SidebarHeader className="flex-row items-center gap-1 p-3 pb-1 pt-[calc(14px+env(safe-area-inset-top))]">
+        {/* relative: on phones the library picker's menu spans the header, not just its button. */}
+        <SidebarHeader className="relative flex-row items-center gap-1 p-3 pb-1 pt-[calc(14px+env(safe-area-inset-top))]">
           <SidebarMenu className="flex-1">
             <SidebarMenuItem>
               <SidebarMenuButton
@@ -138,14 +144,20 @@ export function AccountSideMenu() {
                   </span>
                   <span className="grid min-w-0 group-data-[collapsible=icon]:hidden">
                     <span className="truncate text-sm font-semibold leading-tight text-sidebar-foreground">{libraryName}</span>
+                    {readOnly ? (
+                      // Text only: the sidebar header is narrow on desktop, and the account menu explains it.
+                      <span id="readOnlyBadge" className="truncate text-xs leading-tight text-muted-foreground">Read only</span>
+                    ) : null}
                   </span>
                 </button>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
+          <LibraryPicker />
           {signedIn ? (
             <AccountDropdown
               onOpenPreferences={() => setPreferencesOpen(true)}
+              readOnly={readOnly}
               disabled={loginState.disabled}
               roleDescription={roleDescription}
               roleLabel={roleLabel}
@@ -156,6 +168,7 @@ export function AccountSideMenu() {
           ) : (
             <AccountDropdown
               onOpenPreferences={() => setPreferencesOpen(true)}
+              readOnly={readOnly}
               disabled={loginState.disabled}
               roleDescription=""
               roleLabel={GUEST_ROLE_LABEL}
@@ -1041,6 +1054,7 @@ function folderNavIcon(icon: FolderNavIconName) {
 
 function AccountDropdown({
   onOpenPreferences,
+  readOnly = false,
   disabled,
   roleDescription,
   roleLabel,
@@ -1049,6 +1063,8 @@ function AccountDropdown({
   username,
 }: {
   onOpenPreferences: () => void;
+  /** The server can't change the library, so the role's editing rights don't apply here. */
+  readOnly?: boolean;
   disabled: boolean;
   roleDescription: string;
   roleLabel: string;
@@ -1128,6 +1144,12 @@ function AccountDropdown({
                 <RoleChip description={roleDescription} label={displayRole} />
               </div>
             </div>
+            {readOnly ? (
+              <p id="readOnlyNotice" className="m-0 mb-1.5 flex gap-2 rounded-lg bg-muted px-2.5 py-2 text-xs leading-snug text-muted-foreground [&_svg]:mt-px [&_svg]:size-3.5 [&_svg]:shrink-0">
+                <LockIcon aria-hidden="true" />
+                <span>This server is read only: you can browse and preview, but ratings, tags, trash, and uploads are turned off for every account.</span>
+              </p>
+            ) : null}
             <div className="-mx-1.5 my-1 h-px bg-border" />
             <button
               type="button"
@@ -1170,6 +1192,107 @@ function AccountDropdown({
       </SidebarMenuItem>
     </SidebarMenu>
   );
+}
+
+// Shown only when the server serves several libraries this user may open (a standalone server).
+// Picking one changes only this viewer; the server and other viewers keep theirs.
+function LibraryPicker() {
+  const { isMobile, setOpenMobile } = useSidebar();
+  const { currentId, libraries } = useSyncExternalStore(subscribeLibraryListState, getLibraryListState, getLibraryListState);
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLLIElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    // Statuses change while libraries are read, so the list is asked for again on each opening.
+    void refreshLibraryList();
+    const handleClick = (event: MouseEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("click", handleClick);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("click", handleClick);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  if (libraries.length < 2) return null;
+
+  return (
+    <SidebarMenu className="w-auto shrink-0">
+      {/* static on phones: the menu then spans the header (see SidebarHeader) instead of hanging off the button. */}
+      <SidebarMenuItem ref={containerRef} className={isMobile ? "static" : undefined}>
+        <button
+          id="libraryPickerButton"
+          type="button"
+          className="flex size-10 items-center justify-center rounded-full text-muted-foreground outline-hidden transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring aria-expanded:bg-sidebar-accent [&_svg]:size-4"
+          aria-label="Switch library"
+          aria-haspopup="menu"
+          aria-expanded={open}
+          aria-controls="libraryPickerMenu"
+          title="Switch library"
+          onClick={(event) => {
+            event.stopPropagation();
+            setOpen((current) => !current);
+          }}
+        >
+          <ChevronsUpDownIcon aria-hidden="true" />
+        </button>
+        {open ? (
+          <div
+            id="libraryPickerMenu"
+            role="menu"
+            aria-labelledby="libraryPickerButton"
+            className={
+              isMobile
+                ? "absolute inset-x-3 top-full z-50 mt-1 rounded-2xl border border-border bg-popover p-1.5 text-popover-foreground shadow-[0_18px_48px_-16px_rgba(15,23,42,0.35)]"
+                : "absolute left-full top-0 z-50 ml-3 w-72 rounded-2xl border border-border bg-popover p-1.5 text-popover-foreground shadow-[0_18px_48px_-16px_rgba(15,23,42,0.35)]"
+            }
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="px-2 pb-1.5 pt-1.5 text-xs font-medium text-muted-foreground">Libraries</div>
+            {libraries.map((library) => {
+              const isCurrent = library.id === currentId;
+              const unavailable = library.status === "failed";
+              const detail = libraryStatusText(library);
+              return (
+                <button
+                  key={library.id}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={isCurrent}
+                  disabled={unavailable}
+                  className="relative flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 text-left text-sm text-foreground outline-hidden select-none hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0"
+                  onClick={() => {
+                    setOpen(false);
+                    if (isMobile) setOpenMobile(false);
+                    if (!isCurrent) changeLibrary(library.id);
+                  }}
+                >
+                  <span className="grid min-w-0 flex-1">
+                    <span className="truncate">{library.name}</span>
+                    {detail ? <span className="truncate text-xs text-muted-foreground">{detail}</span> : null}
+                  </span>
+                  {isCurrent ? <CheckIcon aria-hidden="true" /> : null}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+      </SidebarMenuItem>
+    </SidebarMenu>
+  );
+}
+
+function libraryStatusText(library: LibraryEntry) {
+  if (library.status === "failed") return "Can't be read right now";
+  if (library.status !== "building") return "";
+  if (library.total) return `Reading… ${Math.min(100, Math.floor(((library.loaded || 0) / library.total) * 100))}%`;
+  return "Reading…";
 }
 
 function authRoleLabel(role: unknown, canUpload?: boolean) {

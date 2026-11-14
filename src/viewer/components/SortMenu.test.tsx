@@ -28,11 +28,23 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
+// Waits (in act, up to a second) until `ready` holds: on a slow machine a menu closed by the last
+// pick may still be closing, and a new one may not have rendered its items yet.
+async function waitFor(ready: () => boolean, what: string) {
+  for (let waited = 0; !ready(); waited += 10) {
+    if (waited >= 1000) throw new Error(`Timed out waiting for ${what}`);
+    await act(async () => new Promise((resolveWait) => setTimeout(resolveWait, 10)));
+  }
+}
+
 async function openSortMenu() {
   const trigger = document.querySelector<HTMLButtonElement>("#sortSelect")!;
+  // A menu that is still open (closing after the last pick) would take this press as "close".
+  await waitFor(() => trigger.getAttribute("aria-expanded") !== "true", "the sort menu to close");
   await act(async () => {
     trigger.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, button: 0 }));
   });
+  await waitFor(() => document.querySelectorAll('[role="menuitemradio"]').length > 0, "the sort menu items");
 }
 
 async function pick(label: string) {

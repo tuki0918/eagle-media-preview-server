@@ -6,6 +6,7 @@ import { build as esbuild } from "esbuild";
 
 const distDir = resolve("dist");
 const generatedPluginServiceDir = resolve(distDir, ".generated", "plugin-service");
+const STANDALONE_ONLY_MODULE = /[\\/](?:fsBackend|standalone|standaloneConfig|standaloneLog)\.cjs$/;
 
 function copyPluginPackageAssets() {
   const includeRuntimeAsset = (sourcePath: string) => !/\.test\.(?:cjs|js|ts|tsx)$/.test(sourcePath)
@@ -32,7 +33,8 @@ function copyPluginPackageAssets() {
         cp("public/bootstrap.js", resolve(distDir, "public/bootstrap.js")),
         cp("public/assets", resolve(distDir, "public/assets"), { recursive: true }),
       ]);
-      await cp(generatedPluginServiceDir, resolve(distDir, "plugin", "service"), { recursive: true });
+      // The standalone server's own modules run only from bin/eagle-media-server.cjs, never in Eagle.
+      await cp(generatedPluginServiceDir, resolve(distDir, "plugin", "service"), { recursive: true, filter: (sourcePath) => !STANDALONE_ONLY_MODULE.test(sourcePath) });
       await esbuild({
         bundle: true,
         define: {

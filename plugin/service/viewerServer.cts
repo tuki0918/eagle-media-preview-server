@@ -6,7 +6,7 @@ const { randomBytes } = require("crypto");
 const { createAddressBlockList, normalizeClientAddress } = require("./addressBlockList.cjs");
 const { normalizeCustomDomain } = require("./customDomain.cjs");
 const { EagleRequestError, createEagleClient, normalizeStringArray, parseRatingFilter } = require("./eagleClient.cjs");
-const { createConnectionContext } = require("./connection.cjs");
+const { createEagleApiBackend } = require("./libraryBackend.cjs");
 const { createLibraryAccessPolicy, libraryIdFor } = require("./libraryAccess.cjs");
 const { createLibraryIndexManager, parseIndexSort } = require("./libraryIndex.cjs");
 const { readInternetShortcutUrl, servedMediaInfo, streamItemMedia } = require("./media.cjs");
@@ -63,6 +63,13 @@ interface ViewerServerOptions {
   allowMetadataEditing?: boolean;
   authUsers?: AuthUser[];
   basicAuthUsername?: string;
+  /** Where the library is read from; defaults to Eagle through `eagleClient`. */
+  backend?: LibraryBackend;
+  /**
+   * Several libraries served at once (the standalone server). Each request is answered by the one
+   * its library id names; see selectSession.
+   */
+  backends?: LibraryBackend[];
   eagleClient?: EagleClient;
   host?: string;
   httpsCertPath?: string;
@@ -112,6 +119,7 @@ const METADATA_WRITE_FORBIDDEN_MESSAGE = "Metadata editing is not allowed for th
 const ADMIN_WRITE_FORBIDDEN_MESSAGE = "Admin actions are not allowed for this viewer";
 const UPLOAD_FORBIDDEN_MESSAGE = "Uploading is not allowed for this viewer";
 const LIBRARY_NOT_SHARED_MESSAGE = "The library open in Eagle is not shared";
+const READ_ONLY_MESSAGE = "This server can't change the library";
 const LIBRARY_FORBIDDEN_MESSAGE = "Your account can't open the library that is open in Eagle";
 const LIBRARY_CHANGED_MESSAGE = "The library open in Eagle has changed";
 const LIBRARY_REQUIRED_MESSAGE = "A library id is required for library requests";
@@ -205,11 +213,27 @@ interface EagleClient {
   updateItemTrash(id: string, isDeleted: boolean): Promise<EagleItem>;
 }
 
-interface EagleSession {
+// Where every request reads the library from (libraryBackend.cts). `write` is absent on a read-only
+// backend, and every write is then refused.
+interface LibraryBackend extends Omit<EagleClient, "addItemFromPath" | "updateItemMetadata" | "updateItemStar" | "updateItemTrash"> {
+  readonly kind: string;
   clearLibraryInfo?: () => void;
-  client: EagleClient;
   lastLibraryInfo?: () => unknown;
   libraryInfo(): Promise<EagleLibraryInfo>;
+  write?: Pick<EagleClient, "addItemFromPath" | "updateItemMetadata" | "updateItemStar" | "updateItemTrash">;
+  /** A backend that keeps every item in memory sorts by itself; otherwise Advanced Sort builds an index. */
+  sortIndexes?: SortIndexManager;
+  /** False for an item whose file must not be served (in the trash, or in a locked folder). */
+  isItemServable?(id: string): Promise<boolean>;
+  /** The only way this backend's files are found, confined to the library (see media.cts). */
+  resolveItemFile?(id: string, kind: "file" | "thumb"): Promise<string>;
+  /** The library this backend always reads (a standalone backend); absent for Eagle's open library. */
+  readonly libraryPath?: string;
+  readonly name?: string;
+  /** Starts reading the library; rejects when it can't be read. */
+  open?(): Promise<void>;
+  /** Where reading the library stands, without waiting for it. */
+  state?(): { error: string; loaded: number; status: string; total: number };
 }
 
 interface LibraryUser {
@@ -240,7 +264,7 @@ interface ApiContext {
   /** Re-reads the open library from Eagle right before a write and throws if it changed. */
   confirmLibraryBeforeWrite: (res: ServerResponse) => Promise<void>;
   uploadMaxBytes: number;
-  getSession: () => EagleSession;
+  getSession: () => LibraryBackend;
   libraryAccess: LibraryAccessPolicy;
   libraryId: (libraryPath: unknown) => string;
 }
@@ -348,6 +372,8 @@ function createViewerServer({
   uploadRequestTimeoutMs = UPLOAD_REQUEST_TIMEOUT_MS,
   uploadSweepIntervalMs = UPLOAD_SWEEP_INTERVAL_MS,
   requestBodyTimeoutMs = REQUEST_BODY_TIMEOUT_MS,
+  backend,
+  backends = [],
   eagleClient = createEagleClient(),
 }: ViewerServerOptions = {}) {
   let serverInstance: NetServer | null = null;
@@ -394,20 +420,38 @@ function createViewerServer({
   // Per-library users need a signed-in user to check; without password protection they are not applied.
   const libraryAccess: LibraryAccessPolicy = createLibraryAccessPolicy(sharedLibraries, resolvedAuthUsers.length ? libraryUserRules : []);
   const libraryId = (libraryPath: unknown) => libraryIdFor(libraryPath, resolvedSessionSecret);
-  const currentSession: EagleSession = createConnectionContext({ client: eagleClient });
+  // Reads through Eagle unless a backend is given (a test, or later a server that reads the library folder).
+  const multiLibrary = backends.length > 0;
+  const currentSession: LibraryBackend = multiLibrary ? backends[0] : backend ?? createEagleApiBackend({ client: eagleClient });
+  const sessions: LibraryBackend[] = multiLibrary ? backends : [currentSession];
+  const sessionIds = new Map(sessions.map((session) => [session, libraryId(session.libraryPath)]));
   // With Advanced Sort on, the index is built in the background when the server starts (and after a
   // library switch) and kept while the server runs, so sorting is ready before anyone asks for it.
+  // A backend that keeps every item in memory brings its own index, but it too sorts only with
+  // Advanced Sort on: the plugin and the standalone server follow the same setting.
   const sortIndexes: SortIndexManager | null = experimentalSort
-    ? createLibraryIndexManager({ idleMs: Infinity, sourceFor: () => sortIndexSource(eagleClient, () => libraryGeneration) })
+    ? currentSession.sortIndexes ?? createLibraryIndexManager({ idleMs: Infinity, sourceFor: () => sortIndexSource(currentSession, () => libraryGeneration) })
     : null;
-  const sortIndexCheck = () => {
+  const sortIndexesFor = (session: LibraryBackend) => (experimentalSort ? session.sortIndexes ?? sortIndexes : null);
+  const sortIndexCheckFor = (manager: SortIndexManager | null) => () => {
     const admittedGeneration = libraryGeneration;
-    return (libraryPath: string) => sortIndexes && state === "running" && admittedGeneration === libraryGeneration
-      ? sortIndexState(sortIndexes, libraryPath)
+    return (libraryPath: string) => manager && state === "running" && admittedGeneration === libraryGeneration
+      ? sortIndexState(manager, libraryPath)
       : null;
   };
+  const sortIndexCheck = sortIndexCheckFor(sortIndexes);
   let sortWarmRun = 0;
   const warmSortIndex = async () => {
+    if (multiLibrary) {
+      // One at a time, in the order given, so the first library is ready soonest. A library asked
+      // for meanwhile starts reading at once; one that can't be read is retried when asked for.
+      const run = ++sortWarmRun;
+      for (const session of sessions) {
+        if (run !== sortWarmRun) return;
+        await session.open?.().catch(() => {});
+      }
+      return;
+    }
     if (!sortIndexes) return;
     const run = ++sortWarmRun;
     const check = sortIndexCheck();
@@ -419,10 +463,10 @@ function createViewerServer({
   let libraryGeneration = 0;
   // What was known when Eagle reported a switch; it stays readable until Eagle is asked again.
   let libraryInfoBeforeSwitch: unknown = null;
-  const trackLibrary = (res: ServerResponse, admittedLibraryId: string, admittedGeneration: number, user: LibraryUser | null) => {
+  const trackLibrary = (res: ServerResponse, session: LibraryBackend, admittedLibraryId: string, admittedGeneration: number, user: LibraryUser | null) => {
     // Only the id of a library this user may open is ever reported, even when a request is refused mid-way.
     const currentLibraryId = () => {
-      const library = currentSession.lastLibraryInfo?.() as EagleLibraryInfo | null | undefined;
+      const library = session.lastLibraryInfo?.() as EagleLibraryInfo | null | undefined;
       return library && libraryOpenFor(library.path, user) ? libraryId(library.path) : "";
     };
     libraryGuards.set(res, {
@@ -437,14 +481,26 @@ function createViewerServer({
     const status = libraryAccess.status(libraryPath, user);
     return status === "shared" || status === "unrestricted";
   };
-  const admitLibraryRequest = async (req: IncomingMessage, url: URL, res: ServerResponse, user: LibraryUser | null) => {
+  // The backend a request is for. With one library, always that one. With several, the one its
+  // library id names; without an id (health, connect, a first visit), or with one that names no
+  // library of this server (an id from before a restart), the first one this user may open.
+  // Pinned requests with an unknown id get null and are refused as a library change.
+  const selectSession = (req: IncomingMessage, url: URL, user: LibraryUser | null): LibraryBackend | null => {
+    if (!multiLibrary) return currentSession;
+    const requested = String(req.headers["x-library-id"] || url.searchParams.get("library") || "").trim();
+    const named = requested ? sessions.find((session) => sessionIds.get(session) === requested) : undefined;
+    if (named) return named;
+    if (requested && libraryPinFor(url.pathname) !== "none") return null;
+    return sessions.find((session) => libraryOpenFor(session.libraryPath, user)) ?? currentSession;
+  };
+  const admitLibraryRequest = async (req: IncomingMessage, url: URL, res: ServerResponse, user: LibraryUser | null, session: LibraryBackend = currentSession) => {
     const isHealth = url.pathname === "/api/health";
     const pin = libraryPinFor(url.pathname);
     const protectedLibraries = libraryAccess.status(null) !== "unrestricted";
     const admittedGeneration = libraryGeneration;
     let openLibrary: EagleLibraryInfo | null = null;
     try {
-      openLibrary = await currentSession.libraryInfo();
+      openLibrary = await session.libraryInfo();
     } catch (error) {
       // With protection on, a library that cannot be read is never served; health still answers.
       if (protectedLibraries && !isHealth) throw error;
@@ -472,7 +528,7 @@ function createViewerServer({
     }
     if (pin === "none") {
       // /api/connect waits for its body and then reads the library again, so its answer is guarded too.
-      if (openLibraryId) trackLibrary(res, openLibraryId, admittedGeneration, user);
+      if (openLibraryId) trackLibrary(res, session, openLibraryId, admittedGeneration, user);
       return true;
     }
     const expectedLibraryId = String(req.headers["x-library-id"] || url.searchParams.get("library") || "").trim();
@@ -489,14 +545,14 @@ function createViewerServer({
       sendJson(res, 409, { error: LIBRARY_CHANGED_MESSAGE, code: "LIBRARY_CHANGED" });
       return false;
     }
-    trackLibrary(res, openLibraryId, admittedGeneration, user);
+    trackLibrary(res, session, openLibraryId, admittedGeneration, user);
     return true;
   };
-  const confirmLibraryBeforeWrite = async (res: ServerResponse) => {
+  const confirmLibraryBeforeWrite = async (res: ServerResponse, session: LibraryBackend = currentSession) => {
     const guard = libraryGuards.get(res);
     if (!guard) return;
-    currentSession.clearLibraryInfo?.();
-    await currentSession.libraryInfo();
+    session.clearLibraryInfo?.();
+    await session.libraryInfo();
     if (!guard.stillOpen()) throw new HttpError(409, LIBRARY_CHANGED_MESSAGE, "LIBRARY_CHANGED");
   };
 
@@ -514,8 +570,10 @@ function createViewerServer({
       }
       // Stays on this computer, so it names the open library even when it isn't shared with this visitor.
       // No extra Eagle lookup for this: left empty when the last known library may no longer be open.
+      // The backend this request is for, once known (see selectSession).
+      let requestSession = currentSession;
       const logLibraryId = () => {
-        const library = currentSession.lastLibraryInfo?.() as EagleLibraryInfo | null | undefined;
+        const library = requestSession.lastLibraryInfo?.() as EagleLibraryInfo | null | undefined;
         return library && library !== libraryInfoBeforeSwitch ? libraryId(library.path) : "";
       };
       const recordAuth: AuthContext["recordAuth"] = (event, username, status) => {
@@ -525,7 +583,7 @@ function createViewerServer({
           // A sign-in never depends on its log entry.
         }
       };
-      const auth = { authSessions, clientAddress: requestAddress, loginFailures, recordAuth, revokedAuthSessions, secureCookies: httpsEnabled, sessionMaxAgeSeconds, sessionSecret: resolvedSessionSecret, users: resolvedAuthUsers };
+      const auth = { authSessions, clientAddress: requestAddress, loginFailures, recordAuth, revokedAuthSessions, secureCookies: httpsEnabled, sessionMaxAgeSeconds, sessionSecret: resolvedSessionSecret, users: resolvedAuthUsers, readOnly: !currentSession.write };
       // A refused upload must not make this server read the rest of a large body before moving on.
       if (url.pathname === UPLOAD_PATH) res.setHeader("Connection", "close");
       if (!isTrustedUnsafeRequest(req, url, trustedCustomDomain)) {
@@ -539,23 +597,34 @@ function createViewerServer({
       if (url.pathname.startsWith("/api/")) {
         countRequest();
         if (await handleAuthRoutes(req, url, res, auth)) return;
+        const selected = selectSession(req, url, authenticatedUser(req, auth));
         if (url.pathname === "/api/library-status") {
-          await handleLibraryStatus(req, res, currentSession, libraryAccess, authenticatedUser(req, auth));
+          await handleLibraryStatus(req, res, selected ?? currentSession, libraryAccess, authenticatedUser(req, auth));
           return;
         }
         if (!isAuthorized(req, auth)) {
           sendAuthRequired(res);
           return;
         }
-        if (!(await admitLibraryRequest(req, url, res, authenticatedUser(req, auth)))) return;
+        if (url.pathname === "/api/libraries" && multiLibrary) {
+          handleLibraries(req, res, sessions, sessionIds, libraryAccess, authenticatedUser(req, auth));
+          return;
+        }
+        if (!selected) {
+          sendJson(res, 409, { error: LIBRARY_CHANGED_MESSAGE, code: "LIBRARY_CHANGED" });
+          return;
+        }
+        requestSession = selected;
+        if (!(await admitLibraryRequest(req, url, res, authenticatedUser(req, auth), selected))) return;
+        const selectedSortIndexes = sortIndexesFor(selected);
         await handleApi(req, url, res, {
           auth,
-          confirmLibraryBeforeWrite,
-          getSession: () => currentSession,
+          confirmLibraryBeforeWrite: (response: ServerResponse) => confirmLibraryBeforeWrite(response, selected),
+          getSession: () => selected,
           libraryAccess,
           libraryId,
-          sortIndexes,
-          sortIndexCheck,
+          sortIndexes: selectedSortIndexes,
+          sortIndexCheck: selectedSortIndexes === sortIndexes ? sortIndexCheck : sortIndexCheckFor(selectedSortIndexes),
           sortIndexStallMs,
           sortIndexWaitMs,
           libraryGeneration: () => libraryGeneration,
@@ -570,8 +639,14 @@ function createViewerServer({
           sendAuthRequired(res);
           return;
         }
-        if (!(await admitLibraryRequest(req, url, res, authenticatedUser(req, auth)))) return;
-        await streamItemMedia(decodeURIComponent(fileMatch[1]), "file", req, res, currentSession, libraryGuards.get(res)?.stillOpen);
+        const selected = selectSession(req, url, authenticatedUser(req, auth));
+        if (!selected) {
+          sendJson(res, 409, { error: LIBRARY_CHANGED_MESSAGE, code: "LIBRARY_CHANGED" });
+          return;
+        }
+        requestSession = selected;
+        if (!(await admitLibraryRequest(req, url, res, authenticatedUser(req, auth), selected))) return;
+        await streamItemMedia(decodeURIComponent(fileMatch[1]), "file", req, res, selected, libraryGuards.get(res)?.stillOpen);
         return;
       }
       await serveStatic(url.pathname, res, publicDir);
@@ -630,6 +705,7 @@ function createViewerServer({
     async stop() {
       sortWarmRun += 1;
       sortIndexes?.release();
+      for (const session of sessions) if (session.sortIndexes && session.sortIndexes !== sortIndexes) session.sortIndexes.release();
       if (uploadSweepTimer) clearInterval(uploadSweepTimer);
       uploadSweepTimer = null;
       if (!serverInstance || state === "stopped") {
@@ -697,7 +773,7 @@ function createViewerServer({
       libraryGeneration += 1;
       sortIndexes?.release();
       // Scans still running read the newly opened library now, so none of them may be kept.
-      dropItemTypeScans(currentSession.client);
+      dropItemTypeScans(currentSession);
       libraryInfoBeforeSwitch = currentSession.lastLibraryInfo?.();
       currentSession.clearLibraryInfo?.();
       void warmSortIndex();
@@ -707,11 +783,37 @@ function createViewerServer({
   };
 }
 
+// The libraries this server serves that this user may open, for the viewer's library picker. Only
+// ids and names are sent: paths reveal the host's directory layout. `status` says whether the
+// library has been read yet ("ready"), is being read ("building"), or can't be read ("failed").
+function handleLibraries(req: IncomingMessage, res: ServerResponse, sessions: LibraryBackend[], sessionIds: Map<LibraryBackend, string>, libraryAccess: LibraryAccessPolicy, user: LibraryUser | null) {
+  if (req.method !== "GET") {
+    sendMethodNotAllowed(res, ["GET"]);
+    return;
+  }
+  const libraries = sessions
+    .filter((session) => {
+      const status = libraryAccess.status(session.libraryPath, user);
+      return status === "shared" || status === "unrestricted";
+    })
+    .map((session) => {
+      const state = session.state?.();
+      const status = !state || state.status === "ready" ? "ready" : state.status === "failed" ? "failed" : "building";
+      return {
+        id: sessionIds.get(session) || "",
+        name: String(session.name || ""),
+        status,
+        ...(state && status === "building" ? { loaded: state.loaded, total: state.total } : {}),
+      };
+    });
+  sendJson(res, 200, { libraries });
+}
+
 // Public so the viewer can show the offline page before sign-in. It never names the library,
 // and with protection off it answers without asking Eagle.
 // A visitor who is not signed in never learns who may open the library; "forbidden" is only
 // reported to a signed-in user the library is not shared with.
-async function handleLibraryStatus(req: IncomingMessage, res: ServerResponse, session: EagleSession, libraryAccess: LibraryAccessPolicy, user: LibraryUser | null) {
+async function handleLibraryStatus(req: IncomingMessage, res: ServerResponse, session: LibraryBackend, libraryAccess: LibraryAccessPolicy, user: LibraryUser | null) {
   if (req.method !== "GET") {
     sendMethodNotAllowed(res, ["GET"]);
     return;
@@ -763,7 +865,7 @@ function createProtocolServer({ httpsCertPath = "", httpsEnabled = false, httpsK
 // Item metadata for Advanced Sort's index, from Eagle. An index belongs to one library, and Eagle
 // answers for whichever library is open, so an answer is refused once Eagle reports a switch (the
 // index is released then anyway).
-function sortIndexSource(client: EagleClient, libraryGeneration: () => number) {
+function sortIndexSource(client: Pick<LibraryBackend, "sortIndexItems">, libraryGeneration: () => number) {
   const generation = libraryGeneration();
   return {
     async fetchItems(ids: string[]) {
@@ -821,7 +923,7 @@ function folderScope(folderId: string | null): FolderScope {
 // it at once; otherwise Eagle is scanned page by page. Eagle answers for whichever library is open,
 // so nothing read across a library switch is kept or returned.
 async function cachedItemTypes(
-  session: { client: EagleClient; libraryInfo(): Promise<unknown> },
+  session: LibraryBackend,
   scope: FolderScope,
   sortIndexes: SortIndexManager | null,
   libraryGeneration: () => number,
@@ -835,20 +937,20 @@ async function cachedItemTypes(
   const index = sortIndexes && libraryPath ? sortIndexes.loaded(libraryPath) : null;
   // Right after an upload, Eagle lists the new item before it records it in mtime.json, so the index
   // can still count the library without it; Eagle is scanned (and the scan not kept) meanwhile.
-  let settling = uploadSettling(session.client);
+  let settling = uploadSettling(session);
   if (index?.status === "ready" && !settling) {
     const counts = await index.extensionCounts(scope);
     // The count checks the library first, which can take a moment. Meanwhile Eagle may have opened
     // another library, or an upload may have finished (and another request started a scan of Eagle
     // to include the new item): the count is then out of date, and that scan must not be stopped.
     if (switched()) throw new HttpError(409, LIBRARY_CHANGED_MESSAGE, "LIBRARY_CHANGED");
-    settling = uploadSettling(session.client);
+    settling = uploadSettling(session);
     // While an update is read, the counts from before it stand in, and the viewer asks again until
     // it ends, so Eagle isn't scanned for nothing. Eagle is scanned after all when there are no such
     // counts (this folder wasn't counted before; a bulk update can take minutes) or the update has
     // stalled. A scan of Eagle already running or finished (and not expired) answers instead too: it
     // is newer than those counts, and keeps what a viewer already shows from it.
-    if (!settling && counts.status === "refreshing" && counts.items && counts.stalledForMs < sortIndexStallMs && !usableItemTypeScan(session.client, libraryPath, scope)) {
+    if (!settling && counts.status === "refreshing" && counts.items && counts.stalledForMs < sortIndexStallMs && !usableItemTypeScan(session, libraryPath, scope)) {
       return { complete: false, items: counts.items };
     }
     // If the update finished but metadata is still missing, use Eagle instead.
@@ -856,15 +958,15 @@ async function cachedItemTypes(
       // A scan of Eagle started before the index was ready (or while it was incomplete) would only
       // keep paging through Eagle until abandoned; the index answers for every folder now. Scans
       // are shared by every viewer of this server, so theirs stop too and they get the index next.
-      dropItemTypeScans(session.client);
+      dropItemTypeScans(session);
       return { complete: true, items: counts.items };
     }
   }
-  let cache = itemTypesCache.get(session.client);
+  let cache = itemTypesCache.get(session);
   if (!cache || cache.libraryPath !== libraryPath) {
     for (const stale of cache?.scans.values() ?? []) stale.stopped = true;
     cache = { libraryPath, scans: new Map() };
-    itemTypesCache.set(session.client, cache);
+    itemTypesCache.set(session, cache);
   }
   const { scans } = cache;
   const key = itemTypesScanKey(scope);
@@ -878,7 +980,7 @@ async function cachedItemTypes(
       stopped: false,
       value: Promise.resolve([]),
     };
-    nextScan.value = session.client.itemExtensions({
+    nextScan.value = session.itemExtensions({
       ...scope,
       onProgress: (items) => {
         if (!nextScan.complete && !switched()) nextScan.items = items;
@@ -956,7 +1058,7 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
     }
     const checkSortIndex = sortIndexCheck();
     const [app, library] = await Promise.allSettled([
-      session.client.appInfo(),
+      session.appInfo(),
       session.libraryInfo(),
     ]);
     const libraryInfo = library.status === "fulfilled" ? library.value : null;
@@ -967,8 +1069,9 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       library: libraryStatus === "shared" ? publicLibraryInfo(libraryInfo, libraryId) : null,
       libraryStatus,
       error: app.status === "rejected" ? app.reason.message : null,
+      ...(session.write ? {} : { readOnly: true }),
       // Changing the upload permission keeps sessions valid, so open viewers learn about it here.
-      permissions: permissionsForUser(authenticatedUser(req, auth), { authenticated: true }),
+      permissions: permissionsForUser(authenticatedUser(req, auth), { authenticated: true, readOnly: auth.readOnly }),
       uploadMaxBytes: hasUploadAccess(req, auth) ? uploadMaxBytes : undefined,
       // Lets open viewers enable sorting once the background index is ready. Asking also restarts
       // a failed build and follows a library switch.
@@ -982,7 +1085,7 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       sendMethodNotAllowed(res, ["GET"]);
       return;
     }
-    sendJson(res, 200, await session.client.folders());
+    sendJson(res, 200, await session.folders());
     return;
   }
 
@@ -991,7 +1094,7 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       sendMethodNotAllowed(res, ["GET"]);
       return;
     }
-    sendJson(res, 200, await session.client.smartFolders());
+    sendJson(res, 200, await session.smartFolders());
     return;
   }
 
@@ -1025,11 +1128,11 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
           ratings: parseRatingFilter(url.searchParams.get("rating")),
           tags,
         }, sort, offset, limit);
-        const items = await session.client.itemsByIds(page.ids);
+        const items = await session.itemsByIds(page.ids);
         // An index missing items, or still reading an update, gives a short or stale list; say so, so
         // the viewer doesn't take it as whole. Judged when the page was made, not after fetching its
         // items. Right after an upload the index may not hold the new item yet either.
-        const sortState = page.complete && !uploadSettling(session.client) ? { status: "ready" } : { status: "ready", complete: false };
+        const sortState = page.complete && !uploadSettling(session) ? { status: "ready" } : { status: "ready", complete: false };
         sendJson(res, 200, { items, total: page.total, offset, limit, sort: sortState });
         return;
       }
@@ -1037,10 +1140,10 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       sortStatus = { status: index.status === "failed" ? "failed" : "indexing", ...index.progress() };
     }
     const result = smartFolderId
-      ? await session.client.smartFolderItems({ smartFolderId, offset, limit })
+      ? await session.smartFolderItems({ smartFolderId, offset, limit })
       : query && !hasStructuredFilters
-      ? await session.client.searchItems({ query, offset, limit })
-      : await session.client.listItems({
+      ? await session.searchItems({ query, offset, limit })
+      : await session.listItems({
           offset,
           limit,
           keywords: query,
@@ -1058,7 +1161,15 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       sendMethodNotAllowed(res, ["GET"]);
       return;
     }
-    sendJson(res, 200, await cachedItemTypes(session, folderScope(url.searchParams.get("folderId")), sortIndexes, libraryGeneration, sortIndexStallMs));
+    const scope = folderScope(url.searchParams.get("folderId"));
+    // A backend with its own index holds every item in memory and follows the library's changes, so
+    // its counts are always current and cheap: taken from it each time, whether or not Advanced
+    // Sort is on, and never through the cache below, which is for scans of Eagle.
+    if (session.sortIndexes) {
+      sendJson(res, 200, { complete: true, items: await session.itemExtensions({ folderId: scope.folderId || null, isUnfiled: scope.isUnfiled, isUntagged: scope.isUntagged }) });
+      return;
+    }
+    sendJson(res, 200, await cachedItemTypes(session, scope, sortIndexes, libraryGeneration, sortIndexStallMs));
     return;
   }
 
@@ -1069,7 +1180,7 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
     }
     const query = url.searchParams.get("q") || "";
     const limit = url.searchParams.get("limit") || 20;
-    const result = await session.client.listTags({ query, limit });
+    const result = await session.listTags({ query, limit });
     sendJson(res, 200, result);
     return;
   }
@@ -1079,7 +1190,7 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       sendMethodNotAllowed(res, ["GET"]);
       return;
     }
-    sendJson(res, 200, await session.client.tagOverview());
+    sendJson(res, 200, await session.tagOverview());
     return;
   }
 
@@ -1093,7 +1204,7 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       sendJson(res, 400, { error: "tag is required" });
       return;
     }
-    sendJson(res, 200, { item: await session.client.tagCoverItem(tag) });
+    sendJson(res, 200, { item: await session.tagCoverItem(tag) });
     return;
   }
 
@@ -1103,6 +1214,8 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       sendMethodNotAllowed(res, ["POST"]);
       return;
     }
+    const write = writableBackend(session, res);
+    if (!write) return;
     if (!hasRatingWriteAccess(req, auth)) {
       sendJson(res, 403, { error: RATING_WRITE_FORBIDDEN_MESSAGE });
       return;
@@ -1115,7 +1228,7 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
     // Taken before the write: if Eagle switches libraries meanwhile, this index is already dropped
     // and the edit must not land in the next library's index.
     const sortIndex = sortIndexFor(session, sortIndexes);
-    const item = await session.client.updateItemStar(itemId, star);
+    const item = await write.updateItemStar(itemId, star);
     sortIndex?.noteItem({ id: itemId, star: item.star ?? star });
     sendJson(res, 200, { id: item.id || itemId, star: item.star ?? star });
     return;
@@ -1127,6 +1240,8 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       sendMethodNotAllowed(res, ["POST"]);
       return;
     }
+    const write = writableBackend(session, res);
+    if (!write) return;
     if (!hasMetadataWriteAccess(req, auth)) {
       sendJson(res, 403, { error: METADATA_WRITE_FORBIDDEN_MESSAGE });
       return;
@@ -1138,14 +1253,14 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
     editedItems.set(res, { fields: (["tags", "folders"] as const).filter((field) => metadataPatch[field] !== undefined) });
     await confirmLibraryBeforeWrite(res);
     const sortIndex = sortIndexFor(session, sortIndexes);
-    const item = await session.client.updateItemMetadata(itemId, metadataPatch);
+    const item = await write.updateItemMetadata(itemId, metadataPatch);
     const updated = {
       id: item.id || itemId,
       tags: Array.isArray(item.tags) ? item.tags : metadataPatch.tags,
       folders: Array.isArray(item.folders) ? item.folders : metadataPatch.folders,
     };
     sortIndex?.noteItem({ ...updated, id: itemId });
-    dropItemTypeScans(session.client);
+    dropItemTypeScans(session);
     sendJson(res, 200, updated);
     return;
   }
@@ -1156,6 +1271,8 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       sendMethodNotAllowed(res, ["POST"]);
       return;
     }
+    const write = writableBackend(session, res);
+    if (!write) return;
     if (!hasAdminAccess(req, auth)) {
       sendJson(res, 403, { error: ADMIN_WRITE_FORBIDDEN_MESSAGE });
       return;
@@ -1168,10 +1285,10 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
     editedItems.set(res, { event: body.isDeleted ? "trash" : "restore" });
     await confirmLibraryBeforeWrite(res);
     const sortIndex = sortIndexFor(session, sortIndexes);
-    const item = await session.client.updateItemTrash(itemId, body.isDeleted);
+    const item = await write.updateItemTrash(itemId, body.isDeleted);
     const isDeleted = typeof item.isDeleted === "boolean" ? item.isDeleted : body.isDeleted;
     sortIndex?.noteItem({ id: itemId, isDeleted });
-    dropItemTypeScans(session.client);
+    dropItemTypeScans(session);
     sendJson(res, 200, { id: item.id || itemId, isDeleted });
     return;
   }
@@ -1181,6 +1298,8 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       sendMethodNotAllowed(res, ["POST"]);
       return;
     }
+    const write = writableBackend(session, res);
+    if (!write) return;
     if (!hasUploadAccess(req, auth)) {
       sendJson(res, 403, { error: UPLOAD_FORBIDDEN_MESSAGE });
       return;
@@ -1193,11 +1312,11 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       // A library switch during a long upload must not put the file in the other library.
       await confirmLibraryBeforeWrite(res);
       const sortIndex = sortIndexFor(session, sortIndexes);
-      const added = await session.client.addItemFromPath({ path: filePath, name: upload.name, folderId: upload.folderId, tags: upload.tags });
+      const added = await write.addItemFromPath({ path: filePath, name: upload.name, folderId: upload.folderId, tags: upload.tags });
       editedItems.set(res, { ext: upload.extension.slice(1), itemId: addedItemId(added), size: upload.size });
       // Eagle records the new item in mtime.json shortly; look for it on the next sorted request.
       sortIndex?.markStale();
-      dropItemTypeScansAfterUpload(session.client);
+      dropItemTypeScansAfterUpload(session);
     } catch (error) {
       await discardUpload(filePath);
       throw error;
@@ -1249,6 +1368,8 @@ interface AuthContext {
   recordAuth?: (event: "login_failure" | "login_locked" | "login_success" | "logout", username: string, status: number) => void;
   sessionSecret: string;
   users: AuthUser[];
+  /** The backend can't change the library: nobody gets write permissions. */
+  readOnly?: boolean;
 }
 
 async function handleAuthRoutes(req: IncomingMessage, url: URL, res: ServerResponse, auth: AuthContext) {
@@ -1536,11 +1657,11 @@ function sendLoginRateLimited(res: ServerResponse, retryAfterSeconds: number) {
 }
 
 // The Eagle API connection is fixed server-side; viewer clients can only check it, never repoint it.
-async function handleConnect(req: IncomingMessage, res: ServerResponse, session: EagleSession, libraryId: ApiContext["libraryId"], libraryAccess: LibraryAccessPolicy, user: LibraryUser | null, uploadMaxBytes?: number, checkSortIndex: ReturnType<ApiContext["sortIndexCheck"]> | null = null) {
+async function handleConnect(req: IncomingMessage, res: ServerResponse, session: LibraryBackend, libraryId: ApiContext["libraryId"], libraryAccess: LibraryAccessPolicy, user: LibraryUser | null, uploadMaxBytes?: number, checkSortIndex: ReturnType<ApiContext["sortIndexCheck"]> | null = null) {
   await readJson(req);
   try {
     const [app, library] = await Promise.all([
-      session.client.appInfo(),
+      session.appInfo(),
       session.libraryInfo(),
     ]);
     // The library is read again after the body arrives; it may no longer be the shared one.
@@ -1556,6 +1677,8 @@ async function handleConnect(req: IncomingMessage, res: ServerResponse, session:
     sendJson(res, 200, {
       app,
       library: publicLibraryInfo(library, libraryId),
+      // Nothing can be changed through this server, whatever the user's role (the standalone server).
+      ...(session.write ? {} : { readOnly: true }),
       uploadMaxBytes,
       ...(checkSortIndex ? { features: { sort: true }, ...sortIndexField(library?.path ? checkSortIndex(String(library.path)) : null) } : {}),
     });
@@ -1592,8 +1715,16 @@ function loadedSortIndexState(sortIndexes: SortIndexManager): SortIndexState | n
   return index ? describeSortIndex(index) : null;
 }
 
+// The backend's writes, or null after answering 403 when it is read-only. Checked before the
+// request body is read, so a refused upload isn't received first.
+function writableBackend(session: LibraryBackend, res: ServerResponse) {
+  if (session.write) return session.write;
+  sendJson(res, 403, { error: READ_ONLY_MESSAGE, code: "read_only" });
+  return null;
+}
+
 // The loaded sort index, only if it belongs to the library just confirmed open for this request.
-function sortIndexFor(session: EagleSession, sortIndexes: SortIndexManager | null) {
+function sortIndexFor(session: LibraryBackend, sortIndexes: SortIndexManager | null) {
   if (!sortIndexes) return null;
   const library = session.lastLibraryInfo?.() as EagleLibraryInfo | null | undefined;
   return library?.path ? sortIndexes.loaded(String(library.path)) : null;

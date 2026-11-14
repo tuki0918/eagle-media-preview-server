@@ -27,6 +27,8 @@ interface AuthContext {
   sessionMaxAgeSeconds?: number;
   sessionSecret: string;
   users: AuthUser[];
+  /** The library can't be changed (a read-only backend): nobody gets write permissions. */
+  readOnly?: boolean;
 }
 
 const PASSWORD_HASH_ALGORITHM = "sha256";
@@ -71,21 +73,21 @@ function isTrustedOriginHost(hostname: string, customDomain: string) {
 
 function hasMetadataWriteAccess(req: AuthenticatedRequest, auth: AuthContext) {
   const user = authenticatedUser(req, auth);
-  return rolePermissions(user?.role).writeMetadata;
+  return !auth.readOnly && rolePermissions(user?.role).writeMetadata;
 }
 
 function hasRatingWriteAccess(req: AuthenticatedRequest, auth: AuthContext) {
   const user = authenticatedUser(req, auth);
-  return rolePermissions(user?.role).writeRating;
+  return !auth.readOnly && rolePermissions(user?.role).writeRating;
 }
 
 function hasAdminAccess(req: AuthenticatedRequest, auth: AuthContext) {
   const user = authenticatedUser(req, auth);
-  return rolePermissions(user?.role).manageLibrary;
+  return !auth.readOnly && rolePermissions(user?.role).manageLibrary;
 }
 
 function hasUploadAccess(req: AuthenticatedRequest, auth: AuthContext) {
-  return canUserUpload(authenticatedUser(req, auth));
+  return !auth.readOnly && canUserUpload(authenticatedUser(req, auth));
 }
 
 function authenticatedUser(req: AuthenticatedRequest, auth: AuthContext): AuthSession | null {
@@ -185,19 +187,19 @@ function authStatusResponse(auth: AuthContext, user: AuthSession | AuthUser | nu
     authenticated,
     sessionMaxAgeSeconds: auth.sessionMaxAgeSeconds,
     user: user ? { role: user.role, username: user.username } : null,
-    permissions: permissionsForUser(user, { authenticated }),
+    permissions: permissionsForUser(user, { authenticated, readOnly: auth.readOnly }),
   };
 }
 
-function permissionsForUser(user: AuthSession | AuthUser | null, { authenticated = Boolean(user) } = {}) {
+function permissionsForUser(user: AuthSession | AuthUser | null, { authenticated = Boolean(user), readOnly = false } = {}) {
   const read = authenticated;
   const roleAccess = rolePermissions(user?.role);
   return {
-    manageLibrary: roleAccess.manageLibrary,
+    manageLibrary: !readOnly && roleAccess.manageLibrary,
     read,
-    upload: canUserUpload(user),
-    writeMetadata: roleAccess.writeMetadata,
-    writeRating: roleAccess.writeRating,
+    upload: !readOnly && canUserUpload(user),
+    writeMetadata: !readOnly && roleAccess.writeMetadata,
+    writeRating: !readOnly && roleAccess.writeRating,
   };
 }
 

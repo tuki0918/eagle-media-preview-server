@@ -500,6 +500,9 @@ test("createViewerServer allows metadata writes when editing is enabled for an a
         writeRating: true,
       },
     });
+    // Through Eagle the library can be changed, so nothing says otherwise.
+    const health = await (await fetch(`${origin}/api/health`, { headers: { Cookie: cookie } })).json();
+    assert.equal("readOnly" in health, false);
 
     const response = await fetch(`${origin}/api/items/ITEM123/metadata`, {
       method: "POST",
@@ -5449,5 +5452,83 @@ test("a health check answered after a library switch never brings back the previ
     await viewer.stop();
     await rm(first, { recursive: true, force: true });
     await rm(second, { recursive: true, force: true });
+  }
+});
+
+test("a read-only backend grants no write permissions, refuses every write before reading the request, and still serves reads", async () => {
+  const { createEagleApiBackend } = require("../dist/.generated/plugin-service/libraryBackend.cjs");
+  const writes: string[] = [];
+  const eagleBackend = createEagleApiBackend({
+    client: {
+      async appInfo() {
+        return { version: "1.0.0" };
+      },
+      async libraryInfo() {
+        return { path: "/tmp/Test.library", name: "Test Library" };
+      },
+      async folders() {
+        return [{ id: "F1", name: "Folder" }];
+      },
+      async updateItemStar() {
+        writes.push("star");
+        return {};
+      },
+      async updateItemMetadata() {
+        writes.push("metadata");
+        return {};
+      },
+      async updateItemTrash() {
+        writes.push("trash");
+        return {};
+      },
+      async addItemFromPath() {
+        writes.push("upload");
+        return {};
+      },
+    },
+  });
+  assert.equal(eagleBackend.kind, "eagle-api");
+  const { write: _write, ...readOnlyBackend } = eagleBackend;
+  const viewer = createViewerServer({
+    host: "127.0.0.1",
+    port: 0,
+    authUsers: [{ username: "admin", passwordHash: sha256("admin"), role: "admin" }],
+    backend: readOnlyBackend,
+  });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const cookie = await loginCookie(origin, "admin", "admin");
+    const readOnlyPermissions = { manageLibrary: false, read: true, upload: false, writeMetadata: false, writeRating: false };
+    const authStatus = await fetch(`${origin}/api/auth/status`, { headers: { Cookie: cookie } });
+    assert.deepEqual((await authStatus.json()).permissions, readOnlyPermissions);
+    const health = await (await fetch(`${origin}/api/health`, { headers: { Cookie: cookie } })).json();
+    assert.deepEqual(health.permissions, readOnlyPermissions);
+    assert.equal(health.uploadMaxBytes, undefined);
+    // Said outright, so the viewer can tell an admin why editing is gone.
+    assert.equal(health.readOnly, true);
+    const connect = await (await fetch(`${origin}/api/connect`, { method: "POST", headers: { Cookie: cookie, Origin: origin, "Content-Type": "application/json" }, body: "{}" })).json();
+    assert.equal(connect.readOnly, true);
+    const folders = await fetch(`${origin}/api/folders`, { headers: { Cookie: cookie } });
+    assert.equal(folders.status, 200);
+    assert.deepEqual(await folders.json(), [{ id: "F1", name: "Folder" }]);
+
+    const post = (path: string, body: string, contentType = "application/json") => fetch(`${origin}${path}`, {
+      method: "POST",
+      headers: { Cookie: cookie, Origin: origin, "Content-Type": contentType },
+      body,
+    });
+    for (const response of [
+      await post("/api/items/ITEM1/star", JSON.stringify({ star: 3 })),
+      await post("/api/items/ITEM1/metadata", JSON.stringify({ tags: ["a"] })),
+      await post("/api/items/ITEM1/trash", JSON.stringify({ isDeleted: true })),
+      await post(`/api/uploads?${new URLSearchParams({ name: "new.png" })}`, "image-bytes", "application/octet-stream"),
+    ]) {
+      assert.equal(response.status, 403);
+      assert.deepEqual(await response.json(), { error: "This server can't change the library", code: "read_only" });
+    }
+    assert.deepEqual(writes, []);
+  } finally {
+    await viewer.stop();
   }
 });

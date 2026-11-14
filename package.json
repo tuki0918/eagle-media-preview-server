@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "eagle-media-server": "bin/eagle-media-server.cjs"
+  },
   "scripts": {
     "build": "npm run build:plugin-service && vite build",
     "build:plugin-service": "node -e \"require('node:fs').rmSync('dist/.generated/plugin-service', { recursive: true, force: true })\" && tsc -p tsconfig.plugin-service.json && esbuild plugin/settingsChange.ts --format=cjs --platform=node --outfile=dist/.generated/plugin-service/settingsChange.cjs",
@@ -19,7 +22,8 @@
     "screenshot:settings": "npm run build && node scripts/settings-screenshots.mjs",
     "screenshot:activity": "npm run build && node scripts/activity-screenshots.mjs",
     "screenshot:frame": "swift scripts/frame-ipad.swift",
-    "screenshot:frame:iphone": "swift scripts/frame-iphone.swift"
+    "screenshot:frame:iphone": "swift scripts/frame-iphone.swift",
+    "standalone": "node bin/eagle-media-server.cjs"
   },
   "engines": {
     "node": ">=20"

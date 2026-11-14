@@ -832,4 +832,4 @@ function resolveLibraryItemDir(libraryPath: string, itemId: unknown) {
   if (relativePath.startsWith("..") || isAbsolute(relativePath)) return "";
   return itemDir;
 }
-module.exports = { EagleRequestError, ITEM_FIELDS, clampLimit, normalizeExtension, normalizeOffset, normalizeStringArray, createEagleClient, createEagleLibrarySwitcher, normalizePaginatedResponse, parseRatingFilter, unwrapData, pathFromFileValue, resolveLibraryItemFile, sortedExtensionCounts };
+module.exports = { EagleRequestError, ITEM_FIELDS, TAG_COVER_FIELDS, clampLimit, clampTagLimit, normalizeExtension, normalizeOffset, normalizeStringArray, createEagleClient, createEagleLibrarySwitcher, normalizePaginatedResponse, parseRatingFilter, unwrapData, pathFromFileValue, resolveLibraryItemFile, sortedExtensionCounts };

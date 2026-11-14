@@ -40,13 +40,16 @@ interface EagleItem {
   title?: unknown;
 }
 
-interface EagleMediaClient {
+interface EagleMediaSession {
+  /** When present and false, the item's files are not served at all. */
+  isItemServable?(id: string): Promise<boolean>;
+  /**
+   * When present, the only way an item's file is found (a backend reading the library folder):
+   * paths from item metadata and Eagle's thumbnail lookup are not used.
+   */
+  resolveItemFile?(id: string, kind: MediaKind): Promise<string>;
   itemById(id: string): Promise<EagleItem | EagleItem[]>;
   legacyThumbnailPath(id: string): Promise<unknown>;
-}
-
-interface EagleMediaSession {
-  client: EagleMediaClient;
   libraryInfo(): Promise<{ path?: string } | null>;
 }
 
@@ -222,11 +225,13 @@ function parseInternetShortcutUrl(text: string) {
 
 async function resolveItemMediaPath(id: string, kind: MediaKind, session: EagleMediaSession) {
   let itemData: EagleItem = { id };
+  if (session.isItemServable && !(await session.isItemServable(id))) return { filePath: "", itemData };
   try {
-    itemData = mediaItemById(await session.client.itemById(id), id);
+    itemData = mediaItemById(await session.itemById(id), id);
   } catch {
     // The library folder can still resolve the original by its stable item id.
   }
+  if (session.resolveItemFile) return { filePath: await session.resolveItemFile(id, kind), itemData };
   let filePath = "";
 
   if (kind === "thumb") {
@@ -237,7 +242,7 @@ async function resolveItemMediaPath(id: string, kind: MediaKind, session: EagleM
     let unresolvedPath = thumbnailPath;
     if (!filePath) {
       try {
-        const legacyPath = pathFromFileValue(await session.client.legacyThumbnailPath(id));
+        const legacyPath = pathFromFileValue(await session.legacyThumbnailPath(id));
         unresolvedPath ||= legacyPath;
         filePath = await existingFilePath(legacyPath);
       } catch {

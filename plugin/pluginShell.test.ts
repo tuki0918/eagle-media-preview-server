@@ -1400,9 +1400,9 @@ test("plugin server caches authenticated users per request", async () => {
   assert.match(authSource, /req\[AUTH_USER_CACHE\] = user/);
   assert.match(authSource, /function resolveAuthenticatedUser\(req, auth\)/);
   assert.match(authSource, /function rolePermissions\(role\)/);
-  assert.match(authSource, /return rolePermissions\(user\?\.role\)\.writeMetadata;/);
-  assert.match(authSource, /return rolePermissions\(user\?\.role\)\.writeRating;/);
-  assert.match(authSource, /return rolePermissions\(user\?\.role\)\.manageLibrary;/);
+  assert.match(authSource, /return !auth\.readOnly && rolePermissions\(user\?\.role\)\.writeMetadata;/);
+  assert.match(authSource, /return !auth\.readOnly && rolePermissions\(user\?\.role\)\.writeRating;/);
+  assert.match(authSource, /return !auth\.readOnly && rolePermissions\(user\?\.role\)\.manageLibrary;/);
   assert.match(authSource, /const roleAccess = rolePermissions\(user\?\.role\);/);
   assert.doesNotMatch(authSource, /\^Basic\\s\+\/i/);
   assert.doesNotMatch(serverSource, /WWW-Authenticate/);
@@ -1425,7 +1425,7 @@ test("plugin server caches authenticated users per request", async () => {
   assert.match(authSource, /required: authRequired\(auth\)/);
   assert.match(authSource, /sessionMaxAgeSeconds: auth\.sessionMaxAgeSeconds/);
   assert.match(authSource, /user: user \? \{ role: user\.role, username: user\.username \} : null/);
-  assert.match(authSource, /permissions: permissionsForUser\(user, \{ authenticated \}\)/);
+  assert.match(authSource, /permissions: permissionsForUser\(user, \{ authenticated, readOnly: auth\.readOnly \}\)/);
   assert.match(serverSource, /authStatusResponse\(auth, null, \{ authenticated: true \}\)/);
   assert.match(serverSource, /authStatusResponse\(auth, user, \{ authenticated: true \}\)/);
   assert.match(serverSource, /authStatusResponse\(auth, null, \{ authenticated: !authRequired\(auth\) \}\)/);
@@ -1442,7 +1442,7 @@ test("plugin server caches authenticated users per request", async () => {
   assert.match(serverSource, /\{ error: RATING_WRITE_FORBIDDEN_MESSAGE \}/);
   assert.match(serverSource, /\{ error: METADATA_WRITE_FORBIDDEN_MESSAGE \}/);
   assert.doesNotMatch(serverSource, /Invalid password/);
-  assert.match(serverSource, /const auth = \{ authSessions, clientAddress: requestAddress, loginFailures, recordAuth, revokedAuthSessions, secureCookies: httpsEnabled, sessionMaxAgeSeconds, sessionSecret: resolvedSessionSecret, users: resolvedAuthUsers \};/);
+  assert.match(serverSource, /const auth = \{ authSessions, clientAddress: requestAddress, loginFailures, recordAuth, revokedAuthSessions, secureCookies: httpsEnabled, sessionMaxAgeSeconds, sessionSecret: resolvedSessionSecret, users: resolvedAuthUsers, readOnly: !currentSession\.write \};/);
   assert.match(serverSource, /const loginFailures = new Map\(\);/);
   assert.match(serverSource, /revokedAuthSessions\.add\(token\)/);
   assert.match(authSource, /auth\.revokedAuthSessions\.has\(token\)/);
@@ -2195,3 +2195,16 @@ test("the Advanced Sort progress keeps being asked for until the scan has starte
   await new Promise((resolve) => setTimeout(resolve, 1500));
   assert.equal(calls, settled);
 }, 15_000);
+
+test("the plugin package leaves out the standalone server's own modules, and nothing it ships needs them", async () => {
+  const viteConfig = await readFile(new URL("../vite.config.ts", import.meta.url), "utf8");
+  const pattern = viteConfig.match(/const STANDALONE_ONLY_MODULE = (\/.+\/);/)?.[1];
+  assert.ok(pattern, "vite.config.ts filters the standalone modules");
+  const standaloneOnly = ["fsBackend", "standalone", "standaloneConfig", "standaloneLog"];
+  const shipped = ["accessLog", "addressBlockList", "auth", "connection", "customDomain", "eagleClient", "libraryAccess", "libraryBackend", "libraryIndex", "media", "runtime", "static", "upload", "viewerServer"];
+  for (const name of shipped) {
+    const source = await readFile(new URL(`${name}.cjs`, generatedServiceUrl), "utf8");
+    for (const excluded of standaloneOnly) assert.doesNotMatch(source, new RegExp(`require\\("\\./${excluded}\\.cjs"\\)`), `${name}.cjs requires ${excluded}.cjs`);
+  }
+  for (const excluded of standaloneOnly) assert.match(viteConfig, new RegExp(`\\b${excluded}\\b`));
+});
