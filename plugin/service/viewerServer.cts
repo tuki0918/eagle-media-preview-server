@@ -1161,7 +1161,15 @@ async function handleApi(req: IncomingMessage, url: URL, res: ServerResponse, { 
       sendMethodNotAllowed(res, ["GET"]);
       return;
     }
-    sendJson(res, 200, await cachedItemTypes(session, folderScope(url.searchParams.get("folderId")), sortIndexes, libraryGeneration, sortIndexStallMs));
+    const scope = folderScope(url.searchParams.get("folderId"));
+    // A backend with its own index holds every item in memory and follows the library's changes, so
+    // its counts are always current and cheap: taken from it each time, whether or not Advanced
+    // Sort is on, and never through the cache below, which is for scans of Eagle.
+    if (session.sortIndexes) {
+      sendJson(res, 200, { complete: true, items: await session.itemExtensions({ folderId: scope.folderId || null, isUnfiled: scope.isUnfiled, isUntagged: scope.isUntagged }) });
+      return;
+    }
+    sendJson(res, 200, await cachedItemTypes(session, scope, sortIndexes, libraryGeneration, sortIndexStallMs));
     return;
   }
 

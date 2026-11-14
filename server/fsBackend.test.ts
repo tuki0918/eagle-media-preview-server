@@ -661,3 +661,25 @@ test("with Advanced Sort off, as in the plugin, the viewer server neither offers
     await viewer.stop();
   }
 });
+
+test("with Advanced Sort off, the type menu still follows the library's changes at once", async () => {
+  const { createViewerServer } = require("../dist/.generated/plugin-service/viewerServer.cjs");
+  const libraryPath = await createLibrary();
+  const viewer = createViewerServer({ host: "127.0.0.1", port: 0, experimentalSort: false, backend: createFsBackend({ libraryPath, refreshIntervalMs: 0, refreshWaitMs: 5000 }) });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const health = await (await fetch(`${origin}/api/health`)).json();
+    const headers = { "X-Library-Id": health.library.id };
+    const types = async () => (await (await fetch(`${origin}/api/item-types`, { headers })).json()).items;
+    assert.deepEqual(await types(), [{ ext: "jpg", count: 1 }, { ext: "png", count: 2 }]);
+    // A PDF is added in Eagle.
+    const added: TestItem = { id: "P", name: "manual", ext: "pdf", modificationTime: 700 };
+    await writeItem(libraryPath, added);
+    await writeMtime(libraryPath, [...ITEMS, added]);
+    assert.deepEqual(names(await (await fetch(`${origin}/api/items`, { headers })).json()), ["manual", "banana", "cat photo", "apple"]);
+    assert.deepEqual(await types(), [{ ext: "jpg", count: 1 }, { ext: "pdf", count: 1 }, { ext: "png", count: 2 }]);
+  } finally {
+    await viewer.stop();
+  }
+});
