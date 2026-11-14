@@ -98,7 +98,29 @@ interface FsBackendOptions {
    * this often. It costs about a second per 300,000 items, more on a NAS.
    */
   rescanIntervalMs?: number;
+  /** How long an item mtime.json announced, whose folder isn't there, is looked for. */
+  awaitFolderMs?: number;
+  /** How many cached answers are kept; each can hold every item. */
+  maxCachedAnswers?: number;
+  /** The clock, for tests. */
+  now?: () => number;
 }
+
+/**
+ * Why an item mtime.json lists (or the folder listing showed) isn't held:
+ * - "unreadable": its folder is there but its metadata.json is missing or mid-write. Hidden, and
+ *   its files refused, until it reads cleanly; tried again at every check.
+ * - "gone": its folder isn't there. Eagle keeps the ids of deleted items in mtime.json for good, so
+ *   it is skipped until its `time` in mtime.json changes; while `lookingSince` is set (announced
+ *   recently, likely still syncing) it is also looked for every recheckIntervalMs.
+ * - "outside": its folder or metadata.json leads outside the library. Never read; checked again
+ *   when its time changes and every recheckIntervalMs (a link replaced by the real file comes back),
+ *   and counted against Eagle's item count, which includes it.
+ */
+type Absence =
+  | { kind: "unreadable" }
+  | { kind: "gone"; lookingSince?: number; time: number }
+  | { kind: "outside"; time: number };
 
 // Library format versions (the major part of `applicationVersion` in the library's metadata.json)
 // this backend was checked against. Another one may have moved or renamed what is read here.
@@ -110,14 +132,14 @@ const DEFAULT_RECHECK_INTERVAL_MS = 60 * 1000;
 const DEFAULT_RESCAN_INTERVAL_MS = 60 * 1000;
 // How long an item mtime.json announced, but whose folder isn't there, is looked for again. Eagle
 // keeps the ids of deleted items in mtime.json, so one that never arrives is given up on.
-const AWAIT_FOLDER_MS = 60 * 60 * 1000;
+const DEFAULT_AWAIT_FOLDER_MS = 60 * 60 * 1000;
 const FAILED_RETRY_MS = 30 * 1000;
 const ITEM_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const EMPTY_LIST: readonly string[] = Object.freeze([]);
 const IMPORT_ORDER: IndexSort = { key: "import", order: "desc" };
 // Answers kept between changes: sorted lists, query and search results, folders, tags. Each query
 // result can hold every item, so only the most recently used are kept.
-const MAX_CACHED_ANSWERS = 16;
+const DEFAULT_MAX_CACHED_ANSWERS = 16;
 // Paths in an item's metadata.json are never used: a library's metadata could point anywhere.
 // Files are found in the item's own folder instead (see resolveItemFile).
 const PATH_FIELDS = new Set(["fileURL", "filePath", "thumbnailPath", "thumbnailURL"]);
@@ -129,6 +151,9 @@ class LibraryFormatError extends Error {
     this.name = "LibraryFormatError";
   }
 }
+
+// A file whose real path isn't where it should be under the library folder.
+class OutsideLibraryError extends Error {}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -216,6 +241,9 @@ function createFsBackend({
   refreshWaitMs = DEFAULT_REFRESH_WAIT_MS,
   recheckIntervalMs = DEFAULT_RECHECK_INTERVAL_MS,
   rescanIntervalMs = DEFAULT_RESCAN_INTERVAL_MS,
+  awaitFolderMs = DEFAULT_AWAIT_FOLDER_MS,
+  maxCachedAnswers = DEFAULT_MAX_CACHED_ANSWERS,
+  now = Date.now,
 }: FsBackendOptions) {
   const root = String(libraryPath || "").trim().replace(/[\\/]+$/, "");
   if (!root) throw new Error("libraryPath is required");
@@ -235,30 +263,8 @@ function createFsBackend({
   };
   // Each item's time in mtime.json when it was last read; a different time means read it again.
   const readAt = new Map<string, number>();
-  // Items left out (their folder is gone, or it or their metadata.json leads outside the library),
-  // with their time in mtime.json when they were: Eagle leaves removed ids in mtime.json, so each
-  // is skipped there until its time changes, and then checked again (a folder synced back, or a
-  // link replaced by the real file, comes back without a restart).
-  const removed = new Map<string, number>();
-  // Items whose metadata.json couldn't be read at the last try (missing or mid-write). Each check
-  // tries them again, whether or not mtime.json changed, and until one is read it is hidden and
-  // its files aren't served: an edit (moving it to the trash, say) may be what was being written.
-  const unconfirmed = new Set<string>();
-  // Items whose folder or metadata.json leads outside the library: never read, and counted when
-  // comparing with Eagle's item count, so they don't make every check list the folder again.
-  const outside = new Set<string>();
-  // When items in `outside` were last checked again regardless of mtime.json.
-  let lastOutsideCheck = Date.now();
-  // A full listing of `images` is due (Eagle's item count disagrees with what is held), and when the
-  // last one ran. It runs at most every rescanIntervalMs, and stays due while the counts disagree:
-  // an item folder still syncing can arrive later without mtime.json changing again.
-  let rescanDue = false;
-  let lastRescan = 0;
-  // Items mtime.json announced whose folder wasn't there (a sync delivering mtime.json first), with
-  // when that was seen. Each is looked for again every recheckIntervalMs for up to AWAIT_FOLDER_MS:
-  // its folder may arrive without mtime.json changing again, and Eagle's item count may not tell
-  // (another item deleted in the same sync).
-  const awaiting = new Map<string, number>();
+  // Items mtime.json lists, or the folder listing showed, that aren't held, and why (see Absence).
+  const absent = new Map<string, Absence>();
   // mtime.json as last read, for the times of items read again outside a change to it.
   let lastTimes: Record<string, unknown> | null = null;
   let library: Record<string, unknown> = {};
@@ -271,15 +277,32 @@ function createFsBackend({
   let building: Promise<void> | null = null;
   let refreshing: Promise<void> | null = null;
   let lastRefreshCheck = 0;
+  // When items left out ("outside", or "gone" and looked for) were last checked again on their own.
+  let lastRecheck = now();
+  // A full listing of `images` is due (Eagle's item count disagrees with what is held), and when the
+  // last one ran. It runs at most every rescanIntervalMs, and stays due while the counts disagree:
+  // an item folder still syncing can arrive later without mtime.json changing again.
+  let rescanDue = false;
+  let lastRescan = 0;
   let loaded = 0;
   let total = 0;
-  // Bumped on every change, so cached answers are recomputed.
-  let version = 0;
   let disposed = false;
   const signatures = { metadata: "", tags: "", mtime: "" };
-  // Holds answers for the current version only, most recently used last; a change drops them all.
+  // The library folder's real path, found when the library is first read. Every file read or
+  // served must really be where it is expected under it: a link anywhere on the way (the library's
+  // own files, `images`, an item folder, an item's metadata.json) could lead outside the library.
+  let realRoot = "";
+
+  // Cached answers (sorted lists, query and search results, folders, tags) for the current version
+  // only, most recently used last. Any change bumps the version, which drops them all at once, so
+  // a list never shows an item whose files are already refused.
+  let version = 0;
   const caches = new Map<string, unknown>();
   let cachesVersion = version;
+
+  function changed() {
+    version += 1;
+  }
 
   function cached<T>(key: string, compute: () => T): T {
     if (cachesVersion !== version) {
@@ -294,9 +317,11 @@ function createFsBackend({
     }
     const value = compute();
     caches.set(key, value);
-    while (caches.size > MAX_CACHED_ANSWERS) caches.delete(caches.keys().next().value!);
+    while (caches.size > maxCachedAnswers) caches.delete(caches.keys().next().value!);
     return value;
   }
+
+  // --- Reading the library's files ---------------------------------------------------------------
 
   async function signature(path: string) {
     try {
@@ -307,24 +332,13 @@ function createFsBackend({
     }
   }
 
-  // The library folder's real path, found when the library is first read. Every file read or
-  // served must really be where it is expected under it: a link anywhere on the way (the library's
-  // own files, `images`, an item folder, an item's metadata.json) could lead outside the library.
-  let realRoot = "";
-
-  class OutsideLibraryError extends Error {}
-
-  async function readJson(path: string) {
-    return JSON.parse(await readFile(path, "utf8"));
-  }
-
   // Reads a JSON file of this library, only if its real path is exactly where `parts` say under the
   // library folder. Rejects with OutsideLibraryError otherwise, and as readFile does when missing.
   async function readLibraryJson(...parts: string[]) {
     if (!realRoot) realRoot = await realpath(root);
     const real = await realpath(join(root, ...parts));
     if (real !== join(realRoot, ...parts)) throw new OutsideLibraryError(`${join(root, ...parts)} leads outside the library`);
-    return readJson(real);
+    return JSON.parse(await readFile(real, "utf8"));
   }
 
   // The library's own metadata.json: folders, smart folders, tag groups, and the format version.
@@ -340,8 +354,7 @@ function createFsBackend({
     }
     if (!isRecord(value)) throw new LibraryFormatError(`${metadataPath} is not a library metadata file`);
     const appVersion = typeof value.applicationVersion === "string" ? value.applicationVersion : "";
-    const major = appVersion.split(".")[0];
-    if (!allowUnknownFormat && !KNOWN_MAJOR_VERSIONS.includes(major)) {
+    if (!allowUnknownFormat && !KNOWN_MAJOR_VERSIONS.includes(appVersion.split(".")[0])) {
       throw new LibraryFormatError(
         `This library was saved by Eagle ${appVersion || "(unknown version)"}, a format this server hasn't been checked against. ` +
         "Update the server, or start it with --allow-unknown-format to try anyway.",
@@ -371,9 +384,10 @@ function createFsBackend({
     if (!sig) return null;
     try {
       const value = await readLibraryJson("mtime.json");
+      if (!isRecord(value)) return null;
       signatures.mtime = sig;
-      if (isRecord(value)) lastTimes = value;
-      return isRecord(value) ? value : null;
+      lastTimes = value;
+      return value;
     } catch {
       // Mid-write: read again at the next check.
       return null;
@@ -388,8 +402,9 @@ function createFsBackend({
       .filter((id) => ITEM_ID_PATTERN.test(id));
   }
 
+  // --- Items -------------------------------------------------------------------------------------
+
   function indexedItem(id: string, raw: Record<string, unknown>): IndexedItem {
-    const held = unconfirmed.has(id);
     const itemFolders = stringList(raw.folders, intern);
     return {
       btime: finiteNumber(raw.btime),
@@ -398,7 +413,7 @@ function createFsBackend({
       folders: itemFolders,
       height: finiteNumber(raw.height),
       id,
-      isDeleted: held || raw.isDeleted === true || itemFolders.some((folder) => lockedFolders.has(folder)),
+      isDeleted: absent.get(id)?.kind === "unreadable" || raw.isDeleted === true || itemFolders.some((folder) => lockedFolders.has(folder)),
       lastModified: finiteNumber(raw.lastModified),
       modificationTime: finiteNumber(raw.modificationTime),
       mtime: finiteNumber(raw.mtime),
@@ -410,61 +425,49 @@ function createFsBackend({
     };
   }
 
-  // Reads one item: "set" (read), "removed" (its folder is gone), or "unreadable" (missing or
-  // mid-write metadata: hidden and tried again at every check until read; see `unconfirmed`).
-  async function readItem(id: string): Promise<"removed" | "set" | "unreadable"> {
+  function timeIn(times: Record<string, unknown> | null, id: string) {
+    const time = times && id in times ? Number(times[id]) : NaN;
+    return Number.isFinite(time) ? time : NaN;
+  }
+
+  // Reads one item (its time in mtime.json is `time`, NaN when unknown) and records the outcome:
+  // held, held back as unreadable, or left out as gone or outside (see Absence).
+  async function readItem(id: string, time: number) {
     try {
       const raw = await readLibraryJson("images", `${id}.info`, "metadata.json");
-      if (!isRecord(raw) || raw.id !== id) return holdItem(id);
-      unconfirmed.delete(id);
-      outside.delete(id);
+      if (!isRecord(raw) || raw.id !== id) return holdBack(id);
+      absent.delete(id);
       items.set(id, { indexed: indexedItem(id, raw), raw });
-      removed.delete(id);
-      changedNow();
-      return "set";
+      if (Number.isFinite(time)) readAt.set(id, time);
+      changed();
     } catch (error) {
-      // An item whose folder or metadata leads outside the library is left out until its time in
-      // mtime.json changes (see `removed`).
-      if (error instanceof OutsideLibraryError) {
-        outside.add(id);
-        return dropItem(id);
-      }
+      if (error instanceof OutsideLibraryError) return leaveOut(id, "outside", time);
       if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
         try {
-          if ((await stat(join(imagesDir, `${id}.info`))).isDirectory()) return holdItem(id);
+          if ((await stat(join(imagesDir, `${id}.info`))).isDirectory()) return holdBack(id);
         } catch {
-          outside.delete(id);
-          return dropItem(id);
+          return leaveOut(id, "gone", time);
         }
       }
-      return holdItem(id);
+      holdBack(id);
     }
   }
 
-  function dropItem(id: string): "removed" {
-    items.delete(id);
-    readAt.delete(id);
-    unconfirmed.delete(id);
-    removed.set(id, NaN);
-    changedNow();
-    return "removed";
-  }
-
-  function holdItem(id: string): "unreadable" {
-    // Inside the library after all (mid-write, say): counted and tried again like any other.
-    outside.delete(id);
-    removed.delete(id);
-    unconfirmed.add(id);
+  // Missing or mid-write metadata: hidden (and its files refused) until it reads cleanly, since the
+  // edit being written may be a move to the trash. Tried again at every check.
+  function holdBack(id: string) {
+    absent.set(id, { kind: "unreadable" });
     const stored = items.get(id);
     if (stored) stored.indexed = indexedItem(id, stored.raw);
-    changedNow();
-    return "unreadable";
+    changed();
   }
 
-  // An item changed (read, hidden, or gone): answers cached before it are dropped at once, not when
-  // the whole update ends, so a list never shows an item its files are already refused for.
-  function changedNow() {
-    version += 1;
+  function leaveOut(id: string, kind: "gone" | "outside", time: number) {
+    const previous = absent.get(id);
+    absent.set(id, { kind, time, lookingSince: kind === "gone" && previous?.kind === "gone" ? previous.lookingSince : undefined });
+    items.delete(id);
+    readAt.delete(id);
+    changed();
   }
 
   async function readItems(ids: readonly string[], times: Record<string, unknown> | null, onRead?: () => void) {
@@ -472,17 +475,59 @@ function createFsBackend({
     const worker = async () => {
       while (next < ids.length && !disposed) {
         const id = ids[next++];
-        const result = await readItem(id);
+        await readItem(id, timeIn(times, id));
         if (disposed) return;
-        const time = times ? Number(times[id]) : NaN;
-        if (result === "set" && Number.isFinite(time)) readAt.set(id, time);
-        // Remembered so it is skipped until its time changes; without a time, checked at every change.
-        if (result === "removed") removed.set(id, Number.isFinite(time) ? time : NaN);
         onRead?.();
       }
     };
     await Promise.all(Array.from({ length: Math.max(1, Math.min(readConcurrency, ids.length)) }, worker));
   }
+
+  // Starts looking again, every recheckIntervalMs for up to awaitFolderMs, for an item mtime.json
+  // announced recently whose folder isn't there: a sync can deliver mtime.json first, and Eagle's
+  // item count can't tell when another item was deleted in the same sync.
+  function lookFor(id: string) {
+    const entry = absent.get(id);
+    if (entry?.kind === "gone" && entry.lookingSince === undefined) entry.lookingSince = now();
+  }
+
+  function lookedFor(id: string) {
+    const entry = absent.get(id);
+    return entry?.kind === "gone" && entry.lookingSince !== undefined;
+  }
+
+  // Ids `times` lists (or just `ids`) that weren't read: a folder never listed, or listed but gone
+  // before it was read. Eagle keeps the ids of deleted items in mtime.json for good, so most are old
+  // deletions, left out until their time changes; one changed within awaitFolderMs is likely still
+  // syncing, and is looked for.
+  function noteMissingFolders(times: Record<string, unknown> | null, ids: Iterable<string> = Object.keys(times || {})) {
+    if (!times) return;
+    for (const id of ids) {
+      if (id === "all" || !ITEM_ID_PATTERN.test(id) || !(id in times) || items.has(id)) continue;
+      const entry = absent.get(id);
+      // Held back as unreadable or left out as outside: its folder is there.
+      if (entry && entry.kind !== "gone") continue;
+      const time = timeIn(times, id);
+      if (entry) entry.time = time;
+      else absent.set(id, { kind: "gone", time });
+      if (Number.isFinite(time) && Math.abs(now() - time) <= awaitFolderMs) lookFor(id);
+    }
+  }
+
+  function outsideCount() {
+    let count = 0;
+    for (const entry of absent.values()) if (entry.kind === "outside") count += 1;
+    return count;
+  }
+
+  // Whether Eagle's item count ("all" in mtime.json) differs from the items held (and those left
+  // out as outside the library, which Eagle counts but this backend never reads).
+  function countsDisagree(times: Record<string, unknown> | null) {
+    const count = Number(times?.all);
+    return Number.isFinite(count) && count !== items.size + outsideCount();
+  }
+
+  // --- Reading the library, and keeping up with it ------------------------------------------------
 
   async function build() {
     status = "building";
@@ -498,33 +543,30 @@ function createFsBackend({
       const ids = await listItemIds();
       items.clear();
       readAt.clear();
-      removed.clear();
-      unconfirmed.clear();
-      outside.clear();
-      awaiting.clear();
+      absent.clear();
       rescanDue = false;
       loaded = 0;
       total = ids.length;
       await readItems(ids, times, () => {
         loaded += 1;
       });
-      lastRefreshCheck = Date.now();
+      lastRefreshCheck = now();
       noteMissingFolders(times);
       // A folder still syncing when the library is read is looked for again later.
       rescanDue = countsDisagree(times);
-      version += 1;
+      changed();
       status = "ready";
       lastError = null;
     } catch (error) {
       status = "failed";
-      failedAt = Date.now();
+      failedAt = now();
       lastError = error instanceof Error ? error : new Error(String(error));
       throw lastError;
     }
   }
 
   function ensureBuilding() {
-    if (!building || (status === "failed" && Date.now() - failedAt >= FAILED_RETRY_MS)) {
+    if (!building || (status === "failed" && now() - failedAt >= FAILED_RETRY_MS)) {
       building = build();
       building.catch(() => {});
     }
@@ -542,116 +584,102 @@ function createFsBackend({
     }
   }
 
-  async function refresh() {
-    let changed = false;
+  // The library's metadata.json (folders, locks, format) and tags.json, when they changed. Returns
+  // false when the format is no longer one this backend knows, which stops it.
+  async function refreshLibraryFiles() {
     const metadataSig = await signature(metadataPath);
     if (metadataSig && metadataSig !== signatures.metadata) {
       try {
         await readLibraryMetadata();
-        // Locked folders may have changed: which items are hidden is worked out again.
+        // Locked folders may have changed: which items are hidden is worked out again, at once.
         for (const [id, stored] of items) stored.indexed = indexedItem(id, stored.raw);
-        // A folder just locked hides its items now: lists cached before must not show them while
-        // the rest of the update is read.
-        changedNow();
-        changed = true;
+        changed();
       } catch (error) {
         // Mid-write: read again at the next check. A format change stops the backend.
         if (error instanceof LibraryFormatError) {
           status = "failed";
           lastError = error;
-          failedAt = Date.now();
-          return;
+          failedAt = now();
+          return false;
         }
       }
     }
-    // Items that couldn't be read last time, tried again at every check.
-    if (unconfirmed.size) {
-      await readItems([...unconfirmed], lastTimes);
-      changed = true;
-    }
-    // Items left out for leading outside the library, and items announced whose folder hadn't
-    // arrived, checked again now and then: the real files may arrive after mtime.json announced the
-    // change, and then nothing else would read them. Real paths are checked again, so one still
-    // outside (or still missing) is simply left out again.
-    if ((outside.size || awaiting.size) && Date.now() - lastOutsideCheck >= recheckIntervalMs) {
-      lastOutsideCheck = Date.now();
-      for (const [id, since] of awaiting) if (Date.now() - since > AWAIT_FOLDER_MS) awaiting.delete(id);
-      await readItems([...new Set([...outside, ...awaiting.keys()])], lastTimes);
-      for (const id of [...awaiting.keys()]) if (items.has(id) || outside.has(id)) awaiting.delete(id);
-      // An item that arrived may make the counts disagree now (another one deleted meanwhile).
-      if (countsDisagree(lastTimes)) rescanDue = true;
-      changed = true;
-    }
-    const tagsSig = await signature(tagsPath);
-    if (tagsSig !== signatures.tags) {
+    if ((await signature(tagsPath)) !== signatures.tags) {
       await readTagsFile();
-      changed = true;
+      changed();
     }
+    return true;
+  }
+
+  // Items held back as unreadable, at every check; items left out as outside, or gone and looked
+  // for, every recheckIntervalMs. Their real paths are checked again, so one still outside (or
+  // still missing) is simply left out again.
+  async function retryAbsent() {
+    const unreadable = [...absent].filter(([, entry]) => entry.kind === "unreadable").map(([id]) => id);
+    if (unreadable.length) await readItems(unreadable, lastTimes);
+    if (now() - lastRecheck < recheckIntervalMs) return;
+    const recheck: string[] = [];
+    for (const [id, entry] of absent) {
+      if (entry.kind === "gone" && entry.lookingSince !== undefined && now() - entry.lookingSince > awaitFolderMs) entry.lookingSince = undefined;
+      if (entry.kind === "outside" || lookedFor(id)) recheck.push(id);
+    }
+    if (!recheck.length) return;
+    lastRecheck = now();
+    await readItems(recheck, lastTimes);
+    // An item that arrived may make the counts disagree now (another one deleted meanwhile).
+    if (countsDisagree(lastTimes)) rescanDue = true;
+  }
+
+  // Items whose time in mtime.json changed since they were read (or left out).
+  async function readChanges() {
     const mtimeSig = await signature(mtimePath);
-    if (mtimeSig && mtimeSig !== signatures.mtime) {
-      const times = await readMtimeFile();
-      if (times) {
-        const stale = Object.keys(times).filter((id) => id !== "all" && ITEM_ID_PATTERN.test(id) && Number(times[id]) !== readAt.get(id));
-        // Left-out items are checked again once their time has changed since they were left out.
-        const wanted = stale.filter((id) => !removed.has(id) || removed.get(id) !== Number(times[id]));
-        if (wanted.length) {
-          await readItems(wanted, times);
-          changed = true;
-          // Announced, but no folder yet: looked for again, and the folder listed once more, since
-          // a deletion in the same sync can leave Eagle's count matching what is held.
-          const missing = wanted.filter((id) => removed.has(id) && !outside.has(id));
-          for (const id of missing) if (!awaiting.has(id)) awaiting.set(id, Date.now());
-          if (missing.length) rescanDue = true;
-        }
-        if (countsDisagree(times)) rescanDue = true;
-      }
-    }
-    if (rescanDue && Date.now() - lastRescan >= rescanIntervalMs) {
-      lastRescan = Date.now();
-      const ids = await listItemIds();
-      const present = new Set(ids);
-      for (const id of [...items.keys()]) {
-        if (!present.has(id)) {
-          items.delete(id);
-          readAt.delete(id);
-          unconfirmed.delete(id);
-          changedNow();
-        }
-      }
-      const added = ids.filter((id) => !items.has(id) && !outside.has(id));
-      if (added.length) await readItems(added, lastTimes);
-      // Listed, but gone before it was read: looked for again like any recently announced item.
-      noteMissingFolders(lastTimes, added);
-      for (const id of [...awaiting.keys()]) if (items.has(id)) awaiting.delete(id);
-      changed = true;
-      rescanDue = countsDisagree(lastTimes);
-    }
-    if (changed) version += 1;
-  }
-
-  // On the first read, ids mtime.json lists without a folder. Eagle keeps the ids of deleted items
-  // there for good, so most are old deletions, recorded as removed (skipped until their time
-  // changes). One changed within AWAIT_FOLDER_MS is likely still syncing (mtime.json arrived first),
-  // and is looked for again like one announced while running: Eagle's count can't tell when another
-  // item was deleted in the same sync.
-  // An id counts as present only once it was read (or is held back as unreadable or outside): a
-  // folder listed but gone by the time its metadata was read is as missing as one never listed.
-  function noteMissingFolders(times: Record<string, unknown> | null, ids: Iterable<string> = Object.keys(times || {})) {
+    if (!mtimeSig || mtimeSig === signatures.mtime) return;
+    const times = await readMtimeFile();
     if (!times) return;
-    const now = Date.now();
-    for (const id of ids) {
-      if (id === "all" || !ITEM_ID_PATTERN.test(id) || items.has(id) || unconfirmed.has(id) || outside.has(id)) continue;
-      const time = Number(times[id]);
-      if (!(id in times)) continue;
-      removed.set(id, Number.isFinite(time) ? time : NaN);
-      if (Number.isFinite(time) && Math.abs(now - time) <= AWAIT_FOLDER_MS && !awaiting.has(id)) awaiting.set(id, now);
+    const wanted = Object.keys(times).filter((id) => {
+      if (id === "all" || !ITEM_ID_PATTERN.test(id)) return false;
+      const time = timeIn(times, id);
+      const entry = absent.get(id);
+      // Left out (gone or outside): read again only once its time has changed since.
+      if (entry && entry.kind !== "unreadable") return entry.time !== time;
+      return readAt.get(id) !== time;
+    });
+    if (wanted.length) {
+      await readItems(wanted, times);
+      // Announced, but no folder yet: looked for, and the folder listed once more, since a deletion
+      // in the same sync can leave Eagle's count matching what is held.
+      const missing = wanted.filter((id) => absent.get(id)?.kind === "gone");
+      for (const id of missing) lookFor(id);
+      if (missing.length) rescanDue = true;
     }
+    if (countsDisagree(times)) rescanDue = true;
   }
 
-  // Whether Eagle's item count ("all" in mtime.json) differs from the items held (and those left out).
-  function countsDisagree(times: Record<string, unknown> | null) {
-    const count = Number(times?.all);
-    return Number.isFinite(count) && count !== items.size + outside.size;
+  // A full listing of `images`, at most every rescanIntervalMs, while it is due.
+  async function rescanIfDue() {
+    if (!rescanDue || now() - lastRescan < rescanIntervalMs) return;
+    lastRescan = now();
+    const ids = await listItemIds();
+    const present = new Set(ids);
+    for (const id of [...items.keys()]) {
+      if (present.has(id)) continue;
+      items.delete(id);
+      readAt.delete(id);
+      absent.delete(id);
+      changed();
+    }
+    const added = ids.filter((id) => !items.has(id) && absent.get(id)?.kind !== "outside");
+    if (added.length) await readItems(added, lastTimes);
+    // Listed, but gone before it was read: looked for like any recently announced item.
+    noteMissingFolders(lastTimes, added);
+    rescanDue = countsDisagree(lastTimes);
+  }
+
+  async function refresh() {
+    if (!(await refreshLibraryFiles())) return;
+    await retryAbsent();
+    await readChanges();
+    await rescanIfDue();
   }
 
   // At most every refreshIntervalMs, checks the library for changes; waits for that at most
@@ -659,8 +687,8 @@ function createFsBackend({
   async function current() {
     await ensureBuilding();
     if (status === "failed" && lastError) throw lastError;
-    if (!refreshing && Date.now() - lastRefreshCheck >= refreshIntervalMs) {
-      lastRefreshCheck = Date.now();
+    if (!refreshing && now() - lastRefreshCheck >= refreshIntervalMs) {
+      lastRefreshCheck = now();
       refreshing = refresh().finally(() => {
         refreshing = null;
       });
@@ -669,6 +697,8 @@ function createFsBackend({
     if (refreshing) await waitAtMost(refreshing, refreshWaitMs);
     if (status === "failed" && lastError) throw lastError;
   }
+
+  // --- Answers -----------------------------------------------------------------------------------
 
   function visibleSorted(sort: IndexSort): IndexedItem[] {
     return cached(`sorted:${sort.key}:${sort.order}`, () => {
@@ -840,6 +870,16 @@ function createFsBackend({
       return { status, loaded, total, error: status === "failed" && lastError ? lastError.message : "" };
     },
 
+    /** Counts of what is held, for diagnostics and tests. */
+    stats() {
+      const counts = { unreadable: 0, gone: 0, lookedFor: 0, outside: 0 };
+      for (const [id, entry] of absent) {
+        counts[entry.kind] += 1;
+        if (lookedFor(id)) counts.lookedFor += 1;
+      }
+      return { items: items.size, cachedAnswers: cachesVersion === version ? caches.size : 0, ...counts };
+    },
+
     // Answers at once, even while the library is read: which library a request is for never
     // waits on reading it, and status checks stay quick.
     async libraryInfo() {
@@ -1007,6 +1047,7 @@ function createFsBackend({
       items.clear();
       strings.clear();
       readAt.clear();
+      absent.clear();
       caches.clear();
     },
   };
