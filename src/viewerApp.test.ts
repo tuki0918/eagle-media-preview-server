@@ -505,10 +505,15 @@ describe("viewer app data refresh", () => {
     openMediaTypes();
     // The known types stay shown (no loading state) while they are asked for again.
     expect(getSearchControlsState().availableExtsLoaded).toBe(true);
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    const calls = fetchMock.mock.calls.filter(([url]) => String(url).startsWith("/api/item-types"));
-    expect(calls).toHaveLength(expectedCalls);
-    expect(getSearchControlsState().availableExts).toEqual(expectedCalls === 2 ? ["jpg", "pdf"] : ["jpg"]);
+    const itemTypeCalls = () => fetchMock.mock.calls.filter(([url]) => String(url).startsWith("/api/item-types"));
+    if (expectedCalls === 2) {
+      // Waits for the answer itself: the new type appears once the second request has come back.
+      await vi.waitFor(() => expect(getSearchControlsState().availableExts).toEqual(["jpg", "pdf"]));
+    } else {
+      // Nothing is asked: the menu reuses what it has, decided before any request could be sent.
+      expect(getSearchControlsState().availableExts).toEqual(["jpg"]);
+    }
+    expect(itemTypeCalls()).toHaveLength(expectedCalls);
   });
 
   test("lists a folder's extensions from its items once all of them are shown without other filters", async () => {
