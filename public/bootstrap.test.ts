@@ -28,7 +28,7 @@ test("startup failure remains visible without the application bundle and can rec
     expect(display(".startup-retry")).toBe("inline-block");
     expect(dom.window.document.querySelector("#startupFallback")?.getAttribute("aria-busy")).toBe("false");
     expect(dom.window.document.querySelector("#startupTitle")?.textContent).toBe("Media Library is offline");
-    expect(dom.window.document.querySelector("#startupMessage")?.textContent).toContain("Eagle");
+    expect(dom.window.document.querySelector("#startupMessage")?.textContent).toContain("server may be stopped");
     expect(dom.window.document.querySelector(".startup-retry")?.getAttribute("href")).toBe("");
     dom.window.dispatchEvent(new dom.window.Event("media-library-ready"));
     expect(dom.window.document.body.dataset.appState).toBe("ready");
