@@ -363,6 +363,8 @@ function changeLibrary(libraryId: string) {
   if (!libraryId || libraryId === currentLibraryId) return;
   setPickedLibraryId(libraryId);
   clearViewerSessionState();
+  // The list stays on screen while the new library connects, so it shows that something is coming.
+  renderMessage("Loading", "loading");
   void connect();
 }
 
