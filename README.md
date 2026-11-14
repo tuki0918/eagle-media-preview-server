@@ -222,10 +222,18 @@ The standalone server lets the viewer browse Eagle libraries **without Eagle run
 
 ```sh
 npm run build
+node bin/eagle-media-server.cjs -f
+```
+
+Without `--library`, it runs the servers listed in `~/.eagle-media-preview-server/standalone.json`, or, without that file, serves the libraries the plugin shares. `-f` also prints each access log entry in the terminal as it happens; leave it out to run quietly.
+
+To serve specific libraries instead:
+
+```sh
 node bin/eagle-media-server.cjs --library ~/Pictures/Photos.library --library /Volumes/nas/Work.library
 ```
 
-With no arguments, it runs the servers listed in `~/.eagle-media-preview-server/standalone.json`, or, without that file, serves the libraries the plugin shares. For options, `standalone.json`, and the access log, see [Standalone server in DEVELOPMENT.md](docs/DEVELOPMENT.md#standalone-server-experimental). For how it works, see [the design doc](docs/design/standalone-server.md).
+For options, `standalone.json`, and the access log, see [Standalone server in DEVELOPMENT.md](docs/DEVELOPMENT.md#standalone-server-experimental). For how it works, see [the design doc](docs/design/standalone-server.md).
 
 ## Architecture
 
