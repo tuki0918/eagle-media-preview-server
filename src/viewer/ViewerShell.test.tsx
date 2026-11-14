@@ -437,7 +437,7 @@ describe("ViewerAppShell", () => {
     expect(html).toContain('id="authUserLabel"');
     expect(html).toContain('id="authRoleLabel"');
     expect(html).toContain('aria-haspopup="menu"');
-    // The header shows a 16px UserRound line icon (like the nav rows) rather than the account's initial.
+    // The account button shows a 16px UserRound line icon (like the nav rows) rather than the account's initial.
     expect(html).toMatch(/class="lucide lucide-user-round size-4[^"]*"[^>]*id="authAvatarIcon"|id="authAvatarIcon"[^>]*class="lucide lucide-user-round size-4/);
     expect(html).toMatch(/id="eagleStatusDot"[^>]*data-status="checking"/);
 
@@ -485,12 +485,13 @@ describe("ViewerAppShell", () => {
     expect(sidebarFooter?.contains(folderFilter)).toBe(true);
     expect(scrollingFolders?.contains(folderFilter)).toBe(false);
     expect(scrollingFolders?.className).toContain("mask-image:linear-gradient");
-    // The account sits in the header beside the library name; the footer keeps only the folder filter.
+    // The account sits in the footer, after the folder filter; the header keeps the library name.
     const sidebarHeader = accountMenuDocument.querySelector('[data-slot="sidebar-header"]');
     const accountButton = accountMenuDocument.querySelector("#authAccountLabel");
-    expect(sidebarHeader?.contains(accountButton)).toBe(true);
+    expect(sidebarFooter?.contains(accountButton)).toBe(true);
+    expect(folderFilter!.compareDocumentPosition(accountButton!) & 4).toBeTruthy(); // DOCUMENT_POSITION_FOLLOWING
     expect(sidebarHeader?.contains(accountMenuDocument.querySelector('[aria-label="Show all items"]'))).toBe(true);
-    expect(sidebarFooter?.contains(accountButton)).toBe(false);
+    expect(sidebarHeader?.contains(accountButton)).toBe(false);
     expect(html).toContain("Large Images");
     expect(html).toContain(">42</span>");
     expect(html).toContain('title="Large Images"');

@@ -154,29 +154,6 @@ export function AccountSideMenu() {
             </SidebarMenuItem>
           </SidebarMenu>
           <LibraryPicker />
-          {signedIn ? (
-            <AccountDropdown
-              onOpenPreferences={() => setPreferencesOpen(true)}
-              readOnly={readOnly}
-              disabled={loginState.disabled}
-              roleDescription={roleDescription}
-              roleLabel={roleLabel}
-              signedIn
-              statusLabel={accountStatusLabel || accountLabel || "Account"}
-              username={username}
-            />
-          ) : (
-            <AccountDropdown
-              onOpenPreferences={() => setPreferencesOpen(true)}
-              readOnly={readOnly}
-              disabled={loginState.disabled}
-              roleDescription=""
-              roleLabel={GUEST_ROLE_LABEL}
-              signedIn={false}
-              statusLabel={`${GUEST_USERNAME} - ${GUEST_ROLE_LABEL}`}
-              username={GUEST_USERNAME}
-            />
-          )}
         </SidebarHeader>
 
         <SidebarContent className="overflow-hidden">
@@ -211,41 +188,67 @@ export function AccountSideMenu() {
         </SidebarContent>
 
         <SidebarFooter className="p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
-          <form
-            ref={folderFilterFormRef}
-            className="relative mx-1 mb-1 group-data-[collapsible=icon]:hidden"
-            aria-label="Folder filter"
-            onSubmit={(event) => event.preventDefault()}
-          >
-            <FunnelIcon className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-            <Input
-              type="search"
-              aria-label="Filter folders"
-              placeholder="Filter"
-              autoComplete="off"
-              spellCheck={false}
-              value={folderFilter}
-              onChange={(event) => setFolderFilter(event.currentTarget.value)}
-              onKeyDown={(event) => {
-                if (event.key !== "Escape" || !folderFilter) return;
-                event.preventDefault();
-                event.stopPropagation();
-                clearFolderFilter();
-              }}
-              className="h-9 rounded-md bg-background/60 pl-7 pr-8 md:text-xs dark:bg-background/30"
-            />
-            {folderFilter ? (
-              <button
-                type="button"
-                aria-label="Clear folder filter"
-                title="Clear folder filter"
-                className="absolute right-0.5 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                onClick={clearFolderFilter}
-              >
-                <XIcon className="size-3.5" aria-hidden="true" />
-              </button>
-            ) : null}
-          </form>
+          {/* The account button sits at the end of the filter row, at the bottom like most apps' account menus. */}
+          <div className="flex items-center gap-1 pl-1">
+            <form
+              ref={folderFilterFormRef}
+              className="relative min-w-0 flex-1 group-data-[collapsible=icon]:hidden"
+              aria-label="Folder filter"
+              onSubmit={(event) => event.preventDefault()}
+            >
+              <FunnelIcon className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+              <Input
+                type="search"
+                aria-label="Filter folders"
+                placeholder="Filter"
+                autoComplete="off"
+                spellCheck={false}
+                value={folderFilter}
+                onChange={(event) => setFolderFilter(event.currentTarget.value)}
+                onKeyDown={(event) => {
+                  if (event.key !== "Escape" || !folderFilter) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  clearFolderFilter();
+                }}
+                className="h-9 rounded-md bg-background/60 pl-7 pr-8 md:text-xs dark:bg-background/30"
+              />
+              {folderFilter ? (
+                <button
+                  type="button"
+                  aria-label="Clear folder filter"
+                  title="Clear folder filter"
+                  className="absolute right-0.5 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                  onClick={clearFolderFilter}
+                >
+                  <XIcon className="size-3.5" aria-hidden="true" />
+                </button>
+              ) : null}
+            </form>
+            {signedIn ? (
+              <AccountDropdown
+                onOpenPreferences={() => setPreferencesOpen(true)}
+                readOnly={readOnly}
+                disabled={loginState.disabled}
+                roleDescription={roleDescription}
+                roleLabel={roleLabel}
+                signedIn
+                statusLabel={accountStatusLabel || accountLabel || "Account"}
+                username={username}
+              />
+            ) : (
+              <AccountDropdown
+                onOpenPreferences={() => setPreferencesOpen(true)}
+                readOnly={readOnly}
+                disabled={loginState.disabled}
+                roleDescription=""
+                roleLabel={GUEST_ROLE_LABEL}
+                signedIn={false}
+                statusLabel={`${GUEST_USERNAME} - ${GUEST_ROLE_LABEL}`}
+                username={GUEST_USERNAME}
+              />
+            )}
+          </div>
           {signedIn && authError ? (
             <p id="authFooterMessage" className="m-0 rounded-md bg-destructive/10 px-2.5 py-2 text-xs leading-[1.35] text-destructive group-data-[collapsible=icon]:hidden" role="alert">
               {authError}
@@ -1103,11 +1106,11 @@ function AccountDropdown({
   return (
     <SidebarMenu className="w-auto shrink-0">
       <SidebarMenuItem ref={containerRef}>
-        {/* Sits at the right end of the header, so only the avatar shows; the name and role are in the menu. */}
+        {/* Sits at the end of the footer's filter row, so only the avatar shows; the name and role are in the menu. */}
         <button
           id="authAccountLabel"
           type="button"
-          className="flex size-10 items-center justify-center rounded-full outline-hidden transition-colors hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring aria-expanded:bg-sidebar-accent [&>svg]:transition-colors hover:[&>svg]:text-sidebar-foreground"
+          className="flex size-9 items-center justify-center rounded-full outline-hidden transition-colors hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring aria-expanded:bg-sidebar-accent [&>svg]:transition-colors hover:[&>svg]:text-sidebar-foreground"
           aria-label={statusLabel}
           aria-haspopup="menu"
           aria-expanded={open}
@@ -1132,8 +1135,8 @@ function AccountDropdown({
             aria-labelledby="authAccountLabel"
             className={
               isMobile
-                ? "absolute right-0 top-full z-50 mt-2 w-64 rounded-2xl border border-border bg-popover p-1.5 text-popover-foreground shadow-[0_18px_48px_-16px_rgba(15,23,42,0.35)]"
-                : "absolute left-full top-0 z-50 ml-3 w-72 rounded-2xl border border-border bg-popover p-1.5 text-popover-foreground shadow-[0_18px_48px_-16px_rgba(15,23,42,0.35)]"
+                ? "absolute bottom-full right-0 z-50 mb-2 w-64 rounded-2xl border border-border bg-popover p-1.5 text-popover-foreground shadow-[0_18px_48px_-16px_rgba(15,23,42,0.35)]"
+                : "absolute bottom-0 left-full z-50 ml-3 w-72 rounded-2xl border border-border bg-popover p-1.5 text-popover-foreground shadow-[0_18px_48px_-16px_rgba(15,23,42,0.35)]"
             }
             onClick={(event) => event.stopPropagation()}
           >
