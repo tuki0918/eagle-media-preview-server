@@ -226,6 +226,9 @@ The standalone server lets the viewer browse Eagle libraries **without Eagle run
 
 ![Standalone server overview](docs/architecture_standalone.png)
 
+<details>
+<summary><strong>Overview and usage</strong></summary>
+
 - **Read only.** Starring, editing, uploading, and moving to the trash need the plugin in Eagle.
 - **Same users and address as the plugin.** It reads the plugin's `settings.json` (users, sign-in, HTTPS, port, and hostname) and never writes it. A server whose port is in use, by the running plugin for example, is skipped.
 - **Limits.** Smart folders aren't shown, each start reads the whole library (about 16 s per 300,000 items), and it runs with Node.js from this repository; there's no app or installer yet.
@@ -243,7 +246,16 @@ To serve specific libraries instead:
 npm run standalone -- --library ~/Pictures/Photos.library --library /Volumes/nas/Work.library
 ```
 
+> [!NOTE]
+> **Windows PowerShell** may drop the `--`, so npm never passes the options on. Do one of these instead:
+>
+> - Quote it: `npm run standalone '--' -f`
+> - Run the same command in Command Prompt (cmd).
+> - Skip npm: `node bin/eagle-media-server.cjs -f`
+
 For options, `standalone.json`, and the access log, see [Standalone server in DEVELOPMENT.md](docs/DEVELOPMENT.md#standalone-server-experimental). For how it works, see [the design doc](docs/design/standalone-server.md).
+
+</details>
 
 ## Details
 
