@@ -695,7 +695,7 @@ test("an announced item whose folder never arrives is looked for for an hour, th
   // mtime.json announces N just now; its folder doesn't arrive. Eagle's count already matches.
   await writeFile(join(libraryPath, "mtime.json"), JSON.stringify({ ...times, N: clock, all: ITEMS.length }));
   await backend.listItems();
-  assert.deepEqual(backend.stats(), { items: 6, cachedAnswers: backend.stats().cachedAnswers, unreadable: 0, gone: 1, lookedFor: 1, outside: 0 });
+  assert.deepEqual(backend.stats(), { items: 6, cachedAnswers: backend.stats().cachedAnswers, unreadable: 0, gone: 1, lookedFor: 1, outside: 0, indexed: { unreadable: 0, recheck: 1, outside: 0 } });
 
   // Still looked for after 59 minutes.
   clock += 59 * 60 * 1000;
@@ -751,4 +751,41 @@ test("keeps at most maxCachedAnswers answers, and drops them all on a change", a
   await writeMtime(libraryPath, ITEMS, { A: 101 });
   assert.deepEqual(names(await backend.listItems()), ["banana", "cat photo", "green apple"]);
   assert.ok(backend.stats().cachedAnswers < 16, `${backend.stats().cachedAnswers} cached answers`);
+});
+
+test("the ids a check acts on stay in step with each item's state", async () => {
+  const { symlink } = await import("node:fs/promises");
+  const libraryPath = await createLibrary();
+  let clock = Date.now();
+  const backend = createFsBackend({ libraryPath, refreshIntervalMs: 0, refreshWaitMs: 5000, rescanIntervalMs: Infinity, now: () => clock });
+  await backend.open();
+  const times = Object.fromEntries(ITEMS.map((item) => [item.id, item.modificationTime]));
+  // What the indexes hold must always match the per-kind counts from the record.
+  const inStep = () => {
+    const stats = backend.stats();
+    assert.deepEqual(stats.indexed, { unreadable: stats.unreadable, recheck: stats.outside + stats.lookedFor, outside: stats.outside });
+    return stats;
+  };
+  inStep();
+
+  // A unreadable, B a link outside, N announced without a folder.
+  const metadataA = join(libraryPath, "images", "A.info", "metadata.json");
+  await writeFile(metadataA, '{"id": "A", "na');
+  const metadataB = join(libraryPath, "images", "B.info", "metadata.json");
+  const planted = join(libraryPath, "..", "planted.json");
+  await writeFile(planted, JSON.stringify(ITEMS[1]));
+  await rm(metadataB);
+  await symlink(planted, metadataB);
+  await writeFile(join(libraryPath, "mtime.json"), JSON.stringify({ ...times, A: 101, B: 301, N: clock, all: ITEMS.length + 1 }));
+  await backend.listItems();
+  assert.deepEqual(inStep().indexed, { unreadable: 1, recheck: 2, outside: 1 });
+
+  // All three recover: A reads cleanly, B's link becomes the real file, N's folder arrives.
+  await writeFile(metadataA, JSON.stringify(ITEMS[0]));
+  await rm(metadataB);
+  await writeFile(metadataB, JSON.stringify(ITEMS[1]));
+  await writeItem(libraryPath, { id: "N", name: "late", modificationTime: 700 });
+  clock += 61 * 1000;
+  assert.deepEqual(names(await backend.listItems()), ["late", "banana", "cat photo", "apple"]);
+  assert.deepEqual(inStep().indexed, { unreadable: 0, recheck: 0, outside: 0 });
 });

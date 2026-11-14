@@ -264,7 +264,52 @@ function createFsBackend({
   // Each item's time in mtime.json when it was last read; a different time means read it again.
   const readAt = new Map<string, number>();
   // Items mtime.json lists, or the folder listing showed, that aren't held, and why (see Absence).
+  // Most are old deletions Eagle keeps in mtime.json, so it can be large and is never walked in
+  // full on a check: the few ids a check acts on are indexed beside it. All changes go through
+  // setAbsence, clearAbsence, and setLookingSince, which keep the indexes in step.
   const absent = new Map<string, Absence>();
+  // Held back as unreadable: tried again at every check.
+  const unreadableIds = new Set<string>();
+  // Left out as outside, or gone and looked for: checked again every recheckIntervalMs.
+  const recheckIds = new Set<string>();
+  let outsideTotal = 0;
+
+  function needsRecheck(entry: Absence) {
+    return entry.kind === "outside" || (entry.kind === "gone" && entry.lookingSince !== undefined);
+  }
+
+  function clearAbsence(id: string) {
+    const entry = absent.get(id);
+    if (!entry) return;
+    absent.delete(id);
+    unreadableIds.delete(id);
+    recheckIds.delete(id);
+    if (entry.kind === "outside") outsideTotal -= 1;
+  }
+
+  function setAbsence(id: string, entry: Absence) {
+    clearAbsence(id);
+    absent.set(id, entry);
+    if (entry.kind === "unreadable") unreadableIds.add(id);
+    if (entry.kind === "outside") outsideTotal += 1;
+    if (needsRecheck(entry)) recheckIds.add(id);
+  }
+
+  // Starts (a time) or stops (undefined) looking for a gone item.
+  function setLookingSince(id: string, since: number | undefined) {
+    const entry = absent.get(id);
+    if (entry?.kind !== "gone") return;
+    entry.lookingSince = since;
+    if (needsRecheck(entry)) recheckIds.add(id);
+    else recheckIds.delete(id);
+  }
+
+  function clearAbsences() {
+    absent.clear();
+    unreadableIds.clear();
+    recheckIds.clear();
+    outsideTotal = 0;
+  }
   // mtime.json as last read, for the times of items read again outside a change to it.
   let lastTimes: Record<string, unknown> | null = null;
   let library: Record<string, unknown> = {};
@@ -413,7 +458,7 @@ function createFsBackend({
       folders: itemFolders,
       height: finiteNumber(raw.height),
       id,
-      isDeleted: absent.get(id)?.kind === "unreadable" || raw.isDeleted === true || itemFolders.some((folder) => lockedFolders.has(folder)),
+      isDeleted: unreadableIds.has(id) || raw.isDeleted === true || itemFolders.some((folder) => lockedFolders.has(folder)),
       lastModified: finiteNumber(raw.lastModified),
       modificationTime: finiteNumber(raw.modificationTime),
       mtime: finiteNumber(raw.mtime),
@@ -436,7 +481,7 @@ function createFsBackend({
     try {
       const raw = await readLibraryJson("images", `${id}.info`, "metadata.json");
       if (!isRecord(raw) || raw.id !== id) return holdBack(id);
-      absent.delete(id);
+      clearAbsence(id);
       items.set(id, { indexed: indexedItem(id, raw), raw });
       if (Number.isFinite(time)) readAt.set(id, time);
       changed();
@@ -456,7 +501,7 @@ function createFsBackend({
   // Missing or mid-write metadata: hidden (and its files refused) until it reads cleanly, since the
   // edit being written may be a move to the trash. Tried again at every check.
   function holdBack(id: string) {
-    absent.set(id, { kind: "unreadable" });
+    setAbsence(id, { kind: "unreadable" });
     const stored = items.get(id);
     if (stored) stored.indexed = indexedItem(id, stored.raw);
     changed();
@@ -464,7 +509,9 @@ function createFsBackend({
 
   function leaveOut(id: string, kind: "gone" | "outside", time: number) {
     const previous = absent.get(id);
-    absent.set(id, { kind, time, lookingSince: kind === "gone" && previous?.kind === "gone" ? previous.lookingSince : undefined });
+    setAbsence(id, kind === "gone"
+      ? { kind, time, lookingSince: previous?.kind === "gone" ? previous.lookingSince : undefined }
+      : { kind, time });
     items.delete(id);
     readAt.delete(id);
     changed();
@@ -488,7 +535,7 @@ function createFsBackend({
   // item count can't tell when another item was deleted in the same sync.
   function lookFor(id: string) {
     const entry = absent.get(id);
-    if (entry?.kind === "gone" && entry.lookingSince === undefined) entry.lookingSince = now();
+    if (entry?.kind === "gone" && entry.lookingSince === undefined) setLookingSince(id, now());
   }
 
   function lookedFor(id: string) {
@@ -509,22 +556,16 @@ function createFsBackend({
       if (entry && entry.kind !== "gone") continue;
       const time = timeIn(times, id);
       if (entry) entry.time = time;
-      else absent.set(id, { kind: "gone", time });
+      else setAbsence(id, { kind: "gone", time });
       if (Number.isFinite(time) && Math.abs(now() - time) <= awaitFolderMs) lookFor(id);
     }
-  }
-
-  function outsideCount() {
-    let count = 0;
-    for (const entry of absent.values()) if (entry.kind === "outside") count += 1;
-    return count;
   }
 
   // Whether Eagle's item count ("all" in mtime.json) differs from the items held (and those left
   // out as outside the library, which Eagle counts but this backend never reads).
   function countsDisagree(times: Record<string, unknown> | null) {
     const count = Number(times?.all);
-    return Number.isFinite(count) && count !== items.size + outsideCount();
+    return Number.isFinite(count) && count !== items.size + outsideTotal;
   }
 
   // --- Reading the library, and keeping up with it ------------------------------------------------
@@ -543,7 +584,7 @@ function createFsBackend({
       const ids = await listItemIds();
       items.clear();
       readAt.clear();
-      absent.clear();
+      clearAbsences();
       rescanDue = false;
       loaded = 0;
       total = ids.length;
@@ -615,14 +656,13 @@ function createFsBackend({
   // for, every recheckIntervalMs. Their real paths are checked again, so one still outside (or
   // still missing) is simply left out again.
   async function retryAbsent() {
-    const unreadable = [...absent].filter(([, entry]) => entry.kind === "unreadable").map(([id]) => id);
-    if (unreadable.length) await readItems(unreadable, lastTimes);
-    if (now() - lastRecheck < recheckIntervalMs) return;
-    const recheck: string[] = [];
-    for (const [id, entry] of absent) {
-      if (entry.kind === "gone" && entry.lookingSince !== undefined && now() - entry.lookingSince > awaitFolderMs) entry.lookingSince = undefined;
-      if (entry.kind === "outside" || lookedFor(id)) recheck.push(id);
+    if (unreadableIds.size) await readItems([...unreadableIds], lastTimes);
+    if (!recheckIds.size || now() - lastRecheck < recheckIntervalMs) return;
+    for (const id of [...recheckIds]) {
+      const entry = absent.get(id);
+      if (entry?.kind === "gone" && entry.lookingSince !== undefined && now() - entry.lookingSince > awaitFolderMs) setLookingSince(id, undefined);
     }
+    const recheck = [...recheckIds];
     if (!recheck.length) return;
     lastRecheck = now();
     await readItems(recheck, lastTimes);
@@ -665,7 +705,7 @@ function createFsBackend({
       if (present.has(id)) continue;
       items.delete(id);
       readAt.delete(id);
-      absent.delete(id);
+      clearAbsence(id);
       changed();
     }
     const added = ids.filter((id) => !items.has(id) && absent.get(id)?.kind !== "outside");
@@ -877,7 +917,13 @@ function createFsBackend({
         counts[entry.kind] += 1;
         if (lookedFor(id)) counts.lookedFor += 1;
       }
-      return { items: items.size, cachedAnswers: cachesVersion === version ? caches.size : 0, ...counts };
+      return {
+        items: items.size,
+        cachedAnswers: cachesVersion === version ? caches.size : 0,
+        ...counts,
+        // What a check acts on, from the indexes kept beside the record (they must agree with it).
+        indexed: { unreadable: unreadableIds.size, recheck: recheckIds.size, outside: outsideTotal },
+      };
     },
 
     // Answers at once, even while the library is read: which library a request is for never
@@ -1047,7 +1093,7 @@ function createFsBackend({
       items.clear();
       strings.clear();
       readAt.clear();
-      absent.clear();
+      clearAbsences();
       caches.clear();
     },
   };
