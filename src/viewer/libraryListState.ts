@@ -76,8 +76,8 @@ export function setPickedLibraryId(id: string) {
   }
 }
 
-// Asks the server which libraries this user may open. A server that doesn't list them (the plugin,
-// or an older server) answers 404, and the picker stays hidden.
+// Asks the server which libraries this user may open. The plugin lists none, and the picker stays
+// hidden; it stays hidden too when the list can't be fetched.
 let refreshRun = 0;
 
 export async function refreshLibraryList(currentId = current.currentId) {

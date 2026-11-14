@@ -639,8 +639,9 @@ function createViewerServer({
           sendAuthRequired(res);
           return;
         }
-        if (url.pathname === "/api/libraries" && multiLibrary) {
-          handleLibraries(req, res, sessions, sessionIds, libraryAccess, authenticatedUser(req, auth));
+        if (url.pathname === "/api/libraries") {
+          // The plugin (no standalone backends) lists none: the viewer then shows no library picker.
+          handleLibraries(req, res, multiLibrary ? sessions : [], sessionIds, libraryAccess, authenticatedUser(req, auth));
           return;
         }
         if (!selected) {

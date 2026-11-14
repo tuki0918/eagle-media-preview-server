@@ -1996,8 +1996,10 @@ test("createViewerServer does not expose library switching or library history", 
     const origin = `http://127.0.0.1:${status.port}`;
     const adminCookie = await loginCookie(origin, "owner", "own");
 
+    // The plugin lists no libraries (it serves the one open in Eagle), and never Eagle's history.
     const libraries = await fetch(`${origin}/api/libraries`, { headers: { Cookie: adminCookie } });
-    assert.equal(libraries.status, 404);
+    assert.equal(libraries.status, 200);
+    assert.deepEqual(await libraries.json(), { libraries: [] });
 
     const switched = await fetch(`${origin}/api/library/switch`, {
       method: "POST",
