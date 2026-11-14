@@ -100,6 +100,10 @@ test("servers take settings.json's network settings and override only where they
   // A relative path in standalone.json is relative to that file.
   assert.deepEqual(config.servers[1].libraries, [{ path: work, name: "Office" }]);
   assert.equal(config.common.sessionSecret, SECRET);
+  assert.equal(config.common.experimentalSort, false);
+  await writeSettings(dir, { experimentalSort: true });
+  assert.equal((await resolveStandaloneConfig({ settingsPath, configPath })).common.experimentalSort, true);
+  await writeFile(settingsPath, before);
   assert.deepEqual(config.common.authUsers.map((user: { username: string }) => user.username), ["alice"]);
   // settings.json is never written.
   assert.equal(await readFile(settingsPath, "utf8"), before);
@@ -165,6 +169,7 @@ test("runs each server on its own, skips one whose port is taken, and prints the
     const origin = running.servers[0].url.replace("localhost", "127.0.0.1");
     const output = lines.join("\n");
     assert.match(output, /Eagle Media Server \(standalone, read only\)/);
+    assert.match(output, /Sorting:\s+Advanced Sort off \(experimentalSort in settings\.json\)/);
     assert.match(output, new RegExp(`Access log: ${accessLogPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} \\(streaming below\\)`));
     assert.match(output, /PORT\s+STATUS\s+URL\s+LIBRARY\s+LIBRARY STATUS/);
     assert.match(output, new RegExp(`${busyPort}\\s+port in use\\s+http://localhost:${busyPort}\\s+Photos`));

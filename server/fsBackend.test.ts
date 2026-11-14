@@ -202,7 +202,7 @@ test("has no writes, and reports the library by its folder name", async () => {
 test("the viewer server browses, sorts, and serves files from it, and never serves a locked item", async () => {
   const { createViewerServer } = require("../dist/.generated/plugin-service/viewerServer.cjs");
   const libraryPath = await createLibrary();
-  const viewer = createViewerServer({ host: "127.0.0.1", port: 0, backend: createFsBackend({ libraryPath }) });
+  const viewer = createViewerServer({ host: "127.0.0.1", port: 0, experimentalSort: true, backend: createFsBackend({ libraryPath }) });
   await viewer.start();
   try {
     const origin = `http://127.0.0.1:${viewer.status().port}`;
@@ -636,4 +636,28 @@ test.skipIf(process.platform === "win32")("a folder gone between the first listi
   // It comes back; Eagle's count matched what was held, so only looking for it again finds it.
   await writeItem(libraryPath, target);
   assert.deepEqual(names(await backend.listItems()), shown());
+});
+
+test("with Advanced Sort off, as in the plugin, the viewer server neither offers nor applies sorting", async () => {
+  const { createViewerServer } = require("../dist/.generated/plugin-service/viewerServer.cjs");
+  const libraryPath = await createLibrary();
+  const viewer = createViewerServer({ host: "127.0.0.1", port: 0, experimentalSort: false, backend: createFsBackend({ libraryPath }) });
+  await viewer.start();
+  try {
+    const origin = `http://127.0.0.1:${viewer.status().port}`;
+    const health = await (await fetch(`${origin}/api/health`)).json();
+    assert.equal("sortIndex" in health, false);
+    const headers = { "X-Library-Id": health.library.id };
+    const connect = await (await fetch(`${origin}/api/connect`, { method: "POST", headers: { ...headers, "Content-Type": "application/json", Origin: origin }, body: "{}" })).json();
+    assert.equal(connect.features, undefined);
+    // A sort in the request is ignored: Eagle's order, newest first.
+    const items = await (await fetch(`${origin}/api/items?sort=name&order=asc`, { headers })).json();
+    assert.deepEqual(names(items), ["banana", "cat photo", "apple"]);
+    assert.equal(items.sort, undefined);
+    // The type menu still counts from what was read.
+    assert.deepEqual(await (await fetch(`${origin}/api/item-types`, { headers })).json(), { complete: true, items: [{ ext: "jpg", count: 1 }, { ext: "png", count: 2 }] });
+    assert.equal("sortIndex" in viewer.status(), false);
+  } finally {
+    await viewer.stop();
+  }
 });

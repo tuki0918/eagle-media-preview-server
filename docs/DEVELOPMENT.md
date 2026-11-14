@@ -56,4 +56,4 @@ It reads the plugin's `~/.eagle-media-preview-server/settings.json` (never write
 }
 ```
 
-A server whose port is taken (the plugin is running in Eagle, say) is skipped; the others run. The access log goes to `~/.eagle-media-preview-server/standalone-access-log.jsonl`. Run `node bin/eagle-media-server.cjs --help` for every option.
+A server whose port is taken (the plugin is running in Eagle, say) is skipped; the others run. Advanced Sort is on or off as in the plugin (`experimentalSort` in settings.json). The access log goes to `~/.eagle-media-preview-server/standalone-access-log.jsonl`. Run `node bin/eagle-media-server.cjs --help` for every option.

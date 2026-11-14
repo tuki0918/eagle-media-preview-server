@@ -427,10 +427,12 @@ function createViewerServer({
   const sessionIds = new Map(sessions.map((session) => [session, libraryId(session.libraryPath)]));
   // With Advanced Sort on, the index is built in the background when the server starts (and after a
   // library switch) and kept while the server runs, so sorting is ready before anyone asks for it.
-  const sortIndexes: SortIndexManager | null = currentSession.sortIndexes ?? (experimentalSort
-    ? createLibraryIndexManager({ idleMs: Infinity, sourceFor: () => sortIndexSource(currentSession, () => libraryGeneration) })
-    : null);
-  const sortIndexesFor = (session: LibraryBackend) => session.sortIndexes ?? sortIndexes;
+  // A backend that keeps every item in memory brings its own index, but it too sorts only with
+  // Advanced Sort on: the plugin and the standalone server follow the same setting.
+  const sortIndexes: SortIndexManager | null = experimentalSort
+    ? currentSession.sortIndexes ?? createLibraryIndexManager({ idleMs: Infinity, sourceFor: () => sortIndexSource(currentSession, () => libraryGeneration) })
+    : null;
+  const sortIndexesFor = (session: LibraryBackend) => (experimentalSort ? session.sortIndexes ?? sortIndexes : null);
   const sortIndexCheckFor = (manager: SortIndexManager | null) => () => {
     const admittedGeneration = libraryGeneration;
     return (libraryPath: string) => manager && state === "running" && admittedGeneration === libraryGeneration

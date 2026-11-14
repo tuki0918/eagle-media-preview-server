@@ -128,7 +128,7 @@ Each query the viewer makes is answered from the store, following what the Eagle
 
 | Viewer request | FsBackend |
 | --- | --- |
-| All items, folder, unfiled, untagged, type, rating, tags | Filter the store; default order is Eagle's `item/get` order (`modificationTime`, newest first). Advanced Sort keys work for every library, with no setting needed. |
+| All items, folder, unfiled, untagged, type, rating, tags | Filter the store; default order is Eagle's `item/get` order (`modificationTime`, newest first). Advanced Sort keys work for every library, with no setting needed. **As built**: only with Advanced Sort on (`experimentalSort` in `settings.json`), as in the plugin |
 | Folder item counts | Counted from the store. **As built**: items directly in the folder; whether Eagle's `imageCount` includes sub-folders is still to be checked |
 | Search | Name, tags, annotation, and URL, case-insensitive, all words must match. Close to, but not exactly, Eagle's full-text `item/query`; documented as such. **As built**: Eagle's operators (`-word`, `"phrase"`, `a OR b`), also over the extension, folder names and descriptions, and comments |
 | Smart folders | Rules evaluated by our own engine (5.4). **As built**: not listed yet |
@@ -250,7 +250,7 @@ Checked with the ICON sample library (206 item folders, 201 shown): read in 0.1 
 
 Differences from the proposal above:
 
-- **Sorting needs no index of Eagle's.** The backend keeps every item in memory, so it hands the server its own sort index (`backend.sortIndexes`, shaped like `libraryIndex.cts`'s). Advanced Sort and the type menu work in standalone mode without the setting, and nothing is read twice.
+- **Sorting needs no index of Eagle's.** The backend keeps every item in memory, so it hands the server its own sort index (`backend.sortIndexes`, shaped like `libraryIndex.cts`'s). Advanced Sort works in standalone mode without an index of Eagle's, and nothing is read twice. (Later: it is offered only with Advanced Sort on, `experimentalSort` in `settings.json`, as in the plugin; the library is read in full either way, since lists, filters, and search need it. The type menu counts from memory in both cases.)
 - **Files are refused, not just hidden.** The media code asks `backend.isItemServable(id)` first; an item in the trash or in a locked folder answers `404` on `/api/items/<id>/file|thumb` and `/file/<id>`. (Through Eagle, a trashed item's file is still served from its folder, as before.)
 - **Locked folders.** An item in any locked folder (or one inside it) is hidden, even if it is also in an unlocked one. Password fields are stripped from every folder sent.
 - **Smart folders are not listed at all** until the evaluator (5.4) exists, rather than listed and disabled.

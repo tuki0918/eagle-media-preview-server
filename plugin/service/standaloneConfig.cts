@@ -186,6 +186,8 @@ async function resolveStandaloneConfig(cli: CliOverrides = {}) {
     common: {
       authUsers,
       blockedAddresses: settings.blockedAddresses,
+      // Advanced Sort is on or off as in the plugin (settings.json's experimentalSort).
+      experimentalSort: settings.experimentalSort,
       libraryUserRules: libraryUserRules(settings),
       sessionMaxAgeSeconds: settings.sessionDurationDays * 24 * 60 * 60,
       sessionSecret: settings.sessionSecret || randomBytes(32).toString("base64url"),

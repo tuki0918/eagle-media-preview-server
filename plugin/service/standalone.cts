@@ -48,7 +48,7 @@ interface ServerPlan {
 }
 
 interface StandaloneConfig {
-  common: { authUsers: unknown[]; sessionSecret: string } & Record<string, unknown>;
+  common: { authUsers: unknown[]; experimentalSort: boolean; sessionSecret: string } & Record<string, unknown>;
   libraryProtection: Set<string> | null;
   servers: ServerPlan[];
   settingsPath: string;
@@ -275,6 +275,7 @@ async function runStandalone(argv: string[], { log = console.log, lanAddresses =
   log(`  Settings:   ${config.settingsPath} (read only)`);
   log(`  Servers:    ${config.source}`);
   log(`  Sign-in:    ${users ? `required (${users} user${users === 1 ? "" : "s"})` : anonymousOnNetwork ? "not required — anyone on the network can browse" : "not required"}`);
+  log(`  Sorting:    ${config.common.experimentalSort ? "Advanced Sort on" : "Advanced Sort off (experimentalSort in settings.json)"}`);
   log(`  Access log: ${accessLogPath}${options.follow ? " (streaming below)" : " (-f to stream it here)"}`);
   log("");
   for (const line of statusTable()) log(line);
