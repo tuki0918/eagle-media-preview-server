@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-14
+
 ### Added
 
 - Standalone server (experimental): `npm run standalone` serves Eagle libraries to the viewer without Eagle running, read only. It uses the plugin's settings (users, sign-in, HTTPS, port, hostname) without changing them, so viewers reach it at the same address and stay signed in; `~/.eagle-media-preview-server/standalone.json` lists the servers to run, each with its libraries and, if wanted, its own port and hostname. It prints a status table at startup, skips a server whose port is in use (by the plugin, say), and writes an access log, which `npm run standalone -- -f` or `npm run standalone -- logs -f` streams. See `docs/DEVELOPMENT.md`.
@@ -14,7 +16,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Changed
 
-- The offline hints now name both the plugin and the standalone server.
+- Viewer: the account menu button moved from the top of the sidebar to the bottom, beside the folder filter.
+- Improved the UI/UX of the viewer.
 
 ### Security
 
@@ -412,7 +415,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 - Initial release of Eagle Media Preview Server.
 
-[Unreleased]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.7.3...HEAD
+[Unreleased]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.7.3...v0.8.0
 [0.7.3]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.7.0...v0.7.1
