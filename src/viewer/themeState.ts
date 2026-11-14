@@ -79,9 +79,29 @@ function writeStoredPreference(preference: ThemePreference) {
   }
 }
 
+// The browser bar and an installed app's status bar: the page background (--background in styles.css), as in index.html.
+const THEME_COLORS: Record<ResolvedTheme, string> = { light: "#ffffff", dark: "#0f1012" };
+
 function applyThemeToDocument(resolved: ThemeState["resolved"]) {
   if (!hasBrowserApis()) return;
   document.documentElement.classList.toggle(THEME_CLASS, resolved === "dark");
+  syncThemeColor(resolved);
+}
+
+// index.html's theme-color follows the device's light or dark setting, not the viewer's theme, so
+// it is replaced with the theme's color. A new tag rather than a changed one: an installed app on
+// iOS may not notice a change to the tag it read at launch.
+function syncThemeColor(resolved: ResolvedTheme) {
+  const head = document.head;
+  if (!head) return;
+  const color = THEME_COLORS[resolved];
+  const tags = Array.from(head.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]'));
+  if (tags.length === 1 && !tags[0].hasAttribute("media") && tags[0].content === color) return;
+  for (const tag of tags) tag.remove();
+  const tag = document.createElement("meta");
+  tag.name = "theme-color";
+  tag.content = color;
+  head.append(tag);
 }
 
 function setCurrentThemeState(nextState: ThemeState) {
