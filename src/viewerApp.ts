@@ -148,6 +148,10 @@ const SORT_INDEXING_RETRY_MS = 1500;
 let itemTypesState: "idle" | "loading" | "loaded" = "idle";
 // The type menu lists what the open folder holds, so its extensions belong to this folder.
 let itemTypesFolderId = "";
+// The server reads the library folder itself (the standalone server): its type counts are kept
+// current from disk and cheap to ask for, and changes reach it without this viewer knowing, so the
+// type menu asks again each time it opens.
+let itemTypesFollowLibrary = false;
 // Where the items on screen start; tiles add pages after it, so 0 means they run from the first item.
 let loadedItemsOffset = 0;
 // Set when the items on screen may not be the whole list, so they can't be taken as the folder's
@@ -234,7 +238,7 @@ async function init() {
       applyFilterChange({ ext });
     },
     mediaTypesOpened: () => {
-      void loadItemTypes();
+      void loadItemTypes({ refresh: itemTypesFollowLibrary });
     },
     ratingChanged: (rating: string) => {
       applyFilterChange({ rating });
@@ -551,6 +555,7 @@ function showViewer(data: ConnectResponse) {
   currentLibraryId = data.library?.id || "";
   setConnectedLibraryId(currentLibraryId);
   setServerReadOnly(data.readOnly === true);
+  itemTypesFollowLibrary = (data.app as { standalone?: unknown } | undefined)?.standalone === true;
   uploadMaxBytes = data.uploadMaxBytes;
   sortAvailable = data.features?.sort === true;
   // A sort from a bookmarked URL means nothing on a server without the experimental sort.
@@ -895,12 +900,18 @@ function useLoadedItemTypes() {
   if (changed) renderSearchControlButtons();
 }
 
-async function loadItemTypes() {
+// With `refresh`, extensions already loaded are asked for again in the background: the menu keeps
+// showing them, and updates when the answer comes.
+async function loadItemTypes({ refresh = false }: { refresh?: boolean } = {}) {
   syncItemTypesFolder();
-  if (itemTypesState !== "idle") return;
+  if (itemTypesState === "loading") return;
+  if (itemTypesState === "loaded" && !refresh) return;
+  const inBackground = itemTypesState === "loaded";
   const requestId = ++itemTypesRequestId;
-  itemTypesState = "loading";
-  renderSearchControlButtons();
+  if (!inBackground) {
+    itemTypesState = "loading";
+    renderSearchControlButtons();
+  }
   const query = itemTypesFolderId ? `?${new URLSearchParams({ folderId: itemTypesFolderId }).toString()}` : "";
   try {
     // The server answers with the extensions found so far until its scan is complete.
@@ -914,6 +925,11 @@ async function loadItemTypes() {
     itemTypesState = "loaded";
   } catch (error) {
     if (requestId !== itemTypesRequestId) return;
+    // A refresh that fails keeps what was shown.
+    if (inBackground) {
+      handleAuthError(error);
+      return;
+    }
     // Let the next menu open retry.
     itemTypesState = "idle";
     if (handleAuthError(error)) return;
