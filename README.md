@@ -240,6 +240,12 @@ npm run standalone -- -f
 
 Without `--library`, it runs the servers listed in `~/.eagle-media-preview-server/standalone.json`, or, without that file, serves the libraries the plugin shares. `-f` also prints each access log entry in the terminal as it happens; leave it out to run quietly.
 
+Add `--panel` to open the local management panel in your browser. Use it to start and stop each viewer server, check library status, and inspect the access log.
+
+```sh
+npm run standalone -- --panel
+```
+
 To serve specific libraries instead:
 
 ```sh
