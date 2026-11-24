@@ -89,7 +89,10 @@ export async function startStandalonePanel(controls: PanelControls, assets = pan
   async function handle(req: IncomingMessage, res: ServerResponse) {
     for (const [name, value] of Object.entries(securityHeaders)) res.setHeader(name, value as string);
     res.setHeader("Cache-Control", "no-store");
-    if (req.headers.host !== authority || (req.headers.origin && req.headers.origin !== origin)) {
+    if (req.headers.host !== authority) {
+      return json(res, 403, { error: "Open the 127.0.0.1 management panel URL printed by the CLI." });
+    }
+    if (req.headers.origin && req.headers.origin !== origin) {
       return json(res, 403, { error: "Forbidden" });
     }
 

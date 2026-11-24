@@ -38,7 +38,7 @@ function Activity({ snapshot }: { snapshot: PanelSnapshot }) {
   const [searchedText, setSearchedText] = useState("");
   const [revision, setRevision] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<{ source: "refresh" | "action"; message: string } | null>(null);
   const libraryNames = new Map(snapshot.libraryNames);
   const refresh = () => setRevision((current) => current + 1);
 
@@ -59,8 +59,9 @@ function Activity({ snapshot }: { snapshot: PanelSnapshot }) {
         if (controller.signal.aborted) return;
         setSummary(next);
         setSearchedText(term);
+        setError((current) => current?.source === "refresh" ? null : current);
       } catch (error) {
-        if (!controller.signal.aborted) setError(errorMessage(error));
+        if (!controller.signal.aborted) setError({ source: "refresh", message: errorMessage(error) });
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
@@ -80,7 +81,7 @@ function Activity({ snapshot }: { snapshot: PanelSnapshot }) {
   }, [autoRefresh, expanded]);
 
   async function exportLog() {
-    setError("");
+    setError(null);
     try {
       const response = await request("/api/activity/export");
       const url = URL.createObjectURL(await response.blob());
@@ -90,18 +91,18 @@ function Activity({ snapshot }: { snapshot: PanelSnapshot }) {
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (error) {
-      setError(errorMessage(error));
+      setError({ source: "action", message: errorMessage(error) });
     }
   }
 
   async function clearLog() {
     if (!window.confirm("Clear the standalone access log?")) return;
-    setError("");
+    setError(null);
     try {
       await request("/api/activity/clear", { method: "POST" });
       refresh();
     } catch (error) {
-      setError(errorMessage(error));
+      setError({ source: "action", message: errorMessage(error) });
     }
   }
 
@@ -115,10 +116,10 @@ function Activity({ snapshot }: { snapshot: PanelSnapshot }) {
       filters={filters}
       libraryNames={libraryNames}
       loading={loading}
-      notice={error ? { isError: true, text: error } : null}
+      notice={error ? { isError: true, text: error.message } : null}
       onAutoRefreshChange={setAutoRefresh}
       onClear={() => void clearLog()}
-      onDismissNotice={() => setError("")}
+      onDismissNotice={() => setError(null)}
       onEventFilterChange={setEventFilter}
       onExpandedChange={setExpanded}
       onExport={() => void exportLog()}

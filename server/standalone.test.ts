@@ -305,14 +305,23 @@ test("the local management panel stays available through listener failures and s
 
     assert.match(await (await fetch(url.origin)).text(), /Media Preview Server/);
     assert.equal((await fetch(url.origin + "/api/status")).status, 401);
-    const mismatchedHost = await new Promise<number | undefined>((resolve, reject) => {
-      const request = httpGet(url.origin + "/api/status", { headers: { ...headers, Host: "other.test" } }, (response) => {
-        response.resume();
-        resolve(response.statusCode);
+    for (const host of ["other.test", `localhost:${url.port}`]) {
+      const { status, body } = await new Promise<{ status: number | undefined; body: string }>((resolve, reject) => {
+        const request = httpGet(url.origin, { headers: { Host: host } }, async (response) => {
+          try {
+            const chunks = [];
+            for await (const chunk of response) chunks.push(chunk);
+            resolve({ status: response.statusCode, body: Buffer.concat(chunks).toString() });
+          } catch (error) {
+            reject(error);
+          }
+        });
+        request.once("error", reject);
       });
-      request.once("error", reject);
-    });
-    assert.equal(mismatchedHost, 403);
+      assert.equal(status, 403);
+      assert.match(JSON.parse(body).error, /127\.0\.0\.1.*printed by the CLI/);
+      assert.ok(!body.includes(url.hash.slice(1)));
+    }
     assert.equal((await fetch(url.origin + "/api/servers/0/start", { method: "POST", headers: { ...headers, Origin: "http://other.test" } })).status, 403);
     assert.equal((await fetch(url.origin + "/api/servers/0/start", { method: "POST", headers })).status, 403);
     assert.equal((await get("/settings.json")).status, 404);
