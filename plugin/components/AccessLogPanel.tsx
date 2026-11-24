@@ -548,7 +548,7 @@ function EventTable({ emptyText, entries, filters, libraryNames, searchedText, o
   if (!entries.length) return <EmptyRow>{emptyText}</EmptyRow>;
   return (
     <div className="max-h-[240px] overflow-auto rounded-xl border border-[#e6e6e9]" role="table" aria-label="Recent events">
-      <div className={`${eventGridClassName} sticky top-0 border-b border-[#efeff1] bg-[#f7f7f8] ${tableHeaderClassName}`} role="row">
+      <div className={`${eventGridClassName} sticky top-0 z-[1] border-b border-[#efeff1] bg-[#f7f7f8] ${tableHeaderClassName}`} role="row">
         <span role="columnheader">Time</span>
         <span role="columnheader">Address</span>
         <span role="columnheader">User</span>
@@ -558,6 +558,8 @@ function EventTable({ emptyText, entries, filters, libraryNames, searchedText, o
         <span role="columnheader"><span className="sr-only">Actions</span></span>
       </div>
       {entries.map((entry, index) => {
+        const date = new Date(entry.at);
+        const { compact, full } = formatEventTime(date);
         const failed = FAILED_EVENTS.has(entry.event) || (entry.status ?? 0) >= 400;
         const libraryName = entry.libraryId ? libraryNames.get(entry.libraryId) : undefined;
         const fields = entry.fields?.map((field) => FIELD_LABELS[field] || field).join(", ");
@@ -569,7 +571,10 @@ function EventTable({ emptyText, entries, filters, libraryNames, searchedText, o
         ].filter(Boolean);
         return (
           <div key={`${entry.at}-${index}`} className={`${eventGridClassName} border-b border-[#f3f3f5] text-[11.5px] text-[#3a3f47] last:border-b-0`} role="row">
-            <span className="whitespace-nowrap tabular-nums" role="cell" title={new Date(entry.at).toLocaleString()}>{formatTime(entry.at)}</span>
+            <span className="tabular-nums [container-type:inline-size]" role="cell" title={date.toLocaleString()}>
+              <span className="block truncate [@container_(min-width:13ch)]:hidden">{compact}</span>
+              <span className="hidden truncate [@container_(min-width:13ch)]:block">{full}</span>
+            </span>
             <span className="flex min-w-0" role="cell">
               <FilterButton filter={{ field: "address", value: entry.ip }} filters={filters} onFiltersChange={onFiltersChange}><Match query={searchedText} text={entry.ip} /></FilterButton>
             </span>
@@ -668,7 +673,7 @@ function EmptyRow({ children }: { children: ReactNode }) {
 const fieldLabelClassName = "text-[10.5px] font-semibold uppercase leading-tight tracking-[0.06em] text-[#7a7f88]";
 const tableHeaderClassName = "text-[10px] font-semibold uppercase leading-none tracking-[0.06em] text-[#8a8f99]";
 const clientGridClassName = "grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_72px_44px_60px_48px_24px] items-center gap-2 px-2.5 py-1.5";
-const eventGridClassName = "grid grid-cols-[70px_minmax(0,1fr)_minmax(0,0.65fr)_minmax(0,1.1fr)_minmax(0,1.25fr)_minmax(0,1.3fr)_24px] items-center gap-2 px-2.5 py-1.5";
+const eventGridClassName = "grid grid-cols-[minmax(70px,1fr)_minmax(0,1fr)_minmax(0,0.65fr)_minmax(0,1.1fr)_minmax(0,1.25fr)_minmax(0,1.3fr)_24px] items-center gap-2 px-2.5 py-1.5";
 
 function isLoopback(address: string) {
   return address === "::1" || address.startsWith("127.");
@@ -696,10 +701,16 @@ function formatBucketRange(bucket: AccessLogBucket, range: AccessLogRange) {
   return `${formatBucketLabel(bucket.start, range)} – ${formatBucketLabel(bucket.end, range)}`;
 }
 
-function formatTime(at: number) {
-  const date = new Date(at);
-  const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
-  return date.toDateString() === new Date().toDateString() ? time : `${date.getMonth() + 1}/${date.getDate()} ${time.slice(0, 5)}`;
+function formatEventTime(date: Date) {
+  const twoDigits = (value: number) => String(value).padStart(2, "0");
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  const minutes = `${twoDigits(date.getHours())}:${twoDigits(date.getMinutes())}`;
+  const time = `${minutes}:${twoDigits(date.getSeconds())}`;
+  return {
+    compact: date.toDateString() === new Date().toDateString() ? time : `${month}/${day} ${minutes}`,
+    full: `${twoDigits(month)}/${twoDigits(day)} ${time}`,
+  };
 }
 
 function formatDateTime(at: number) {
