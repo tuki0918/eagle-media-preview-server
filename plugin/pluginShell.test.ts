@@ -251,7 +251,7 @@ test("plugin app keeps Eagle Node API compatibility with a classic script", asyn
   assert.match(app, /typeof window\.require !== "function"/);
   assert.match(app, /window\.require\(runtimePath\)/);
   assert.doesNotMatch(app, /window\.require\(qrcodePath\)/);
-  assert.match(app, /import qrcodeFactory from "qrcode-generator"/);
+  assert.match(app, /import \{ createQrDataUrl \} from "\.\/qrCode"/);
 });
 
 test("settings can collapse and endpoint opens externally", async () => {
@@ -1560,10 +1560,12 @@ test("manifest uses a frameless window for custom chrome", async () => {
 test("plugin QR rendering uses the bundled QR library instead of custom matrix code", async () => {
   const app = await readPluginAppSource();
 
-  assert.match(app, /qrcode-generator/);
+  const qr = await readFile(new URL("./qrCode.ts", import.meta.url), "utf8");
+
   assert.match(app, /createQrDataUrl/);
-  assert.doesNotMatch(app, /function createQrMatrix/);
-  assert.doesNotMatch(app, /function reedSolomon/);
+  assert.match(qr, /import qrcodeFactory from "qrcode-generator"/);
+  assert.doesNotMatch(qr, /function createQrMatrix/);
+  assert.doesNotMatch(qr, /function reedSolomon/);
 });
 
 test("plugin component styles are embedded as Tailwind classes", async () => {
@@ -2223,7 +2225,7 @@ test("the plugin package leaves out the standalone server's own modules, and not
   const viteConfig = await readFile(new URL("../vite.config.ts", import.meta.url), "utf8");
   const pattern = viteConfig.match(/const STANDALONE_ONLY_MODULE = (\/.+\/);/)?.[1];
   assert.ok(pattern, "vite.config.ts filters the standalone modules");
-  const standaloneOnly = ["fsBackend", "standalone", "standaloneConfig", "standaloneLog"];
+  const standaloneOnly = ["fsBackend", "standalone", "standaloneConfig", "standaloneLog", "standalonePanel"];
   const shipped = ["accessLog", "addressBlockList", "auth", "connection", "customDomain", "eagleClient", "libraryAccess", "libraryBackend", "libraryIndex", "media", "runtime", "static", "upload", "viewerServer"];
   for (const name of shipped) {
     const source = await readFile(new URL(`${name}.cjs`, generatedServiceUrl), "utf8");

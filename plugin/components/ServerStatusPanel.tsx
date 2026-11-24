@@ -9,7 +9,7 @@ interface ServerStatusPanelProps {
   publicNetwork: boolean;
   qrSrc: string;
   serverState: ServerState;
-  settings: {
+  settings?: {
     autoStart?: boolean;
   };
   /** The Advanced Sort index; undefined hides the row (sort off or server stopped). */
@@ -20,13 +20,13 @@ interface ServerStatusPanelProps {
   url: string;
   urlCopied?: boolean;
   settingsLocked?: boolean;
-  onAutoStartChange: (checked: boolean) => void;
+  onAutoStartChange?: (checked: boolean) => void;
   onCopyAccessUrl: () => void;
-  onHttpsDocsOpen: () => void;
-  onHttpsEnabledChange: (checked: boolean) => void;
+  onHttpsDocsOpen?: () => void;
+  onHttpsEnabledChange?: (checked: boolean) => void;
   onOpenEndpointUrl: () => void;
-  onPasswordProtectionChange: (checked: boolean) => void;
-  onPublicNetworkChange: (checked: boolean) => void;
+  onPasswordProtectionChange?: (checked: boolean) => void;
+  onPublicNetworkChange?: (checked: boolean) => void;
   onServerPowerChange: (checked: boolean) => void;
 }
 
@@ -37,7 +37,7 @@ export function ServerStatusPanel({
   publicNetwork,
   qrSrc,
   serverState,
-  settings,
+  settings = {},
   sortIndex,
   statusLabel,
   statusPending = false,
@@ -82,14 +82,14 @@ export function ServerStatusPanel({
           </div>
 
           <div className="grid overflow-hidden rounded-xl border border-[#e6e6e9]">
-            <OptionRow
+            {onAutoStartChange ? <OptionRow
               checked={Boolean(settings.autoStart)}
               disabled={formDisabled}
               icon={<PowerIcon />}
               title="Auto start"
               description="Start server automatically when app launches."
               onChange={onAutoStartChange}
-            />
+            /> : null}
             <OptionRow
               checked={authEnabled}
               disabled={formDisabled}
@@ -230,7 +230,7 @@ function OptionRow({ actionLabel, checked, description, disabled, icon, onAction
   disabled: boolean;
   icon: ReactNode;
   onAction?: () => void;
-  onChange: (checked: boolean) => void;
+  onChange?: (checked: boolean) => void;
   title: string;
 }) {
   return (
@@ -250,7 +250,9 @@ function OptionRow({ actionLabel, checked, description, disabled, icon, onAction
           ) : null}
         </small>
       </span>
-      <ToggleSwitch checked={checked} disabled={disabled} label={title} onChange={onChange} />
+      {onChange ? <ToggleSwitch checked={checked} disabled={disabled} label={title} onChange={onChange} /> : (
+        <span className="text-[11.5px] font-medium text-[#5f6670]">{checked ? "On" : "Off"}</span>
+      )}
     </div>
   );
 }

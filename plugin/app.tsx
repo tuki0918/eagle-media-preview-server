@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import qrcodeFactory from "qrcode-generator";
+import { createQrDataUrl } from "./qrCode";
 import { AccessLogPanel, accessLogSearchKeys, RECENT_EVENT_LIMIT } from "./components/AccessLogPanel";
 import { CloseIcon } from "./components/Icons";
 import { ServerStatusPanel } from "./components/ServerStatusPanel";
@@ -877,20 +877,6 @@ function App() {
       </div>
     </main>
   );
-}
-
-interface QrCodeFactoryResult {
-  addData(value: string): void;
-  createSvgTag(options: { alt: string; cellSize: number; margin: number; scalable: boolean }): string;
-  make(): void;
-}
-
-function createQrDataUrl(value: string) {
-  const qr = qrcodeFactory(0, "M") as QrCodeFactoryResult;
-  qr.addData(value);
-  qr.make();
-  const svg = qr.createSvgTag({ cellSize: 4, margin: 16, scalable: true, alt: value });
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 function willRestartServer(status: PluginStatus, nextSettings: Record<string, unknown>) {

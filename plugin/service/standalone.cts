@@ -1,3 +1,5 @@
+import { startStandalonePanel, type PanelActivityQuery, type PanelSnapshot } from "./standalonePanel.cjs";
+
 // The standalone server: serves Eagle libraries to the viewer without Eagle, read only
 // (docs/design/standalone-server.md). `node bin/eagle-media-server.cjs` runs the servers listed in
 // standalone.json (or given with --library), on top of the plugin's settings.json.
@@ -21,6 +23,7 @@ interface ServeOptions {
   help: boolean;
   host: string;
   libraries: string[];
+  panel: boolean;
   port: string;
   settingsPath: string;
 }
@@ -48,7 +51,7 @@ interface ServerPlan {
 }
 
 interface StandaloneConfig {
-  common: { authUsers: unknown[]; experimentalSort: boolean; sessionSecret: string } & Record<string, unknown>;
+  common: { authUsers: unknown[]; blockedAddresses: Array<{ address: string; addedAt: number }>; experimentalSort: boolean; sessionSecret: string } & Record<string, unknown>;
   libraryProtection: Set<string> | null;
   servers: ServerPlan[];
   settingsPath: string;
@@ -73,6 +76,7 @@ may change where each one listens:
 A server whose port is taken (by the plugin, say) is skipped; the others run.
 
 Options:
+  --panel                   Open the local management panel in a browser
   --library <path>          Serve this library; repeat for more. Replaces standalone.json's servers
   --port <number>           With --library: the port (default: settings.json's; 0 for any free one)
   --host <address>          With --library: the address to listen on (default: settings.json's)
@@ -89,7 +93,7 @@ function parseArgs(argv: string[]): LogsOptions | ServeOptions {
   const command = argv[0] === "logs" ? "logs" : "serve";
   const args = command === "logs" ? argv.slice(1) : argv;
   const common = { accessLogPath: "", configPath: "", follow: false, help: false, settingsPath: "" };
-  const serve: ServeOptions = { ...common, command: "serve", allowAnonymousLan: false, allowUnknownFormat: false, host: "", libraries: [], port: "" };
+  const serve: ServeOptions = { ...common, command: "serve", allowAnonymousLan: false, allowUnknownFormat: false, host: "", libraries: [], panel: false, port: "" };
   const logs: LogsOptions = { ...common, command: "logs", lines: 50 };
   const target = command === "logs" ? logs : serve;
   for (let index = 0; index < args.length; index += 1) {
@@ -112,6 +116,7 @@ function parseArgs(argv: string[]): LogsOptions | ServeOptions {
       if (!Number.isInteger(lines) || lines < 0) throw new Error(`${flag} needs a number`);
       logs.lines = lines;
     } else if (command === "serve" && flag === "--library") serve.libraries.push(value());
+    else if (command === "serve" && flag === "--panel" && inline === undefined) serve.panel = true;
     else if (command === "serve" && flag === "--port") serve.port = value();
     else if (command === "serve" && flag === "--host") serve.host = value();
     else if (command === "serve" && flag === "--allow-anonymous-lan") serve.allowAnonymousLan = true;
@@ -136,7 +141,15 @@ async function isLibraryFolder(path: string) {
   }
 }
 
-async function runStandalone(argv: string[], { log = console.log, lanAddresses = getLanAddresses() }: { lanAddresses?: Array<{ address: string; label: string }>; log?: (message: string) => void } = {}) {
+async function runStandalone(argv: string[], {
+  log = console.log,
+  lanAddresses = getLanAddresses(),
+  panelAssets,
+}: {
+  lanAddresses?: Array<{ address: string; label: string }>;
+  log?: (message: string) => void;
+  panelAssets?: string;
+} = {}) {
   const options = parseArgs(argv);
   if (options.help) {
     log(USAGE);
@@ -147,6 +160,7 @@ async function runStandalone(argv: string[], { log = console.log, lanAddresses =
     return null;
   }
 
+  const { allowUnknownFormat } = options;
   const config: StandaloneConfig = await resolveStandaloneConfig({
     allowAnonymousLan: options.allowAnonymousLan,
     configPath: options.configPath,
@@ -157,23 +171,16 @@ async function runStandalone(argv: string[], { log = console.log, lanAddresses =
   });
   const libraryName = new Map<string, string>();
   const idOf = (path: string) => libraryIdFor(path, config.common.sessionSecret);
+  for (const server of config.servers) {
+    for (const library of server.libraries) libraryName.set(idOf(library.path), library.name);
+  }
 
   // One backend per library folder, shared by every server that lists it.
-  const backends = new Map<string, ReturnType<typeof createFsBackend>>();
+  type Backend = ReturnType<typeof createFsBackend>;
+  const backends = new Map<string, Backend>();
   const libraryState = new Map<string, LibraryStatus>();
-  for (const server of config.servers) {
-    for (const library of server.libraries) {
-      const key = libraryPathKey(library.path);
-      libraryName.set(idOf(library.path), library.name);
-      if (libraryState.has(key)) continue;
-      if (!(await isLibraryFolder(library.path))) libraryState.set(key, "not found");
-      else if (config.libraryProtection && !config.libraryProtection.has(key)) libraryState.set(key, "not shared");
-      else {
-        libraryState.set(key, "idle");
-        backends.set(key, createFsBackend({ libraryPath: library.path, name: library.name, allowUnknownFormat: options.allowUnknownFormat }));
-      }
-    }
-  }
+  const running = new Map<number, { url: string; viewer: ReturnType<typeof createViewerServer> }>();
+  const serverStatus = config.servers.map(() => "stopped");
 
   const accessLogPath = options.accessLogPath ? expandPath(options.accessLogPath) : defaultAccessLogPath();
   const accessLog = createAccessLog({ filePath: accessLogPath });
@@ -191,25 +198,38 @@ async function runStandalone(argv: string[], { log = console.log, lanAddresses =
     },
   };
 
-  // Each server listens on its own; one that can't (its port taken by the plugin, say) is skipped.
-  const running: Array<{ index: number; url: string; viewer: ReturnType<typeof createViewerServer> }> = [];
-  const serverStatus: string[] = [];
-  for (const [index, server] of config.servers.entries()) {
-    const served = server.libraries
-      .map((library) => backends.get(libraryPathKey(library.path)))
-      .filter((backend): backend is ReturnType<typeof createFsBackend> => backend !== undefined)
-      .filter((backend, position, list) => list.indexOf(backend) === position);
-    if (!served.length) {
-      serverStatus[index] = "not started: no library to serve";
-      continue;
+  async function startServer(index: number) {
+    if (running.has(index)) return;
+    const server = config.servers[index];
+    const served = new Set<Backend>();
+    for (const library of server.libraries) {
+      const key = libraryPathKey(library.path);
+      let backend = backends.get(key);
+      if (!backend) {
+        if (!(await isLibraryFolder(library.path))) {
+          libraryState.set(key, "not found");
+          continue;
+        }
+        if (config.libraryProtection && !config.libraryProtection.has(key)) {
+          libraryState.set(key, "not shared");
+          continue;
+        }
+        backend = createFsBackend({ libraryPath: library.path, name: library.name, allowUnknownFormat });
+        libraryState.set(key, "idle");
+        backends.set(key, backend);
+      }
+      served.add(backend);
     }
+
     try {
-      // Inside the try: with HTTPS on, the certificate and key are read here, and a missing one
-      // must skip only this server.
+      if (!served.size) {
+        serverStatus[index] = "not started: no library to serve";
+        return;
+      }
       const viewer = createViewerServer({
         ...config.common,
         accessLog: recorder,
-        backends: served,
+        backends: [...served],
         customDomain: server.customDomain,
         host: server.host,
         httpsCertPath: server.httpsCertPath,
@@ -220,7 +240,7 @@ async function runStandalone(argv: string[], { log = console.log, lanAddresses =
       await viewer.start();
       const port = viewer.status().boundPort || server.port;
       const url = buildAccessUrl({ customDomain: server.customDomain, host: server.host, httpsEnabled: server.httpsEnabled, port, lanAddresses });
-      running.push({ index, url, viewer });
+      running.set(index, { url, viewer });
       serverStatus[index] = "running";
       recorder.record({ type: "system", event: "server_start", ip: "this computer", path: url });
     } catch (error) {
@@ -232,13 +252,29 @@ async function runStandalone(argv: string[], { log = console.log, lanAddresses =
     }
   }
 
-  // A library only on servers that didn't start isn't read.
-  const servedKeys = new Set(running.flatMap(({ index }) => config.servers[index].libraries.map((library) => libraryPathKey(library.path))));
-  for (const [key, backend] of [...backends]) {
-    if (servedKeys.has(key)) continue;
-    await backend.dispose();
-    backends.delete(key);
+  async function stopServer(index: number) {
+    const entry = running.get(index);
+    if (entry) {
+      await entry.viewer.stop();
+      running.delete(index);
+      recorder.record({ type: "system", event: "server_stop", ip: "this computer", path: entry.url });
+    }
+    serverStatus[index] = "stopped";
   }
+
+  async function releaseUnusedBackends() {
+    const servedKeys = new Set([...running.keys()].flatMap((index) => config.servers[index].libraries.map((library) => libraryPathKey(library.path))));
+    for (const [key, backend] of backends) {
+      if (servedKeys.has(key)) continue;
+      backends.delete(key);
+      await backend.dispose();
+    }
+  }
+
+  // A failed listener doesn't prevent the rest from starting.
+  for (const index of config.servers.keys()) await startServer(index);
+  await releaseUnusedBackends();
+
   const describeLibrary = (path: string) => {
     const key = libraryPathKey(path);
     const backend = backends.get(key);
@@ -257,12 +293,12 @@ async function runStandalone(argv: string[], { log = console.log, lanAddresses =
   const statusTable = () => {
     const rows: string[][] = [];
     for (const [index, server] of config.servers.entries()) {
-      const url = running.find((entry) => entry.index === index)?.url
+      const url = running.get(index)?.url
         ?? buildAccessUrl({ customDomain: server.customDomain, host: server.host, httpsEnabled: server.httpsEnabled, port: server.port, lanAddresses });
       const status = serverStatus[index] === "running" ? "running" : serverStatus[index].startsWith("port in use") ? "port in use" : "not started";
       server.libraries.forEach((library, position) => {
         rows.push(position === 0
-          ? [String(running.find((entry) => entry.index === index)?.viewer.status().boundPort || server.port || "-"), status, url, library.name, describeLibrary(library.path)]
+          ? [String(running.get(index)?.viewer.status().boundPort || server.port || "-"), status, url, library.name, describeLibrary(library.path)]
           : ["", "", "", library.name, describeLibrary(library.path)]);
       });
     }
@@ -270,7 +306,7 @@ async function runStandalone(argv: string[], { log = console.log, lanAddresses =
   };
 
   const users = config.common.authUsers.length;
-  const anonymousOnNetwork = !users && running.some(({ index }) => !isLoopback(config.servers[index].host));
+  const anonymousOnNetwork = !users && [...running.keys()].some((index) => !isLoopback(config.servers[index].host));
   log("Eagle Media Server (standalone, read only)");
   log(`  Settings:   ${config.settingsPath} (read only)`);
   log(`  Servers:    ${config.source}`);
@@ -284,48 +320,126 @@ async function runStandalone(argv: string[], { log = console.log, lanAddresses =
   }
   log("");
   streaming = true;
-  if (!running.length) {
-    await Promise.all([...backends.values()].map((backend) => backend.dispose()));
+  if (!running.size && !options.panel) {
     await accessLog.flush();
     throw new Error("No server could start");
   }
 
-  // Libraries are read one at a time, in the order listed; each is reported when done.
-  let stopped = false;
-  const ready = (async () => {
-    const order = [...new Set(config.servers.flatMap((server) => server.libraries.map((library) => libraryPathKey(library.path))))];
+  // Schedule scans in config order. If a server stops before its turn, skip its released backend.
+  let scanQueue = Promise.resolve();
+  const scanScheduled = new WeakSet<Backend>();
+  function scanLibraries() {
+    const order = new Set(config.servers.flatMap((server) => server.libraries.map((library) => libraryPathKey(library.path))));
     for (const key of order) {
       const backend = backends.get(key);
-      if (!backend || stopped) continue;
-      const started = Date.now();
-      try {
-        await backend.open();
-        if (!stopped) log(`Read "${backend.name}": ${backend.state().total} items in ${((Date.now() - started) / 1000).toFixed(1)} s`);
-      } catch (error) {
-        if (!stopped) log(`Can't read "${backend.name}" (${backend.libraryPath}): ${error instanceof Error ? error.message : String(error)}`);
-      }
+      if (!backend || scanScheduled.has(backend)) continue;
+      scanScheduled.add(backend);
+      scanQueue = scanQueue.then(async () => {
+        if (backends.get(key) !== backend) return;
+        const started = Date.now();
+        try {
+          await backend.open();
+          if (backends.get(key) === backend) log(`Read "${backend.name}": ${backend.state().total} items in ${((Date.now() - started) / 1000).toFixed(1)} s`);
+        } catch (error) {
+          if (backends.get(key) === backend) log(`Can't read "${backend.name}" (${backend.libraryPath}): ${error instanceof Error ? error.message : String(error)}`);
+        }
+      });
     }
-    if (!stopped && backends.size) {
+    return scanQueue;
+  }
+
+  let closing = false;
+  let commands = Promise.resolve();
+  const snapshot = (): PanelSnapshot => ({
+    activeClients: accessLog.activeClients(),
+    blockedAddresses: config.common.blockedAddresses,
+    settingsPath: config.settingsPath,
+    source: config.source,
+    libraryNames: [...libraryName.entries()],
+    servers: config.servers.map((server, index) => {
+      const entry = running.get(index);
+      const state = entry ? "running" : serverStatus[index] === "stopped" ? "stopped" : "error";
+      return {
+        index,
+        state,
+        error: state === "error" ? serverStatus[index] : "",
+        url: entry?.url || "",
+        port: entry?.viewer.status().boundPort || server.port,
+        authEnabled: Boolean(users),
+        httpsEnabled: server.httpsEnabled,
+        publicNetwork: !isLoopback(server.host),
+        libraries: server.libraries.map(({ name, path }) => ({ name, status: describeLibrary(path) })),
+      };
+    }),
+  });
+
+  function setPower(index: number, enabled: boolean) {
+    const command = commands.then(async () => {
+      if (closing) return;
+      if (enabled) await startServer(index);
+      else await stopServer(index);
+      await releaseUnusedBackends();
+      void scanLibraries();
+    });
+    commands = command.catch(() => {});
+    return command;
+  }
+
+  let panel: Awaited<ReturnType<typeof startStandalonePanel>> | undefined;
+  try {
+    if (options.panel) {
+      panel = await startStandalonePanel({
+        snapshot,
+        serverCount: config.servers.length,
+        setPower,
+        activity: (query: PanelActivityQuery) => ({
+          ...accessLog.summary({ range: query.range }),
+          recent: accessLog.entries({ ...query, limit: 100, searchKeys: { ...query.searchKeys, libraryNames: libraryName } }),
+        }),
+        async clearLog() {
+          await accessLog.clear();
+          recorder.record({ type: "system", event: "log_cleared", ip: "this computer" });
+        },
+        exportLog: () => accessLog.entries({ limit: Number.MAX_SAFE_INTEGER }).reverse(),
+      }, panelAssets);
+      log(`  Management panel: ${panel.url}`);
+    }
+  } catch (error) {
+    await Promise.all([...running.keys()].map(stopServer));
+    await releaseUnusedBackends();
+    await accessLog.flush();
+    throw error;
+  }
+
+  const ready = scanLibraries().then(() => {
+    if (!closing && backends.size) {
       log("");
       for (const line of statusTable()) log(line);
       log("");
     }
-  })();
+  });
 
+  let shutdown: Promise<void> | undefined;
   return {
     accessLogPath,
-    servers: running.map(({ url, viewer }) => ({ url, viewer })),
+    panelUrl: panel?.url,
+    get servers() {
+      return [...running.values()];
+    },
     statusTable,
-    /** Resolves once every library has been read, or found unreadable. */
+    /** Resolves once every initially served library has been read, or found unreadable. */
     ready,
-    async stop() {
-      stopped = true;
-      for (const { url, viewer } of running) {
-        await viewer.stop();
-        recorder.record({ type: "system", event: "server_stop", ip: "this computer", path: url });
-      }
-      await Promise.all([...backends.values()].map((backend) => backend.dispose()));
-      await accessLog.flush();
+    stop() {
+      if (shutdown) return shutdown;
+      closing = true;
+      shutdown = (async () => {
+        await panel?.stop();
+        await commands;
+        await Promise.all([...running.keys()].map(stopServer));
+        await releaseUnusedBackends();
+        await accessLog.flush();
+      })();
+      return shutdown;
     },
   };
 }

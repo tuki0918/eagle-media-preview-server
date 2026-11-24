@@ -1,6 +1,7 @@
 import { afterEach, test } from "vitest";
 import assert from "node:assert/strict";
 import { appendFile, mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { get as httpGet } from "node:http";
 import { createServer } from "node:net";
 import { createRequire } from "node:module";
 import { join } from "node:path";
@@ -60,10 +61,13 @@ test("parses the serve options and the logs command", () => {
     help: false,
     host: "",
     libraries: ["/a.library"],
+    panel: false,
     port: "8080",
     settingsPath: "",
   });
   assert.deepEqual(parseArgs(["logs", "-f", "-n", "10"]), { accessLogPath: "", command: "logs", configPath: "", follow: true, help: false, lines: 10, settingsPath: "" });
+  assert.equal(parseArgs(["--panel"]).panel, true);
+  assert.throws(() => parseArgs(["logs", "--panel"]), /Unknown option: --panel/);
   assert.throws(() => parseArgs(["--library"]), /--library needs a value/);
   assert.throws(() => parseArgs(["logs", "--library", "/a"]), /Unknown option: --library/);
 });
@@ -257,5 +261,99 @@ test("a server whose HTTPS certificate can't be read is skipped; the others run"
     assert.match(lines.join("\n"), /running\s+http:\/\/localhost:\d+\s+Work/);
   } finally {
     await running.stop();
+  }
+});
+
+test("the local management panel stays available through listener failures and stop/start", async () => {
+  const dir = await workspace();
+  const first = await createLibrary(dir, "Photos");
+  const second = join(dir, "Work.library");
+  const busy = createServer();
+  await new Promise<void>((resolveListen, rejectListen) => {
+    busy.once("error", rejectListen);
+    busy.listen(0, "127.0.0.1", () => {
+      busy.off("error", rejectListen);
+      resolveListen();
+    });
+  });
+  const port = (busy.address() as { port: number }).port;
+  const settingsPath = await writeSettings(dir);
+  const configPath = await writeConfig(dir, { servers: [
+    { libraries: [first], port },
+    { libraries: [second], port: 0 },
+  ] });
+  const before = await readFile(settingsPath, "utf8");
+  const configBefore = await readFile(configPath, "utf8");
+  await writeFile(join(dir, "index.html"), "<title>Media Preview Server</title>");
+  await writeFile(join(dir, "app.js"), "");
+  const lines: string[] = [];
+
+  let stop: (() => Promise<void>) | undefined;
+  try {
+    const running = await runStandalone(["--panel", "--settings", settingsPath, "--config", configPath, "--access-log", join(dir, "access.jsonl")], {
+      log: (line: string) => lines.push(line),
+      panelAssets: dir,
+    });
+    stop = () => running.stop();
+    const url = new URL(running.panelUrl);
+    assert.equal(url.hostname, "127.0.0.1");
+    assert.equal(url.hash.length, 44);
+    assert.ok(lines.some((line) => line.includes(running.panelUrl)));
+    const headers = { Authorization: `Bearer ${url.hash.slice(1)}` };
+    const get = (path: string) => fetch(url.origin + path, { headers });
+    const post = (path: string) => fetch(url.origin + path, { method: "POST", headers: { ...headers, Origin: url.origin } });
+
+    assert.match(await (await fetch(url.origin)).text(), /Media Preview Server/);
+    assert.equal((await fetch(url.origin + "/api/status")).status, 401);
+    const mismatchedHost = await new Promise<number | undefined>((resolve, reject) => {
+      const request = httpGet(url.origin + "/api/status", { headers: { ...headers, Host: "other.test" } }, (response) => {
+        response.resume();
+        resolve(response.statusCode);
+      });
+      request.once("error", reject);
+    });
+    assert.equal(mismatchedHost, 403);
+    assert.equal((await fetch(url.origin + "/api/servers/0/start", { method: "POST", headers: { ...headers, Origin: "http://other.test" } })).status, 403);
+    assert.equal((await fetch(url.origin + "/api/servers/0/start", { method: "POST", headers })).status, 403);
+    assert.equal((await get("/settings.json")).status, 404);
+
+    const initial = await (await get("/api/status")).json();
+    assert.equal(initial.servers[0].state, "error");
+    assert.match(initial.servers[0].error, /port in use/);
+    assert.equal(initial.servers[1].state, "error");
+    assert.match(initial.servers[1].libraries[0].status, /not found/);
+    assert.equal(running.servers.length, 0);
+
+    await new Promise<void>((resolveClose) => busy.close(() => resolveClose()));
+    await createLibrary(dir, "Work");
+    const firstStart = await (await post("/api/servers/0/start")).json();
+    assert.equal(firstStart.servers[0].state, "running");
+    const secondStart = await (await post("/api/servers/1/start")).json();
+    const secondOrigin = secondStart.servers[1].url.replace("localhost", "127.0.0.1");
+    assert.equal((await fetch(secondOrigin + "/api/health")).status, 200);
+
+    const firstStop = await (await post("/api/servers/0/stop")).json();
+    assert.deepEqual(firstStop.servers.map(({ state }: { state: string }) => state), ["stopped", "running"]);
+    assert.equal((await fetch(secondOrigin + "/api/health")).status, 200);
+    const bothStopped = await (await post("/api/servers/1/stop")).json();
+    assert.deepEqual(bothStopped.servers.map(({ state }: { state: string }) => state), ["stopped", "stopped"]);
+    const restarted = await (await post("/api/servers/0/start")).json();
+    assert.equal(restarted.servers[0].state, "running");
+
+    const activity = await (await get("/api/activity?range=1h&type=system&search=stopped&eventKey=server_stop")).json();
+    assert.equal(activity.range, "1h");
+    assert.deepEqual(activity.recent.map(({ event }: { event: string }) => event), ["server_stop", "server_stop"]);
+    assert.match(await (await get("/api/activity/export")).text(), /server_start_failed/);
+    assert.equal((await post("/api/activity/clear")).status, 200);
+    const cleared = await (await get("/api/activity")).json();
+    assert.deepEqual(cleared.recent.map(({ event }: { event: string }) => event), ["log_cleared"]);
+
+    await running.stop();
+    await assert.rejects(fetch(url.origin));
+    assert.equal(await readFile(settingsPath, "utf8"), before);
+    assert.equal(await readFile(configPath, "utf8"), configBefore);
+  } finally {
+    await stop?.();
+    if (busy.listening) await new Promise<void>((resolveClose) => busy.close(() => resolveClose()));
   }
 });
