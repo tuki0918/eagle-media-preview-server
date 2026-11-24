@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { build as esbuild } from "esbuild";
 import { JSDOM } from "jsdom";
+import type { AccessLogSearchKeys } from "./types";
 
 type PluginRequirePath = (relativePath: string) => string;
 const generatedServiceUrl = new URL("../dist/.generated/plugin-service/", import.meta.url);
@@ -1796,13 +1797,16 @@ test("activity search asks the log once typing pauses and ignores an older answe
   const status = { settings: { host: "127.0.0.1", port: 41532 }, state: "stopped", url: "http://localhost:41532" };
   const searches: string[] = [];
   const addressFilters: Array<Array<{ field: string; value: string }>> = [];
-  const searchKeys: Array<{ events: string[]; libraryIds?: string[] }> = [];
+  const searchKeys: AccessLogSearchKeys[] = [];
   const held = new Map<string, () => void>();
   const summaryFor = (search: string) => ({
     activeClients: 0, buckets: [], clientCount: 1,
     clients: ["192.168.1.7", "192.168.1.77"].map((ip, index) => ({ active: false, authFailures: 0, edits: 0, ip, lastSeen: Date.now(), user: index ? "carol" : "", views: 0 })),
     range: "24h",
-    recent: search === "none" ? [] : [{ at: Date.now(), event: "login_failure", ip: search ? `address-${search}` : "address-all", libraryId: "studio-id", type: "auth", user: "bob" }],
+    recent: search === "none" ? [] : [
+      { at: Date.now(), event: "login_failure", ip: search ? `address-${search}` : "address-all", libraryId: "studio-id", type: "auth", user: "bob" },
+      { at: Date.now(), event: "view", ip: "192.168.1.7", libraryId: "Ab12Cd34Ef56Gh78", type: "view" },
+    ],
     totals: { auth: 0, authFailures: 0, browse: 0, edit: 0, view: 0 },
   });
   pluginWindow.eagle = {};
@@ -1813,7 +1817,7 @@ test("activity search asks the log once typing pauses and ignores an older answe
       async libraries() {
         return { current: null, items: [{ id: "studio-id", name: "Studio Footage", path: "/Studio.library", current: false, shared: true }] };
       },
-      async accessLogSummary({ filters = [], search = "", searchKeys: keys }: { filters?: Array<{ field: string; value: string }>; search?: string; searchKeys?: { events: string[]; libraryIds?: string[] } }) {
+      async accessLogSummary({ filters = [], search = "", searchKeys: keys }: { filters?: Array<{ field: string; value: string }>; search?: string; searchKeys?: AccessLogSearchKeys }) {
         searches.push(search);
         addressFilters.push(filters);
         if (keys) searchKeys.push(keys);
@@ -1910,7 +1914,10 @@ test("activity search asks the log once typing pauses and ignores an older answe
 
     type("footage");
     await waitFor(() => marks() === "footage,Footage");
-    assert.equal(JSON.stringify(searchKeys.at(-1)?.libraryIds), '["studio-id"]');
+    assert.equal(searchKeys.at(-1)?.libraryNames?.get("studio-id"), "Studio Footage");
+
+    type("cd34");
+    await waitFor(() => button("Filter events by Library: Ab12Cd34Ef56Gh78")?.querySelector("mark")?.textContent === "Cd34");
 
     // The box's x clears the chips and the text together.
     type("bob");

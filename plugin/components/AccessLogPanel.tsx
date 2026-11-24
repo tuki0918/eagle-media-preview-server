@@ -124,13 +124,7 @@ const FIELD_LABELS: Record<string, string> = {
 export function accessLogSearchKeys(search: string, libraryNames?: ReadonlyMap<string, string>): AccessLogSearchKeys {
   const term = search.trim().toLowerCase();
   const matching = (labels: Record<string, string>) => term ? Object.keys(labels).filter((key) => labels[key].toLowerCase().includes(term)) : [];
-  const libraryIds: string[] = [];
-  if (term && libraryNames) {
-    for (const [id, name] of libraryNames) {
-      if (name.toLowerCase().includes(term)) libraryIds.push(id);
-    }
-  }
-  return { events: matching(EVENT_LABELS), fields: matching(FIELD_LABELS), libraryIds };
+  return { events: matching(EVENT_LABELS), fields: matching(FIELD_LABELS), libraryNames };
 }
 
 function filterLabel({ field, value }: AccessLogFilter, libraryName?: string) {
@@ -590,7 +584,7 @@ function EventTable({ emptyText, entries, filters, libraryNames, searchedText, o
             <span className="flex min-w-0" role="cell">
               {entry.libraryId ? (
                 <FilterButton filter={{ field: "libraryId", value: entry.libraryId }} filters={filters} libraryName={libraryName} onFiltersChange={onFiltersChange}>
-                  {libraryName ? <Match query={searchedText} text={libraryName} /> : entry.libraryId}
+                  <Match query={searchedText} text={libraryName || entry.libraryId} />
                 </FilterButton>
               ) : "—"}
             </span>

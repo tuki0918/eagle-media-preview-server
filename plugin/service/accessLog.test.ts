@@ -4,6 +4,7 @@ import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { AccessLogSearchKeys } from "../types";
 
 const require = createRequire(import.meta.url);
 const { accessLogCsv, createAccessLog } = require("../../dist/.generated/plugin-service/accessLog.cjs");
@@ -75,19 +76,21 @@ test("access log filters are exact: values of a column widen, different columns 
 test("access log search covers the text the panel shows, including its own wording", async () => {
   const log = createAccessLog({ filePath: await tempLogPath() });
   log.record({ type: "view", event: "view", ext: "mp4", ip: "10.0.0.1", itemId: "ITEMABC", libraryId: "HIDDENLIB", path: "/file/ITEMABC", size: 48234567, status: 200 });
-  log.record({ type: "edit", event: "star", fields: ["rating"], ip: "10.0.0.2", itemId: "ITEMDEF", status: 200 });
+  log.record({ type: "edit", event: "star", fields: ["rating"], ip: "10.0.0.2", itemId: "ITEMDEF", libraryId: "Ab12Cd34Ef56Gh78", status: 200 });
   log.record({ type: "auth", event: "login_failure", ip: "10.0.0.3", status: 401, user: "bob" });
 
-  const found = (search: string, searchKeys?: { events: string[]; fields: string[]; libraryIds?: string[] }) => log.entries({ search, searchKeys }).map((entry: { ip: string }) => entry.ip);
+  const libraryNames = new Map([["HIDDENLIB", "Studio Footage"]]);
+  const found = (search: string, searchKeys: AccessLogSearchKeys = { events: [], fields: [], libraryNames }) => log.entries({ search, searchKeys }).map((entry: { ip: string }) => entry.ip);
   assert.deepEqual(found("itemdef"), ["10.0.0.2"]);
   assert.deepEqual(found("/file/"), ["10.0.0.1"]);
   assert.deepEqual(found("MP4"), ["10.0.0.1"]);
   assert.deepEqual(found("rating"), ["10.0.0.2"]);
   assert.deepEqual(found("401"), ["10.0.0.3"]);
   assert.deepEqual(found("login_fail"), ["10.0.0.3"]);
-  assert.deepEqual(found("studio", { events: [], fields: [], libraryIds: ["HIDDENLIB"] }), ["10.0.0.1"]);
-  // Free-text library search uses the resolved names.
+  // Library search matches the label shown in the table.
+  assert.deepEqual(found("studio"), ["10.0.0.1"]);
   assert.deepEqual(found("hiddenlib"), []);
+  assert.deepEqual(found("cd34"), ["10.0.0.2"]);
   assert.deepEqual(found("48234567"), []);
   // The panel's wording arrives as keys.
   assert.deepEqual(found("sign-in failed"), []);

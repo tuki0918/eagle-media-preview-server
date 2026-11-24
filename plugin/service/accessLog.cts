@@ -70,7 +70,7 @@ interface EntriesOptions {
   filters?: AccessLogFilter[];
   limit?: number;
   search?: string;
-  searchKeys?: { events: string[]; fields: string[]; libraryIds?: string[] };
+  searchKeys?: { events: string[]; fields: string[]; libraryNames?: ReadonlyMap<string, string> };
   type?: string;
 }
 
@@ -89,10 +89,10 @@ const RANGE_BUCKETS: Record<AccessLogRange, { bucketMs: number; count: number }>
 
 // The log lives in the OS temp directory: it outlives a server stop or an Eagle restart for
 // investigation, but is not meant to be kept, so a reboot (or the age limit) may drop it.
-function entryMatchesSearch(entry: AccessLogEntry, term: string, eventKeys: Set<string>, fieldKeys: Set<string>, libraryKeys: Set<string>) {
-  if (entry.libraryId && libraryKeys.has(entry.libraryId)) return true;
+function entryMatchesSearch(entry: AccessLogEntry, term: string, eventKeys: Set<string>, fieldKeys: Set<string>, libraryNames?: ReadonlyMap<string, string>) {
   if (eventKeys.has(entry.event) || entry.fields?.some((field) => fieldKeys.has(field))) return true;
-  const texts = [entry.ip, entry.user, entry.event, entry.itemId, entry.path, entry.ext, entry.status, ...(entry.fields || [])];
+  const libraryLabel = entry.libraryId && (libraryNames?.get(entry.libraryId) || entry.libraryId);
+  const texts = [entry.ip, entry.user, entry.event, entry.itemId, entry.path, entry.ext, entry.status, libraryLabel, ...(entry.fields || [])];
   return texts.some((text) => text !== undefined && String(text).toLowerCase().includes(term));
 }
 
@@ -263,7 +263,6 @@ function createAccessLog({
       const term = search.trim().toLowerCase();
       const eventKeys = new Set(searchKeys.events);
       const fieldKeys = new Set(searchKeys.fields);
-      const libraryKeys = new Set(searchKeys.libraryIds);
       const output: AccessLogEntry[] = [];
       for (let index = entries.length - 1; index >= 0 && output.length < limit; index -= 1) {
         const entry = entries[index];
@@ -272,7 +271,7 @@ function createAccessLog({
         if (events.size && !events.has(entry.event)) continue;
         if (libraries.size && (!entry.libraryId || !libraries.has(entry.libraryId))) continue;
         if (users.size && !users.has(entry.user || "")) continue;
-        if (term && !entryMatchesSearch(entry, term, eventKeys, fieldKeys, libraryKeys)) continue;
+        if (term && !entryMatchesSearch(entry, term, eventKeys, fieldKeys, searchKeys.libraryNames)) continue;
         output.push(entry);
       }
       return output;

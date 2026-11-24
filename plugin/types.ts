@@ -95,11 +95,11 @@ export interface AccessLogFilter {
   value: string;
 }
 
-/** Log keys whose panel wording matches the search text, since the log itself holds only the keys. */
+/** Panel labels used to match the event, field, and library values stored in the log. */
 export interface AccessLogSearchKeys {
   events: string[];
   fields: string[];
-  libraryIds?: string[];
+  libraryNames?: ReadonlyMap<string, string>;
 }
 
 export interface AccessLogEntry {
