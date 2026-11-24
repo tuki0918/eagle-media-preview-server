@@ -99,8 +99,8 @@ test("without the name, the lead cell keeps the rating, or just the thumbnail", 
 });
 
 test("list view renders only the chosen columns, including the extra ones", () => {
-  const html = renderToStaticMarkup(<ResultList items={[item]} viewMode="list" onOpenPreview={() => {}} listColumns={["name", "created", "annotation", "url", "type"]} />);
-  expect(headers(html)).toEqual(["Type", "Created", "Annotation", "URL"]);
+  const html = renderToStaticMarkup(<ResultList items={[item]} viewMode="list" onOpenPreview={() => {}} listColumns={["name", "modified", "created", "annotation", "url", "type"]} />);
+  expect(headers(html)).toEqual(["Annotation", "URL", "Type", "Modified", "Created"]);
   expect(html).not.toContain("rating-star");
   expect(html).not.toContain(">Tags<");
   expect(html).toContain('title="Line one line two"');

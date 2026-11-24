@@ -5,14 +5,14 @@ export type ListColumnId =
   | "name"
   | "rating"
   | "tags"
+  | "annotation"
+  | "url"
   | "type"
   | "size"
   | "dimensions"
   | "duration"
   | "modified"
-  | "created"
-  | "annotation"
-  | "url";
+  | "created";
 
 export interface ListColumnDefinition {
   id: ListColumnId;
@@ -28,14 +28,14 @@ export const LIST_COLUMNS: readonly ListColumnDefinition[] = [
   { id: "name", label: "Name", track: null, minWidth: 0 },
   { id: "rating", label: "Rating", track: null, minWidth: 0 },
   { id: "tags", label: "Tags", track: "minmax(120px,2fr)", minWidth: 120 },
+  { id: "annotation", label: "Annotation", track: "minmax(120px,1.6fr)", minWidth: 120 },
+  { id: "url", label: "URL", track: "minmax(120px,1.2fr)", minWidth: 120 },
   { id: "type", label: "Type", track: "80px", minWidth: 80 },
   { id: "size", label: "Size", track: "80px", minWidth: 80 },
   { id: "dimensions", label: "Dimensions", track: "minmax(96px,0.8fr)", minWidth: 96 },
   { id: "duration", label: "Duration", track: "72px", minWidth: 72 },
   { id: "modified", label: "Modified", track: "104px", minWidth: 104 },
   { id: "created", label: "Created", track: "104px", minWidth: 104 },
-  { id: "annotation", label: "Annotation", track: "minmax(120px,1.6fr)", minWidth: 120 },
-  { id: "url", label: "URL", track: "minmax(120px,1.2fr)", minWidth: 120 },
 ];
 
 export const DEFAULT_LIST_COLUMNS: readonly ListColumnId[] = ["name", "rating", "tags", "type", "size", "dimensions", "duration", "modified"];

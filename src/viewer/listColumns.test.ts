@@ -57,7 +57,7 @@ test("default columns keep the list's usual columns and widths", () => {
 test("the table needs room for every chosen column, and never less than the compact breakpoint", () => {
   const all = LIST_COLUMNS.map((column) => column.id);
   const layout = listColumnLayout(all);
-  expect(layout.columns).toEqual(["tags", "type", "size", "dimensions", "duration", "modified", "created", "annotation", "url"]);
+  expect(layout.columns).toEqual(["tags", "annotation", "url", "type", "size", "dimensions", "duration", "modified", "created"]);
   expect(layout.minWidth).toBe(24 + 196 + 896 + 9 * 12);
   expect(listColumnLayout(["name", "type"]).minWidth).toBe(COMPACT_LIST_MAX_WIDTH);
 });
@@ -148,13 +148,14 @@ test("changing another column in a narrow window still brings tags back when it 
 
 test("a column list saved in the earlier format keeps every listed column, tags included, at any width", () => {
   const storage = installDom();
-  storage.setItem(LIST_COLUMNS_STORAGE_KEY, JSON.stringify([...DEFAULT_LIST_COLUMNS, "created"]));
+  storage.setItem(LIST_COLUMNS_STORAGE_KEY, JSON.stringify([...DEFAULT_LIST_COLUMNS, "created", "annotation", "url"]));
+  const expected = ["name", "rating", "tags", "annotation", "url", "type", "size", "dimensions", "duration", "modified", "created"];
   setListAreaWidth(800);
   try {
     initializeListColumns();
-    expect(getListColumns()).toEqual([...DEFAULT_LIST_COLUMNS, "created"]);
+    expect(getListColumns()).toEqual(expected);
     setListAreaWidth(1200);
-    expect(getListColumns()).toEqual([...DEFAULT_LIST_COLUMNS, "created"]);
+    expect(getListColumns()).toEqual(expected);
   } finally {
     setListAreaWidth(Number.POSITIVE_INFINITY);
     resetListColumns();
@@ -184,7 +185,7 @@ test("a reset that leaves the columns as they are still tells subscribers it is 
 });
 
 test("normalizes stored columns into table order and ignores unknown ids", () => {
-  expect(normalizeListColumns(["url", "bogus", "type", "type", 3])).toEqual(["type", "url"]);
+  expect(normalizeListColumns(["type", "bogus", "url", "type", 3])).toEqual(["url", "type"]);
   expect(normalizeListColumns("nope")).toEqual([...DEFAULT_LIST_COLUMNS]);
   expect(isDefaultListColumns([...DEFAULT_LIST_COLUMNS].reverse())).toBe(true);
   expect(isDefaultListColumns(["type"])).toBe(false);
@@ -198,7 +199,7 @@ test("keeps the column choice in localStorage and notifies subscribers", () => {
 
   toggleListColumn("url", true);
   toggleListColumn("tags", false);
-  expect(getListColumns()).toEqual(["name", "rating", "type", "size", "dimensions", "duration", "modified", "url"]);
+  expect(getListColumns()).toEqual(["name", "rating", "url", "type", "size", "dimensions", "duration", "modified"]);
   // Only the changes are kept, so the width-based defaults still apply to the rest.
   expect(JSON.parse(storage.getItem(LIST_COLUMNS_STORAGE_KEY) || "{}")).toEqual({ shown: ["url"], hidden: ["tags"] });
   expect(listener).toHaveBeenCalledTimes(2);
