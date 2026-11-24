@@ -47,8 +47,8 @@ test("access log search matches part of the address or user across every kept en
 
 test("access log filters are exact: values of a column widen, different columns narrow", async () => {
   const log = createAccessLog({ filePath: await tempLogPath() });
-  log.record({ type: "view", event: "view", ip: "192.168.1.2", user: "alice" });
-  log.record({ type: "view", event: "view", ip: "192.168.1.24", user: "bob" });
+  log.record({ type: "view", event: "view", ip: "192.168.1.2", libraryId: "lib-a", user: "alice" });
+  log.record({ type: "view", event: "view", ip: "192.168.1.24", libraryId: "lib-ab", user: "bob" });
   log.record({ type: "auth", event: "login_success", ip: "192.168.1.3", user: "bob" });
 
   const addresses = (input: Record<string, unknown>) => log.entries(input).map((entry: { ip: string }) => entry.ip);
@@ -65,6 +65,10 @@ test("access log filters are exact: values of a column widen, different columns 
   assert.deepEqual(addresses({ filters: two, type: "view" }), ["192.168.1.2"]);
   // A user chip never matches entries without a user, or part of a name.
   assert.deepEqual(addresses({ filters: [{ field: "user", value: "bo" }] }), []);
+  const libraries = [{ field: "libraryId", value: "lib-a" }, { field: "libraryId", value: "lib-ab" }];
+  assert.deepEqual(addresses({ filters: libraries.slice(0, 1), limit: 1 }), ["192.168.1.2"]);
+  assert.deepEqual(addresses({ filters: libraries }), ["192.168.1.24", "192.168.1.2"]);
+  assert.deepEqual(addresses({ filters: [...libraries, { field: "user", value: "bob" }] }), ["192.168.1.24"]);
   assert.equal(log.entries({ filters: [] }).length, 3);
 });
 
@@ -74,14 +78,15 @@ test("access log search covers the text the panel shows, including its own wordi
   log.record({ type: "edit", event: "star", fields: ["rating"], ip: "10.0.0.2", itemId: "ITEMDEF", status: 200 });
   log.record({ type: "auth", event: "login_failure", ip: "10.0.0.3", status: 401, user: "bob" });
 
-  const found = (search: string, searchKeys?: { events: string[]; fields: string[] }) => log.entries({ search, searchKeys }).map((entry: { ip: string }) => entry.ip);
+  const found = (search: string, searchKeys?: { events: string[]; fields: string[]; libraryIds?: string[] }) => log.entries({ search, searchKeys }).map((entry: { ip: string }) => entry.ip);
   assert.deepEqual(found("itemdef"), ["10.0.0.2"]);
   assert.deepEqual(found("/file/"), ["10.0.0.1"]);
   assert.deepEqual(found("MP4"), ["10.0.0.1"]);
   assert.deepEqual(found("rating"), ["10.0.0.2"]);
   assert.deepEqual(found("401"), ["10.0.0.3"]);
   assert.deepEqual(found("login_fail"), ["10.0.0.3"]);
-  // Not shown in the panel, so a search doesn't find it.
+  assert.deepEqual(found("studio", { events: [], fields: [], libraryIds: ["HIDDENLIB"] }), ["10.0.0.1"]);
+  // Free-text library search uses the resolved names.
   assert.deepEqual(found("hiddenlib"), []);
   assert.deepEqual(found("48234567"), []);
   // The panel's wording arrives as keys.

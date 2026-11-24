@@ -1279,13 +1279,15 @@ test("generated server manager lists libraries from Eagle's own settings and the
   });
 
   const libraries = await manager.libraries({ current: { path: open, name: "Private" }, userDataPath: userData });
+  const { libraryIdFor } = require("../../dist/.generated/plugin-service/libraryAccess.cjs");
+  const idOf = (path: string) => libraryIdFor(path, settings.sessionSecret);
 
   assert.deepEqual(libraries, {
     current: { path: open, name: "Private" },
     items: [
-      { path: work, name: "Work", current: false, shared: true },
-      { path: archived, name: "Old", current: false, shared: true },
-      { path: open, name: "Private", current: true, shared: false },
+      { path: work, name: "Work", id: idOf(work), current: false, shared: true },
+      { path: archived, name: "Old", id: idOf(archived), current: false, shared: true },
+      { path: open, name: "Private", id: idOf(open), current: true, shared: false },
     ],
   });
   assert.equal(JSON.stringify(libraries).includes("must-not-leak"), false);
@@ -1308,9 +1310,10 @@ test("generated server manager still lists saved libraries without Eagle setting
     },
   });
 
+  const { libraryIdFor } = require("../../dist/.generated/plugin-service/libraryAccess.cjs");
   assert.deepEqual(await manager.libraries(), {
     current: null,
-    items: [{ path: "/Users/me/Work.library", name: "Work", current: false, shared: false }],
+    items: [{ path: "/Users/me/Work.library", name: "Work", id: libraryIdFor("/Users/me/Work.library", settings.sessionSecret), current: false, shared: false }],
   });
 });
 

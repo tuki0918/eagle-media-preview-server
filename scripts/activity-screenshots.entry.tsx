@@ -28,11 +28,11 @@ const buckets: AccessLogBucket[] = VIEWS_BY_HOUR.map((view, index) => {
 const sum = (key: "auth" | "authFailures" | "edit" | "view") => buckets.reduce((total, bucket) => total + bucket[key], 0);
 
 const recent: AccessLogEntry[] = [
-  { at: now - 8 * 1000, event: "view", ext: "mp4", ip: "192.168.1.24", itemId: "M8K2Q9ZP4A1BC", size: 48234567, status: 200, type: "view", user: "alice" },
-  { at: now - 3 * 60 * 1000, event: "star", fields: ["rating"], ip: "192.168.1.31", itemId: "M8K2Q9ZP7D3EF", status: 200, type: "edit", user: "bob" },
-  { at: now - 14 * 60 * 1000, event: "login_success", ip: "192.168.1.31", status: 200, type: "auth", user: "bob" },
+  { at: now - 8 * 1000, event: "view", ext: "mp4", ip: "192.168.1.24", itemId: "M8K2Q9ZP4A1BC", libraryId: "footage", size: 48234567, status: 200, type: "view", user: "alice" },
+  { at: now - 3 * 60 * 1000, event: "star", fields: ["rating"], ip: "192.168.1.31", itemId: "M8K2Q9ZP7D3EF", libraryId: "footage", status: 200, type: "edit", user: "bob" },
+  { at: now - 14 * 60 * 1000, event: "login_success", ip: "192.168.1.31", libraryId: "footage", status: 200, type: "auth", user: "bob" },
   { at: now - 40 * 60 * 1000, event: "login_failure", ip: "192.168.1.77", status: 401, type: "auth", user: "admin" },
-  { at: now - 42 * 60 * 1000, event: "library_open", ip: "this computer", type: "system" },
+  { at: now - 42 * 60 * 1000, event: "library_open", ip: "this computer", libraryId: "footage", type: "system" },
   { at: now - 42 * 60 * 1000 - 1000, event: "server_start", ip: "this computer", type: "system" },
 ];
 
@@ -64,6 +64,7 @@ flushSync(() => {
       eventFilter=""
       filters={[]}
       expanded
+      libraryNames={new Map([["footage", "Studio Footage"]])}
       range="24h"
       search=""
       summary={summary}

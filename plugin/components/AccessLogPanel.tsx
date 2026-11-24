@@ -18,6 +18,7 @@ interface AccessLogPanelProps {
   /** Chips in the search box: Recent events shows only entries with these exact values. */
   filters: AccessLogFilter[];
   expanded: boolean;
+  libraryNames: ReadonlyMap<string, string>;
   loading?: boolean;
   /** Result of the last Activity action (export, block); errors stay until dismissed or the next one. */
   notice?: ActivityNotice | null;
@@ -120,14 +121,21 @@ const FIELD_LABELS: Record<string, string> = {
   uploadTimeoutMinutes: "upload timeout",
 };
 // The log holds keys like login_failure, but people search for what the panel shows.
-export function accessLogSearchKeys(search: string): AccessLogSearchKeys {
+export function accessLogSearchKeys(search: string, libraryNames?: ReadonlyMap<string, string>): AccessLogSearchKeys {
   const term = search.trim().toLowerCase();
   const matching = (labels: Record<string, string>) => term ? Object.keys(labels).filter((key) => labels[key].toLowerCase().includes(term)) : [];
-  return { events: matching(EVENT_LABELS), fields: matching(FIELD_LABELS) };
+  const libraryIds: string[] = [];
+  if (term && libraryNames) {
+    for (const [id, name] of libraryNames) {
+      if (name.toLowerCase().includes(term)) libraryIds.push(id);
+    }
+  }
+  return { events: matching(EVENT_LABELS), fields: matching(FIELD_LABELS), libraryIds };
 }
 
-function filterLabel({ field, value }: AccessLogFilter) {
+function filterLabel({ field, value }: AccessLogFilter, libraryName?: string) {
   if (field === "user") return `User: ${value}`;
+  if (field === "libraryId") return `Library: ${libraryName || value}`;
   return field === "event" ? `Event: ${EVENT_LABELS[value] || value}` : value;
 }
 
@@ -141,6 +149,7 @@ export function AccessLogPanel({
   eventFilter,
   filters,
   expanded,
+  libraryNames,
   loading = false,
   notice = null,
   range,
@@ -248,20 +257,23 @@ export function AccessLogPanel({
               </div>
             </div>
             <div className="relative flex min-h-8 flex-wrap items-center gap-1 rounded-lg border border-[#e6e6e9] bg-white py-[3px] pl-1 pr-8 focus-within:border-[#9aa2ae]">
-              {filters.map((filter) => (
-                <span key={`${filter.field}\u0000${filter.value}`} className="inline-flex h-6 min-w-0 max-w-full items-center gap-0.5 rounded-md bg-[#f1f1f3] pl-1.5 pr-0.5 text-[11.5px] font-medium tabular-nums text-[#171717]">
-                  <span className="truncate">{filterLabel(filter)}</span>
-                  <button
-                    className="grid h-5 w-5 shrink-0 place-items-center rounded border-0 bg-transparent p-0 text-[#8a8f99] transition-colors hover:bg-[#e6e6e9] hover:text-[#171717]"
-                    type="button"
-                    aria-label={`Remove ${filterLabel(filter)} from the filter`}
-                    title={`Remove ${filterLabel(filter)} from the filter`}
-                    onClick={() => onFiltersChange(toggleFilter(filters, filter))}
-                  >
-                    <CloseIcon className="h-3 w-3" />
-                  </button>
-                </span>
-              ))}
+              {filters.map((filter) => {
+                const label = filterLabel(filter, filter.field === "libraryId" ? libraryNames.get(filter.value) : undefined);
+                return (
+                  <span key={`${filter.field}\u0000${filter.value}`} className="inline-flex h-6 min-w-0 max-w-full items-center gap-0.5 rounded-md bg-[#f1f1f3] pl-1.5 pr-0.5 text-[11.5px] font-medium tabular-nums text-[#171717]">
+                    <span className="truncate">{label}</span>
+                    <button
+                      className="grid h-5 w-5 shrink-0 place-items-center rounded border-0 bg-transparent p-0 text-[#8a8f99] transition-colors hover:bg-[#e6e6e9] hover:text-[#171717]"
+                      type="button"
+                      aria-label={`Remove ${label} from the filter`}
+                      title={`Remove ${label} from the filter`}
+                      onClick={() => onFiltersChange(toggleFilter(filters, filter))}
+                    >
+                      <CloseIcon className="h-3 w-3" />
+                    </button>
+                  </span>
+                );
+              })}
               <input
                 className="h-6 min-w-[120px] flex-1 border-0 bg-transparent px-1.5 text-[12px] text-[#171717] outline-0 placeholder:text-[#9a9ea6]"
                 type="text"
@@ -289,7 +301,7 @@ export function AccessLogPanel({
               ) : null}
             </div>
             {selectNotice ? <NoticeBanner notice={selectNotice} onDismiss={onDismissSelectNotice} /> : null}
-            <EventTable emptyText={search.trim() || filters.length || eventFilter ? "No matching events." : "No events in the log."} entries={recent} filters={filters} searchedText={searchedText} onFiltersChange={onFiltersChange} onSelectItem={onSelectItem} />
+            <EventTable emptyText={search.trim() || filters.length || eventFilter ? "No matching events." : "No events in the log."} entries={recent} filters={filters} libraryNames={libraryNames} searchedText={searchedText} onFiltersChange={onFiltersChange} onSelectItem={onSelectItem} />
           </div>
 
           <p className="m-0 text-[10.5px] leading-snug text-[#9a9ea6]">
@@ -516,9 +528,9 @@ function toggleFilter(filters: AccessLogFilter[], filter: AccessLogFilter) {
   return others.length === filters.length ? [...filters, filter] : others;
 }
 
-function FilterButton({ children, className = "", filter, filters, onFiltersChange }: { children: ReactNode; className?: string; filter: AccessLogFilter; filters: AccessLogFilter[]; onFiltersChange: (filters: AccessLogFilter[]) => void }) {
+function FilterButton({ children, className = "", filter, filters, libraryName, onFiltersChange }: { children: ReactNode; className?: string; filter: AccessLogFilter; filters: AccessLogFilter[]; libraryName?: string; onFiltersChange: (filters: AccessLogFilter[]) => void }) {
   const picked = filters.some((other) => other.field === filter.field && other.value === filter.value);
-  const label = `${picked ? "Stop filtering" : "Filter"} events by ${filterLabel(filter)}`;
+  const label = `${picked ? "Stop filtering" : "Filter"} events by ${filterLabel(filter, libraryName)}`;
   return (
     <button
       className={`-mx-1 min-w-0 truncate rounded border-0 bg-transparent px-1 text-left transition-colors hover:bg-[#ececef] active:bg-[#e2e2e6] active:shadow-[inset_0_1px_2px_rgba(16,24,40,0.18)] ${picked ? "text-[#1d4ed8]" : ""} ${className}`}
@@ -538,7 +550,7 @@ function Match({ query, text }: { query: string; text: string }) {
   return <HighlightedText className="text-[#1d4ed8]" query={query} text={text} />;
 }
 
-function EventTable({ emptyText, entries, filters, searchedText, onFiltersChange, onSelectItem }: { emptyText: string; entries: AccessLogEntry[]; filters: AccessLogFilter[]; searchedText: string; onFiltersChange: (filters: AccessLogFilter[]) => void; onSelectItem?: (itemId: string) => void }) {
+function EventTable({ emptyText, entries, filters, libraryNames, searchedText, onFiltersChange, onSelectItem }: { emptyText: string; entries: AccessLogEntry[]; filters: AccessLogFilter[]; libraryNames: ReadonlyMap<string, string>; searchedText: string; onFiltersChange: (filters: AccessLogFilter[]) => void; onSelectItem?: (itemId: string) => void }) {
   if (!entries.length) return <EmptyRow>{emptyText}</EmptyRow>;
   return (
     <div className="max-h-[240px] overflow-auto rounded-xl border border-[#e6e6e9]" role="table" aria-label="Recent events">
@@ -547,11 +559,13 @@ function EventTable({ emptyText, entries, filters, searchedText, onFiltersChange
         <span role="columnheader">Address</span>
         <span role="columnheader">User</span>
         <span role="columnheader">Event</span>
+        <span role="columnheader">Library</span>
         <span role="columnheader">Detail</span>
         <span role="columnheader"><span className="sr-only">Actions</span></span>
       </div>
       {entries.map((entry, index) => {
         const failed = FAILED_EVENTS.has(entry.event) || (entry.status ?? 0) >= 400;
+        const libraryName = entry.libraryId ? libraryNames.get(entry.libraryId) : undefined;
         const fields = entry.fields?.map((field) => FIELD_LABELS[field] || field).join(", ");
         // The size isn't searched, so it never gets a mark.
         const details = [
@@ -572,6 +586,13 @@ function EventTable({ emptyText, entries, filters, searchedText, onFiltersChange
               <FilterButton filter={{ field: "event", value: entry.event }} filters={filters} onFiltersChange={onFiltersChange}>
                 <Match query={searchedText} text={`${EVENT_LABELS[entry.event] || entry.event}${failed && entry.type !== "auth" && entry.type !== "system" && entry.status ? ` (${entry.status})` : ""}`} />
               </FilterButton>
+            </span>
+            <span className="flex min-w-0" role="cell">
+              {entry.libraryId ? (
+                <FilterButton filter={{ field: "libraryId", value: entry.libraryId }} filters={filters} libraryName={libraryName} onFiltersChange={onFiltersChange}>
+                  {libraryName ? <Match query={searchedText} text={libraryName} /> : entry.libraryId}
+                </FilterButton>
+              ) : "—"}
             </span>
             <span className="grid min-w-0" role="cell" title={entry.path}>
               <span className="truncate font-mono text-[10.5px] text-[#6b7079]"><Match query={searchedText} text={entry.itemId || entry.path || ""} /></span>
@@ -653,7 +674,7 @@ function EmptyRow({ children }: { children: ReactNode }) {
 const fieldLabelClassName = "text-[10.5px] font-semibold uppercase leading-tight tracking-[0.06em] text-[#7a7f88]";
 const tableHeaderClassName = "text-[10px] font-semibold uppercase leading-none tracking-[0.06em] text-[#8a8f99]";
 const clientGridClassName = "grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_72px_44px_60px_48px_24px] items-center gap-2 px-2.5 py-1.5";
-const eventGridClassName = "grid grid-cols-[76px_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.2fr)_24px] items-center gap-2 px-2.5 py-1.5";
+const eventGridClassName = "grid grid-cols-[70px_minmax(0,1fr)_minmax(0,0.65fr)_minmax(0,1.1fr)_minmax(0,1.25fr)_minmax(0,1.3fr)_24px] items-center gap-2 px-2.5 py-1.5";
 
 function isLoopback(address: string) {
   return address === "::1" || address.startsWith("127.");

@@ -1796,13 +1796,13 @@ test("activity search asks the log once typing pauses and ignores an older answe
   const status = { settings: { host: "127.0.0.1", port: 41532 }, state: "stopped", url: "http://localhost:41532" };
   const searches: string[] = [];
   const addressFilters: Array<Array<{ field: string; value: string }>> = [];
-  const searchKeys: Array<{ events: string[] }> = [];
+  const searchKeys: Array<{ events: string[]; libraryIds?: string[] }> = [];
   const held = new Map<string, () => void>();
   const summaryFor = (search: string) => ({
     activeClients: 0, buckets: [], clientCount: 1,
     clients: ["192.168.1.7", "192.168.1.77"].map((ip, index) => ({ active: false, authFailures: 0, edits: 0, ip, lastSeen: Date.now(), user: index ? "carol" : "", views: 0 })),
     range: "24h",
-    recent: search === "none" ? [] : [{ at: Date.now(), event: "login_failure", ip: search ? `address-${search}` : "address-all", type: "auth", user: "bob" }],
+    recent: search === "none" ? [] : [{ at: Date.now(), event: "login_failure", ip: search ? `address-${search}` : "address-all", libraryId: "studio-id", type: "auth", user: "bob" }],
     totals: { auth: 0, authFailures: 0, browse: 0, edit: 0, view: 0 },
   });
   pluginWindow.eagle = {};
@@ -1810,7 +1810,10 @@ test("activity search asks the log once typing pauses and ignores an older answe
     createServerManager: () => ({
       async init() { return status; },
       async status() { return status; },
-      async accessLogSummary({ filters = [], search = "", searchKeys: keys }: { filters?: Array<{ field: string; value: string }>; search?: string; searchKeys?: { events: string[] } }) {
+      async libraries() {
+        return { current: null, items: [{ id: "studio-id", name: "Studio Footage", path: "/Studio.library", current: false, shared: true }] };
+      },
+      async accessLogSummary({ filters = [], search = "", searchKeys: keys }: { filters?: Array<{ field: string; value: string }>; search?: string; searchKeys?: { events: string[]; libraryIds?: string[] } }) {
         searches.push(search);
         addressFilters.push(filters);
         if (keys) searchKeys.push(keys);
@@ -1876,7 +1879,16 @@ test("activity search asks the log once typing pauses and ignores an older answe
     button("Stop filtering events by 192.168.1.77")?.click();
     await waitFor(() => lastFilter() === "");
 
-    // Recent events' address, user, and event add chips too, named so each reads on its own.
+    const headers = Array.from(doc.querySelectorAll('[aria-label="Recent events"] [role="columnheader"]'), (header) => header.textContent);
+    assert.deepEqual(headers.slice(3, 6), ["Event", "Library", "Detail"]);
+    assert.equal(button("Filter events by Library: Studio Footage")?.textContent, "Studio Footage");
+    button("Filter events by Library: Studio Footage")?.click();
+    await waitFor(() => lastFilter() === "libraryId:studio-id");
+    assert.equal(button("Stop filtering events by Library: Studio Footage")?.getAttribute("aria-pressed"), "true");
+    button("Remove Library: Studio Footage from the filter")?.click();
+    await waitFor(() => lastFilter() === "");
+
+    // Recent events' address, user, and event also add chips.
     button("Filter events by address-all")?.click();
     await waitFor(() => lastFilter() === "address:address-all");
     button("Filter events by User: bob")?.click();
@@ -1895,6 +1907,10 @@ test("activity search asks the log once typing pauses and ignores an older answe
     type("sign-in failed");
     await waitFor(() => searches.at(-1) === "sign-in failed");
     assert.equal(JSON.stringify(searchKeys.at(-1)?.events), '["login_failure"]');
+
+    type("footage");
+    await waitFor(() => marks() === "footage,Footage");
+    assert.equal(JSON.stringify(searchKeys.at(-1)?.libraryIds), '["studio-id"]');
 
     // The box's x clears the chips and the text together.
     type("bob");

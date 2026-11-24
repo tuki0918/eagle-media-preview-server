@@ -62,7 +62,7 @@ const ACCESS_LOG_TYPES: AccessLogType[] = ["auth", "browse", "edit", "system", "
 // Viewers poll /api/health every few seconds, so anyone seen this recently is still connected.
 const ACTIVE_CLIENT_WINDOW_MS = 2 * 60 * 1000;
 interface AccessLogFilter {
-  field: "address" | "event" | "user";
+  field: "address" | "event" | "libraryId" | "user";
   value: string;
 }
 
@@ -70,7 +70,7 @@ interface EntriesOptions {
   filters?: AccessLogFilter[];
   limit?: number;
   search?: string;
-  searchKeys?: { events: string[]; fields: string[] };
+  searchKeys?: { events: string[]; fields: string[]; libraryIds?: string[] };
   type?: string;
 }
 
@@ -89,7 +89,8 @@ const RANGE_BUCKETS: Record<AccessLogRange, { bucketMs: number; count: number }>
 
 // The log lives in the OS temp directory: it outlives a server stop or an Eagle restart for
 // investigation, but is not meant to be kept, so a reboot (or the age limit) may drop it.
-function entryMatchesSearch(entry: AccessLogEntry, term: string, eventKeys: Set<string>, fieldKeys: Set<string>) {
+function entryMatchesSearch(entry: AccessLogEntry, term: string, eventKeys: Set<string>, fieldKeys: Set<string>, libraryKeys: Set<string>) {
+  if (entry.libraryId && libraryKeys.has(entry.libraryId)) return true;
   if (eventKeys.has(entry.event) || entry.fields?.some((field) => fieldKeys.has(field))) return true;
   const texts = [entry.ip, entry.user, entry.event, entry.itemId, entry.path, entry.ext, entry.status, ...(entry.fields || [])];
   return texts.some((text) => text !== undefined && String(text).toLowerCase().includes(term));
@@ -257,18 +258,21 @@ function createAccessLog({
       const values = (field: AccessLogFilter["field"]) => new Set(filters.filter((filter) => filter.field === field).map((filter) => filter.value));
       const addresses = values("address");
       const events = values("event");
+      const libraries = values("libraryId");
       const users = values("user");
       const term = search.trim().toLowerCase();
       const eventKeys = new Set(searchKeys.events);
       const fieldKeys = new Set(searchKeys.fields);
+      const libraryKeys = new Set(searchKeys.libraryIds);
       const output: AccessLogEntry[] = [];
       for (let index = entries.length - 1; index >= 0 && output.length < limit; index -= 1) {
         const entry = entries[index];
         if (type && entry.type !== type) continue;
         if (addresses.size && !addresses.has(entry.ip)) continue;
         if (events.size && !events.has(entry.event)) continue;
+        if (libraries.size && (!entry.libraryId || !libraries.has(entry.libraryId))) continue;
         if (users.size && !users.has(entry.user || "")) continue;
-        if (term && !entryMatchesSearch(entry, term, eventKeys, fieldKeys)) continue;
+        if (term && !entryMatchesSearch(entry, term, eventKeys, fieldKeys, libraryKeys)) continue;
         output.push(entry);
       }
       return output;

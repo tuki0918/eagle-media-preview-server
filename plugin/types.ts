@@ -28,6 +28,7 @@ export interface SharedLibrary {
 
 export interface LibraryCandidate extends SharedLibrary {
   current: boolean;
+  id: string;
   /** Shared by the saved settings (unsaved checkbox edits do not count). */
   shared: boolean;
 }
@@ -90,7 +91,7 @@ export type AccessLogEventFilter = "" | AccessLogType;
 
 /** A chip in Recent events: an exact value of one column. */
 export interface AccessLogFilter {
-  field: "address" | "event" | "user";
+  field: "address" | "event" | "libraryId" | "user";
   value: string;
 }
 
@@ -98,6 +99,7 @@ export interface AccessLogFilter {
 export interface AccessLogSearchKeys {
   events: string[];
   fields: string[];
+  libraryIds?: string[];
 }
 
 export interface AccessLogEntry {

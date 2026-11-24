@@ -103,6 +103,7 @@ interface LibraryListInput {
 
 interface LibraryCandidate extends SharedLibrary {
   current: boolean;
+  id: string;
   shared: boolean;
 }
 
@@ -821,7 +822,7 @@ function createServerManager({
         items: candidates.map((library): LibraryCandidate => {
           const key = libraryPathKey(library.path);
           // `shared` reflects the saved settings, not unsaved edits in the panel.
-          return { ...library, current: key === currentKey, shared: settings.libraryProtectionEnabled && sharedKeys.has(key) };
+          return { ...library, id: libraryIdFor(library.path, settings.sessionSecret), current: key === currentKey, shared: settings.libraryProtectionEnabled && sharedKeys.has(key) };
         }),
       };
     },
@@ -831,7 +832,7 @@ function createServerManager({
     },
 
     // The log belongs to the manager, not the viewer, so it stays readable after the server stops.
-    async accessLogSummary({ range = "24h", limit = 200, ...query }: { filters?: Array<{ field: "address" | "event" | "user"; value: string }>; limit?: number; range?: "1h" | "24h" | "7d"; search?: string; searchKeys?: { events: string[]; fields: string[] }; type?: string } = {}) {
+    async accessLogSummary({ range = "24h", limit = 200, ...query }: { filters?: Array<{ field: "address" | "event" | "libraryId" | "user"; value: string }>; limit?: number; range?: "1h" | "24h" | "7d"; search?: string; searchKeys?: { events: string[]; fields: string[]; libraryIds?: string[] }; type?: string } = {}) {
       await accessLog.load();
       return { ...accessLog.summary({ range }), recent: accessLog.entries({ ...query, limit }) };
     },

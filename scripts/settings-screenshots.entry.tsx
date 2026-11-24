@@ -15,9 +15,9 @@ const sharedLibraries = [
 const libraries: LibraryList = {
   current: sharedLibraries[1],
   items: [
-    { ...sharedLibraries[0], current: false, shared: true },
-    { ...sharedLibraries[1], current: true, shared: true },
-    { current: false, name: "TEST", path: "/Users/xxx/TEST.library", shared: false },
+    { ...sharedLibraries[0], current: false, id: "my", shared: true },
+    { ...sharedLibraries[1], current: true, id: "icon", shared: true },
+    { current: false, id: "test", name: "TEST", path: "/Users/xxx/TEST.library", shared: false },
   ],
 };
 const settings: PluginSettings = {

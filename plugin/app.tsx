@@ -99,6 +99,7 @@ function App() {
   const [passwordDraftRevision, setPasswordDraftRevision] = useState(0);
   const userPasswordsRef = useRef<Record<string, string>>({});
   const [libraries, setLibraries] = useState<LibraryList | null>(null);
+  const libraryNames = useMemo(() => new Map(libraries?.items.map(({ id, name }) => [id, name])), [libraries]);
   const [accessLog, setAccessLog] = useState<AccessLogSummary | null>(null);
   const [accessLogRange, setAccessLogRange] = useState<AccessLogRange>("24h");
   const [activityExpanded, setActivityExpanded] = useState(false);
@@ -108,6 +109,7 @@ function App() {
   const [accessLogSearch, setAccessLogSearch] = useState("");
   // What the log is asked for: follows the search box once typing pauses.
   const [accessLogSearchQuery, setAccessLogSearchQuery] = useState("");
+  const searchedLibraryNames = accessLogSearchQuery ? libraryNames : undefined;
   // The search the listed events came back for; set together with them.
   const [accessLogSearchedText, setAccessLogSearchedText] = useState("");
   const accessLogRequestRef = useRef(0);
@@ -225,7 +227,7 @@ function App() {
       if (document.visibilityState === "visible") void refreshAccessLog();
     }, ACCESS_LOG_AUTO_REFRESH_MS);
     return () => window.clearInterval(timer);
-  }, [activityExpanded, accessLogAutoRefresh, accessLogRange, accessLogEventFilter, accessLogFilters, accessLogSearchQuery]);
+  }, [activityExpanded, accessLogAutoRefresh, accessLogRange, accessLogEventFilter, accessLogFilters, accessLogSearchQuery, searchedLibraryNames]);
 
   useEffect(() => {
     if (!activityNotice || activityNotice.isError) return;
@@ -370,7 +372,7 @@ function App() {
     const request = ++accessLogRequestRef.current;
     setAccessLogLoading(true);
     try {
-      const next = await managerRef.current?.accessLogSummary?.({ filters: accessLogFilters, limit: RECENT_EVENT_LIMIT, range: accessLogRange, search: accessLogSearchQuery, searchKeys: accessLogSearchKeys(accessLogSearchQuery), type: accessLogEventFilter });
+      const next = await managerRef.current?.accessLogSummary?.({ filters: accessLogFilters, limit: RECENT_EVENT_LIMIT, range: accessLogRange, search: accessLogSearchQuery, searchKeys: accessLogSearchKeys(accessLogSearchQuery, searchedLibraryNames), type: accessLogEventFilter });
       if (next && request === accessLogRequestRef.current) {
         setAccessLog(next);
         setAccessLogSearchedText(accessLogSearchQuery);
@@ -848,6 +850,7 @@ function App() {
           eventFilter={accessLogEventFilter}
           filters={accessLogFilters}
           expanded={activityExpanded}
+          libraryNames={libraryNames}
           loading={accessLogLoading}
           notice={activityNotice}
           selectNotice={selectNotice}
