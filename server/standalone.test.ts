@@ -277,28 +277,27 @@ test("the local management panel stays available through listener failures and s
     });
   });
   const port = (busy.address() as { port: number }).port;
-  const settingsPath = await writeSettings(dir);
-  const configPath = await writeConfig(dir, { servers: [
-    { libraries: [first], port },
-    { libraries: [second], port: 0 },
-  ] });
+  const settingsPath = await writeSettings(dir, {
+    port,
+    sharedLibraries: [{ path: first, name: "Photos" }, { path: second, name: "Work" }],
+  });
   const before = await readFile(settingsPath, "utf8");
-  const configBefore = await readFile(configPath, "utf8");
   await writeFile(join(dir, "index.html"), "<title>Media Preview Server</title>");
   await writeFile(join(dir, "app.js"), "");
   const lines: string[] = [];
 
   let stop: (() => Promise<void>) | undefined;
   try {
-    const running = await runStandalone(["--panel", "--settings", settingsPath, "--config", configPath, "--access-log", join(dir, "access.jsonl")], {
+    const running = await runStandalone(["--panel"], {
       log: (line: string) => lines.push(line),
       panelAssets: dir,
+      panelStateDir: dir,
     });
     stop = () => running.stop();
     const url = new URL(running.panelUrl);
     assert.equal(url.hostname, "127.0.0.1");
     assert.equal(url.hash.length, 44);
-    assert.ok(lines.some((line) => line.includes(running.panelUrl)));
+    assert.deepEqual(lines, [`Management panel: ${running.panelUrl}`]);
     const headers = { Authorization: `Bearer ${url.hash.slice(1)}` };
     const get = (path: string) => fetch(url.origin + path, { headers });
     const post = (path: string) => fetch(url.origin + path, { method: "POST", headers: { ...headers, Origin: url.origin } });
@@ -329,29 +328,25 @@ test("the local management panel stays available through listener failures and s
     const initial = await (await get("/api/status")).json();
     assert.equal(initial.servers[0].state, "error");
     assert.match(initial.servers[0].error, /port in use/);
-    assert.equal(initial.servers[1].state, "error");
-    assert.match(initial.servers[1].libraries[0].status, /not found/);
+    assert.equal(initial.servers.length, 1);
+    assert.match(initial.servers[0].libraries[1].status, /not found/);
     assert.equal(running.servers.length, 0);
 
     await new Promise<void>((resolveClose) => busy.close(() => resolveClose()));
     await createLibrary(dir, "Work");
-    const firstStart = await (await post("/api/servers/0/start")).json();
-    assert.equal(firstStart.servers[0].state, "running");
-    const secondStart = await (await post("/api/servers/1/start")).json();
-    const secondOrigin = secondStart.servers[1].url.replace("localhost", "127.0.0.1");
-    assert.equal((await fetch(secondOrigin + "/api/health")).status, 200);
-
-    const firstStop = await (await post("/api/servers/0/stop")).json();
-    assert.deepEqual(firstStop.servers.map(({ state }: { state: string }) => state), ["stopped", "running"]);
-    assert.equal((await fetch(secondOrigin + "/api/health")).status, 200);
-    const bothStopped = await (await post("/api/servers/1/stop")).json();
-    assert.deepEqual(bothStopped.servers.map(({ state }: { state: string }) => state), ["stopped", "stopped"]);
+    const started = await (await post("/api/servers/0/start")).json();
+    assert.equal(started.servers[0].state, "running");
+    const viewerOrigin = started.servers[0].url.replace("localhost", "127.0.0.1");
+    assert.equal((await fetch(viewerOrigin + "/api/health")).status, 200);
+    assert.equal((await post("/api/servers/1/start")).status, 404);
+    const stopped = await (await post("/api/servers/0/stop")).json();
+    assert.equal(stopped.servers[0].state, "stopped");
     const restarted = await (await post("/api/servers/0/start")).json();
     assert.equal(restarted.servers[0].state, "running");
 
     const activity = await (await get("/api/activity?range=1h&type=system&search=stopped&eventKey=server_stop")).json();
     assert.equal(activity.range, "1h");
-    assert.deepEqual(activity.recent.map(({ event }: { event: string }) => event), ["server_stop", "server_stop"]);
+    assert.deepEqual(activity.recent.map(({ event }: { event: string }) => event), ["server_stop"]);
     assert.match(await (await get("/api/activity/export")).text(), /server_start_failed/);
     assert.equal((await post("/api/activity/clear")).status, 200);
     const cleared = await (await get("/api/activity")).json();
@@ -360,19 +355,27 @@ test("the local management panel stays available through listener failures and s
     await running.stop();
     await assert.rejects(fetch(url.origin));
     assert.equal(await readFile(settingsPath, "utf8"), before);
-    assert.equal(await readFile(configPath, "utf8"), configBefore);
+    assert.deepEqual(lines, [`Management panel: ${running.panelUrl}`]);
   } finally {
     await stop?.();
     if (busy.listening) await new Promise<void>((resolveClose) => busy.close(() => resolveClose()));
   }
 });
 
-test("the management panel saves shared settings, applies overrides and blocks viewers live", async () => {
+test("the management panel saves shared settings, preserves editable drafts and blocks viewers live", async () => {
   const dir = await workspace();
   const library = await createLibrary(dir, "Photos");
+  const reservation = createServer();
+  await new Promise<void>((resolve, reject) => {
+    reservation.once("error", reject);
+    reservation.listen(0, "127.0.0.1", resolve);
+  });
+  const port = (reservation.address() as { port: number }).port;
+  await new Promise<void>((resolve) => reservation.close(() => resolve()));
   const { hashPassword } = require("../dist/.generated/plugin-service/runtime.cjs");
   const existingHash = hashPassword("existing password");
   const settingsPath = await writeSettings(dir, {
+    port,
     authUsers: [{ username: "alice", passwordHash: existingHash, role: "viewer" }],
     autoStart: true,
     customField: "retained",
@@ -380,14 +383,10 @@ test("the management panel saves shared settings, applies overrides and blocks v
     libraryProtectionEnabled: true,
     sharedLibraries: [{ path: library, name: "Photos", access: "selected", users: ["alice"] }],
   });
-  const configPath = await writeConfig(dir, { servers: [{ libraries: [library], port: 0 }] });
   const before = await readFile(settingsPath, "utf8");
-  const configBefore = await readFile(configPath, "utf8");
   await writeFile(join(dir, "index.html"), "<title>Media Preview Server</title>");
   await writeFile(join(dir, "app.js"), "");
-  const running = await runStandalone([
-    "--panel", "--settings", settingsPath, "--config", configPath, "--access-log", join(dir, "access.jsonl"),
-  ], { log: () => {}, panelAssets: dir });
+  const running = await runStandalone(["--panel"], { log: () => {}, panelAssets: dir, panelStateDir: dir });
   try {
     const url = new URL(running.panelUrl);
     const authorization = { Authorization: `Bearer ${url.hash.slice(1)}` };
@@ -414,7 +413,7 @@ test("the management panel saves shared settings, applies overrides and blocks v
           { username: "bob", password: "new password", role: "admin" },
         ],
         customDomain: "preview.local",
-        port: "41444",
+        port: String(port),
         sessionDurationDays: "12",
         sharedLibraries: [{ path: library, name: "Photos", access: "selected", users: ["alicia"] }],
       },
@@ -425,14 +424,21 @@ test("the management panel saves shared settings, applies overrides and blocks v
 
     assert.equal((await post("/api/servers/0/stop")).status, 200);
     const invalid = await post("/api/settings", { revision, settings: { port: 0 } });
-    assert.equal(invalid.ok, false);
+    assert.equal(invalid.status, 400);
     assert.equal(await readFile(settingsPath, "utf8"), before);
+    assert.equal((await post("/api/settings/block", { address: "invalid" })).status, 400);
+    const draftAddress = "198.51.100.8";
+    assert.equal((await post("/api/settings/block", { address: draftAddress })).status, 200);
+    assert.equal((await (await read("/api/settings")).json()).revision, revision);
+    assert.equal((await post("/api/settings/unblock", { address: draftAddress })).status, 200);
+    assert.equal((await (await read("/api/settings")).json()).revision, revision);
+    assert.equal((await post("/api/settings/block", { address: draftAddress })).status, 200);
     const response = await post("/api/settings", change);
     assert.equal(response.status, 200);
     const saved = await response.json();
     assert.notEqual(saved.form.revision, revision);
-    assert.equal(saved.form.settings.port, 41444);
-    assert.equal(saved.snapshot.servers[0].port, 0);
+    assert.equal(saved.form.settings.port, port);
+    assert.equal(saved.snapshot.servers[0].port, port);
     assert.equal(saved.snapshot.servers[0].authEnabled, true);
     assert.equal(saved.form.settings.authUsers[1].hasPassword, true);
     const persistedText = await readFile(settingsPath, "utf8");
@@ -444,7 +450,7 @@ test("the management panel saves shared settings, applies overrides and blocks v
     assert.equal(persisted.trustForwardedFor, true);
     assert.deepEqual(persisted.sharedLibraries[0].users, ["alicia"]);
     assert.doesNotMatch(persistedText, /new password|existing password/);
-    assert.equal(await readFile(configPath, "utf8"), configBefore);
+    assert.deepEqual(persisted.blockedAddresses.map(({ address }: { address: string }) => address), [draftAddress]);
     assert.equal((await post("/api/settings", change)).status, 409);
 
     const started = await (await post("/api/servers/0/start")).json();
@@ -465,11 +471,53 @@ test("the management panel saves shared settings, applies overrides and blocks v
     assert.equal((await proxied()).status, 200);
     const blocked = await post("/api/settings/block", { address });
     assert.equal(blocked.status, 200);
-    assert.equal((await blocked.json()).blockedAddresses[0].address, address);
-    assert.equal(JSON.parse(await readFile(settingsPath, "utf8")).blockedAddresses[0].address, address);
+    assert.ok((await blocked.json()).blockedAddresses.some((entry: { address: string }) => entry.address === address));
+    assert.ok(JSON.parse(await readFile(settingsPath, "utf8")).blockedAddresses.some((entry: { address: string }) => entry.address === address));
     assert.equal((await proxied()).status, 403);
     assert.equal((await post("/api/settings/unblock", { address })).status, 200);
     assert.equal((await proxied()).status, 200);
+  } finally {
+    await running.stop();
+  }
+});
+
+test("panel mode takes no CLI options and can configure its first library", async () => {
+  const dir = await workspace();
+  const library = await createLibrary(dir, "Photos");
+  await writeFile(join(dir, "index.html"), "<title>Media Preview Server</title>");
+  await writeFile(join(dir, "app.js"), "");
+  const options = { log: () => {}, panelAssets: dir, panelStateDir: dir };
+  for (const flags of [
+    ["--config", "standalone.json"], ["--library", library], ["--settings", "other.json"],
+    ["--access-log", "other.jsonl"], ["-f"], ["--port", "0"],
+  ]) {
+    await assert.rejects(runStandalone(["--panel", ...flags], options), /--panel must be used on its own/);
+  }
+  const running = await runStandalone(["--panel"], options);
+  try {
+    const url = new URL(running.panelUrl);
+    const headers = { Authorization: `Bearer ${url.hash.slice(1)}`, Origin: url.origin };
+    const get = (path: string) => fetch(url.origin + path, { headers });
+    const save = (body: unknown) => fetch(url.origin + "/api/settings", {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const status = await (await get("/api/status")).json();
+    assert.deepEqual(status.servers.map((server: { state: string; libraries: unknown[] }) => [server.state, server.libraries]), [["stopped", []]]);
+    const form = await (await get("/api/settings")).json();
+    const draft = { revision: form.revision, settings: { host: "0.0.0.0", sharedLibraries: [{ path: library, name: "Photos" }] } };
+    const unconfirmed = await save(draft);
+    assert.equal(unconfirmed.status, 400);
+    assert.equal((await unconfirmed.json()).code, "confirm_anonymous_lan");
+    await assert.rejects(stat(join(dir, "settings.json")), { code: "ENOENT" });
+    const confirmed = await save({ ...draft, allowAnonymousLan: true });
+    assert.equal(confirmed.status, 200);
+    const { snapshot } = await confirmed.json();
+    assert.equal(snapshot.servers[0].publicNetwork, true);
+    assert.equal(snapshot.servers[0].libraries[0].name, "Photos");
+    const onDisk = JSON.parse(await readFile(join(dir, "settings.json"), "utf8"));
+    assert.equal(onDisk.sharedLibraries[0].path, library);
   } finally {
     await running.stop();
   }

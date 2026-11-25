@@ -3,7 +3,7 @@ import { authUserKey, SettingsForm } from "../components/SettingsForm";
 import type { PanelSnapshot } from "../service/standalonePanel.cjs";
 import type { PanelSettings } from "../service/standaloneSettings.cjs";
 import type { AuthUser, LibraryCandidate, PluginSettings, SettingsTab, SharedLibrary } from "../types";
-import { errorMessage, postJson, request } from "./panelApi";
+import { errorMessage, PanelApiError, postJson, request } from "./panelApi";
 
 function publicNetwork(host: string | undefined) {
   return Boolean(host && !/^(localhost|\[?::1\]?|127\.(\d+\.){2}\d+)$/i.test(host));
@@ -22,6 +22,7 @@ export function StandaloneSettings({ snapshot, powerPending, onSavingChange, onS
   const [passwordRevision, setPasswordRevision] = useState(0);
   const [tab, setTab] = useState<SettingsTab>("general");
   const [expanded, setExpanded] = useState(true);
+  const [libraryPath, setLibraryPath] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ message: string; error: boolean } | null>(null);
   const unshared = useRef(new Map<string, SharedLibrary>());
@@ -29,6 +30,12 @@ export function StandaloneSettings({ snapshot, powerPending, onSavingChange, onS
   const locked = running || powerPending || busy;
   const users = draft.authUsers || [];
   const shares = draft.sharedLibraries || [];
+  const libraries = [...(form?.libraries || [])];
+  for (const library of shares) {
+    if (!libraries.some((entry) => entry.path === library.path)) {
+      libraries.push({ ...library, id: library.path, current: false, shared: false });
+    }
+  }
   const passwordFor = (user: AuthUser) => {
     const key = authUserKey(user);
     return Object.hasOwn(passwords, key) ? passwords[key] : "";
@@ -38,6 +45,7 @@ export function StandaloneSettings({ snapshot, powerPending, onSavingChange, onS
     setForm(next);
     setDraft(next.settings);
     setPasswords({});
+    setLibraryPath("");
     setVisible({});
     setPasswordRevision((current) => current + 1);
     unshared.current.clear();
@@ -95,6 +103,14 @@ export function StandaloneSettings({ snapshot, powerPending, onSavingChange, onS
     update({ authUsers: users.filter((_, i) => i !== index) });
   }
 
+  function addLibrary() {
+    const path = libraryPath.trim().replace(/[\\/]+$/, "");
+    if (!path) return;
+    const name = path.split(/[\\/]/).pop()?.replace(/\.library$/i, "") || path;
+    if (!shares.some((library) => library.path === path)) update({ sharedLibraries: [...shares, { path, name }] });
+    setLibraryPath("");
+  }
+
   function changeLibraryShared(library: LibraryCandidate, shared: boolean) {
     const others = shares.filter((entry) => entry.path !== library.path);
     if (shared) {
@@ -118,19 +134,13 @@ export function StandaloneSettings({ snapshot, powerPending, onSavingChange, onS
 
   async function save() {
     if (!form || locked) return;
-    const allowAnonymousLan = !draft.authEnabled && (
-      (draft.host !== form.settings.host && publicNetwork(draft.host)) ||
-      (form.settings.authEnabled && snapshot.servers.some((server) => server.publicNetwork))
-    );
-    if (allowAnonymousLan && !window.confirm("Public Network without password protection lets anyone on the network browse. Save these settings?")) return;
     setBusy(true);
     onSavingChange(true);
     setNotice(null);
     try {
       const usernameByKey = new Map(users.map((user) => [authUserKey(user), user.username?.trim() || ""]));
-      const response = await postJson("/api/settings", {
+      const payload = {
         revision: form.revision,
-        allowAnonymousLan,
         settings: {
           ...draft,
           authUsers: users.map(({ hasPassword: _hasPassword, ...user }) => ({
@@ -141,11 +151,19 @@ export function StandaloneSettings({ snapshot, powerPending, onSavingChange, onS
             ? { ...library, users: (library.users || []).flatMap((key) => usernameByKey.get(key) || []) }
             : library),
         },
-      });
+      };
+      let response: Response;
+      try {
+        response = await postJson("/api/settings", payload);
+      } catch (error) {
+        if (!(error instanceof PanelApiError) || error.code !== "confirm_anonymous_lan") throw error;
+        if (!window.confirm(error.message)) return;
+        response = await postJson("/api/settings", { ...payload, allowAnonymousLan: true });
+      }
       const saved: { form: PanelSettings; snapshot: PanelSnapshot } = await response.json();
       applyForm(saved.form);
       onSnapshot(saved.snapshot);
-      setNotice({ message: "Settings saved. They apply when the viewer servers start.", error: false });
+      setNotice({ message: "Settings saved. They apply when the viewer starts.", error: false });
     } catch (error) {
       setNotice({ message: errorMessage(error), error: true });
     } finally {
@@ -174,13 +192,25 @@ export function StandaloneSettings({ snapshot, powerPending, onSavingChange, onS
       authUsers={users}
       busy={busy}
       httpsEnabled={Boolean(draft.httpsEnabled)}
-      libraries={{ current: null, items: form.libraries }}
+      libraries={{ current: null, items: libraries }}
+      libraryOptions={
+        <div className="flex flex-wrap gap-2">
+          <input className="min-w-0 flex-1 rounded-lg border border-[#e1e2e6] px-2.5 py-1.5 text-[12px]" type="text" aria-label="Library folder path" placeholder="/path/to/Photos.library" value={libraryPath} disabled={locked}
+            onChange={(event) => setLibraryPath(event.currentTarget.value)}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter") return;
+              event.preventDefault();
+              addLibrary();
+            }} />
+          <button className="rounded-lg border border-[#e1e2e6] px-3 text-[12px] disabled:opacity-40" type="button" disabled={locked || !libraryPath.trim()} onClick={addLibrary}>Add library</button>
+        </div>
+      }
       message={notice?.message || ""}
       messageIsError={Boolean(notice?.error)}
       networkOptions={
         <div className="grid gap-2 border-b border-[#efeff1] pb-3 text-[12px]">
-          {running ? <p className="m-0 text-[#8a5a00]" role="note">Stop all viewer servers to edit the shared settings.</p> : null}
-          <p className="m-0 text-[#5f6670]">These defaults are shared with the Eagle plugin. CLI and standalone.json server overrides take precedence.</p>
+          {running ? <p className="m-0 text-[#8a5a00]" role="note">Stop the viewer server to edit the shared settings.</p> : null}
+          <p className="m-0 text-[#5f6670]">These settings are shared with the Eagle plugin. Choose libraries to serve in the Libraries tab.</p>
           <div className="flex flex-wrap gap-x-4 gap-y-2">
             {networkOptions.map(({ label, checked, change }) => (
               <label key={label} className="inline-flex items-center gap-2">

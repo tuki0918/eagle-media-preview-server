@@ -6,13 +6,19 @@ if (launchToken) {
 }
 const token = launchToken || sessionStorage.getItem(tokenKey);
 
+export class PanelApiError extends Error {
+  constructor(message: string, readonly code?: string) {
+    super(message);
+  }
+}
+
 export async function request(path: string, init?: RequestInit) {
   const headers = new Headers(init?.headers);
   headers.set("Authorization", `Bearer ${token || ""}`);
   const response = await fetch(path, { ...init, headers });
   if (!response.ok) {
     const result = await response.json();
-    throw new Error(result.error);
+    throw new PanelApiError(result.error, result.code);
   }
   return response;
 }

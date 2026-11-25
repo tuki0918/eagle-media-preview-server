@@ -179,6 +179,9 @@ function defaultSettingsPath() {
   return join(homedir(), ".eagle-media-preview-server", "settings.json");
 }
 
+export class SettingsValidationError extends Error {}
+export class SettingsConflictError extends Error {}
+
 export function createSettingsStore({ filePath = defaultSettingsPath() }: { filePath?: string } = {}) {
   // save() reads the file, merges and writes it back, and load() writes it when migrating or
   // creating it. Either running alongside a save could write back stale settings over the save, so
@@ -237,7 +240,10 @@ export function createSettingsStore({ filePath = defaultSettingsPath() }: { file
     ) {
       return queued(async () => {
         const current = await readCurrent();
-        const next = await prepareSettings(current.settings, makeInput(current));
+        const input = makeInput(current);
+        const next = await prepareSettings(current.settings, input).catch((error: unknown) => {
+          throw new SettingsValidationError(errorMessage(error), { cause: error });
+        });
         const result = await validate(next);
         const target: string = await realpath(filePath).catch((error: unknown) => {
           if (isNodeError(error) && error.code === "ENOENT") return filePath;
@@ -254,12 +260,12 @@ export function createSettingsStore({ filePath = defaultSettingsPath() }: { file
         const text = serializeSettings(next, retained);
         try {
           await writeFile(temporary, text, { encoding: "utf8", flag: "wx", mode: 0o600 });
-          if ((await readCurrent()).revision !== current.revision) throw new Error("Settings changed on disk. Reload settings and try again.");
+          if ((await readCurrent()).revision !== current.revision) throw new SettingsConflictError("Settings changed on disk. Reload settings and try again.");
           await rename(temporary, target);
         } finally {
           await rm(temporary, { force: true });
         }
-        return { before: current.settings, settings: next, revision: revisionOf(text), result };
+        return { before: current.settings, settings: next, result };
       });
     },
     load: () => queued(loadNow),
@@ -932,6 +938,8 @@ function createServerManager({
 
 module.exports = {
   DEFAULT_SETTINGS,
+  SettingsConflictError,
+  SettingsValidationError,
   buildAccessUrl,
   createServerManager,
   createSettingsStore,

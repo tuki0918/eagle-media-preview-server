@@ -1,3 +1,4 @@
+import { SettingsConflictError, SettingsValidationError } from "./runtime.cjs";
 import type { PanelSettings } from "./standaloneSettings.cjs";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { access } from "node:fs/promises";
@@ -65,7 +66,7 @@ function activityQuery(query: URLSearchParams): PanelActivityQuery {
 }
 
 export class PanelRequestError extends Error {
-  constructor(message: string, readonly status: number) {
+  constructor(message: string, readonly status: number, readonly code?: string) {
     super(message);
   }
 }
@@ -173,7 +174,16 @@ export async function startStandalonePanel(controls: PanelControls, assets = pan
   const server = createServer((req, res) => {
     void handle(req, res).catch((error: unknown) => {
       if (res.headersSent) res.destroy();
-      else json(res, error instanceof PanelRequestError ? error.status : 500, { error: error instanceof Error ? error.message : String(error) });
+      else {
+        const status = error instanceof PanelRequestError ? error.status
+          : error instanceof SettingsConflictError ? 409
+          : error instanceof SettingsValidationError ? 400
+          : 500;
+        json(res, status, {
+          error: error instanceof Error ? error.message : String(error),
+          code: error instanceof PanelRequestError ? error.code : undefined,
+        });
+      }
     });
   });
   await new Promise<void>((resolveListen, rejectListen) => {

@@ -1,6 +1,6 @@
 import { PanelRequestError, startStandalonePanel, type PanelActivityQuery, type PanelSnapshot } from "./standalonePanel.cjs";
-import { panelSettings, settingsPatch } from "./standaloneSettings.cjs";
-import { changedSettingFields, createSettingsStore } from "./runtime.cjs";
+import { panelSettings, panelSettingsRevision, settingsPatch } from "./standaloneSettings.cjs";
+import { changedSettingFields, createSettingsStore, SettingsValidationError } from "./runtime.cjs";
 
 // The standalone server: serves Eagle libraries to the viewer without Eagle, read only
 // (docs/design/standalone-server.md). `node bin/eagle-media-server.cjs` runs the servers listed in
@@ -79,12 +79,12 @@ may change where each one listens:
 A server whose port is taken (by the plugin, say) is skipped; the others run.
 
 Options:
-  --panel                   Open the local management panel in a browser
+  --panel                   Open the local management panel using settings.json (use on its own)
   --library <path>          Serve this library; repeat for more. Replaces standalone.json's servers
   --port <number>           With --library: the port (default: settings.json's; 0 for any free one)
   --host <address>          With --library: the address to listen on (default: settings.json's)
   --settings <file>         The plugin's settings (default: ~/.eagle-media-preview-server/settings.json)
-  --config <file>           The servers (default: ~/.eagle-media-preview-server/standalone.json)
+  --config <file>           The servers (default: ~/.eagle-media-preview-server/standalone.json; CLI only)
   --access-log <file>       Where to write the access log (default: ~/.eagle-media-preview-server/standalone-access-log.jsonl)
   -f, --follow              Also print each access log entry here as it happens
   --allow-anonymous-lan     Allow --host on a network address with no sign-in
@@ -148,10 +148,12 @@ async function runStandalone(argv: string[], {
   log = console.log,
   lanAddresses = getLanAddresses(),
   panelAssets,
+  panelStateDir,
 }: {
   lanAddresses?: Array<{ address: string; label: string }>;
   log?: (message: string) => void;
   panelAssets?: string;
+  panelStateDir?: string;
 } = {}) {
   const options = parseArgs(argv);
   if (options.help) {
@@ -163,7 +165,10 @@ async function runStandalone(argv: string[], {
     return null;
   }
 
-  const { allowUnknownFormat } = options;
+  if (options.panel && (argv.length !== 1 || argv[0] !== "--panel")) {
+    throw new Error("--panel must be used on its own. Configure libraries and settings in the panel.");
+  }
+  const { allowUnknownFormat, panel: panelMode } = options;
   const overrides = {
     allowAnonymousLan: options.allowAnonymousLan,
     configPath: options.configPath,
@@ -171,6 +176,8 @@ async function runStandalone(argv: string[], {
     libraries: options.libraries,
     port: options.port,
     settingsPath: options.settingsPath,
+    panel: panelMode,
+    panelStateDir,
   };
   let config: StandaloneConfig = await resolveStandaloneConfig(overrides);
   const settingsStore = createSettingsStore({ filePath: config.settingsPath });
@@ -190,7 +197,9 @@ async function runStandalone(argv: string[], {
   const running = new Map<number, { url: string; viewer: ReturnType<typeof createViewerServer> }>();
   let serverStatus = config.servers.map(() => "stopped");
 
-  const accessLogPath = options.accessLogPath ? expandPath(options.accessLogPath) : defaultAccessLogPath();
+  const accessLogPath = options.accessLogPath ? expandPath(options.accessLogPath)
+    : panelMode && panelStateDir ? join(panelStateDir, "standalone-access-log.jsonl")
+    : defaultAccessLogPath();
   const accessLog = createAccessLog({ filePath: accessLogPath });
   await accessLog.load();
   // Streaming starts below the status table; entries before it are only written to the file.
@@ -231,7 +240,9 @@ async function runStandalone(argv: string[], {
 
     try {
       if (!served.size) {
-        serverStatus[index] = "not started: no library to serve";
+        serverStatus[index] = server.libraries.length
+          ? "not started: no library to serve"
+          : "Add a library in Settings to start the server.";
         return;
       }
       const viewer = createViewerServer({
@@ -280,7 +291,9 @@ async function runStandalone(argv: string[], {
   }
 
   // A failed listener doesn't prevent the rest from starting.
-  for (const index of config.servers.keys()) await startServer(index);
+  for (const [index, server] of config.servers.entries()) {
+    if (server.libraries.length) await startServer(index);
+  }
   await releaseUnusedBackends();
 
   const describeLibrary = (path: string) => {
@@ -313,22 +326,24 @@ async function runStandalone(argv: string[], {
     return renderTable(["PORT", "STATUS", "URL", "LIBRARY", "LIBRARY STATUS"], rows);
   };
 
-  const users = config.common.authUsers.length;
-  const anonymousOnNetwork = !users && [...running.keys()].some((index) => !isLoopback(config.servers[index].host));
-  log("Eagle Media Server (standalone, read only)");
-  log(`  Settings:   ${config.settingsPath}${options.panel ? " (editable in panel)" : " (read only)"}`);
-  log(`  Servers:    ${config.source}`);
-  log(`  Sign-in:    ${users ? `required (${users} user${users === 1 ? "" : "s"})` : anonymousOnNetwork ? "not required — anyone on the network can browse" : "not required"}`);
-  log(`  Sorting:    ${config.common.experimentalSort ? "Advanced Sort on" : "Advanced Sort off (experimentalSort in settings.json)"}`);
-  log(`  Access log: ${accessLogPath}${options.follow ? " (streaming below)" : " (-f to stream it here)"}`);
-  log("");
-  for (const line of statusTable()) log(line);
-  for (const [index, status] of serverStatus.entries()) {
-    if (status !== "running") log(`  Server ${index + 1}: ${status}`);
+  if (!panelMode) {
+    const users = config.common.authUsers.length;
+    const anonymousOnNetwork = !users && [...running.keys()].some((index) => !isLoopback(config.servers[index].host));
+    log("Eagle Media Server (standalone, read only)");
+    log(`  Settings:   ${config.settingsPath} (read only)`);
+    log(`  Servers:    ${config.source}`);
+    log(`  Sign-in:    ${users ? `required (${users} user${users === 1 ? "" : "s"})` : anonymousOnNetwork ? "not required — anyone on the network can browse" : "not required"}`);
+    log(`  Sorting:    ${config.common.experimentalSort ? "Advanced Sort on" : "Advanced Sort off (experimentalSort in settings.json)"}`);
+    log(`  Access log: ${accessLogPath}${options.follow ? " (streaming below)" : " (-f to stream it here)"}`);
+    log("");
+    for (const line of statusTable()) log(line);
+    for (const [index, status] of serverStatus.entries()) {
+      if (status !== "running") log(`  Server ${index + 1}: ${status}`);
+    }
+    log("");
   }
-  log("");
   streaming = true;
-  if (!running.size && !options.panel) {
+  if (!running.size && !panelMode) {
     await accessLog.flush();
     throw new Error("No server could start");
   }
@@ -347,9 +362,9 @@ async function runStandalone(argv: string[], {
         const started = Date.now();
         try {
           await backend.open();
-          if (backends.get(key) === backend) log(`Read "${backend.name}": ${backend.state().total} items in ${((Date.now() - started) / 1000).toFixed(1)} s`);
+          if (!panelMode && backends.get(key) === backend) log(`Read "${backend.name}": ${backend.state().total} items in ${((Date.now() - started) / 1000).toFixed(1)} s`);
         } catch (error) {
-          if (backends.get(key) === backend) log(`Can't read "${backend.name}" (${backend.libraryPath}): ${error instanceof Error ? error.message : String(error)}`);
+          if (!panelMode && backends.get(key) === backend) log(`Can't read "${backend.name}" (${backend.libraryPath}): ${error instanceof Error ? error.message : String(error)}`);
         }
       });
     }
@@ -402,14 +417,14 @@ async function runStandalone(argv: string[], {
 
   async function getSettings() {
     const current = await settingsStore.read();
-    return panelSettings(current, config.servers.flatMap((server) => server.libraries));
+    return panelSettings(current.settings, config.servers.flatMap((server) => server.libraries));
   }
 
   function saveSettings(payload: Record<string, unknown>) {
     return queueCommand(async () => {
-      if (running.size) throw new PanelRequestError("Stop all viewer servers before saving settings", 409);
-      const { before, settings, revision, result } = await settingsStore.update((current) => {
-        if (payload.revision !== current.revision) {
+      if (running.size) throw new PanelRequestError("Stop the viewer server before saving settings", 409);
+      const { before, settings, result } = await settingsStore.update((current) => {
+        if (payload.revision !== panelSettingsRevision(current.settings)) {
           throw new PanelRequestError("Settings changed on disk. Reload settings and try again.", 409);
         }
         return {
@@ -417,14 +432,16 @@ async function runStandalone(argv: string[], {
           sessionSecret: current.settings.sessionSecret || config.common.sessionSecret,
         };
       }, async (next) => {
-        const proposed: StandaloneConfig = await resolveStandaloneConfig(overrides, next);
+        const proposed: StandaloneConfig = await resolveStandaloneConfig(overrides, next).catch((error: Error) => {
+          throw new SettingsValidationError(error.message, { cause: error });
+        });
         const newAnonymousListener = !proposed.common.authUsers.length && proposed.servers.some((server, index) => {
-          if (isLoopback(server.host)) return false;
+          if (isLoopback(server.host) || !server.libraries.length) return false;
           const previous = config.servers[index];
-          return config.common.authUsers.length > 0 || !previous || isLoopback(previous.host);
+          return config.common.authUsers.length > 0 || !previous?.libraries.length || isLoopback(previous.host);
         });
         if (newAnonymousListener && payload.allowAnonymousLan !== true) {
-          throw new PanelRequestError("Confirm public network access without password protection before saving.", 400);
+          throw new PanelRequestError("Public Network without password protection lets anyone on the network browse. Save these settings?", 400, "confirm_anonymous_lan");
         }
         return proposed;
       });
@@ -434,13 +451,20 @@ async function runStandalone(argv: string[], {
       rememberLibraryNames();
       const fields = changedSettingFields(before, settings);
       if (fields.length) recorder.record({ type: "system", event: "settings_changed", ip: "this computer", fields });
-      return panelSettings({ revision, settings }, config.servers.flatMap((server) => server.libraries));
+      return panelSettings(settings, config.servers.flatMap((server) => server.libraries));
     });
   }
 
   function setBlockedAddress(address: unknown, blocked: boolean) {
     return queueCommand(async () => {
-      const normalized: string = normalizeBlockedAddress(address);
+      if (typeof address !== "string") throw new SettingsValidationError("Enter an IP address or CIDR range.");
+      let normalized: string;
+      try {
+        normalized = normalizeBlockedAddress(address);
+      } catch (error) {
+        if (error instanceof Error) throw new SettingsValidationError(error.message, { cause: error });
+        throw error;
+      }
       const { before, settings } = await settingsStore.update(({ settings }) => ({
         blockedAddresses: blocked
           ? [...settings.blockedAddresses, { address: normalized, addedAt: Date.now() }]
@@ -457,7 +481,7 @@ async function runStandalone(argv: string[], {
 
   let panel: Awaited<ReturnType<typeof startStandalonePanel>> | undefined;
   try {
-    if (options.panel) {
+    if (panelMode) {
       panel = await startStandalonePanel({
         snapshot,
         getSettings,
@@ -474,7 +498,7 @@ async function runStandalone(argv: string[], {
         },
         exportLog: () => accessLog.entries({ limit: Number.MAX_SAFE_INTEGER }).reverse(),
       }, panelAssets);
-      log(`  Management panel: ${panel.url}`);
+      log(`Management panel: ${panel.url}`);
     }
   } catch (error) {
     await Promise.all([...running.keys()].map(stopServer));
@@ -484,7 +508,7 @@ async function runStandalone(argv: string[], {
   }
 
   const ready = scanLibraries().then(() => {
-    if (!closing && backends.size) {
+    if (!closing && backends.size && !panelMode) {
       log("");
       for (const line of statusTable()) log(line);
       log("");

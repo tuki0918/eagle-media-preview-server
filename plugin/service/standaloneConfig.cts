@@ -38,6 +38,8 @@ interface CliOverrides {
   libraries?: string[];
   port?: string;
   settingsPath?: string;
+  panel?: boolean;
+  panelStateDir?: string;
 }
 
 // Only where a server listens may differ from settings.json.
@@ -122,7 +124,8 @@ function serverFrom(base: Record<string, unknown>, override: Record<string, unkn
  * `--library` given on the command line replaces standalone.json's servers with a single server.
  */
 async function resolveStandaloneConfig(cli: CliOverrides = {}, proposed?: PluginSettings) {
-  const settingsPath = cli.settingsPath ? expandPath(cli.settingsPath) : defaultSettingsPath();
+  const settingsPath = cli.panel && cli.panelStateDir ? join(cli.panelStateDir, "settings.json")
+    : cli.settingsPath ? expandPath(cli.settingsPath) : defaultSettingsPath();
   const configPath = cli.configPath ? expandPath(cli.configPath) : defaultConfigPath();
   const settings = proposed ?? normalizeSettings(withLoadableCustomDomain(
     (await readJsonFile(settingsPath, { optional: !cli.settingsPath })) ?? {},
@@ -132,7 +135,10 @@ async function resolveStandaloneConfig(cli: CliOverrides = {}, proposed?: Plugin
 
   let servers: ServerPlan[];
   let source: string;
-  if (cli.libraries?.length) {
+  if (cli.panel) {
+    servers = [serverFrom(base, {}, settings.sharedLibraries.map((library: ServedLibrary) => ({ path: library.path, name: library.name })), settingsPath)];
+    source = `${settingsPath} (shared libraries)`;
+  } else if (cli.libraries?.length) {
     const override: Record<string, unknown> = {};
     if (cli.port) override.port = cli.port;
     if (cli.host) override.host = cli.host;

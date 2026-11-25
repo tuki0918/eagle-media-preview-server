@@ -165,7 +165,7 @@ function SelectedServer({ server, pending, saving, onPower }: {
       {(server.error || copyError) && <p className="m-0 rounded-xl bg-[#fef2f2] px-3 py-2 text-[13px] text-[#b42318]" role="alert">{server.error || copyError}</p>}
       <ServerStatusPanel
         authEnabled={server.authEnabled}
-        formDisabled={pending !== null || saving}
+        formDisabled={pending !== null || saving || !server.libraries.length}
         httpsEnabled={server.httpsEnabled}
         publicNetwork={server.publicNetwork}
         qrSrc={qrSrc}
@@ -180,6 +180,7 @@ function SelectedServer({ server, pending, saving, onPower }: {
       />
       <section className="grid gap-2 rounded-2xl border border-[#e6e6e9] bg-white p-4">
         <h2 className="m-0 text-[15px] font-semibold">Libraries</h2>
+        {!server.libraries.length ? <p className="m-0 text-[13px] text-[#5f6670]">Add a library in Settings, then start the server.</p> : null}
         <ul className="m-0 grid list-none divide-y divide-[#efeff1] p-0 text-[13px]">
           {server.libraries.map(({ name, status }, index) => (
             <li key={index} className="flex flex-wrap justify-between gap-x-4 gap-y-1 py-2">
@@ -195,13 +196,12 @@ function SelectedServer({ server, pending, saving, onPower }: {
 
 function App() {
   const [snapshot, setSnapshot] = useState<PanelSnapshot | null>(null);
-  const [selected, setSelected] = useState(0);
   const [pending, setPending] = useState<"Starting" | "Stopping" | null>(null);
   const [saving, setSaving] = useState(false);
   const [statusError, setStatusError] = useState("");
   const statusRequest = useRef<AbortController | null>(null);
   const powerPending = useRef(false);
-  const server = snapshot?.servers[selected] ?? snapshot?.servers[0];
+  const server = snapshot?.servers[0];
 
   useEffect(() => {
     async function refresh() {
@@ -233,7 +233,6 @@ function App() {
   function applySnapshot(next: PanelSnapshot) {
     statusRequest.current?.abort();
     setSnapshot(next);
-    setSelected((current) => current < next.servers.length ? current : 0);
   }
 
   async function setPower(checked: boolean) {
@@ -264,18 +263,6 @@ function App() {
         {!snapshot && !statusError && <p role="status">Connecting to the standalone server…</p>}
         {snapshot && server && (
           <>
-            {snapshot.servers.length > 1 && (
-              <label className="grid gap-1 text-[13px] font-medium">
-                Viewer server
-                <select className="w-full rounded-xl border border-[#e6e6e9] bg-white px-3 py-2" disabled={pending !== null} value={selected} onChange={(event) => setSelected(Number(event.currentTarget.value))}>
-                  {snapshot.servers.map((entry) => (
-                    <option key={entry.index} value={entry.index}>
-                      {entry.libraries.map(({ name }) => name).join(", ")} · {entry.port || "automatic port"} · {entry.state}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
             <SelectedServer key={server.index} server={server} pending={pending} saving={saving} onPower={(checked) => void setPower(checked)} />
             <StandaloneSettings snapshot={snapshot} powerPending={pending !== null} onSavingChange={setSaving} onSnapshot={applySnapshot} />
             <Activity snapshot={snapshot} onSnapshot={applySnapshot} />

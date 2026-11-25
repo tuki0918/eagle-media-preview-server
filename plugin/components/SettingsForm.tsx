@@ -9,6 +9,7 @@ interface SettingsFormProps {
   httpsEnabled: boolean;
   libraries: LibraryList | null;
   networkOptions?: ReactNode;
+  libraryOptions?: ReactNode;
   standalone?: boolean;
   message: string;
   messageIsError: boolean;
@@ -85,6 +86,7 @@ export function SettingsForm({
   httpsEnabled,
   libraries,
   networkOptions,
+  libraryOptions,
   standalone = false,
   message,
   messageIsError,
@@ -286,7 +288,7 @@ export function SettingsForm({
         </div>
 
         <div id="librariesSettingsPanel" role="tabpanel" aria-labelledby="librariesSettingsTab" hidden={settingsTab !== "libraries"}>
-          <SettingRow label="Protection" help={standalone ? "When on, the viewer serves only the configured libraries checked below." : "When on, the viewer serves only the libraries checked below. While another library is open in Eagle, viewers see it as offline."}>
+          <SettingRow label="Protection" help={standalone ? "When on, you can limit each shared library to selected users." : "When on, the viewer serves only the libraries checked below. While another library is open in Eagle, viewers see it as offline."}>
             <label className="inline-flex items-center gap-2 text-[12px] text-[#171717] has-[:disabled]:opacity-60">
               <input
                 type="checkbox"
@@ -300,6 +302,7 @@ export function SettingsForm({
           </SettingRow>
           <SettingRow label="Libraries" help="A shared library can be limited to selected users. Admins can always open shared libraries.">
             <div className="grid gap-2">
+              {libraryOptions}
               {currentLibraryUnshared ? (
                 <p className="m-0 rounded-lg border border-[#f5dfa8] bg-[#fffaeb] px-2.5 py-1.5 text-[11px] leading-snug text-[#8a5a00]" role="note">
                   The library open in Eagle is not shared. Viewers see the server as offline.
@@ -334,21 +337,22 @@ export function SettingsForm({
                     // Locked inputs only dim the checkbox, so shared rows (white) and unshared rows (gray, muted text)
                     // stay distinct while the server runs.
                     const shared = libraryProtectionEnabled && checked;
+                    const selected = checked && (standalone || libraryProtectionEnabled);
                     return (
-                      <li key={library.path} className={`relative ${libraryGridClassName} border-b border-[#efeff1] last:rounded-b-xl last:border-b-0 ${shared ? "bg-white" : "bg-[#f7f7f8]"}`}>
+                      <li key={library.path} className={`relative ${libraryGridClassName} border-b border-[#efeff1] last:rounded-b-xl last:border-b-0 ${selected ? "bg-white" : "bg-[#f7f7f8]"}`}>
                         {/* Only the checkbox toggles sharing: a click on the row is often just closing the user picker. */}
                         <div className="grid min-w-0 grid-cols-[16px_minmax(0,1fr)] items-center gap-2.5 py-2">
                           <input
                             className="disabled:opacity-50"
                             type="checkbox"
                             aria-label={`Share ${library.name}`}
-                            disabled={settingsInputDisabled || !libraryProtectionEnabled}
+                            disabled={settingsInputDisabled || (!standalone && !libraryProtectionEnabled)}
                             checked={checked}
                             onChange={(event) => onLibrarySharedChange(library, event.currentTarget.checked)}
                           />
                           <span className="min-w-0">
-                            <strong className={`block truncate text-[12.5px] font-semibold ${shared ? "text-[#171717]" : "text-[#8a8f99]"}`}>{library.name}</strong>
-                            <small className={`block truncate text-[10.5px] ${shared ? "text-[#5f6670]" : "text-[#a3a7ae]"}`} title={library.path}>{library.path}</small>
+                            <strong className={`block truncate text-[12.5px] font-semibold ${selected ? "text-[#171717]" : "text-[#8a8f99]"}`}>{library.name}</strong>
+                            <small className={`block truncate text-[10.5px] ${selected ? "text-[#5f6670]" : "text-[#a3a7ae]"}`} title={library.path}>{library.path}</small>
                           </span>
                         </div>
                         {/* Two fixed slots, so the folder icons line up whether or not the row has a status badge. */}

@@ -1,6 +1,8 @@
-import type { PluginSettings, SettingsInput } from "./runtime.cjs";
+import { createHmac, randomBytes } from "node:crypto";
+import { SettingsValidationError, type PluginSettings, type SettingsInput } from "./runtime.cjs";
 
 const { libraryPathKey } = require("./libraryAccess.cjs");
+const { expandPath } = require("./standaloneConfig.cjs");
 
 type SettingsFields = Pick<PluginSettings,
   "authEnabled" | "customDomain" | "experimentalSort" | "host" | "httpsCertPath" | "httpsEnabled" |
@@ -17,22 +19,30 @@ const booleanFields = ["authEnabled", "experimentalSort", "httpsEnabled", "libra
 const stringFields = ["customDomain", "host", "httpsCertPath", "httpsKeyPath"] as const;
 const numberFields = ["port", "sessionDurationDays"] as const;
 
+const editableFields = [...booleanFields, ...stringFields, ...numberFields, "sharedLibraries"] as const;
+const revisionKey = randomBytes(32);
+
+export function panelSettingsRevision(settings: PluginSettings) {
+  // Compare the editable settings, including any password updates, without exposing the hashes.
+  const values = [...editableFields.map((field) => settings[field]), settings.authUsers];
+  return createHmac("sha256", revisionKey).update(JSON.stringify(values)).digest("base64url");
+}
+
 export function panelSettings(
-  { revision, settings }: { revision: string; settings: PluginSettings },
+  settings: PluginSettings,
   configuredLibraries: Array<{ name: string; path: string }>,
 ): PanelSettings {
-  const fields = [...booleanFields, ...stringFields, ...numberFields, "sharedLibraries"] as const;
-  const selected = Object.fromEntries(fields.map((field) => [field, settings[field]])) as SettingsFields;
+  const selected = Object.fromEntries(editableFields.map((field) => [field, settings[field]])) as SettingsFields;
   const shared = new Set(settings.sharedLibraries.map(({ path }) => libraryPathKey(path)));
   const libraries = new Map<string, PanelSettings["libraries"][number]>();
   for (const library of [...settings.sharedLibraries, ...configuredLibraries]) {
     const id: string = libraryPathKey(library.path);
     if (!libraries.has(id)) {
-      libraries.set(id, { name: library.name, path: library.path, id, current: false, shared: settings.libraryProtectionEnabled && shared.has(id) });
+      libraries.set(id, { name: library.name, path: library.path, id, current: false, shared: shared.has(id) });
     }
   }
   return {
-    revision,
+    revision: panelSettingsRevision(settings),
     settings: {
       ...selected,
       authUsers: settings.authUsers.map(({ passwordHash, ...user }) => ({ ...user, hasPassword: Boolean(passwordHash) })),
@@ -42,7 +52,7 @@ export function panelSettings(
 }
 
 function object(value: unknown, message: string): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(message);
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new SettingsValidationError(message);
   return value as Record<string, unknown>;
 }
 
@@ -51,24 +61,24 @@ export function settingsPatch(value: unknown, current: PluginSettings): Settings
   const patch: SettingsInput = {};
   for (const key of booleanFields) {
     if (payload[key] === undefined) continue;
-    if (typeof payload[key] !== "boolean") throw new Error(`${key} must be a boolean`);
+    if (typeof payload[key] !== "boolean") throw new SettingsValidationError(`${key} must be a boolean`);
     patch[key] = payload[key];
   }
   for (const key of stringFields) {
     if (payload[key] === undefined) continue;
-    if (typeof payload[key] !== "string") throw new Error(`${key} must be text`);
+    if (typeof payload[key] !== "string") throw new SettingsValidationError(`${key} must be text`);
     patch[key] = payload[key];
   }
   for (const key of numberFields) {
     if (payload[key] === undefined) continue;
     const number = payload[key];
     if (typeof number !== "number" && (typeof number !== "string" || !/^\d+$/.test(number.trim()))) {
-      throw new Error(`${key} must be an integer`);
+      throw new SettingsValidationError(`${key} must be an integer`);
     }
     patch[key] = Number(number);
   }
   if (payload.authUsers !== undefined) {
-    if (!Array.isArray(payload.authUsers)) throw new Error("Users must be a list");
+    if (!Array.isArray(payload.authUsers)) throw new SettingsValidationError("Users must be a list");
     const existing = new Map(current.authUsers.map((user) => [user.username, user.passwordHash]));
     const passwords: Array<[string, string]> = [];
     patch.authUsers = payload.authUsers.map((value: unknown) => {
@@ -84,12 +94,12 @@ export function settingsPatch(value: unknown, current: PluginSettings): Settings
     patch.passwordHash = "";
   }
   if (payload.sharedLibraries !== undefined) {
-    if (!Array.isArray(payload.sharedLibraries)) throw new Error("Shared libraries must be a list");
+    if (!Array.isArray(payload.sharedLibraries)) throw new SettingsValidationError("Shared libraries must be a list");
     patch.sharedLibraries = payload.sharedLibraries.map((value: unknown) => {
       const library = object(value, "Each shared library needs a path");
-      if (typeof library.path !== "string" || !library.path.trim()) throw new Error("Each shared library needs a path");
+      if (typeof library.path !== "string" || !library.path.trim()) throw new SettingsValidationError("Each shared library needs a path");
       return {
-        path: library.path,
+        path: expandPath(library.path),
         name: typeof library.name === "string" ? library.name : "",
         ...(library.access === "selected" ? {
           access: "selected" as const,
