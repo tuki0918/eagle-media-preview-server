@@ -8,7 +8,7 @@ interface SettingsFormProps {
   busy: boolean;
   httpsEnabled: boolean;
   libraries: LibraryList | null;
-  networkOptions?: ReactNode;
+  generalNote?: ReactNode;
   libraryOptions?: ReactNode;
   standalone?: boolean;
   message: string;
@@ -85,7 +85,7 @@ export function SettingsForm({
   busy,
   httpsEnabled,
   libraries,
-  networkOptions,
+  generalNote,
   libraryOptions,
   standalone = false,
   message,
@@ -156,7 +156,7 @@ export function SettingsForm({
         </div>
 
         <div id="generalSettingsPanel" role="tabpanel" aria-labelledby="generalSettingsTab" hidden={settingsTab !== "general"}>
-          {networkOptions}
+          {generalNote}
           <SettingRow label="Hostname" help="Optional. Used for the endpoint URL and QR code.">
             <input
               className={`${settingInputClassName} w-full`}

@@ -7,6 +7,7 @@ interface ServerStatusPanelProps {
   formDisabled: boolean;
   httpsEnabled: boolean;
   publicNetwork: boolean;
+  powerDisabled?: boolean;
   qrSrc: string;
   serverState: ServerState;
   settings?: {
@@ -35,6 +36,7 @@ export function ServerStatusPanel({
   formDisabled,
   httpsEnabled,
   publicNetwork,
+  powerDisabled = false,
   qrSrc,
   serverState,
   settings = {},
@@ -65,7 +67,7 @@ export function ServerStatusPanel({
         </div>
         <div className="inline-flex shrink-0 items-center gap-2.5">
           <StatusBadge state={serverState} label={statusLabel} pending={statusPending} />
-          <PowerSwitch checked={running} disabled={formDisabled} onChange={onServerPowerChange} />
+          <PowerSwitch checked={running} disabled={formDisabled || powerDisabled} onChange={onServerPowerChange} />
         </div>
       </div>
 

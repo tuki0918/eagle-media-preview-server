@@ -1,18 +1,87 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { authUserKey, SettingsForm } from "../components/SettingsForm";
-import type { PanelSnapshot } from "../service/standalonePanel.cjs";
-import type { PanelSettings } from "../service/standaloneSettings.cjs";
+import { ServerStatusPanel } from "../components/ServerStatusPanel";
+import { createQrDataUrl } from "../qrCode";
+import type { PanelServer, PanelSnapshot } from "../service/standalonePanel.cjs";
+import type { PanelSettings, PanelSettingSwitch } from "../service/standaloneSettings.cjs";
 import type { AuthUser, LibraryCandidate, PluginSettings, SettingsTab, SharedLibrary } from "../types";
 import { errorMessage, PanelApiError, postJson, request } from "./panelApi";
 
-function publicNetwork(host: string | undefined) {
-  return Boolean(host && !/^(localhost|\[?::1\]?|127\.(\d+\.){2}\d+)$/i.test(host));
+function StandaloneServerStatus({ server, pending, busy, error, onPower, onSwitch }: {
+  server: PanelServer;
+  pending: "Starting" | "Stopping" | "Restarting" | null;
+  busy: boolean;
+  error: string;
+  onPower(checked: boolean): void;
+  onSwitch?: (field: PanelSettingSwitch, checked: boolean) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState("");
+  const qrSrc = useMemo(() => server.url ? createQrDataUrl(server.url) : "", [server.url]);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 1500);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+
+  async function copyUrl() {
+    try {
+      await navigator.clipboard.writeText(server.url);
+      setCopyError("");
+      setCopied(true);
+    } catch (error) {
+      setCopyError(errorMessage(error));
+    }
+  }
+
+  return (
+    <>
+      {(error || server.error || copyError) && <p className="m-0 rounded-xl bg-[#fef2f2] px-3 py-2 text-[13px] text-[#b42318]" role="alert">{error || server.error || copyError}</p>}
+      <ServerStatusPanel
+        authEnabled={server.authEnabled}
+        formDisabled={pending !== null || busy}
+        powerDisabled={!server.libraries.length}
+        httpsEnabled={server.httpsEnabled}
+        publicNetwork={server.publicNetwork}
+        qrSrc={qrSrc}
+        serverState={server.state}
+        statusLabel={pending || { running: "Running", stopped: "Stopped", error: "Error" }[server.state]}
+        statusPending={pending !== null}
+        url={server.url}
+        urlCopied={copied}
+        onPasswordProtectionChange={onSwitch && ((checked) => onSwitch("authEnabled", checked))}
+        onPublicNetworkChange={onSwitch && ((checked) => onSwitch("host", checked))}
+        onHttpsEnabledChange={onSwitch && ((checked) => onSwitch("httpsEnabled", checked))}
+        onHttpsDocsOpen={() => window.open("https://github.com/tuki0918/eagle-media-preview-server/blob/main/docs/https-mkcert.md", "_blank", "noopener")}
+        onCopyAccessUrl={() => void copyUrl()}
+        onOpenEndpointUrl={() => server.url && window.open(server.url, "_blank", "noopener")}
+        onServerPowerChange={onPower}
+      />
+      {!server.libraries.length && (
+        <p className="m-0 px-1 text-[12px] text-[#5f6670]">Add a library in Settings, then start the server.</p>
+      )}
+    </>
+  );
 }
 
-export function StandaloneSettings({ snapshot, powerPending, onSavingChange, onSnapshot }: {
-  snapshot: PanelSnapshot;
-  powerPending: boolean;
-  onSavingChange(saving: boolean): void;
+async function submitSettings(path: string, payload: Record<string, unknown>) {
+  let response: Response;
+  try {
+    response = await postJson(path, payload);
+  } catch (error) {
+    if (!(error instanceof PanelApiError) || error.code !== "confirm_anonymous_lan") throw error;
+    if (!window.confirm(error.message)) return null;
+    response = await postJson(path, { ...payload, allowAnonymousLan: true });
+  }
+  const saved: { form: PanelSettings; snapshot: PanelSnapshot } = await response.json();
+  return saved;
+}
+
+export function StandaloneSettings({ server, pending, onPower, onSnapshot }: {
+  server: PanelServer;
+  pending: "Starting" | "Stopping" | null;
+  onPower(checked: boolean): void;
   onSnapshot(snapshot: PanelSnapshot): void;
 }) {
   const [form, setForm] = useState<PanelSettings | null>(null);
@@ -24,10 +93,12 @@ export function StandaloneSettings({ snapshot, powerPending, onSavingChange, onS
   const [expanded, setExpanded] = useState(true);
   const [libraryPath, setLibraryPath] = useState("");
   const [busy, setBusy] = useState(false);
+  const [switching, setSwitching] = useState(false);
+  const [switchError, setSwitchError] = useState("");
   const [notice, setNotice] = useState<{ message: string; error: boolean } | null>(null);
   const unshared = useRef(new Map<string, SharedLibrary>());
-  const running = snapshot.servers.some((server) => server.state === "running");
-  const locked = running || powerPending || busy;
+  const running = server.state === "running";
+  const locked = running || pending !== null || busy || switching;
   const users = draft.authUsers || [];
   const shares = draft.sharedLibraries || [];
   const libraries = [...(form?.libraries || [])];
@@ -44,6 +115,7 @@ export function StandaloneSettings({ snapshot, powerPending, onSavingChange, onS
   function applyForm(next: PanelSettings) {
     setForm(next);
     setDraft(next.settings);
+    setSwitchError("");
     setPasswords({});
     setLibraryPath("");
     setVisible({});
@@ -135,7 +207,6 @@ export function StandaloneSettings({ snapshot, powerPending, onSavingChange, onS
   async function save() {
     if (!form || locked) return;
     setBusy(true);
-    onSavingChange(true);
     setNotice(null);
     try {
       const usernameByKey = new Map(users.map((user) => [authUserKey(user), user.username?.trim() || ""]));
@@ -152,15 +223,8 @@ export function StandaloneSettings({ snapshot, powerPending, onSavingChange, onS
             : library),
         },
       };
-      let response: Response;
-      try {
-        response = await postJson("/api/settings", payload);
-      } catch (error) {
-        if (!(error instanceof PanelApiError) || error.code !== "confirm_anonymous_lan") throw error;
-        if (!window.confirm(error.message)) return;
-        response = await postJson("/api/settings", { ...payload, allowAnonymousLan: true });
-      }
-      const saved: { form: PanelSettings; snapshot: PanelSnapshot } = await response.json();
+      const saved = await submitSettings("/api/settings", payload);
+      if (!saved) return;
       applyForm(saved.form);
       onSnapshot(saved.snapshot);
       setNotice({ message: "Settings saved. They apply when the viewer starts.", error: false });
@@ -168,91 +232,120 @@ export function StandaloneSettings({ snapshot, powerPending, onSavingChange, onS
       setNotice({ message: errorMessage(error), error: true });
     } finally {
       setBusy(false);
-      onSavingChange(false);
     }
   }
 
+  async function changeSwitch(field: PanelSettingSwitch, checked: boolean) {
+    if (!form || pending || busy || switching) return;
+    setSwitchError("");
+    if (checked && field === "authEnabled" && (!form.settings.authUsers.length || form.settings.authUsers.some((user) => !user.hasPassword))) {
+      setSwitchError("Save a password for each user in Settings → Access before enabling password protection.");
+      return;
+    }
+    if (checked && field === "httpsEnabled" && (!form.settings.httpsCertPath || !form.settings.httpsKeyPath)) {
+      setSwitchError("Save the certificate and key paths in Settings → Security before enabling HTTPS.");
+      return;
+    }
+    setSwitching(true);
+    try {
+      const saved = await submitSettings("/api/settings/switch", { revision: form.revision, field, checked });
+      if (!saved) return;
+      const { authEnabled, host, httpsEnabled } = saved.form.settings;
+      setForm(saved.form);
+      update({ authEnabled, host, httpsEnabled });
+      onSnapshot(saved.snapshot);
+    } catch (error) {
+      setSwitchError(errorMessage(error));
+    } finally {
+      setSwitching(false);
+    }
+  }
+
+  const status = (
+    <StandaloneServerStatus
+      server={server}
+      pending={pending || (switching && running ? "Restarting" : null)}
+      busy={busy || switching}
+      error={switchError}
+      onPower={onPower}
+      onSwitch={form ? (field, checked) => void changeSwitch(field, checked) : undefined}
+    />
+  );
+
   if (!form) {
     return (
-      <section className="rounded-2xl border border-[#e6e6e9] bg-white p-4 text-[13px]">
-        {notice ? <><p role="alert">{notice.message}</p><button type="button" onClick={reload} disabled={busy}>Retry loading settings</button></> : <p role="status">Loading settings…</p>}
-      </section>
+      <>
+        {status}
+        <section className="rounded-2xl border border-[#e6e6e9] bg-white p-4 text-[13px]">
+          {notice ? <><p role="alert">{notice.message}</p><button type="button" onClick={reload} disabled={busy}>Retry loading settings</button></> : <p role="status">Loading settings…</p>}
+        </section>
+      </>
     );
   }
 
-  const networkOptions = [
-    { label: "Public Network", checked: publicNetwork(draft.host), change: (checked: boolean) => update({ host: checked ? "0.0.0.0" : "127.0.0.1" }) },
-    { label: "Password protection", checked: Boolean(draft.authEnabled), change: (checked: boolean) => update({ authEnabled: checked }) },
-    { label: "HTTPS", checked: Boolean(draft.httpsEnabled), change: (checked: boolean) => update({ httpsEnabled: checked }) },
-  ];
   return (
-    <SettingsForm
-      standalone
-      authEnabled={Boolean(draft.authEnabled)}
-      authUsers={users}
-      busy={busy}
-      httpsEnabled={Boolean(draft.httpsEnabled)}
-      libraries={{ current: null, items: libraries }}
-      libraryOptions={
-        <div className="flex flex-wrap gap-2">
-          <input className="min-w-0 flex-1 rounded-lg border border-[#e1e2e6] px-2.5 py-1.5 text-[12px]" type="text" aria-label="Library folder path" placeholder="/path/to/Photos.library" value={libraryPath} disabled={locked}
-            onChange={(event) => setLibraryPath(event.currentTarget.value)}
-            onKeyDown={(event) => {
-              if (event.key !== "Enter") return;
-              event.preventDefault();
-              addLibrary();
-            }} />
-          <button className="rounded-lg border border-[#e1e2e6] px-3 text-[12px] disabled:opacity-40" type="button" disabled={locked || !libraryPath.trim()} onClick={addLibrary}>Add library</button>
-        </div>
-      }
-      message={notice?.message || ""}
-      messageIsError={Boolean(notice?.error)}
-      networkOptions={
-        <div className="grid gap-2 border-b border-[#efeff1] pb-3 text-[12px]">
-          {running ? <p className="m-0 text-[#8a5a00]" role="note">Stop the viewer server to edit the shared settings.</p> : null}
-          <p className="m-0 text-[#5f6670]">These settings are shared with the Eagle plugin. Choose libraries to serve in the Libraries tab.</p>
-          <div className="flex flex-wrap gap-x-4 gap-y-2">
-            {networkOptions.map(({ label, checked, change }) => (
-              <label key={label} className="inline-flex items-center gap-2">
-                <input type="checkbox" checked={checked} disabled={locked} onChange={(event) => change(event.currentTarget.checked)} />
-                {label}
-              </label>
-            ))}
+    <>
+      {status}
+      <SettingsForm
+        standalone
+        authEnabled={Boolean(draft.authEnabled)}
+        authUsers={users}
+        busy={busy || switching}
+        httpsEnabled={Boolean(draft.httpsEnabled)}
+        libraries={{ current: null, items: libraries }}
+        libraryOptions={
+          <div className="flex flex-wrap gap-2">
+            <input className="min-w-0 flex-1 rounded-lg border border-[#e1e2e6] px-2.5 py-1.5 text-[12px]" type="text" aria-label="Library folder path" placeholder="/path/to/Photos.library" value={libraryPath} disabled={locked}
+              onChange={(event) => setLibraryPath(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") return;
+                event.preventDefault();
+                addLibrary();
+              }} />
+            <button className="rounded-lg border border-[#e1e2e6] px-3 text-[12px] disabled:opacity-40" type="button" disabled={locked || !libraryPath.trim()} onClick={addLibrary}>Add library</button>
           </div>
-        </div>
-      }
-      passwordDraftRevision={passwordRevision}
-      passwordVisibleByIndex={Object.fromEntries(users.map((user, index) => [index, visible[authUserKey(user)] === true]))}
-      serverRunning={running}
-      settings={draft}
-      settingsExpanded={expanded}
-      settingsInputDisabled={locked}
-      settingsTab={tab}
-      userPasswords={Object.fromEntries(users.map((user, index) => [index, passwordFor(user)]))}
-      onAddAuthUser={addUser}
-      onCustomDomainChange={(customDomain) => update({ customDomain })}
-      onExperimentalSortChange={(experimentalSort) => update({ experimentalSort })}
-      onHttpsCertPathChange={(httpsCertPath) => update({ httpsCertPath })}
-      onHttpsKeyPathChange={(httpsKeyPath) => update({ httpsKeyPath })}
-      onLibraryProtectionChange={(libraryProtectionEnabled) => update({ libraryProtectionEnabled })}
-      onLibrarySharedChange={changeLibraryShared}
-      onLibraryUsersChange={changeLibraryUsers}
-      onPortChange={(port) => update({ port })}
-      onReloadLibraries={reload}
-      onRemoveAuthUser={removeUser}
-      onSaveSettings={() => void save()}
-      onSessionDurationDaysChange={(sessionDurationDays) => update({ sessionDurationDays })}
-      onSettingsExpandedChange={setExpanded}
-      onSettingsTabChange={setTab}
-      onTogglePasswordVisible={(index) => {
-        const key = authUserKey(users[index]);
-        setVisible((current) => ({ ...current, [key]: current[key] !== true }));
-      }}
-      onUpdateAuthUser={updateUser}
-      onUserPasswordDraftChange={(index, value) => {
-        const key = authUserKey(users[index]);
-        setPasswords((current) => ({ ...current, [key]: value }));
-      }}
-    />
+        }
+        message={notice?.message || ""}
+        messageIsError={Boolean(notice?.error)}
+        generalNote={
+          <div className="grid gap-2 border-b border-[#efeff1] pb-3 text-[12px]">
+            {running ? <p className="m-0 text-[#8a5a00]" role="note">Stop the viewer server to edit detailed settings.</p> : null}
+            <p className="m-0 text-[#5f6670]">These settings are shared with the Eagle plugin. Choose libraries to serve in the Libraries tab.</p>
+          </div>
+        }
+        passwordDraftRevision={passwordRevision}
+        passwordVisibleByIndex={Object.fromEntries(users.map((user, index) => [index, visible[authUserKey(user)] === true]))}
+        serverRunning={running}
+        settings={draft}
+        settingsExpanded={expanded}
+        settingsInputDisabled={locked}
+        settingsTab={tab}
+        userPasswords={Object.fromEntries(users.map((user, index) => [index, passwordFor(user)]))}
+        onAddAuthUser={addUser}
+        onCustomDomainChange={(customDomain) => update({ customDomain })}
+        onExperimentalSortChange={(experimentalSort) => update({ experimentalSort })}
+        onHttpsCertPathChange={(httpsCertPath) => update({ httpsCertPath })}
+        onHttpsKeyPathChange={(httpsKeyPath) => update({ httpsKeyPath })}
+        onLibraryProtectionChange={(libraryProtectionEnabled) => update({ libraryProtectionEnabled })}
+        onLibrarySharedChange={changeLibraryShared}
+        onLibraryUsersChange={changeLibraryUsers}
+        onPortChange={(port) => update({ port })}
+        onReloadLibraries={reload}
+        onRemoveAuthUser={removeUser}
+        onSaveSettings={() => void save()}
+        onSessionDurationDaysChange={(sessionDurationDays) => update({ sessionDurationDays })}
+        onSettingsExpandedChange={setExpanded}
+        onSettingsTabChange={setTab}
+        onTogglePasswordVisible={(index) => {
+          const key = authUserKey(users[index]);
+          setVisible((current) => ({ ...current, [key]: current[key] !== true }));
+        }}
+        onUpdateAuthUser={updateUser}
+        onUserPasswordDraftChange={(index, value) => {
+          const key = authUserKey(users[index]);
+          setPasswords((current) => ({ ...current, [key]: value }));
+        }}
+      />
+    </>
   );
 }

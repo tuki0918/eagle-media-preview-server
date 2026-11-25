@@ -15,7 +15,6 @@ export interface PanelSnapshot {
   activeClients: number;
   blockedAddresses: Array<{ address: string; addedAt: number }>;
   settingsPath: string;
-  source: string;
   libraryNames: Array<[string, string]>;
   servers: PanelServer[];
 }
@@ -48,7 +47,7 @@ interface PanelControls {
   clearLog(): Promise<void>;
   exportLog(): unknown[];
   getSettings(): Promise<PanelSettings>;
-  saveSettings(payload: Record<string, unknown>): Promise<PanelSettings>;
+  saveSettings(payload: Record<string, unknown>, switchOnly: boolean): Promise<PanelSettings>;
   setBlockedAddress(address: unknown, blocked: boolean): Promise<void>;
   setPower(index: number, enabled: boolean): Promise<void>;
   snapshot(): PanelSnapshot;
@@ -149,8 +148,8 @@ export async function startStandalonePanel(controls: PanelControls, assets = pan
     }
     if (req.method === "POST") {
       if (req.headers.origin !== origin) return json(res, 403, { error: "Forbidden" });
-      if (path === "/api/settings") {
-        const form = await controls.saveSettings(await readPayload(req));
+      if (path === "/api/settings" || path === "/api/settings/switch") {
+        const form = await controls.saveSettings(await readPayload(req), path.endsWith("/switch"));
         return json(res, 200, { form, snapshot: controls.snapshot() });
       }
       if (path === "/api/settings/block" || path === "/api/settings/unblock") {

@@ -1,5 +1,5 @@
 import { PanelRequestError, startStandalonePanel, type PanelActivityQuery, type PanelSnapshot } from "./standalonePanel.cjs";
-import { panelSettings, panelSettingsRevision, settingsPatch } from "./standaloneSettings.cjs";
+import { panelSettings, panelSettingsRevision, settingsPatch, settingsSwitchPatch } from "./standaloneSettings.cjs";
 import { changedSettingFields, createSettingsStore, SettingsValidationError } from "./runtime.cjs";
 
 // The standalone server: serves Eagle libraries to the viewer without Eagle, read only
@@ -377,7 +377,6 @@ async function runStandalone(argv: string[], {
     activeClients: accessLog.activeClients(),
     blockedAddresses: config.common.blockedAddresses,
     settingsPath: config.settingsPath,
-    source: config.source,
     libraryNames: [...libraryName.entries()],
     servers: config.servers.map((server, index) => {
       const entry = running.get(index);
@@ -420,15 +419,15 @@ async function runStandalone(argv: string[], {
     return panelSettings(current.settings, config.servers.flatMap((server) => server.libraries));
   }
 
-  function saveSettings(payload: Record<string, unknown>) {
+  function saveSettings(payload: Record<string, unknown>, switchOnly: boolean) {
     return queueCommand(async () => {
-      if (running.size) throw new PanelRequestError("Stop the viewer server before saving settings", 409);
+      if (!switchOnly && running.size) throw new PanelRequestError("Stop the viewer server before saving settings", 409);
       const { before, settings, result } = await settingsStore.update((current) => {
         if (payload.revision !== panelSettingsRevision(current.settings)) {
           throw new PanelRequestError("Settings changed on disk. Reload settings and try again.", 409);
         }
         return {
-          ...settingsPatch(payload.settings, current.settings),
+          ...(switchOnly ? settingsSwitchPatch(payload.field, payload.checked) : settingsPatch(payload.settings, current.settings)),
           sessionSecret: current.settings.sessionSecret || config.common.sessionSecret,
         };
       }, async (next) => {
@@ -445,12 +444,25 @@ async function runStandalone(argv: string[], {
         }
         return proposed;
       });
-      config = result;
-      serverStatus = config.servers.map(() => "stopped");
-      libraryState.clear();
-      rememberLibraryNames();
       const fields = changedSettingFields(before, settings);
+      const switchChanged = fields.length > 0
+        || Boolean(config.common.authUsers.length) !== Boolean(result.common.authUsers.length)
+        || config.servers[0].host !== result.servers[0].host
+        || config.servers[0].httpsEnabled !== result.servers[0].httpsEnabled;
+      const restart = switchOnly && switchChanged && running.has(0);
+      if (restart) await stopServer(0);
+      if (!running.size) {
+        config = result;
+        serverStatus = config.servers.map(() => "stopped");
+        libraryState.clear();
+        rememberLibraryNames();
+      }
       if (fields.length) recorder.record({ type: "system", event: "settings_changed", ip: "this computer", fields });
+      if (restart) {
+        await startServer(0);
+        await releaseUnusedBackends();
+        void scanLibraries();
+      }
       return panelSettings(settings, config.servers.flatMap((server) => server.libraries));
     });
   }

@@ -7,6 +7,7 @@ import {
   Download,
   Eye,
   EyeOff,
+  FileText,
   FolderOpen,
   Globe,
   KeyRound,
@@ -42,6 +43,7 @@ export const TrashIcon = iconComponent(Trash2);
 export const UsersIcon = iconComponent(UsersRound);
 export const CheckIcon = iconComponent(Check);
 export const CopyIcon = iconComponent(Copy);
+export const FileTextIcon = iconComponent(FileText);
 export const FolderOpenIcon = iconComponent(FolderOpen);
 export const EmptyQrIcon = iconComponent(QrCode);
 export const EyeIcon = iconComponent(Eye);

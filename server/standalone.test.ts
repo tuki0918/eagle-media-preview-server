@@ -476,6 +476,32 @@ test("the management panel saves shared settings, preserves editable drafts and 
     assert.equal((await proxied()).status, 403);
     assert.equal((await post("/api/settings/unblock", { address })).status, 200);
     assert.equal((await proxied()).status, 200);
+
+    const revisionAfterSave = saved.form.revision;
+    const invalidHttps = await post("/api/settings/switch", { revision: revisionAfterSave, field: "httpsEnabled", checked: true });
+    assert.equal(invalidHttps.status, 400);
+    assert.match((await invalidHttps.json()).error, /certificate and key/);
+    assert.equal((await (await proxied()).json()).required, true);
+
+    const passwordOff = await post("/api/settings/switch", {
+      revision: revisionAfterSave,
+      field: "authEnabled",
+      checked: false,
+      settings: { port: 1 },
+    });
+    assert.equal(passwordOff.status, 200);
+    const switched = await passwordOff.json();
+    assert.equal(switched.snapshot.servers[0].state, "running");
+    assert.equal(switched.snapshot.servers[0].authEnabled, false);
+    const diskSettings = JSON.parse(await readFile(settingsPath, "utf8"));
+    assert.equal(diskSettings.authEnabled, false);
+    assert.equal(diskSettings.port, port);
+    assert.equal((await (await proxied()).json()).required, false);
+
+    const passwordOn = await post("/api/settings/switch", { revision: switched.form.revision, field: "authEnabled", checked: true });
+    assert.equal(passwordOn.status, 200);
+    assert.equal((await passwordOn.json()).snapshot.servers[0].state, "running");
+    assert.equal((await login("alicia", "existing password")).status, 200);
   } finally {
     await running.stop();
   }
