@@ -53,9 +53,9 @@ export interface PanelActivityQuery {
 }
 
 interface PanelControls {
-  activity(query: PanelActivityQuery): Promise<unknown>;
+  activity(query: PanelActivityQuery): unknown;
   clearLog(): Promise<void>;
-  exportLog(): Promise<unknown[]>;
+  exportLog(): unknown[];
   getSettings(): Promise<PanelSettings>;
   saveSettings(payload: Record<string, unknown>, switchOnly: boolean): Promise<PanelSettings>;
   setBlockedAddress(address: unknown, blocked: boolean): Promise<void>;
@@ -150,10 +150,10 @@ export async function startStandalonePanel(controls: PanelControls, {
     if (req.method === "GET" && path === "/api/settings") return json(res, 200, await controls.getSettings());
     if (req.method === "GET" && path === "/api/status") return json(res, 200, controls.snapshot());
     if (req.method === "GET" && path === "/api/activity") {
-      return json(res, 200, await controls.activity(activityQuery(new URLSearchParams(query))));
+      return json(res, 200, controls.activity(activityQuery(new URLSearchParams(query))));
     }
     if (req.method === "GET" && path === "/api/activity/export") {
-      const entries = await controls.exportLog();
+      const entries = controls.exportLog();
       res.writeHead(200, {
         "Content-Disposition": 'attachment; filename="access-log.csv"',
         "Content-Type": "text/csv; charset=utf-8",

@@ -8,7 +8,7 @@ import { changedSettingFields, createSettingsStore, SettingsValidationError } fr
 const { stat } = require("fs").promises;
 const { join } = require("path");
 const { normalizeBlockedAddress } = require("./addressBlockList.cjs");
-const { createAccessLog, createAccessLogHistory } = require("./accessLog.cjs");
+const { createAccessLog } = require("./accessLog.cjs");
 const { createFsBackend } = require("./fsBackend.cjs");
 const { libraryIdFor, libraryPathKey } = require("./libraryAccess.cjs");
 const { buildAccessUrl, getLanAddresses } = require("./runtime.cjs");
@@ -213,7 +213,6 @@ async function runStandalone(argv: string[], {
     : panelMode && panelStateDir ? join(panelStateDir, "standalone-access-log.jsonl")
     : defaultAccessLogPath();
   const accessLog = createAccessLog({ filePath: accessLogPath });
-  const history = createAccessLogHistory(accessLog, "standalone");
   await accessLog.load();
   // Streaming starts below the status table; entries before it are only written to the file.
   let streaming = false;
@@ -542,14 +541,15 @@ async function runStandalone(argv: string[], {
         saveSettings,
         setBlockedAddress,
         setPower,
-        activity: (query: PanelActivityQuery) => history.summary({
-          ...query, limit: 100, searchKeys: { ...query.searchKeys, libraryNames: libraryName },
+        activity: (query: PanelActivityQuery) => ({
+          ...accessLog.summary({ range: query.range }),
+          recent: accessLog.entries({ ...query, limit: 100, searchKeys: { ...query.searchKeys, libraryNames: libraryName } }),
         }),
         async clearLog() {
-          await history.clear();
+          await accessLog.clear();
           recorder.record({ type: "system", event: "log_cleared", ip: "this computer" });
         },
-        exportLog: history.entries,
+        exportLog: () => accessLog.entries({ limit: Number.MAX_SAFE_INTEGER }).reverse(),
       }, { assets: panelAssets, port: options.panelPort });
       const startup = queueCommand(startConfiguredServers);
       log(`Management panel: ${panel.url}`);

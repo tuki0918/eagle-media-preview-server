@@ -299,7 +299,7 @@ export function AccessLogPanel({
           </div>
 
           <p className="m-0 text-[10.5px] leading-snug text-[#9a9ea6]">
-            Shows up to 7 days of history from Eagle plugin and Standalone. Connected devices are for this server.
+            Shows up to 7 days of access history.
           </p>
         </div>
 
@@ -585,11 +585,6 @@ function EventTable({ emptyText, entries, filters, libraryNames, searchedText, o
               <FilterButton filter={{ field: "event", value: entry.event }} filters={filters} onFiltersChange={onFiltersChange}>
                 <Match query={searchedText} text={`${EVENT_LABELS[entry.event] || entry.event}${failed && entry.type !== "auth" && entry.type !== "system" && entry.status ? ` (${entry.status})` : ""}`} />
               </FilterButton>
-              {entry.source && (
-                <span className="max-w-full truncate rounded bg-[#f1f1f3] px-1 text-[9.5px] font-medium text-[#5f6670]">
-                  <Match query={searchedText} text={entry.source === "plugin" ? "Eagle plugin" : "Standalone"} />
-                </span>
-              )}
             </span>
             <span className="flex min-w-0" role="cell">
               {entry.libraryId ? (
@@ -603,7 +598,7 @@ function EventTable({ emptyText, entries, filters, libraryNames, searchedText, o
               {details.length ? <span className="truncate text-[10px] leading-tight text-[#9a9ea6]">{details.map((detail, detailIndex) => <Fragment key={detailIndex}>{detailIndex ? " · " : ""}{detail}</Fragment>)}</span> : null}
             </span>
             <span className="grid place-items-center" role="cell">
-              {entry.itemId && entry.source !== "standalone" && onSelectItem ? (
+              {entry.itemId && onSelectItem ? (
                 <button className="grid h-6 w-6 place-items-center rounded-md border-0 bg-transparent p-0 text-[#8a8f99] transition-colors hover:bg-[#f1f1f3] hover:text-[#171717]" type="button" aria-label={`Select ${entry.itemId} in Eagle`} title="Select in Eagle" onClick={() => onSelectItem(entry.itemId as string)}>
                   <SelectItemIcon className="h-3.5 w-3.5" />
                 </button>

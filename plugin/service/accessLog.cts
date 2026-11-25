@@ -1,6 +1,6 @@
 const { appendFile, mkdir, readFile, rename, rm, writeFile } = require("fs/promises");
 const { homedir } = require("os");
-const { dirname, join, resolve } = require("path");
+const { dirname, join } = require("path");
 const { randomUUID } = require("crypto");
 
 // "browse" holds only failed requests; "system" is what the admin or the server itself did.
@@ -23,7 +23,6 @@ interface AccessLogEntry {
   path?: string;
   size?: number;
   status?: number;
-  source?: AccessLogSource;
   type: AccessLogType;
   user?: string;
 }
@@ -93,8 +92,7 @@ const RANGE_BUCKETS: Record<AccessLogRange, { bucketMs: number; count: number }>
 function entryMatchesSearch(entry: AccessLogEntry, term: string, eventKeys: Set<string>, fieldKeys: Set<string>, libraryNames?: ReadonlyMap<string, string>) {
   if (eventKeys.has(entry.event) || entry.fields?.some((field) => fieldKeys.has(field))) return true;
   const libraryLabel = entry.libraryId && (libraryNames?.get(entry.libraryId) || entry.libraryId);
-  const source = entry.source === "plugin" ? "Eagle plugin" : entry.source === "standalone" ? "Standalone" : undefined;
-  const texts = [source, entry.ip, entry.user, entry.event, entry.itemId, entry.path, entry.ext, entry.status, libraryLabel, ...(entry.fields || [])];
+  const texts = [entry.ip, entry.user, entry.event, entry.itemId, entry.path, entry.ext, entry.status, libraryLabel, ...(entry.fields || [])];
   return texts.some((text) => text !== undefined && String(text).toLowerCase().includes(term));
 }
 
@@ -260,7 +258,7 @@ function createAccessLog({
     // Filters are exact: an entry needs one of the values given for each column, so values of a
     // column widen the result and different columns narrow it. `search` matches part of any text
     // the panel shows for the entry, ignoring case; `searchKeys` covers the panel's own wording.
-    entries({ filters = [], limit = 200, search = "", searchKeys = { events: [], fields: [] }, type = "" }: EntriesOptions = {}, history?: AccessLogEntry[]) {
+    entries({ filters = [], limit = 200, search = "", searchKeys = { events: [], fields: [] }, type = "" }: EntriesOptions = {}) {
       prune();
       const values = (field: AccessLogFilter["field"]) => new Set(filters.filter((filter) => filter.field === field).map((filter) => filter.value));
       const addresses = values("address");
@@ -271,9 +269,8 @@ function createAccessLog({
       const eventKeys = new Set(searchKeys.events);
       const fieldKeys = new Set(searchKeys.fields);
       const output: AccessLogEntry[] = [];
-      const eventsToSearch = history ?? entries;
-      for (let index = eventsToSearch.length - 1; index >= 0 && output.length < limit; index -= 1) {
-        const entry = eventsToSearch[index];
+      for (let index = entries.length - 1; index >= 0 && output.length < limit; index -= 1) {
+        const entry = entries[index];
         if (type && entry.type !== type) continue;
         if (addresses.size && !addresses.has(entry.ip)) continue;
         if (events.size && !events.has(entry.event)) continue;
@@ -288,7 +285,7 @@ function createAccessLog({
     // Cheap enough to poll every few seconds: it only reads the per-address heartbeat table.
     activeClients: countActiveAddresses,
 
-    summary({ clientLimit = MAX_SUMMARY_CLIENTS, range = "24h" }: { clientLimit?: number; range?: AccessLogRange } = {}, history?: AccessLogEntry[]) {
+    summary({ clientLimit = MAX_SUMMARY_CLIENTS, range = "24h" }: { clientLimit?: number; range?: AccessLogRange } = {}) {
       prune();
       const at = now();
       const { bucketMs, count } = RANGE_BUCKETS[range] || RANGE_BUCKETS["24h"];
@@ -317,7 +314,7 @@ function createAccessLog({
         return client;
       };
       const totals = { auth: 0, authFailures: 0, browse: 0, edit: 0, editFailures: 0, system: 0, view: 0, viewFailures: 0 };
-      for (const entry of history ?? entries) {
+      for (const entry of entries) {
         // Devices, tiles and chart all count the selected range only.
         if (entry.at < firstStart) continue;
         const bucket = buckets[Math.floor((entry.at - firstStart) / bucketMs)];
@@ -449,41 +446,8 @@ function parseEntry(line: string): AccessLogEntry | null {
   }
 }
 
-// Merge on read so the other process keeps sole responsibility for its log and its rotation.
-function createAccessLogHistory(local: ReturnType<typeof createAccessLog>, source: AccessLogSource) {
-  const peerSource = source === "plugin" ? "standalone" : "plugin";
-  const peer = defaultAccessLogPath(peerSource, dirname(local.filePath));
-
-  async function readPeerHistory() {
-    if (resolve(peer) === resolve(local.filePath)) return [];
-    const cutoff = Date.now() - DEFAULT_MAX_AGE_MS;
-    const text: string = await readFile(peer, "utf8").catch(() => "");
-    return text.split("\n").flatMap((line): AccessLogEntry[] => {
-      const entry = parseEntry(line);
-      return entry && entry.at >= cutoff ? [{ ...entry, source: peerSource }] : [];
-    }).slice(-DEFAULT_MAX_ENTRIES);
-  }
-
-  async function readHistory() {
-    const [, peerEntries] = await Promise.all([local.load(), readPeerHistory()]);
-    const ownEntries = local.entries({ limit: Number.MAX_SAFE_INTEGER }).reverse().map((entry) => ({ ...entry, source }));
-    return [...ownEntries, ...peerEntries]
-      .sort((a, b) => a.at - b.at || Number(a.source === "standalone") - Number(b.source === "standalone"));
-  }
-
-  return {
-    async summary({ range, ...query }: EntriesOptions & { range: AccessLogRange }) {
-      const history = await readHistory();
-      return { ...local.summary({ range }, history), recent: local.entries(query, history) };
-    },
-    entries: readHistory,
-    clear: local.clear,
-  };
-}
-
 function accessLogCsv(entries: AccessLogEntry[]) {
   const columns: Array<keyof AccessLogEntry> = ["at", "type", "event", "ip", "user", "method", "path", "libraryId", "itemId", "fields", "ext", "size", "status"];
-  if (entries.some((entry) => entry.source)) columns.push("source");
   const cell = (value: unknown) => {
     let text = String(value ?? "");
     // User names and paths come from clients; a leading quote keeps a spreadsheet from running them as formulas.
@@ -501,6 +465,5 @@ function accessLogCsv(entries: AccessLogEntry[]) {
 module.exports = {
   accessLogCsv,
   createAccessLog,
-  createAccessLogHistory,
   defaultAccessLogPath,
 };

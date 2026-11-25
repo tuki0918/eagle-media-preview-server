@@ -5,7 +5,7 @@ const { homedir, networkInterfaces } = require("os");
 const { createEagleLibrarySwitcher } = require("./eagleClient.cjs");
 const { BYTES_PER_MB } = require("./upload.cjs");
 const { createViewerServer } = require("./viewerServer.cjs");
-const { accessLogCsv, createAccessLog, createAccessLogHistory } = require("./accessLog.cjs");
+const { accessLogCsv, createAccessLog } = require("./accessLog.cjs");
 const { normalizeBlockedAddress, normalizeBlockedAddresses } = require("./addressBlockList.cjs");
 const { serverRestartSettingsChanged } = require("./settingsChange.cjs");
 const { normalizeCustomDomain } = require("./customDomain.cjs");
@@ -694,7 +694,6 @@ function createServerManager({
   lanAddressProvider = getLanAddresses,
   defaultEagleUserDataPath = defaultEagleUserDataDir,
 }: ServerManagerOptions = {}) {
-  const history = createAccessLogHistory(accessLog, "plugin");
   let viewer: ManagedViewer | null = null;
   let stateOverride: ServerStatus = "stopped";
   let lastError = "";
@@ -897,7 +896,8 @@ function createServerManager({
 
     // The log belongs to the manager, not the viewer, so it stays readable after the server stops.
     async accessLogSummary({ range = "24h", limit = 200, ...query }: { filters?: Array<{ field: "address" | "event" | "libraryId" | "user"; value: string }>; limit?: number; range?: "1h" | "24h" | "7d"; search?: string; searchKeys?: { events: string[]; fields: string[]; libraryNames?: ReadonlyMap<string, string> }; type?: string } = {}) {
-      return history.summary({ range, limit, ...query });
+      await accessLog.load();
+      return { ...accessLog.summary({ range }), recent: accessLog.entries({ ...query, limit }) };
     },
 
     accessLogConnectedCount() {
@@ -917,14 +917,15 @@ function createServerManager({
     },
 
     async exportAccessLog(filePath: string, format: "csv" | "jsonl" = "csv") {
-      const entries = await history.entries();
+      await accessLog.load();
+      const entries = accessLog.entries({ limit: Number.MAX_SAFE_INTEGER }).reverse();
       const body = format === "jsonl" ? entries.map((entry: object) => `${JSON.stringify(entry)}\n`).join("") : accessLogCsv(entries);
       await writeFile(filePath, body, "utf8");
       return { count: entries.length, filePath };
     },
 
     async clearAccessLog() {
-      await history.clear();
+      await accessLog.clear();
       // Stays behind as the first entry, so a cleared log shows that it was cleared.
       logSystemEvent("log_cleared");
     },

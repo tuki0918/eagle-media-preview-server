@@ -119,7 +119,6 @@ export interface AccessLogEntry {
   method?: string;
   path?: string;
   size?: number;
-  source?: "plugin" | "standalone";
   status?: number;
   type: AccessLogType;
   user?: string;
