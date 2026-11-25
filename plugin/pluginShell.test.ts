@@ -2249,7 +2249,7 @@ test("plugin separates startup and restart alerts from settings save errors", as
     url: "file:///tmp/eagle-plugin/plugin/index.html",
   });
   const win = dom.window as unknown as Window & { require(id: string): unknown; eval(source: string): void };
-  const stopped = { state: "stopped", port: 41532, settings: { host: "127.0.0.1", port: 41532, authEnabled: false } };
+  const stopped = { state: "stopped", url: "http://localhost:41532", port: 41532, settings: { host: "127.0.0.1", port: 41532, authEnabled: false } };
   const portConflict = { ...stopped, state: "error", lastError: "listen EADDRINUSE: address already in use 0.0.0.0:41532" };
   let rejectSave = true;
   let rejectStart = true;
@@ -2258,9 +2258,9 @@ test("plugin separates startup and restart alerts from settings save errors", as
     createServerManager: () => ({
       init: () => stopped,
       start: () => rejectStart ? portConflict : { ...stopped, state: "running" },
-      saveSettings() {
+      saveSettings(payload: Record<string, unknown>) {
         if (rejectSave) throw new Error("Could not write settings.json");
-        return failRestart ? portConflict : stopped;
+        return failRestart ? portConflict : { ...stopped, settings: { ...stopped.settings, ...payload } };
       },
     }),
   };
@@ -2278,6 +2278,12 @@ test("plugin separates startup and restart alerts from settings save errors", as
     assert.equal(banner(), null);
 
     rejectSave = false;
+    doc.querySelector<HTMLButtonElement>("#settingsToggleButton")!.click();
+    await waitFor(() => Boolean(doc.querySelector("#settingsPanel")?.hasAttribute("hidden")));
+    doc.querySelector<HTMLButtonElement>('[aria-label="Copy endpoint URL"]')!.click();
+    await waitFor(() => Boolean(banner()?.textContent?.includes("Could not copy the endpoint URL")));
+    assert.equal(doc.querySelector("#settingsPanel")?.hasAttribute("hidden"), true);
+
     power().click();
     await waitFor(() => Boolean(banner()?.textContent?.includes("Port 41532 is already in use")));
     assert.match(banner()?.textContent || "", /choose a different port/);
@@ -2293,6 +2299,16 @@ test("plugin separates startup and restart alerts from settings save errors", as
     doc.querySelector<HTMLInputElement>('input[aria-label="Public Network"]')!.click();
     await waitFor(() => Boolean(banner()?.textContent?.includes("Port 41532 is already in use")));
     assert.doesNotMatch(footer(), /EADDRINUSE|Port 41532/);
+
+    failRestart = false;
+    const network = () => doc.querySelector<HTMLInputElement>('input[aria-label="Public Network"]')!;
+    network().click();
+    await waitFor(() => network().checked && !network().disabled);
+    Object.defineProperty(win, "confirm", { value: undefined });
+    power().click();
+    await waitFor(() => Boolean(banner()?.textContent?.includes("Enable password protection or disable Public Network")));
+    network().click();
+    await waitFor(() => !network().checked && !network().disabled && banner() === null);
   } finally {
     dom.window.close();
   }

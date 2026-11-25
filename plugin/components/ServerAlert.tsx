@@ -15,14 +15,18 @@ export function ServerAlert({ title, message }: { title: string; message: string
 }
 
 export function ServerStartAlert({ message, port }: { message?: string; port?: number | string }) {
-  if (message && /\bEADDRINUSE\b|^port in use\b/i.test(message)) {
-    const boundPort = message.match(/:(\d+)\s*$/)?.[1] || port;
+  const reason = message?.replace(/^not started:\s*/i, "").trim();
+  if (reason && /\bEADDRINUSE\b|^port in use\b/i.test(reason)) {
+    const boundPort = reason.match(/:(\d+)\s*$/)?.[1] || port;
+    const hint = /the Eagle plugin may be running/i.test(reason)
+      ? " The Media Preview Server plugin in Eagle may be using this port."
+      : "";
     return (
       <ServerAlert
         title={boundPort ? `Port ${boundPort} is already in use` : "The port is already in use"}
-        message="Stop the other server or choose a different port in Settings → General."
+        message={`Stop the other server or choose a different port in Settings → General.${hint}`}
       />
     );
   }
-  return <ServerAlert title="Could not start the server" message={message || "Try starting the server again."} />;
+  return <ServerAlert title="Could not start the server" message={reason || "Try starting the server again."} />;
 }

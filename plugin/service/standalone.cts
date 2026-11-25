@@ -551,8 +551,9 @@ async function runStandalone(argv: string[], {
         },
         exportLog: () => accessLog.entries({ limit: Number.MAX_SAFE_INTEGER }).reverse(),
       }, { assets: panelAssets, port: options.panelPort });
-      await queueCommand(startConfiguredServers);
+      const startup = queueCommand(startConfiguredServers);
       log(`Management panel: ${panel.url}`);
+      await startup;
     }
   } catch (error) {
     closing = true;
