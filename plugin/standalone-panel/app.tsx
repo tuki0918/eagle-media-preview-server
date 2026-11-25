@@ -66,10 +66,12 @@ function Activity({ snapshot, onSnapshot }: { snapshot: PanelSnapshot; onSnapsho
     setError(null);
     try {
       const response = await request("/api/activity/export");
+      const filename = response.headers.get("content-disposition")?.match(/filename="([^"]+)"/)?.[1];
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
       const url = URL.createObjectURL(await response.blob());
       const link = document.createElement("a");
       link.href = url;
-      link.download = "standalone-access-log.csv";
+      link.download = filename ?? `standalone-access-log-${stamp}.csv`;
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (error) {

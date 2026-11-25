@@ -154,8 +154,9 @@ export async function startStandalonePanel(controls: PanelControls, {
     }
     if (req.method === "GET" && path === "/api/activity/export") {
       const entries = controls.exportLog();
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
       res.writeHead(200, {
-        "Content-Disposition": 'attachment; filename="standalone-access-log.csv"',
+        "Content-Disposition": `attachment; filename="standalone-access-log-${stamp}.csv"`,
         "Content-Type": "text/csv; charset=utf-8",
       });
       return res.end(accessLogCsv(entries));
