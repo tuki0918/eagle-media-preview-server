@@ -49,7 +49,7 @@ Two entry points share one server:
 | Backend | `EagleApiBackend` | `FsBackend` |
 | Libraries | The one open in Eagle (switchable) | All configured, at the same time |
 | Writes | Yes (by role) | No |
-| Settings | `~/.eagle-media-preview-server/settings.json` | The plugin's `settings.json`, editable with `--panel`, plus `standalone.json` for the servers (as built; see [Configuration and operation](#configuration-and-operation-as-built)) |
+| Settings | `~/.eagle-media-preview-server/settings.json` | The plugin's `settings.json`, editable with `--panel`. Terminal mode also accepts `standalone.json` for server definitions (as built; see [Configuration and operation](#configuration-and-operation-as-built)) |
 
 ## 4. The backend seam
 
@@ -295,7 +295,7 @@ Superseded by [Configuration and operation](#configuration-and-operation-as-buil
 
 This replaces the `--config` file of P2, which was the plugin's settings format plus `libraries`.
 
-**settings.json supplies the shared defaults.** Users, roles, sign-in, the session secret, the block list, library protection (shared libraries and per-library users), and the default port, host, hostname, and HTTPS come from the plugin's `~/.eagle-media-preview-server/settings.json` (`--settings` for another). The CLI reads it on startup. With `--panel`, the management panel can also save shared settings using the plugin's format. The server definitions are kept separately in `standalone.json`.
+**settings.json supplies the shared defaults.** Users, roles, sign-in, the session secret, the block list, library protection (shared libraries and per-library users), and the default port, host, hostname, and HTTPS come from the plugin's `~/.eagle-media-preview-server/settings.json` (`--settings` for another). The CLI reads it on startup. With `--panel`, the management panel can also save shared settings using the plugin's format. Panel mode uses the default settings file and its shared libraries for a single viewer server. Terminal mode can load separate server definitions from `standalone.json`.
 
 Sharing the session secret is what makes switching seamless: sign-in cookies and library ids are both derived from it, so a viewer stays signed in and keeps its library when the plugin answers instead of the standalone server, or the other way round. To edit a library, stop the standalone server for it, open Eagle, and use the same URL.
 
