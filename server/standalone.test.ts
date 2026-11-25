@@ -602,3 +602,54 @@ test("panel mode starts the viewer with the CLI only when Auto start is on", asy
     await second.stop();
   }
 });
+
+test("the standalone panel reports Advanced Sort progress separately for each library", async () => {
+  const dir = await workspace();
+  const photos = await createLibrary(dir, "Photos");
+  const legacy = await createLibrary(dir, "Legacy");
+  await writeFile(join(legacy, "metadata.json"), JSON.stringify({ applicationVersion: "999.0.0" }));
+  const reservation = createServer();
+  await new Promise<void>((resolve, reject) => {
+    reservation.once("error", reject);
+    reservation.listen(0, "127.0.0.1", resolve);
+  });
+  const port = (reservation.address() as { port: number }).port;
+  await new Promise<void>((resolve) => reservation.close(() => resolve()));
+  await writeSettings(dir, {
+    port,
+    autoStart: true,
+    experimentalSort: true,
+    sharedLibraries: [
+      { path: photos, name: "Photos" },
+      { path: legacy, name: "Legacy" },
+      { path: join(dir, "Missing.library"), name: "Missing" },
+    ],
+  });
+  await writeFile(join(dir, "index.html"), "<title>Media Preview Server</title>");
+  await writeFile(join(dir, "app.js"), "");
+
+  const running = await runStandalone(["--panel"], { log: () => {}, panelAssets: dir, panelStateDir: dir });
+  try {
+    await running.ready;
+    const url = new URL(running.panelUrl);
+    const headers = { Authorization: `Bearer ${url.hash.slice(1)}`, Origin: url.origin };
+    const response = await fetch(url.origin + "/api/status", { headers });
+    assert.equal(response.status, 200);
+    const { servers } = await response.json();
+    assert.equal(servers[0].state, "running");
+    const [ready, failed, unavailable] = servers[0].sortIndexes;
+    assert.deepEqual(ready, { id: libraryIdFor(photos, SECRET), name: "Photos", status: "ready", loaded: 1, total: 1 });
+    assert.equal(failed.name, "Legacy");
+    assert.equal(failed.status, "failed");
+    assert.match(failed.reason, /999/);
+    assert.equal(unavailable.name, "Missing");
+    assert.equal(unavailable.status, "unavailable");
+    assert.match(unavailable.reason, /not found/);
+
+    const stopped = await fetch(url.origin + "/api/servers/0/stop", { method: "POST", headers });
+    assert.equal(stopped.status, 200);
+    assert.equal((await stopped.json()).servers[0].sortIndexes, undefined);
+  } finally {
+    await running.stop();
+  }
+});

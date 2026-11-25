@@ -29,9 +29,15 @@ export interface PanelServer {
   httpsEnabled: boolean;
   publicNetwork: boolean;
   libraries: Array<{ name: string; status: string }>;
-  /** The Advanced Sort index across this server's libraries; undefined while sort is off or stopped. */
-  sortIndex?: { loaded: number; status: "building" | "failed" | "ready"; total: number };
+  /** Advanced Sort progress by library; omitted while sort is off or the viewer is stopped. */
+  sortIndexes?: PanelLibrarySortIndex[];
 }
+
+export type PanelLibrarySortIndex = { id: string; name: string } & (
+  | { status: "waiting" }
+  | { status: "building" | "ready"; loaded: number; total: number }
+  | { status: "failed" | "unavailable"; reason: string }
+);
 
 type ActivityRange = "1h" | "24h" | "7d";
 const filterFields = ["address", "event", "libraryId", "user"] as const;

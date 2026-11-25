@@ -15,6 +15,7 @@ interface ServerStatusPanelProps {
   };
   /** The Advanced Sort index; undefined hides the row (sort off or server stopped). */
   sortIndex?: SortIndexStatus | null;
+  sortIndexDetails?: ReactNode;
   statusLabel: string;
   /** A start/stop/restart is in flight; the badge shows its label instead of the settled state. */
   statusPending?: boolean;
@@ -42,6 +43,7 @@ export function ServerStatusPanel({
   serverState,
   settings = {},
   sortIndex,
+  sortIndexDetails,
   statusLabel,
   statusPending = false,
   url,
@@ -139,12 +141,12 @@ export function ServerStatusPanel({
           <span>Settings are locked while the server is running. Stop the server to edit them.</span>
         </p>
       ) : null}
-      {running && sortIndex !== undefined ? <SortIndexProgress sortIndex={sortIndex} /> : null}
+      {running && (sortIndexDetails ?? (sortIndex !== undefined ? <SortIndexProgress sortIndex={sortIndex} /> : null))}
     </section>
   );
 }
 
-export function SortIndexProgress({ sortIndex }: { sortIndex: SortIndexStatus | null }) {
+export function SortIndexProgress({ sortIndex, libraryName }: { sortIndex: SortIndexStatus | null; libraryName?: string }) {
   const status = sortIndex?.status ?? "building";
   const loaded = sortIndex?.loaded ?? 0;
   const total = sortIndex?.total ?? 0;
@@ -159,15 +161,17 @@ export function SortIndexProgress({ sortIndex }: { sortIndex: SortIndexStatus | 
     ? `Scanning library… ${loaded.toLocaleString()} / ${total.toLocaleString()} (${percent}%)`
     : "Scanning library…";
   return (
-    <div className="mt-4 grid min-w-0 gap-1.5 rounded-xl border border-[#e6e6e9] px-3 py-2.5" data-testid="sortIndexProgress">
-      <div className="flex min-w-0 items-center justify-between gap-3">
-        <span className={`${fieldLabelClassName} shrink-0 whitespace-nowrap`}>Advanced Sort Index</span>
+    <div className={`grid min-w-0 gap-1.5 ${libraryName === undefined ? "mt-4 rounded-xl border border-[#e6e6e9] px-3 py-2.5" : ""}`} data-testid="sortIndexProgress">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        {libraryName === undefined
+          ? <span className={`${fieldLabelClassName} shrink-0 whitespace-nowrap`}>Advanced Sort Index</span>
+          : <span className="min-w-0 break-words text-[12px] font-semibold text-[#171717]">{libraryName}</span>}
         <span title={detail} className={`min-w-0 truncate text-[11.5px] ${status === "failed" ? "text-[#b42318]" : "text-[#5f6670]"}`}>{detail}</span>
       </div>
       <div
         className="h-1.5 overflow-hidden rounded-full bg-[#ececef]"
         role="progressbar"
-        aria-label="Advanced Sort Index"
+        aria-label={libraryName === undefined ? "Advanced Sort Index" : `Advanced Sort Index for ${libraryName}`}
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={status === "building" && !known ? undefined : percent}

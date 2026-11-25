@@ -1,4 +1,4 @@
-import { PanelRequestError, startStandalonePanel, type PanelActivityQuery, type PanelSnapshot } from "./standalonePanel.cjs";
+import { PanelRequestError, startStandalonePanel, type PanelActivityQuery, type PanelLibrarySortIndex, type PanelSnapshot } from "./standalonePanel.cjs";
 import { panelSettings, panelSettingsRevision, settingsPatch, settingsSwitchPatch } from "./standaloneSettings.cjs";
 import { changedSettingFields, createSettingsStore, SettingsValidationError } from "./runtime.cjs";
 
@@ -314,20 +314,25 @@ async function runStandalone(argv: string[], {
     if (state.status === "building") return state.total ? `reading ${state.loaded}/${state.total}` : "reading";
     return "waiting to read";
   };
-  // Advanced Sort reads the items FsBackend already holds, so its index is the library scan.
-  const sortIndexOf = (server: ServerPlan) => {
-    const states = server.libraries
-      .map((library) => backends.get(libraryPathKey(library.path))?.state())
-      .filter((state): state is ReturnType<Backend["state"]> => state !== undefined);
-    const status: "building" | "failed" | "ready" = states.some((state) => state.status === "failed") ? "failed"
-      : states.length && states.every((state) => state.status === "ready") ? "ready"
-      : "building";
-    return {
-      status,
-      loaded: states.reduce((sum, state) => sum + state.loaded, 0),
-      total: states.reduce((sum, state) => sum + state.total, 0),
-    };
-  };
+  // Standalone Advanced Sort uses the items each library scan already holds.
+  function sortIndexesOf(server: ServerPlan): PanelLibrarySortIndex[] {
+    return server.libraries.map(({ name, path }) => {
+      const library = { id: idOf(path), name };
+      const key = libraryPathKey(path);
+      const state = backends.get(key)?.state();
+      if (!state) {
+        const reason = libraryState.get(key) === "not shared"
+          ? "Library protection excludes this folder."
+          : "Library folder or metadata.json was not found.";
+        return { ...library, status: "unavailable", reason };
+      }
+      if (state.status === "idle") return { ...library, status: "waiting" };
+      if (state.status === "failed") {
+        return { ...library, status: "failed", reason: state.error || "The library could not be read." };
+      }
+      return { ...library, status: state.status, loaded: state.loaded, total: state.total };
+    });
+  }
   const statusTable = () => {
     const rows: string[][] = [];
     for (const [index, server] of config.servers.entries()) {
@@ -408,7 +413,7 @@ async function runStandalone(argv: string[], {
         httpsEnabled: server.httpsEnabled,
         publicNetwork: !isLoopback(server.host),
         libraries: server.libraries.map(({ name, path }) => ({ name, status: describeLibrary(path) })),
-        sortIndex: entry && config.common.experimentalSort ? sortIndexOf(server) : undefined,
+        sortIndexes: entry && config.common.experimentalSort ? sortIndexesOf(server) : undefined,
       };
     }),
   });

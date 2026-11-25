@@ -7,6 +7,7 @@ import type { PanelServer, PanelSnapshot } from "../service/standalonePanel.cjs"
 import type { PanelSettings, PanelSettingSwitch } from "../service/standaloneSettings.cjs";
 import type { AuthUser, LibraryCandidate, PluginSettings, SettingsTab, SharedLibrary } from "../types";
 import { errorMessage, PanelApiError, postJson, request } from "./panelApi";
+import { LibrarySortIndexes } from "./LibrarySortIndexes";
 
 function StandaloneServerStatus({ server, autoStart, pending, busy, onPower, onSwitch }: {
   server: PanelServer;
@@ -50,7 +51,7 @@ function StandaloneServerStatus({ server, autoStart, pending, busy, onPower, onS
         serverState={server.state}
         settings={{ autoStart }}
         settingsLocked={server.state === "running"}
-        sortIndex={server.state === "running" ? server.sortIndex : undefined}
+        sortIndexDetails={server.sortIndexes && <LibrarySortIndexes libraries={server.sortIndexes} />}
         statusLabel={pending || { running: "Running", stopped: "Stopped", error: "Error" }[server.state]}
         statusPending={pending !== null}
         url={server.url}
