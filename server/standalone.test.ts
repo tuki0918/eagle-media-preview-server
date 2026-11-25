@@ -722,12 +722,16 @@ test("both management panels read and export shared history while clearing only 
   const dir = await workspace();
   const { createAccessLog, defaultAccessLogPath } = require("../dist/.generated/plugin-service/accessLog.cjs");
   const { createServerManager } = require("../dist/.generated/plugin-service/runtime.cjs");
-  const pluginLog = createAccessLog({ filePath: defaultAccessLogPath("plugin", dir) });
+  const pluginLogPath = defaultAccessLogPath("plugin", dir);
+  assert.equal(pluginLogPath, join(dir, "access-log.jsonl"));
+  const pluginLog = createAccessLog({ filePath: pluginLogPath });
+  const legacyPluginLog = createAccessLog({ filePath: join(dir, "plugin-access-log.jsonl") });
   const standaloneLog = createAccessLog({ filePath: defaultAccessLogPath("standalone", dir) });
   const at = Date.now();
   pluginLog.record({ at: at - 100, type: "view", event: "view", ip: "192.0.2.1", user: "plugin-user" });
+  legacyPluginLog.record({ at: at - 200, type: "view", event: "view", ip: "192.0.2.4", user: "legacy-user" });
   standaloneLog.record({ at, type: "view", event: "view", ip: "192.0.2.2", user: "standalone-user" });
-  await Promise.all([pluginLog.flush(), standaloneLog.flush()]);
+  await Promise.all([pluginLog.flush(), legacyPluginLog.flush(), standaloneLog.flush()]);
   const manager = createServerManager({ accessLog: pluginLog });
   await writeFile(join(dir, "index.html"), "<title>Media Preview Server</title>");
   await writeFile(join(dir, "app.js"), "");
@@ -740,27 +744,28 @@ test("both management panels read and export shared history while clearing only 
     const recentSources = (summary: { recent: { source: string }[] }) => summary.recent.map((entry) => entry.source);
     const plugin = await manager.accessLogSummary({ range: "24h" });
     const standalone = await (await request("/api/activity")).json();
-    assert.deepEqual(recentSources(plugin), ["standalone", "plugin"]);
-    assert.deepEqual(recentSources(standalone), ["standalone", "plugin"]);
-    assert.equal(plugin.totals.view, 2);
-    assert.equal(standalone.totals.view, 2);
+    assert.deepEqual(recentSources(plugin), ["standalone", "plugin", "plugin"]);
+    assert.deepEqual(recentSources(standalone), ["standalone", "plugin", "plugin"]);
+    assert.equal(plugin.totals.view, 3);
+    assert.equal(standalone.totals.view, 3);
     assert.equal(plugin.activeClients, 1);
     assert.equal(standalone.activeClients, 0);
 
     pluginLog.record({ at: at + 100, type: "auth", event: "login_success", ip: "192.0.2.3" });
     await pluginLog.flush();
     const updated = await (await request("/api/activity?search=Eagle%20plugin")).json();
-    assert.deepEqual(recentSources(updated), ["plugin", "plugin"]);
+    assert.deepEqual(recentSources(updated), ["plugin", "plugin", "plugin"]);
     assert.equal(updated.recent[0].event, "login_success");
 
     const exported = await (await request("/api/activity/export")).text();
     assert.match(exported, /status,source\n/);
     assert.match(exported, /plugin-user.*plugin\n/);
+    assert.match(exported, /legacy-user.*plugin\n/);
     assert.match(exported, /standalone-user.*standalone\n/);
     const pluginExportPath = join(dir, "export.jsonl");
     await manager.exportAccessLog(pluginExportPath, "jsonl");
     const exportedEvents = (await readFile(pluginExportPath, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
-    assert.deepEqual(exportedEvents.map((entry) => entry.source), ["plugin", "standalone", "plugin"]);
+    assert.deepEqual(exportedEvents.map((entry) => entry.source), ["plugin", "plugin", "standalone", "plugin"]);
 
     await manager.clearAccessLog();
     await pluginLog.flush();
@@ -768,6 +773,7 @@ test("both management panels read and export shared history while clearing only 
     assert.equal(afterPluginClear.totals.view, 1);
     assert.ok(afterPluginClear.recent.some((entry: { user?: string }) => entry.user === "standalone-user"));
     assert.ok(!afterPluginClear.recent.some((entry: { user?: string }) => entry.user === "plugin-user"));
+    assert.ok(!afterPluginClear.recent.some((entry: { user?: string }) => entry.user === "legacy-user"));
 
     assert.equal((await request("/api/activity/clear", "POST")).status, 200);
     const afterStandaloneClear = await (await request("/api/activity")).json();

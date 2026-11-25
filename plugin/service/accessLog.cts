@@ -99,7 +99,7 @@ function entryMatchesSearch(entry: AccessLogEntry, term: string, eventKeys: Set<
 }
 
 function defaultAccessLogPath(source: AccessLogSource = "plugin", directory = process.env.EAGLE_MEDIA_PREVIEW_LOG_DIR || join(homedir(), ".eagle-media-preview-server")) {
-  return join(directory, source === "plugin" ? "plugin-access-log.jsonl" : "standalone-access-log.jsonl");
+  return join(directory, source === "plugin" ? "access-log.jsonl" : "standalone-access-log.jsonl");
 }
 
 function legacyPluginAccessLogPath() {
@@ -456,8 +456,11 @@ function parseEntry(line: string): AccessLogEntry | null {
 // Merge on read so the other process keeps sole responsibility for its log and its rotation.
 function createAccessLogHistory(local: ReturnType<typeof createAccessLog>, source: AccessLogSource) {
   const peerSource = source === "plugin" ? "standalone" : "plugin";
-  const peer = defaultAccessLogPath(peerSource, dirname(local.filePath));
-  const legacy = local.filePath === defaultAccessLogPath(source) ? legacyPluginAccessLogPath() : undefined;
+  const directory = dirname(local.filePath);
+  const peer = defaultAccessLogPath(peerSource, directory);
+  const legacyPaths = [join(directory, "plugin-access-log.jsonl")];
+  if (local.filePath === defaultAccessLogPath(source)) legacyPaths.push(legacyPluginAccessLogPath());
+  const legacy = legacyPaths.filter((path) => resolve(path) !== resolve(local.filePath));
 
   async function readHistory() {
     const cutoff = Date.now() - DEFAULT_MAX_AGE_MS;
@@ -472,10 +475,10 @@ function createAccessLogHistory(local: ReturnType<typeof createAccessLog>, sourc
     const [, peerEntries, legacyEntries] = await Promise.all([
       local.load(),
       read(peer, peerSource),
-      legacy ? read(legacy, "plugin") : [],
+      Promise.all(legacy.map((path) => read(path, "plugin"))),
     ]);
     const ownEntries = local.entries({ limit: Number.MAX_SAFE_INTEGER }).reverse().map((entry) => ({ ...entry, source }));
-    return [...ownEntries, ...peerEntries, ...legacyEntries]
+    return [...ownEntries, ...peerEntries, ...legacyEntries.flat()]
       .sort((a, b) => a.at - b.at || Number(a.source === "standalone") - Number(b.source === "standalone"));
   }
 
@@ -486,7 +489,7 @@ function createAccessLogHistory(local: ReturnType<typeof createAccessLog>, sourc
     },
     entries: readHistory,
     async clear() {
-      if (source === "plugin" && legacy) await rm(legacy, { force: true });
+      if (source === "plugin") await Promise.all(legacy.map((path) => rm(path, { force: true })));
       await local.clear();
     },
   };

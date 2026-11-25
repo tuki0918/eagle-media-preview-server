@@ -186,7 +186,7 @@ Block a device from its row or by entering an address or CIDR range under **Bloc
 
 ![](docs/server_panel_activity_blocked.png)
 
-The log is kept in your computer's temporary folder for up to 7 days and can be exported as CSV.
+Both management panels show up to 7 days of access history and can export it as CSV. By default, the Eagle plugin writes to `~/.eagle-media-preview-server/access-log.jsonl` and the standalone server writes to `~/.eagle-media-preview-server/standalone-access-log.jsonl`. Recent entries in the plugin's previous log files are also visible in Activity.
 
 </details>
 
