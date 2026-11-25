@@ -40,9 +40,13 @@ Optional:
 - Public Network: allow access from other devices on the network.
 - HTTPS: use TLS when certificate paths are set.
 - Multiple users with Viewer, Editor, Editor + Upload, and Admin roles.
-- File Upload (experimental): add files to the library open in Eagle, for Admin and Editor + Upload users.
-- Advanced Sort (experimental): sort the viewer by date added, created, or modified, name, type, file size, resolution, rating, or duration.
 - Library protection: share only the Eagle libraries you select.
+
+Experimental:
+
+- File Upload: add files to the library open in Eagle, for Admin and Editor + Upload users.
+- Advanced Sort: sort the viewer by date added, created, or modified, name, type, file size, resolution, rating, or duration.
+- Standalone Server: browse one or more Eagle libraries in read-only mode without running Eagle. [Setup and usage](#standalone-server-experimental).
 
 <details>
 <summary><strong>PWA Installation</strong></summary>
