@@ -8,6 +8,8 @@ import { resolve } from "node:path";
 const { accessLogCsv } = require("./accessLog.cjs");
 const { serveStatic, securityHeaders } = require("./static.cjs");
 
+export const DEFAULT_PANEL_PORT = 41531;
+
 const panelDir = resolve(__dirname, "../standalone-panel");
 const pluginDir = resolve(__dirname, "../../plugin");
 const publicDir = resolve(__dirname, "../../public");
@@ -99,7 +101,10 @@ async function readPayload(req: IncomingMessage): Promise<Record<string, unknown
   throw new PanelRequestError("Expected a JSON object", 400);
 }
 
-export async function startStandalonePanel(controls: PanelControls, assets = panelDir) {
+export async function startStandalonePanel(controls: PanelControls, {
+  assets = panelDir,
+  port = DEFAULT_PANEL_PORT,
+}: { assets?: string; port?: number } = {}) {
   const staticFiles = new Map([
     ["/", assets],
     ["/app.js", assets],
@@ -193,19 +198,27 @@ export async function startStandalonePanel(controls: PanelControls, assets = pan
       }
     });
   });
-  await new Promise<void>((resolveListen, rejectListen) => {
-    server.once("error", rejectListen);
-    server.listen(0, host, () => {
-      server.off("error", rejectListen);
-      resolveListen();
+  try {
+    await new Promise<void>((resolveListen, rejectListen) => {
+      server.once("error", rejectListen);
+      server.listen(port, host, () => {
+        server.off("error", rejectListen);
+        resolveListen();
+      });
     });
-  });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EADDRINUSE") {
+      throw new Error(`Management panel port ${port} is already in use. Choose another port with --panel-port.`, { cause: error });
+    }
+    throw error;
+  }
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Unable to determine the management panel's address");
   authority = `${host}:${address.port}`;
   origin = `http://${authority}`;
 
   return {
+    port: address.port,
     url: `${origin}/#${token}`,
     stop: () => new Promise<void>((resolveClose) => {
       server.close(() => resolveClose());

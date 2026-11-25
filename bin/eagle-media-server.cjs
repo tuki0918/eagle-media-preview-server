@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 // Serves an Eagle library to the viewer without Eagle. Build first: npm run build
-const { spawn } = require("node:child_process");
 const { join } = require("path");
 
 let runStandalone;
@@ -21,14 +20,6 @@ runStandalone(process.argv.slice(2)).then((running) => {
   };
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
-  if (running.panelUrl) {
-    const opener = { darwin: "open", linux: "xdg-open", win32: "explorer.exe" }[process.platform];
-    if (opener) {
-      const child = spawn(opener, [running.panelUrl], { stdio: "ignore", windowsHide: true });
-      child.on("error", () => {});
-      child.unref();
-    }
-  }
 }, (error) => {
   console.error(`eagle-media-server: ${error instanceof Error ? error.message : String(error)}`);
   process.exit(1);

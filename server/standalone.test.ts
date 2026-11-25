@@ -67,6 +67,12 @@ test("parses the serve options and the logs command", () => {
   });
   assert.deepEqual(parseArgs(["logs", "-f", "-n", "10"]), { accessLogPath: "", command: "logs", configPath: "", follow: true, help: false, lines: 10, settingsPath: "" });
   assert.equal(parseArgs(["--panel"]).panel, true);
+  assert.equal(parseArgs(["--panel", "--panel-port", "0"]).panelPort, 0);
+  assert.equal(parseArgs(["--panel-port=41080", "--panel"]).panelPort, 41080);
+  assert.throws(() => parseArgs(["--panel-port", "41080"]), /--panel-port requires --panel/);
+  for (const port of ["", "65536", "-1", "4.5"]) {
+    assert.throws(() => parseArgs(["--panel", `--panel-port=${port}`]), /--panel-port must be an integer from 0-65535/);
+  }
   assert.throws(() => parseArgs(["logs", "--panel"]), /Unknown option: --panel/);
   assert.throws(() => parseArgs(["--library"]), /--library needs a value/);
   assert.throws(() => parseArgs(["logs", "--library", "/a"]), /Unknown option: --library/);
@@ -289,7 +295,7 @@ test("the local management panel stays available through listener failures and s
 
   let stop: (() => Promise<void>) | undefined;
   try {
-    const running = await runStandalone(["--panel"], {
+    const running = await runStandalone(["--panel", "--panel-port", "0"], {
       log: (line: string) => lines.push(line),
       panelAssets: dir,
       panelStateDir: dir,
@@ -387,7 +393,7 @@ test("the management panel saves shared settings, preserves editable drafts and 
   const before = await readFile(settingsPath, "utf8");
   await writeFile(join(dir, "index.html"), "<title>Media Preview Server</title>");
   await writeFile(join(dir, "app.js"), "");
-  const running = await runStandalone(["--panel"], { log: () => {}, panelAssets: dir, panelStateDir: dir });
+  const running = await runStandalone(["--panel", "--panel-port", "0"], { log: () => {}, panelAssets: dir, panelStateDir: dir });
   try {
     const url = new URL(running.panelUrl);
     const authorization = { Authorization: `Bearer ${url.hash.slice(1)}` };
@@ -508,7 +514,7 @@ test("the management panel saves shared settings, preserves editable drafts and 
   }
 });
 
-test("panel mode takes no CLI options and can configure its first library", async () => {
+test("panel mode rejects viewer CLI options and can configure its first library", async () => {
   const dir = await workspace();
   const library = await createLibrary(dir, "Photos");
   await writeFile(join(dir, "index.html"), "<title>Media Preview Server</title>");
@@ -518,9 +524,9 @@ test("panel mode takes no CLI options and can configure its first library", asyn
     ["--config", "standalone.json"], ["--library", library], ["--settings", "other.json"],
     ["--access-log", "other.jsonl"], ["-f"], ["--port", "0"],
   ]) {
-    await assert.rejects(runStandalone(["--panel", ...flags], options), /--panel must be used on its own/);
+    await assert.rejects(runStandalone(["--panel", ...flags], options), /--panel can only be combined with --panel-port/);
   }
-  const running = await runStandalone(["--panel"], options);
+  const running = await runStandalone(["--panel", "--panel-port", "0"], options);
   try {
     const url = new URL(running.panelUrl);
     const headers = { Authorization: `Bearer ${url.hash.slice(1)}`, Origin: url.origin };
@@ -565,7 +571,7 @@ test("panel mode starts the viewer with the CLI only when Auto start is on", asy
   await writeFile(join(dir, "app.js"), "");
   const options = { log: () => {}, panelAssets: dir, panelStateDir: dir };
 
-  const first = await runStandalone(["--panel"], options);
+  const first = await runStandalone(["--panel", "--panel-port", "0"], options);
   try {
     const url = new URL(first.panelUrl);
     const headers = { Authorization: `Bearer ${url.hash.slice(1)}`, Origin: url.origin };
@@ -595,7 +601,7 @@ test("panel mode starts the viewer with the CLI only when Auto start is on", asy
     await first.stop();
   }
 
-  const second = await runStandalone(["--panel"], options);
+  const second = await runStandalone(["--panel", "--panel-port", "0"], options);
   try {
     assert.equal(second.servers.length, 1);
   } finally {
@@ -628,7 +634,7 @@ test("the standalone panel reports Advanced Sort progress separately for each li
   await writeFile(join(dir, "index.html"), "<title>Media Preview Server</title>");
   await writeFile(join(dir, "app.js"), "");
 
-  const running = await runStandalone(["--panel"], { log: () => {}, panelAssets: dir, panelStateDir: dir });
+  const running = await runStandalone(["--panel", "--panel-port", "0"], { log: () => {}, panelAssets: dir, panelStateDir: dir });
   try {
     await running.ready;
     const url = new URL(running.panelUrl);
@@ -651,5 +657,63 @@ test("the standalone panel reports Advanced Sort progress separately for each li
     assert.equal((await stopped.json()).servers[0].sortIndexes, undefined);
   } finally {
     await running.stop();
+  }
+});
+
+test("the panel keeps its chosen port, rotates its token, and reports port conflicts", async () => {
+  const dir = await workspace();
+  const library = await createLibrary(dir, "Photos");
+  const reservation = createServer();
+  await new Promise<void>((resolve, reject) => {
+    reservation.once("error", reject);
+    reservation.listen(0, "127.0.0.1", resolve);
+  });
+  const port = (reservation.address() as { port: number }).port;
+  const args = ["--panel", "--panel-port", String(port)];
+  const options = { log: () => {}, panelAssets: dir, panelStateDir: dir };
+
+  try {
+    await writeSettings(dir, { port, autoStart: true, sharedLibraries: [{ path: library, name: "Photos" }] });
+    await writeFile(join(dir, "index.html"), "<title>Media Preview Server</title>");
+    await writeFile(join(dir, "app.js"), "");
+    await assert.rejects(
+      runStandalone(args, options),
+      new RegExp(`Management panel port ${port} is already in use.*--panel-port`),
+    );
+  } finally {
+    await new Promise<void>((resolve) => reservation.close(() => resolve()));
+  }
+
+  const first = await runStandalone(args, options);
+  const firstUrl = new URL(first.panelUrl);
+  try {
+    assert.equal(firstUrl.hostname, "127.0.0.1");
+    assert.equal(firstUrl.port, String(port));
+    const status = await fetch(firstUrl.origin + "/api/status", {
+      headers: { Authorization: `Bearer ${firstUrl.hash.slice(1)}` },
+    });
+    assert.equal(status.status, 200);
+    const { servers } = await status.json();
+    assert.equal(servers[0].state, "error");
+    assert.match(servers[0].error, /Choose a different viewer port/);
+  } finally {
+    await first.stop();
+  }
+
+  const second = await runStandalone(args, options);
+  try {
+    const secondUrl = new URL(second.panelUrl);
+    assert.equal(secondUrl.origin, firstUrl.origin);
+    assert.notEqual(secondUrl.hash, firstUrl.hash);
+    const rejected = await fetch(secondUrl.origin + "/api/status", {
+      headers: { Authorization: `Bearer ${firstUrl.hash.slice(1)}` },
+    });
+    assert.equal(rejected.status, 401);
+    const authorized = await fetch(secondUrl.origin + "/api/status", {
+      headers: { Authorization: `Bearer ${secondUrl.hash.slice(1)}` },
+    });
+    assert.equal(authorized.status, 200);
+  } finally {
+    await second.stop();
   }
 });

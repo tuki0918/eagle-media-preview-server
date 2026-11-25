@@ -40,7 +40,7 @@ Serves libraries to the viewer without Eagle, read only. See [docs/design/standa
 npm run build
 npm run standalone                                       # the servers in standalone.json
 npm run standalone -- --library /path/to/Photos.library  # or one server, from the command line
-npm run standalone -- --panel                            # open the local management panel
+npm run standalone -- --panel                            # print the local management URL
 npm run standalone -- -f                                 # and stream the access log here
 npm run standalone -- logs -f                            # or follow it from another terminal
 ```
@@ -59,7 +59,11 @@ It reads the plugin's `~/.eagle-media-preview-server/settings.json` (read only w
 
 A server whose port is taken (the plugin is running in Eagle, say) is skipped; the others run. Advanced Sort is on or off as in the plugin (`experimentalSort` in settings.json). The access log goes to `~/.eagle-media-preview-server/standalone-access-log.jsonl`. Run `npm run standalone -- --help` for every option. Options go after `--`, which passes them on to `bin/eagle-media-server.cjs`.
 
-Run `--panel` on its own. The panel uses the default `settings.json` and its shared library list. CLI options such as `--config`, `--library`, `--settings` and `-f` are for terminal mode. The terminal prints the management URL and tries to open it in the default browser. Open the printed URL on the same machine when the browser does not open automatically. The panel listens on `127.0.0.1` on a separate port. The URL carries a per-run token and appears in the CLI output and in the arguments passed to the browser launcher. Keep any saved output private and use `--panel` on machines where you trust users who can inspect process arguments.
+Run `--panel` to start the local management panel. The panel uses the default `settings.json` and its shared library list. CLI options such as `--config`, `--library`, `--settings` and `-f` are for terminal mode.
+
+The panel listens only on `127.0.0.1:41531` by default, independently of the viewer's port and Public Network setting. Set another management port with `--panel --panel-port 41080`, or pass `--panel-port 0` to use an available port. If both servers are configured for the same port, the management panel starts first so you can change the viewer port in **Settings → General**.
+
+Open the complete URL printed in the terminal on the machine running the CLI. The browser stores the token after `#` for the current tab and uses it to authorize management requests. Each CLI run generates a new token. Keep the complete URL and any saved terminal output private.
 
 Start or stop the viewer server and check its endpoint and QR code in the panel. **Auto start** decides whether the viewer server starts with the CLI: on starts it right away, off leaves it stopped until you start it in the panel. It is the plugin's `autoStart` in `settings.json`, so it also applies when Eagle launches the plugin. The switches under **Server Status** save Auto start, Password protection, Public Network, and HTTPS immediately. Changing Auto start doesn't restart a running viewer; the other switches restart it to apply the change. While the viewer runs, the Settings form is locked and, with Advanced Sort on, Server Status shows the library scan as the Advanced Sort Index. Save user passwords in **Settings → Access** and certificate and key paths in **Settings → Security** before enabling their switches. The file icon in the panel header shows the settings file in use.
 

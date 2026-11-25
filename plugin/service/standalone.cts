@@ -1,4 +1,4 @@
-import { PanelRequestError, startStandalonePanel, type PanelActivityQuery, type PanelLibrarySortIndex, type PanelSnapshot } from "./standalonePanel.cjs";
+import { DEFAULT_PANEL_PORT, PanelRequestError, startStandalonePanel, type PanelActivityQuery, type PanelLibrarySortIndex, type PanelSnapshot } from "./standalonePanel.cjs";
 import { panelSettings, panelSettingsRevision, settingsPatch, settingsSwitchPatch } from "./standaloneSettings.cjs";
 import { changedSettingFields, createSettingsStore, SettingsValidationError } from "./runtime.cjs";
 
@@ -27,6 +27,7 @@ interface ServeOptions {
   host: string;
   libraries: string[];
   panel: boolean;
+  panelPort?: number;
   port: string;
   settingsPath: string;
 }
@@ -79,7 +80,8 @@ may change where each one listens:
 A server whose port is taken (by the plugin, say) is skipped; the others run.
 
 Options:
-  --panel                   Open the local management panel using settings.json (use on its own)
+  --panel                   Start the local management panel and print its URL
+  --panel-port <number>     With --panel: the management port (default: ${DEFAULT_PANEL_PORT}; 0 for any free one)
   --library <path>          Serve this library; repeat for more. Replaces standalone.json's servers
   --port <number>           With --library: the port (default: settings.json's; 0 for any free one)
   --host <address>          With --library: the address to listen on (default: settings.json's)
@@ -99,9 +101,11 @@ function parseArgs(argv: string[]): LogsOptions | ServeOptions {
   const serve: ServeOptions = { ...common, command: "serve", allowAnonymousLan: false, allowUnknownFormat: false, host: "", libraries: [], panel: false, port: "" };
   const logs: LogsOptions = { ...common, command: "logs", lines: 50 };
   const target = command === "logs" ? logs : serve;
+  const flags = new Set<string>();
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     const [flag, inline] = arg.startsWith("--") && arg.includes("=") ? [arg.slice(0, arg.indexOf("=")), arg.slice(arg.indexOf("=") + 1)] : [arg, undefined];
+    flags.add(flag);
     const value = () => {
       if (inline !== undefined) return inline;
       const next = args[index + 1];
@@ -120,11 +124,21 @@ function parseArgs(argv: string[]): LogsOptions | ServeOptions {
       logs.lines = lines;
     } else if (command === "serve" && flag === "--library") serve.libraries.push(value());
     else if (command === "serve" && flag === "--panel" && inline === undefined) serve.panel = true;
-    else if (command === "serve" && flag === "--port") serve.port = value();
+    else if (command === "serve" && flag === "--panel-port") {
+      const port = value();
+      if (!/^\d+$/.test(port) || Number(port) > 65535) throw new Error("--panel-port must be an integer from 0-65535");
+      serve.panelPort = Number(port);
+    } else if (command === "serve" && flag === "--port") serve.port = value();
     else if (command === "serve" && flag === "--host") serve.host = value();
     else if (command === "serve" && flag === "--allow-anonymous-lan") serve.allowAnonymousLan = true;
     else if (command === "serve" && flag === "--allow-unknown-format") serve.allowUnknownFormat = true;
     else throw new Error(`Unknown option: ${arg}`);
+  }
+  if (command === "serve" && !serve.help) {
+    if (!serve.panel && serve.panelPort !== undefined) throw new Error("--panel-port requires --panel.");
+    if (serve.panel && [...flags].some((flag) => flag !== "--panel" && flag !== "--panel-port")) {
+      throw new Error("--panel can only be combined with --panel-port. Configure libraries and settings in the panel.");
+    }
   }
   return target;
 }
@@ -165,9 +179,6 @@ async function runStandalone(argv: string[], {
     return null;
   }
 
-  if (options.panel && (argv.length !== 1 || argv[0] !== "--panel")) {
-    throw new Error("--panel must be used on its own. Configure libraries and settings in the panel.");
-  }
   const { allowUnknownFormat, panel: panelMode } = options;
   const overrides = {
     allowAnonymousLan: options.allowAnonymousLan,
@@ -196,6 +207,7 @@ async function runStandalone(argv: string[], {
   const libraryState = new Map<string, LibraryStatus>();
   const running = new Map<number, { url: string; viewer: ReturnType<typeof createViewerServer> }>();
   let serverStatus = config.servers.map(() => "stopped");
+  let panel: Awaited<ReturnType<typeof startStandalonePanel>> | undefined;
 
   const accessLogPath = options.accessLogPath ? expandPath(options.accessLogPath)
     : panelMode && panelStateDir ? join(panelStateDir, "standalone-access-log.jsonl")
@@ -245,6 +257,9 @@ async function runStandalone(argv: string[], {
           : "Add a library in Settings to start the server.";
         return;
       }
+      if (panel?.port === server.port) {
+        throw new Error(`The management panel uses port ${server.port}. Choose a different viewer port in Settings → General.`);
+      }
       const viewer = createViewerServer({
         ...config.common,
         accessLog: recorder,
@@ -292,12 +307,15 @@ async function runStandalone(argv: string[], {
 
   // A failed listener doesn't prevent the rest from starting. With --panel, the viewer starts with
   // the CLI only when Auto start is on; otherwise it waits for the panel's power switch.
-  if (!panelMode || config.common.autoStart) {
-    for (const [index, server] of config.servers.entries()) {
-      if (server.libraries.length) await startServer(index);
+  async function startConfiguredServers() {
+    if (!panelMode || config.common.autoStart) {
+      for (const [index, server] of config.servers.entries()) {
+        if (server.libraries.length) await startServer(index);
+      }
     }
+    await releaseUnusedBackends();
   }
-  await releaseUnusedBackends();
+  if (!panelMode) await startConfiguredServers();
 
   const describeLibrary = (path: string) => {
     const key = libraryPathKey(path);
@@ -515,7 +533,6 @@ async function runStandalone(argv: string[], {
     });
   }
 
-  let panel: Awaited<ReturnType<typeof startStandalonePanel>> | undefined;
   try {
     if (panelMode) {
       panel = await startStandalonePanel({
@@ -533,10 +550,14 @@ async function runStandalone(argv: string[], {
           recorder.record({ type: "system", event: "log_cleared", ip: "this computer" });
         },
         exportLog: () => accessLog.entries({ limit: Number.MAX_SAFE_INTEGER }).reverse(),
-      }, panelAssets);
+      }, { assets: panelAssets, port: options.panelPort });
+      await queueCommand(startConfiguredServers);
       log(`Management panel: ${panel.url}`);
     }
   } catch (error) {
+    closing = true;
+    await panel?.stop();
+    await commands;
     await Promise.all([...running.keys()].map(stopServer));
     await releaseUnusedBackends();
     await accessLog.flush();
