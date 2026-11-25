@@ -22,6 +22,7 @@ interface ServerStatusPanelProps {
   urlCopied?: boolean;
   settingsLocked?: boolean;
   onAutoStartChange?: (checked: boolean) => void;
+  autoStartDescription?: string;
   onCopyAccessUrl: () => void;
   onHttpsDocsOpen?: () => void;
   onHttpsEnabledChange?: (checked: boolean) => void;
@@ -47,6 +48,7 @@ export function ServerStatusPanel({
   urlCopied = false,
   settingsLocked = false,
   onAutoStartChange,
+  autoStartDescription = "Start server automatically when app launches.",
   onCopyAccessUrl,
   onHttpsDocsOpen,
   onHttpsEnabledChange,
@@ -89,7 +91,7 @@ export function ServerStatusPanel({
               disabled={formDisabled}
               icon={<PowerIcon />}
               title="Auto start"
-              description="Start server automatically when app launches."
+              description={autoStartDescription}
               onChange={onAutoStartChange}
             /> : null}
             <OptionRow

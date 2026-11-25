@@ -194,6 +194,8 @@ async function resolveStandaloneConfig(cli: CliOverrides = {}, proposed?: Plugin
     // whichever one answers. Without one in settings.json, sign-ins last until this server stops.
     common: {
       authUsers,
+      // With --panel, the viewer starts with the CLI only when this is on (shared with the plugin).
+      autoStart: settings.autoStart,
       blockedAddresses: settings.blockedAddresses,
       // Advanced Sort is on or off as in the plugin (settings.json's experimentalSort).
       experimentalSort: settings.experimentalSort,

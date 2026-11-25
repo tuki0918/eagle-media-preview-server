@@ -200,10 +200,10 @@ function App() {
             <summary className="grid h-8 w-8 cursor-pointer list-none place-items-center rounded-lg text-[#555b65] hover:bg-[#ececef] [&::-webkit-details-marker]:hidden" aria-label="Configuration source" title="Configuration source">
               <FileTextIcon className="h-4 w-4" />
             </summary>
-            <div className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-1.75rem)] rounded-xl border border-[#e6e6e9] bg-white p-3 text-[12px] shadow-lg">
-              <p className="m-0 font-semibold">Settings file</p>
-              <p className="mb-2 mt-1 break-all text-[#555b65]">{snapshot.settingsPath}</p>
-              <p className="m-0 text-[#555b65]">The server uses the shared libraries in this file.</p>
+            <div className="absolute right-0 top-full mt-2 grid w-80 max-w-[calc(100vw-1.75rem)] gap-1.5 rounded-xl border border-[#e6e6e9] bg-white p-3 shadow-[0_8px_24px_rgba(16,24,40,0.12)]">
+              <p className="m-0 text-[10.5px] font-semibold uppercase leading-tight tracking-[0.06em] text-[#7a7f88]">Settings file</p>
+              <p className="m-0 select-all break-all rounded-lg bg-[#f4f4f6] px-2.5 py-2 font-mono text-[11px] leading-snug text-[#171717]" title={snapshot.settingsPath}>{snapshot.settingsPath}</p>
+              <p className="m-0 px-0.5 text-[11px] leading-snug text-[#7a808a]">The server uses the shared libraries in this file.</p>
             </div>
           </details>
         )}

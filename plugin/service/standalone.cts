@@ -54,7 +54,7 @@ interface ServerPlan {
 }
 
 interface StandaloneConfig {
-  common: { authUsers: unknown[]; blockedAddresses: Array<{ address: string; addedAt: number }>; experimentalSort: boolean; sessionSecret: string } & Record<string, unknown>;
+  common: { authUsers: unknown[]; autoStart: boolean; blockedAddresses: Array<{ address: string; addedAt: number }>; experimentalSort: boolean; sessionSecret: string } & Record<string, unknown>;
   libraryProtection: Set<string> | null;
   servers: ServerPlan[];
   settingsPath: string;
@@ -290,9 +290,12 @@ async function runStandalone(argv: string[], {
     }
   }
 
-  // A failed listener doesn't prevent the rest from starting.
-  for (const [index, server] of config.servers.entries()) {
-    if (server.libraries.length) await startServer(index);
+  // A failed listener doesn't prevent the rest from starting. With --panel, the viewer starts with
+  // the CLI only when Auto start is on; otherwise it waits for the panel's power switch.
+  if (!panelMode || config.common.autoStart) {
+    for (const [index, server] of config.servers.entries()) {
+      if (server.libraries.length) await startServer(index);
+    }
   }
   await releaseUnusedBackends();
 
@@ -310,6 +313,20 @@ async function runStandalone(argv: string[], {
     if (state.status === "failed") return `can't read: ${state.error}`;
     if (state.status === "building") return state.total ? `reading ${state.loaded}/${state.total}` : "reading";
     return "waiting to read";
+  };
+  // Advanced Sort reads the items FsBackend already holds, so its index is the library scan.
+  const sortIndexOf = (server: ServerPlan) => {
+    const states = server.libraries
+      .map((library) => backends.get(libraryPathKey(library.path))?.state())
+      .filter((state): state is ReturnType<Backend["state"]> => state !== undefined);
+    const status: "building" | "failed" | "ready" = states.some((state) => state.status === "failed") ? "failed"
+      : states.length && states.every((state) => state.status === "ready") ? "ready"
+      : "building";
+    return {
+      status,
+      loaded: states.reduce((sum, state) => sum + state.loaded, 0),
+      total: states.reduce((sum, state) => sum + state.total, 0),
+    };
   };
   const statusTable = () => {
     const rows: string[][] = [];
@@ -391,6 +408,7 @@ async function runStandalone(argv: string[], {
         httpsEnabled: server.httpsEnabled,
         publicNetwork: !isLoopback(server.host),
         libraries: server.libraries.map(({ name, path }) => ({ name, status: describeLibrary(path) })),
+        sortIndex: entry && config.common.experimentalSort ? sortIndexOf(server) : undefined,
       };
     }),
   });
@@ -445,7 +463,8 @@ async function runStandalone(argv: string[], {
         return proposed;
       });
       const fields = changedSettingFields(before, settings);
-      const switchChanged = fields.length > 0
+      // Auto start only matters when the CLI starts, so changing it never restarts the viewer.
+      const switchChanged = fields.some((field) => field !== "autoStart")
         || Boolean(config.common.authUsers.length) !== Boolean(result.common.authUsers.length)
         || config.servers[0].host !== result.servers[0].host
         || config.servers[0].httpsEnabled !== result.servers[0].httpsEnabled;

@@ -5,7 +5,7 @@ const { libraryPathKey } = require("./libraryAccess.cjs");
 const { expandPath } = require("./standaloneConfig.cjs");
 
 type SettingsFields = Pick<PluginSettings,
-  "authEnabled" | "customDomain" | "experimentalSort" | "host" | "httpsCertPath" | "httpsEnabled" |
+  "authEnabled" | "autoStart" | "customDomain" | "experimentalSort" | "host" | "httpsCertPath" | "httpsEnabled" |
   "httpsKeyPath" | "libraryProtectionEnabled" | "port" | "sessionDurationDays" | "sharedLibraries">;
 
 type PanelUser = Omit<PluginSettings["authUsers"][number], "passwordHash"> & { hasPassword: boolean };
@@ -15,7 +15,7 @@ export interface PanelSettings {
   libraries: Array<{ id: string; name: string; path: string; current: false; shared: boolean }>;
 }
 
-const booleanFields = ["authEnabled", "experimentalSort", "httpsEnabled", "libraryProtectionEnabled"] as const;
+const booleanFields = ["authEnabled", "autoStart", "experimentalSort", "httpsEnabled", "libraryProtectionEnabled"] as const;
 const stringFields = ["customDomain", "host", "httpsCertPath", "httpsKeyPath"] as const;
 const numberFields = ["port", "sessionDurationDays"] as const;
 
@@ -56,13 +56,14 @@ function object(value: unknown, message: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-export type PanelSettingSwitch = "authEnabled" | "host" | "httpsEnabled";
+export type PanelSettingSwitch = "authEnabled" | "autoStart" | "host" | "httpsEnabled";
 
 export function settingsSwitchPatch(field: unknown, checked: unknown): SettingsInput {
   if (typeof checked !== "boolean") throw new SettingsValidationError("Switch needs a boolean value");
   switch (field) {
     case "host": return { host: checked ? "0.0.0.0" : "127.0.0.1" };
     case "authEnabled": return { authEnabled: checked };
+    case "autoStart": return { autoStart: checked };
     case "httpsEnabled": return { httpsEnabled: checked };
     default: throw new SettingsValidationError("Unknown settings switch");
   }

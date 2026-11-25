@@ -279,6 +279,7 @@ test("the local management panel stays available through listener failures and s
   const port = (busy.address() as { port: number }).port;
   const settingsPath = await writeSettings(dir, {
     port,
+    autoStart: true,
     sharedLibraries: [{ path: first, name: "Photos" }, { path: second, name: "Work" }],
   });
   const before = await readFile(settingsPath, "utf8");
@@ -546,5 +547,58 @@ test("panel mode takes no CLI options and can configure its first library", asyn
     assert.equal(onDisk.sharedLibraries[0].path, library);
   } finally {
     await running.stop();
+  }
+});
+
+test("panel mode starts the viewer with the CLI only when Auto start is on", async () => {
+  const dir = await workspace();
+  const library = await createLibrary(dir, "Photos");
+  const reservation = createServer();
+  await new Promise<void>((resolve, reject) => {
+    reservation.once("error", reject);
+    reservation.listen(0, "127.0.0.1", resolve);
+  });
+  const port = (reservation.address() as { port: number }).port;
+  await new Promise<void>((resolve) => reservation.close(() => resolve()));
+  await writeSettings(dir, { port, sharedLibraries: [{ path: library, name: "Photos" }] });
+  await writeFile(join(dir, "index.html"), "<title>Media Preview Server</title>");
+  await writeFile(join(dir, "app.js"), "");
+  const options = { log: () => {}, panelAssets: dir, panelStateDir: dir };
+
+  const first = await runStandalone(["--panel"], options);
+  try {
+    const url = new URL(first.panelUrl);
+    const headers = { Authorization: `Bearer ${url.hash.slice(1)}`, Origin: url.origin };
+    const get = (path: string) => fetch(url.origin + path, { headers });
+    const status = await (await get("/api/status")).json();
+    assert.equal(status.servers[0].state, "stopped");
+    assert.equal(first.servers.length, 0);
+
+    const form = await (await get("/api/settings")).json();
+    assert.equal(form.settings.autoStart, false);
+    const started = await (await fetch(url.origin + "/api/servers/0/start", { method: "POST", headers })).json();
+    assert.equal(started.servers[0].state, "running");
+    const before = started.servers[0].url;
+    const switched = await fetch(url.origin + "/api/settings/switch", {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ revision: form.revision, field: "autoStart", checked: true }),
+    });
+    assert.equal(switched.status, 200);
+    const saved = await switched.json();
+    assert.equal(saved.form.settings.autoStart, true);
+    // Turning Auto start on saves it for the next CLI start without restarting the running viewer.
+    assert.equal(saved.snapshot.servers[0].state, "running");
+    assert.equal(saved.snapshot.servers[0].url, before);
+    assert.equal(JSON.parse(await readFile(join(dir, "settings.json"), "utf8")).autoStart, true);
+  } finally {
+    await first.stop();
+  }
+
+  const second = await runStandalone(["--panel"], options);
+  try {
+    assert.equal(second.servers.length, 1);
+  } finally {
+    await second.stop();
   }
 });

@@ -29,6 +29,8 @@ export interface PanelServer {
   httpsEnabled: boolean;
   publicNetwork: boolean;
   libraries: Array<{ name: string; status: string }>;
+  /** The Advanced Sort index across this server's libraries; undefined while sort is off or stopped. */
+  sortIndex?: { loaded: number; status: "building" | "failed" | "ready"; total: number };
 }
 
 type ActivityRange = "1h" | "24h" | "7d";

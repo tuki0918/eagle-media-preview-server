@@ -7,8 +7,9 @@ import type { PanelSettings, PanelSettingSwitch } from "../service/standaloneSet
 import type { AuthUser, LibraryCandidate, PluginSettings, SettingsTab, SharedLibrary } from "../types";
 import { errorMessage, PanelApiError, postJson, request } from "./panelApi";
 
-function StandaloneServerStatus({ server, pending, busy, error, onPower, onSwitch }: {
+function StandaloneServerStatus({ server, autoStart, pending, busy, error, onPower, onSwitch }: {
   server: PanelServer;
+  autoStart?: boolean;
   pending: "Starting" | "Stopping" | "Restarting" | null;
   busy: boolean;
   error: string;
@@ -46,10 +47,15 @@ function StandaloneServerStatus({ server, pending, busy, error, onPower, onSwitc
         publicNetwork={server.publicNetwork}
         qrSrc={qrSrc}
         serverState={server.state}
+        settings={{ autoStart }}
+        settingsLocked={server.state === "running"}
+        sortIndex={server.state === "running" ? server.sortIndex : undefined}
         statusLabel={pending || { running: "Running", stopped: "Stopped", error: "Error" }[server.state]}
         statusPending={pending !== null}
         url={server.url}
         urlCopied={copied}
+        onAutoStartChange={onSwitch && ((checked) => onSwitch("autoStart", checked))}
+        autoStartDescription="Start the server when the CLI starts. When off, start it here."
         onPasswordProtectionChange={onSwitch && ((checked) => onSwitch("authEnabled", checked))}
         onPublicNetworkChange={onSwitch && ((checked) => onSwitch("host", checked))}
         onHttpsEnabledChange={onSwitch && ((checked) => onSwitch("httpsEnabled", checked))}
@@ -93,12 +99,12 @@ export function StandaloneSettings({ server, pending, onPower, onSnapshot }: {
   const [expanded, setExpanded] = useState(true);
   const [libraryPath, setLibraryPath] = useState("");
   const [busy, setBusy] = useState(false);
-  const [switching, setSwitching] = useState(false);
+  const [switching, setSwitching] = useState<PanelSettingSwitch | null>(null);
   const [switchError, setSwitchError] = useState("");
   const [notice, setNotice] = useState<{ message: string; error: boolean } | null>(null);
   const unshared = useRef(new Map<string, SharedLibrary>());
   const running = server.state === "running";
-  const locked = running || pending !== null || busy || switching;
+  const locked = running || pending !== null || busy || switching !== null;
   const users = draft.authUsers || [];
   const shares = draft.sharedLibraries || [];
   const libraries = [...(form?.libraries || [])];
@@ -246,26 +252,27 @@ export function StandaloneSettings({ server, pending, onPower, onSnapshot }: {
       setSwitchError("Save the certificate and key paths in Settings → Security before enabling HTTPS.");
       return;
     }
-    setSwitching(true);
+    setSwitching(field);
     try {
       const saved = await submitSettings("/api/settings/switch", { revision: form.revision, field, checked });
       if (!saved) return;
-      const { authEnabled, host, httpsEnabled } = saved.form.settings;
+      const { authEnabled, autoStart, host, httpsEnabled } = saved.form.settings;
       setForm(saved.form);
-      update({ authEnabled, host, httpsEnabled });
+      update({ authEnabled, autoStart, host, httpsEnabled });
       onSnapshot(saved.snapshot);
     } catch (error) {
       setSwitchError(errorMessage(error));
     } finally {
-      setSwitching(false);
+      setSwitching(null);
     }
   }
 
   const status = (
     <StandaloneServerStatus
       server={server}
-      pending={pending || (switching && running ? "Restarting" : null)}
-      busy={busy || switching}
+      autoStart={form?.settings.autoStart}
+      pending={pending || (switching && switching !== "autoStart" && running ? "Restarting" : null)}
+      busy={busy || switching !== null}
       error={switchError}
       onPower={onPower}
       onSwitch={form ? (field, checked) => void changeSwitch(field, checked) : undefined}
@@ -290,7 +297,7 @@ export function StandaloneSettings({ server, pending, onPower, onSnapshot }: {
         standalone
         authEnabled={Boolean(draft.authEnabled)}
         authUsers={users}
-        busy={busy || switching}
+        busy={busy || switching !== null}
         httpsEnabled={Boolean(draft.httpsEnabled)}
         libraries={{ current: null, items: libraries }}
         libraryOptions={
@@ -307,12 +314,6 @@ export function StandaloneSettings({ server, pending, onPower, onSnapshot }: {
         }
         message={notice?.message || ""}
         messageIsError={Boolean(notice?.error)}
-        generalNote={
-          <div className="grid gap-2 border-b border-[#efeff1] pb-3 text-[12px]">
-            {running ? <p className="m-0 text-[#8a5a00]" role="note">Stop the viewer server to edit detailed settings.</p> : null}
-            <p className="m-0 text-[#5f6670]">These settings are shared with the Eagle plugin. Choose libraries to serve in the Libraries tab.</p>
-          </div>
-        }
         passwordDraftRevision={passwordRevision}
         passwordVisibleByIndex={Object.fromEntries(users.map((user, index) => [index, visible[authUserKey(user)] === true]))}
         serverRunning={running}

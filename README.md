@@ -240,7 +240,7 @@ npm run standalone -- -f
 
 Without `--library`, it runs the servers listed in `~/.eagle-media-preview-server/standalone.json`, or, without that file, serves the libraries the plugin shares. `-f` also prints each access log entry in the terminal as it happens; leave it out to run quietly.
 
-Run `--panel` on its own to open the local management panel in your browser. It uses the default `settings.json` and displays the access log under **Activity**. Start and stop the viewer server from the panel and add libraries under **Settings → Libraries**.
+Run `--panel` on its own to open the local management panel in your browser. It uses the default `settings.json` and displays the access log under **Activity**. Start and stop the viewer server from the panel and add libraries under **Settings → Libraries**. With **Auto start** on, the viewer server starts with the CLI; with it off, start it from the panel. Auto start is the same setting as the plugin's.
 
 ```sh
 npm run standalone -- --panel
