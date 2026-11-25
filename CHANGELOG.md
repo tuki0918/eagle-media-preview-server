@@ -7,6 +7,18 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-11-26
+
+### Added
+
+- Standalone server: an optional management panel. Run `npm run standalone -- --panel` and open the printed URL in a browser on that computer (port `41531` by default; `--panel-port` changes it). It starts and stops the viewer server and edits the settings shared with the plugin.
+
+### Changed
+
+- The plugin's access log moved from the system's temporary folder to `~/.eagle-media-preview-server/access-log.jsonl`, beside the standalone server's.
+- List view: the Annotation and URL columns now come before Created.
+- Improved the UI of the plugin panel.
+
 ## [0.8.0] - 2026-11-14
 
 ### Added
@@ -415,7 +427,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 - Initial release of Eagle Media Preview Server.
 
-[Unreleased]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.7.3...v0.8.0
 [0.7.3]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/tuki0918/eagle-media-preview-server/compare/v0.7.1...v0.7.2
