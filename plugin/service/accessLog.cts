@@ -1,5 +1,5 @@
 const { appendFile, mkdir, readFile, rename, rm, writeFile } = require("fs/promises");
-const { homedir, tmpdir } = require("os");
+const { homedir } = require("os");
 const { dirname, join, resolve } = require("path");
 const { randomUUID } = require("crypto");
 
@@ -100,10 +100,6 @@ function entryMatchesSearch(entry: AccessLogEntry, term: string, eventKeys: Set<
 
 function defaultAccessLogPath(source: AccessLogSource = "plugin", directory = process.env.EAGLE_MEDIA_PREVIEW_LOG_DIR || join(homedir(), ".eagle-media-preview-server")) {
   return join(directory, source === "plugin" ? "access-log.jsonl" : "standalone-access-log.jsonl");
-}
-
-function legacyPluginAccessLogPath() {
-  return join(tmpdir(), "eagle-media-preview-server", "access-log.jsonl");
 }
 
 function createAccessLog({
@@ -456,29 +452,22 @@ function parseEntry(line: string): AccessLogEntry | null {
 // Merge on read so the other process keeps sole responsibility for its log and its rotation.
 function createAccessLogHistory(local: ReturnType<typeof createAccessLog>, source: AccessLogSource) {
   const peerSource = source === "plugin" ? "standalone" : "plugin";
-  const directory = dirname(local.filePath);
-  const peer = defaultAccessLogPath(peerSource, directory);
-  const legacyPaths = [join(directory, "plugin-access-log.jsonl")];
-  if (local.filePath === defaultAccessLogPath(source)) legacyPaths.push(legacyPluginAccessLogPath());
-  const legacy = legacyPaths.filter((path) => resolve(path) !== resolve(local.filePath));
+  const peer = defaultAccessLogPath(peerSource, dirname(local.filePath));
+
+  async function readPeerHistory() {
+    if (resolve(peer) === resolve(local.filePath)) return [];
+    const cutoff = Date.now() - DEFAULT_MAX_AGE_MS;
+    const text: string = await readFile(peer, "utf8").catch(() => "");
+    return text.split("\n").flatMap((line): AccessLogEntry[] => {
+      const entry = parseEntry(line);
+      return entry && entry.at >= cutoff ? [{ ...entry, source: peerSource }] : [];
+    }).slice(-DEFAULT_MAX_ENTRIES);
+  }
 
   async function readHistory() {
-    const cutoff = Date.now() - DEFAULT_MAX_AGE_MS;
-    async function read(path: string, from: AccessLogSource) {
-      if (resolve(path) === resolve(local.filePath)) return [];
-      const text: string = await readFile(path, "utf8").catch(() => "");
-      return text.split("\n").flatMap((line): AccessLogEntry[] => {
-        const entry = parseEntry(line);
-        return entry && entry.at >= cutoff ? [{ ...entry, source: from }] : [];
-      }).slice(-DEFAULT_MAX_ENTRIES);
-    }
-    const [, peerEntries, legacyEntries] = await Promise.all([
-      local.load(),
-      read(peer, peerSource),
-      Promise.all(legacy.map((path) => read(path, "plugin"))),
-    ]);
+    const [, peerEntries] = await Promise.all([local.load(), readPeerHistory()]);
     const ownEntries = local.entries({ limit: Number.MAX_SAFE_INTEGER }).reverse().map((entry) => ({ ...entry, source }));
-    return [...ownEntries, ...peerEntries, ...legacyEntries.flat()]
+    return [...ownEntries, ...peerEntries]
       .sort((a, b) => a.at - b.at || Number(a.source === "standalone") - Number(b.source === "standalone"));
   }
 
@@ -488,10 +477,7 @@ function createAccessLogHistory(local: ReturnType<typeof createAccessLog>, sourc
       return { ...local.summary({ range }, history), recent: local.entries(query, history) };
     },
     entries: readHistory,
-    async clear() {
-      if (source === "plugin") await Promise.all(legacy.map((path) => rm(path, { force: true })));
-      await local.clear();
-    },
+    clear: local.clear,
   };
 }
 
