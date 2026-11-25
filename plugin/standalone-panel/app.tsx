@@ -69,7 +69,7 @@ function Activity({ snapshot, onSnapshot }: { snapshot: PanelSnapshot; onSnapsho
       const url = URL.createObjectURL(await response.blob());
       const link = document.createElement("a");
       link.href = url;
-      link.download = "access-log.csv";
+      link.download = "standalone-access-log.csv";
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (error) {

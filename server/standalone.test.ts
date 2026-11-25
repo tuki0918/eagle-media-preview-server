@@ -749,7 +749,9 @@ test("both management panels display, search, export, and clear only their own a
     assert.deepEqual(recentUsers(await manager.accessLogSummary({ search: "standalone-user" })), []);
     assert.deepEqual(recentUsers(await (await request("/api/activity?search=plugin-user")).json()), []);
 
-    const exported = await (await request("/api/activity/export")).text();
+    const exportResponse = await request("/api/activity/export");
+    assert.equal(exportResponse.headers.get("content-disposition"), 'attachment; filename="standalone-access-log.csv"');
+    const exported = await exportResponse.text();
     assert.match(exported, /status\n/);
     assert.match(exported, /standalone-user/);
     assert.doesNotMatch(exported, /plugin-user/);
