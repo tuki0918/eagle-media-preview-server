@@ -229,7 +229,7 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(uiSource, /value=\{settings\.port \?\? DEFAULT_PORT\}/);
   assert.match(uiSource, /disabled=\{settingsInputDisabled\}/);
   assert.match(uiSource, /flex min-h-9 items-center justify-between gap-3 border-t border-\[#efeff1\] pt-3/);
-  assert.match(uiSource, /<p className=\{`min-w-0 flex-1 [^\n]+aria-live="polite" hidden=\{!message\}>/);
+  assert.match(uiSource, /<p className=\{`m-0 min-w-0 flex-1 [^\n]+aria-live="polite" hidden=\{!message\}>/);
   assert.match(uiSource, /messageIsError \? "text-\[#d92d20\]" : "text-\[#178c35\]"/);
   assert.doesNotMatch(app, /onBlur=\{\(\) => saveSettings\(\)\}\s*\/>\s*<button className=\{`grid h-7 w-7 place-items-center rounded-md \$\{authActionButtonClassName\}`\}/);
   assert.doesNotMatch(app, /passwordDrafts: nextUserPasswords/);
@@ -2233,4 +2233,67 @@ test("the plugin package leaves out the standalone server's own modules, and not
     for (const excluded of standaloneOnly) assert.doesNotMatch(source, new RegExp(`require\\("\\./${excluded}\\.cjs"\\)`), `${name}.cjs requires ${excluded}.cjs`);
   }
   for (const excluded of standaloneOnly) assert.match(viteConfig, new RegExp(`\\b${excluded}\\b`));
+});
+
+test("plugin separates startup and restart alerts from settings save errors", async () => {
+  const bundle = await esbuild({
+    bundle: true,
+    define: { "process.env.NODE_ENV": JSON.stringify("test") },
+    entryPoints: [new URL("./app.tsx", import.meta.url).pathname],
+    format: "iife",
+    platform: "browser",
+    write: false,
+  });
+  const dom = new JSDOM('<!doctype html><div id="root"></div>', {
+    runScripts: "outside-only",
+    url: "file:///tmp/eagle-plugin/plugin/index.html",
+  });
+  const win = dom.window as unknown as Window & { require(id: string): unknown; eval(source: string): void };
+  const stopped = { state: "stopped", port: 41532, settings: { host: "127.0.0.1", port: 41532, authEnabled: false } };
+  const portConflict = { ...stopped, state: "error", lastError: "listen EADDRINUSE: address already in use 0.0.0.0:41532" };
+  let rejectSave = true;
+  let rejectStart = true;
+  let failRestart = false;
+  win.require = (id) => id === "path" ? path : {
+    createServerManager: () => ({
+      init: () => stopped,
+      start: () => rejectStart ? portConflict : { ...stopped, state: "running" },
+      saveSettings() {
+        if (rejectSave) throw new Error("Could not write settings.json");
+        return failRestart ? portConflict : stopped;
+      },
+    }),
+  };
+  try {
+    win.eval(bundle.outputFiles[0].text);
+    const doc = dom.window.document;
+    const submit = () => doc.querySelector<HTMLButtonElement>('form button[type="submit"]')!;
+    const power = () => doc.querySelector<HTMLInputElement>('[aria-label="Start or stop server"] input')!;
+    const banner = () => doc.querySelector<HTMLElement>('[role="alert"]');
+    const footer = () => doc.querySelector('form [aria-live="polite"]')!.textContent || "";
+    await waitFor(() => Boolean(submit() && !submit().disabled));
+
+    submit().click();
+    await waitFor(() => footer().includes("Could not write settings.json"));
+    assert.equal(banner(), null);
+
+    rejectSave = false;
+    power().click();
+    await waitFor(() => Boolean(banner()?.textContent?.includes("Port 41532 is already in use")));
+    assert.match(banner()?.textContent || "", /choose a different port/);
+    assert.equal(banner()?.closest("form"), null);
+    assert.doesNotMatch(footer(), /EADDRINUSE|Port 41532/);
+
+    rejectStart = false;
+    power().click();
+    await waitFor(() => power().checked && !power().disabled);
+    assert.equal(banner(), null);
+
+    failRestart = true;
+    doc.querySelector<HTMLInputElement>('input[aria-label="Public Network"]')!.click();
+    await waitFor(() => Boolean(banner()?.textContent?.includes("Port 41532 is already in use")));
+    assert.doesNotMatch(footer(), /EADDRINUSE|Port 41532/);
+  } finally {
+    dom.window.close();
+  }
 });

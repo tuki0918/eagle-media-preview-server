@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { authUserKey, SettingsForm } from "../components/SettingsForm";
+import { ServerAlert, ServerStartAlert } from "../components/ServerAlert";
 import { ServerStatusPanel } from "../components/ServerStatusPanel";
 import { createQrDataUrl } from "../qrCode";
 import type { PanelServer, PanelSnapshot } from "../service/standalonePanel.cjs";
@@ -7,12 +8,11 @@ import type { PanelSettings, PanelSettingSwitch } from "../service/standaloneSet
 import type { AuthUser, LibraryCandidate, PluginSettings, SettingsTab, SharedLibrary } from "../types";
 import { errorMessage, PanelApiError, postJson, request } from "./panelApi";
 
-function StandaloneServerStatus({ server, autoStart, pending, busy, error, onPower, onSwitch }: {
+function StandaloneServerStatus({ server, autoStart, pending, busy, onPower, onSwitch }: {
   server: PanelServer;
   autoStart?: boolean;
   pending: "Starting" | "Stopping" | "Restarting" | null;
   busy: boolean;
-  error: string;
   onPower(checked: boolean): void;
   onSwitch?: (field: PanelSettingSwitch, checked: boolean) => void;
 }) {
@@ -38,7 +38,8 @@ function StandaloneServerStatus({ server, autoStart, pending, busy, error, onPow
 
   return (
     <>
-      {(error || server.error || copyError) && <p className="m-0 rounded-xl bg-[#fef2f2] px-3 py-2 text-[13px] text-[#b42318]" role="alert">{error || server.error || copyError}</p>}
+      {server.state === "error" && !pending && <ServerStartAlert message={server.error} port={server.port} />}
+      {copyError && <ServerAlert title="Could not copy the endpoint URL" message={copyError} />}
       <ServerStatusPanel
         authEnabled={server.authEnabled}
         formDisabled={pending !== null || busy}
@@ -100,7 +101,6 @@ export function StandaloneSettings({ server, pending, onPower, onSnapshot }: {
   const [libraryPath, setLibraryPath] = useState("");
   const [busy, setBusy] = useState(false);
   const [switching, setSwitching] = useState<PanelSettingSwitch | null>(null);
-  const [switchError, setSwitchError] = useState("");
   const [notice, setNotice] = useState<{ message: string; error: boolean } | null>(null);
   const unshared = useRef(new Map<string, SharedLibrary>());
   const running = server.state === "running";
@@ -121,7 +121,7 @@ export function StandaloneSettings({ server, pending, onPower, onSnapshot }: {
   function applyForm(next: PanelSettings) {
     setForm(next);
     setDraft(next.settings);
-    setSwitchError("");
+    setNotice(null);
     setPasswords({});
     setLibraryPath("");
     setVisible({});
@@ -136,7 +136,6 @@ export function StandaloneSettings({ server, pending, onPower, onSnapshot }: {
       const next: PanelSettings = await response.json();
       if (signal?.aborted) return;
       applyForm(next);
-      setNotice(null);
     } catch (error) {
       if (!signal?.aborted) setNotice({ message: errorMessage(error), error: true });
     } finally {
@@ -235,21 +234,26 @@ export function StandaloneSettings({ server, pending, onPower, onSnapshot }: {
       onSnapshot(saved.snapshot);
       setNotice({ message: "Settings saved. They apply when the viewer starts.", error: false });
     } catch (error) {
-      setNotice({ message: errorMessage(error), error: true });
+      showSettingsError(errorMessage(error));
     } finally {
       setBusy(false);
     }
   }
 
+  function showSettingsError(message: string) {
+    setExpanded(true);
+    setNotice({ message, error: true });
+  }
+
   async function changeSwitch(field: PanelSettingSwitch, checked: boolean) {
     if (!form || pending || busy || switching) return;
-    setSwitchError("");
+    setNotice(null);
     if (checked && field === "authEnabled" && (!form.settings.authUsers.length || form.settings.authUsers.some((user) => !user.hasPassword))) {
-      setSwitchError("Save a password for each user in Settings → Access before enabling password protection.");
+      showSettingsError("Save a password for each user in Settings → Access before enabling password protection.");
       return;
     }
     if (checked && field === "httpsEnabled" && (!form.settings.httpsCertPath || !form.settings.httpsKeyPath)) {
-      setSwitchError("Save the certificate and key paths in Settings → Security before enabling HTTPS.");
+      showSettingsError("Save the certificate and key paths in Settings → Security before enabling HTTPS.");
       return;
     }
     setSwitching(field);
@@ -261,7 +265,7 @@ export function StandaloneSettings({ server, pending, onPower, onSnapshot }: {
       update({ authEnabled, autoStart, host, httpsEnabled });
       onSnapshot(saved.snapshot);
     } catch (error) {
-      setSwitchError(errorMessage(error));
+      showSettingsError(errorMessage(error));
     } finally {
       setSwitching(null);
     }
@@ -273,7 +277,6 @@ export function StandaloneSettings({ server, pending, onPower, onSnapshot }: {
       autoStart={form?.settings.autoStart}
       pending={pending || (switching && switching !== "autoStart" && running ? "Restarting" : null)}
       busy={busy || switching !== null}
-      error={switchError}
       onPower={onPower}
       onSwitch={form ? (field, checked) => void changeSwitch(field, checked) : undefined}
     />

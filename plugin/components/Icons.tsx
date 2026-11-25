@@ -2,6 +2,7 @@ import {
   Activity,
   Ban,
   Check,
+  CircleAlert,
   ChevronDown,
   Copy,
   Download,
@@ -35,6 +36,7 @@ function iconComponent(Icon: LucideIcon, defaultClassName = "h-6 w-6") {
 }
 
 export const ActivityIcon = iconComponent(Activity);
+export const AlertIcon = iconComponent(CircleAlert);
 export const BanIcon = iconComponent(Ban);
 export const CloseIcon = iconComponent(X);
 export const DownloadIcon = iconComponent(Download);

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { AuthUser, LibraryCandidate, LibraryList, PluginSettings, SettingsTab, SharedLibrary, UserRole } from "../types";
-import { ChevronIcon, EyeIcon, EyeOffIcon, FolderOpenIcon, MinusIcon, PlusIcon, RefreshIcon, SettingsIcon, UsersIcon } from "./Icons";
+import { AlertIcon, ChevronIcon, EyeIcon, EyeOffIcon, FolderOpenIcon, MinusIcon, PlusIcon, RefreshIcon, SettingsIcon, UsersIcon } from "./Icons";
 
 interface SettingsFormProps {
   authEnabled: boolean;
@@ -427,8 +427,9 @@ export function SettingsForm({
         </div>
 
         <div className="flex min-h-9 items-center justify-between gap-3 border-t border-[#efeff1] pt-3">
-          <p className={`min-w-0 flex-1 px-0.5 text-[10px] ${standalone ? "break-words" : "truncate"} ${messageIsError ? "text-[#d92d20]" : "text-[#178c35]"}`} aria-live="polite" hidden={!message}>
-            {message}
+          <p className={`m-0 min-w-0 flex-1 items-start gap-1.5 px-0.5 text-[11px] leading-snug ${messageIsError ? "text-[#d92d20]" : "text-[#178c35]"} ${message ? "flex" : ""}`} aria-live="polite" hidden={!message}>
+            {messageIsError && <AlertIcon className="h-3.5 w-3.5 shrink-0" />}
+            <span className="min-w-0 break-words">{message}</span>
           </p>
           <button className={`ml-auto inline-flex h-8 items-center rounded-full px-4 text-[12px] font-semibold ${primaryButtonClassName}`} type="submit" disabled={settingsInputDisabled}>
             Save settings

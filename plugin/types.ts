@@ -80,6 +80,7 @@ export interface SortIndexStatus {
 
 export interface PluginStatus {
   lastError?: string;
+  port?: number;
   /** Present only while the server runs with Advanced Sort on. */
   sortIndex?: SortIndexStatus | null;
   settings?: PluginSettings;

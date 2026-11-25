@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { AccessLogPanel, accessLogSearchKeys } from "../components/AccessLogPanel";
+import { ServerAlert, ServerStartAlert } from "../components/ServerAlert";
 import { FileTextIcon } from "../components/Icons";
 import type { PanelSnapshot } from "../service/standalonePanel.cjs";
 import type { AccessLogEventFilter, AccessLogFilter, AccessLogRange, AccessLogSummary } from "../types";
@@ -136,7 +137,7 @@ function Activity({ snapshot, onSnapshot }: { snapshot: PanelSnapshot; onSnapsho
 function App() {
   const [snapshot, setSnapshot] = useState<PanelSnapshot | null>(null);
   const [pending, setPending] = useState<"Starting" | "Stopping" | null>(null);
-  const [statusError, setStatusError] = useState("");
+  const [statusError, setStatusError] = useState<{ action: "start" | "stop" | "load"; message: string } | null>(null);
   const statusRequest = useRef<AbortController | null>(null);
   const powerPending = useRef(false);
   const server = snapshot?.servers[0];
@@ -151,9 +152,9 @@ function App() {
         const next = await response.json();
         if (controller.signal.aborted) return;
         setSnapshot(next);
-        setStatusError("");
+        setStatusError((current) => current?.action === "load" ? null : current);
       } catch (error) {
-        if (!controller.signal.aborted) setStatusError(errorMessage(error));
+        if (!controller.signal.aborted) setStatusError({ action: "load", message: errorMessage(error) });
       } finally {
         if (statusRequest.current === controller) statusRequest.current = null;
       }
@@ -178,12 +179,12 @@ function App() {
     powerPending.current = true;
     statusRequest.current?.abort();
     setPending(checked ? "Starting" : "Stopping");
-    setStatusError("");
+    setStatusError(null);
     try {
       const response = await request(`/api/servers/${server.index}/${checked ? "start" : "stop"}`, { method: "POST" });
       setSnapshot(await response.json());
     } catch (error) {
-      setStatusError(errorMessage(error));
+      setStatusError({ action: checked ? "start" : "stop", message: errorMessage(error) });
     } finally {
       powerPending.current = false;
       setPending(null);
@@ -209,7 +210,9 @@ function App() {
         )}
       </header>
       <div className="mx-auto grid max-w-4xl gap-3 p-3">
-        {statusError && <p className="m-0 rounded-xl bg-[#fef2f2] px-3 py-2 text-[13px] text-[#b42318]" role="alert">{statusError}</p>}
+        {statusError && (statusError.action === "start"
+          ? <ServerStartAlert message={statusError.message} port={server?.port} />
+          : <ServerAlert title={statusError.action === "stop" ? "Could not stop the server" : "Could not load server status"} message={statusError.message} />)}
         {!snapshot && !statusError && <p role="status">Connecting to the standalone server…</p>}
         {snapshot && server && (
           <>

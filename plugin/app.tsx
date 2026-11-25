@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { createQrDataUrl } from "./qrCode";
 import { AccessLogPanel, accessLogSearchKeys, RECENT_EVENT_LIMIT } from "./components/AccessLogPanel";
 import { CloseIcon } from "./components/Icons";
+import { ServerAlert, ServerStartAlert } from "./components/ServerAlert";
 import { ServerStatusPanel } from "./components/ServerStatusPanel";
 import { authUserKey, SettingsForm, type HttpsFileField } from "./components/SettingsForm";
 import { serverRestartSettingsChanged, settingsPayloadChanged } from "./settingsChange";
@@ -90,6 +91,7 @@ function App() {
   const managerRef = useRef<ServerManager | null>(null);
   const [busy, setBusy] = useState(false);
   const [busyAction, setBusyAction] = useState<BusyAction | null>(null);
+  const [serverCommandError, setServerCommandError] = useState<{ action: BusyAction | null; message: string } | null>(null);
   const [message, setMessageState] = useState("");
   const [messageIsError, setMessageIsError] = useState(false);
   const [urlCopied, setUrlCopied] = useState(false);
@@ -181,7 +183,7 @@ function App() {
         init();
       }
     } catch (error) {
-      setErrorMessage(error);
+      setServerCommandError({ action: null, message: errorMessage(error) });
     }
   }, []);
 
@@ -257,20 +259,18 @@ function App() {
     }
   }
 
-  async function runCommand(command: () => Promise<PluginStatus> | PluginStatus | null | undefined, { action = null, quiet = false }: { action?: BusyAction | null; quiet?: boolean } = {}) {
+  async function runCommand(command: () => Promise<PluginStatus> | PluginStatus | null | undefined, { action = null, quiet = false, savingSettings = false }: { action?: BusyAction | null; quiet?: boolean; savingSettings?: boolean } = {}) {
+    if (!savingSettings) setServerCommandError(null);
     setBusy(true);
     setBusyAction(action);
     try {
       const nextStatus = await command();
       if (nextStatus) setStatus(nextStatus);
-      if (nextStatus?.state === "error") {
-        setMessage(nextStatus.lastError || "Server failed to start", true);
-      } else if (!quiet) {
-        setMessage("");
-      }
+      if (!quiet && !savingSettings) setMessage("");
       return true;
     } catch (error) {
-      setErrorMessage(error);
+      if (savingSettings) setErrorMessage(error);
+      else setServerCommandError({ action, message: errorMessage(error) });
       return false;
     } finally {
       setBusy(false);
@@ -330,7 +330,7 @@ function App() {
       if (restarting) {
         setStatus((current) => ({ ...current, state: "stopped" }));
       }
-      const saved = await runCommand(() => managerRef.current?.saveSettings(payload), { action: restarting ? "restarting" : null, quiet: true });
+      const saved = await runCommand(() => managerRef.current?.saveSettings(payload), { action: restarting ? "restarting" : null, quiet: true, savingSettings: true });
       if (!saved) setStatus(previousStatus);
       if (saved) unsharedLibrariesRef.current.clear();
       if (saved && hasUserPasswords) clearUserPasswordDrafts();
@@ -529,6 +529,7 @@ function App() {
   }
 
   function setMessage(value: string, isError = false) {
+    if (isError) setSettingsExpanded(true);
     setMessageState(value);
     setMessageIsError(isError);
   }
@@ -654,7 +655,7 @@ function App() {
 
   function confirmUnsafePublicNetwork() {
     if (typeof window.confirm !== "function") {
-      setMessage("Enable password protection or disable Public Network before starting the server.", true);
+      setServerCommandError({ action: "starting", message: "Enable password protection or disable Public Network before starting the server." });
       return false;
     }
     return window.confirm(PUBLIC_NETWORK_WITHOUT_PASSWORD_MESSAGE);
@@ -662,7 +663,7 @@ function App() {
 
   function confirmInsecurePublicHttp() {
     if (typeof window.confirm !== "function") {
-      setMessage("Enable HTTPS or disable Public Network before starting the server.", true);
+      setServerCommandError({ action: "starting", message: "Enable HTTPS or disable Public Network before starting the server." });
       return false;
     }
     return window.confirm(PUBLIC_NETWORK_HTTP_WITH_PASSWORD_MESSAGE);
@@ -759,6 +760,13 @@ function App() {
       </header>
 
       <div className="grid gap-3 p-3">
+        {serverCommandError ? (
+          serverCommandError.action === "starting"
+            ? <ServerStartAlert message={serverCommandError.message} port={status.port || settings.port} />
+            : <ServerAlert title={serverCommandError.action === "stopping" ? "Could not stop the server" : "Could not load server status"} message={serverCommandError.message} />
+        ) : serverState === "error" && !busyAction ? (
+          <ServerStartAlert message={status.lastError} port={status.port || settings.port} />
+        ) : null}
         <ServerStatusPanel
           authEnabled={authEnabled}
           formDisabled={formDisabled}
