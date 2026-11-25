@@ -230,7 +230,7 @@ The standalone server lets the viewer browse Eagle libraries **without Eagle run
 <summary><strong>Overview and usage</strong></summary>
 
 - **Read only.** Starring, editing, uploading, and moving to the trash need the plugin in Eagle.
-- **Same users and address as the plugin.** It reads the plugin's `settings.json` (users, sign-in, HTTPS, port, and hostname) and never writes it. A server whose port is in use, by the running plugin for example, is skipped.
+- **Same users and address as the plugin.** It uses the plugin's `settings.json` for users, sign-in, HTTPS, port, and hostname. Use the optional management panel to edit those settings. A server whose port is in use, by the running plugin for example, is skipped.
 - **Limits.** Smart folders aren't shown, each start reads the whole library (about 16 s per 300,000 items), and it runs with Node.js from this repository; there's no app or installer yet.
 
 ```sh
@@ -240,7 +240,7 @@ npm run standalone -- -f
 
 Without `--library`, it runs the servers listed in `~/.eagle-media-preview-server/standalone.json`, or, without that file, serves the libraries the plugin shares. `-f` also prints each access log entry in the terminal as it happens; leave it out to run quietly.
 
-Add `--panel` to open the local management panel in your browser. Use it to start and stop each viewer server, check library status, and inspect the access log.
+Add `--panel` to open the local management panel in your browser. Use it to start and stop each viewer server, check library status, edit shared settings, and inspect the access log.
 
 ```sh
 npm run standalone -- --panel
