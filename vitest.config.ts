@@ -3,7 +3,7 @@ import { mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-// Keeps tests out of the real access log, which lives in the OS temp directory.
+// Keeps tests out of the real access logs and temporary files.
 const testTmpDir = join(tmpdir(), "eagle-media-preview-server-tests");
 mkdirSync(testTmpDir, { recursive: true });
 
@@ -14,7 +14,7 @@ export default defineConfig({
     },
   },
   test: {
-    env: { TEMP: testTmpDir, TMP: testTmpDir, TMPDIR: testTmpDir },
+    env: { TEMP: testTmpDir, TMP: testTmpDir, TMPDIR: testTmpDir, EAGLE_MEDIA_PREVIEW_LOG_DIR: join(testTmpDir, "logs") },
     environment: "node",
     globals: true,
     include: [

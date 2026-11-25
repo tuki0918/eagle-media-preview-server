@@ -1,10 +1,12 @@
-const { appendFile, mkdir, readFile, rm, writeFile } = require("fs/promises");
-const { tmpdir } = require("os");
-const { join } = require("path");
+const { appendFile, mkdir, readFile, rename, rm, writeFile } = require("fs/promises");
+const { homedir, tmpdir } = require("os");
+const { dirname, join, resolve } = require("path");
+const { randomUUID } = require("crypto");
 
 // "browse" holds only failed requests; "system" is what the admin or the server itself did.
 type AccessLogType = "auth" | "browse" | "edit" | "system" | "view";
 type AccessLogRange = "1h" | "24h" | "7d";
+type AccessLogSource = "plugin" | "standalone";
 
 interface AccessLogEntry {
   at: number;
@@ -21,6 +23,7 @@ interface AccessLogEntry {
   path?: string;
   size?: number;
   status?: number;
+  source?: AccessLogSource;
   type: AccessLogType;
   user?: string;
 }
@@ -87,16 +90,19 @@ const RANGE_BUCKETS: Record<AccessLogRange, { bucketMs: number; count: number }>
   "7d": { bucketMs: 24 * 60 * 60 * 1000, count: 7 },
 };
 
-// The log lives in the OS temp directory: it outlives a server stop or an Eagle restart for
-// investigation, but is not meant to be kept, so a reboot (or the age limit) may drop it.
 function entryMatchesSearch(entry: AccessLogEntry, term: string, eventKeys: Set<string>, fieldKeys: Set<string>, libraryNames?: ReadonlyMap<string, string>) {
   if (eventKeys.has(entry.event) || entry.fields?.some((field) => fieldKeys.has(field))) return true;
   const libraryLabel = entry.libraryId && (libraryNames?.get(entry.libraryId) || entry.libraryId);
-  const texts = [entry.ip, entry.user, entry.event, entry.itemId, entry.path, entry.ext, entry.status, libraryLabel, ...(entry.fields || [])];
+  const source = entry.source === "plugin" ? "Eagle plugin" : entry.source === "standalone" ? "Standalone" : undefined;
+  const texts = [source, entry.ip, entry.user, entry.event, entry.itemId, entry.path, entry.ext, entry.status, libraryLabel, ...(entry.fields || [])];
   return texts.some((text) => text !== undefined && String(text).toLowerCase().includes(term));
 }
 
-function defaultAccessLogPath() {
+function defaultAccessLogPath(source: AccessLogSource = "plugin", directory = process.env.EAGLE_MEDIA_PREVIEW_LOG_DIR || join(homedir(), ".eagle-media-preview-server")) {
+  return join(directory, source === "plugin" ? "plugin-access-log.jsonl" : "standalone-access-log.jsonl");
+}
+
+function legacyPluginAccessLogPath() {
   return join(tmpdir(), "eagle-media-preview-server", "access-log.jsonl");
 }
 
@@ -145,7 +151,7 @@ function createAccessLog({
 
   // Memory already holds every entry still waiting to be appended, so those lines are dropped here;
   // appending them later as well would write them twice.
-  function rewriteFromMemory() {
+  async function rewriteFromMemory() {
     const body = entries.map((entry) => `${JSON.stringify(entry)}\n`).join("");
     const bodyBytes = Buffer.byteLength(body);
     pendingLines = [];
@@ -153,9 +159,14 @@ function createAccessLog({
       clearTimeout(flushTimer);
       flushTimer = null;
     }
-    return writeFile(filePath, body, "utf8").then(() => {
+    const temporary = `${filePath}.${randomUUID()}.tmp`;
+    try {
+      await writeFile(temporary, body, { encoding: "utf8", mode: 0o600, flag: "wx" });
+      await rename(temporary, filePath);
       fileBytes = bodyBytes;
-    });
+    } finally {
+      await rm(temporary, { force: true });
+    }
   }
 
   function load() {
@@ -202,7 +213,7 @@ function createAccessLog({
       if (!lines.length) return;
       const chunk = lines.join("");
       const chunkBytes = Buffer.byteLength(chunk);
-      await mkdir(join(filePath, ".."), { recursive: true });
+      await mkdir(dirname(filePath), { recursive: true, mode: 0o700 });
       // Cleared while waiting: these lines were cleared too, and memory now holds only later events.
       if (queuedIn !== generation) return;
       if (fileBytes + chunkBytes > maxFileBytes) {
@@ -211,7 +222,7 @@ function createAccessLog({
         await rewriteFromMemory();
         return;
       }
-      await appendFile(filePath, chunk, "utf8");
+      await appendFile(filePath, chunk, { encoding: "utf8", mode: 0o600 });
       fileBytes += chunkBytes;
     });
   }
@@ -219,7 +230,7 @@ function createAccessLog({
   return {
     filePath,
 
-    // Restores what an earlier run (or a previous plugin window) left in the temp file.
+    // Restores what an earlier run (or a previous plugin window) left in the history file.
     load,
 
     record(input: Omit<AccessLogEntry, "at"> & { at?: number }) {
@@ -253,7 +264,7 @@ function createAccessLog({
     // Filters are exact: an entry needs one of the values given for each column, so values of a
     // column widen the result and different columns narrow it. `search` matches part of any text
     // the panel shows for the entry, ignoring case; `searchKeys` covers the panel's own wording.
-    entries({ filters = [], limit = 200, search = "", searchKeys = { events: [], fields: [] }, type = "" }: EntriesOptions = {}) {
+    entries({ filters = [], limit = 200, search = "", searchKeys = { events: [], fields: [] }, type = "" }: EntriesOptions = {}, history?: AccessLogEntry[]) {
       prune();
       const values = (field: AccessLogFilter["field"]) => new Set(filters.filter((filter) => filter.field === field).map((filter) => filter.value));
       const addresses = values("address");
@@ -264,8 +275,9 @@ function createAccessLog({
       const eventKeys = new Set(searchKeys.events);
       const fieldKeys = new Set(searchKeys.fields);
       const output: AccessLogEntry[] = [];
-      for (let index = entries.length - 1; index >= 0 && output.length < limit; index -= 1) {
-        const entry = entries[index];
+      const eventsToSearch = history ?? entries;
+      for (let index = eventsToSearch.length - 1; index >= 0 && output.length < limit; index -= 1) {
+        const entry = eventsToSearch[index];
         if (type && entry.type !== type) continue;
         if (addresses.size && !addresses.has(entry.ip)) continue;
         if (events.size && !events.has(entry.event)) continue;
@@ -280,7 +292,7 @@ function createAccessLog({
     // Cheap enough to poll every few seconds: it only reads the per-address heartbeat table.
     activeClients: countActiveAddresses,
 
-    summary({ clientLimit = MAX_SUMMARY_CLIENTS, range = "24h" }: { clientLimit?: number; range?: AccessLogRange } = {}) {
+    summary({ clientLimit = MAX_SUMMARY_CLIENTS, range = "24h" }: { clientLimit?: number; range?: AccessLogRange } = {}, history?: AccessLogEntry[]) {
       prune();
       const at = now();
       const { bucketMs, count } = RANGE_BUCKETS[range] || RANGE_BUCKETS["24h"];
@@ -309,7 +321,7 @@ function createAccessLog({
         return client;
       };
       const totals = { auth: 0, authFailures: 0, browse: 0, edit: 0, editFailures: 0, system: 0, view: 0, viewFailures: 0 };
-      for (const entry of entries) {
+      for (const entry of history ?? entries) {
         // Devices, tiles and chart all count the selected range only.
         if (entry.at < firstStart) continue;
         const bucket = buckets[Math.floor((entry.at - firstStart) / bucketMs)];
@@ -434,15 +446,55 @@ function parseEntry(line: string): AccessLogEntry | null {
   if (!line.trim()) return null;
   try {
     const value = JSON.parse(line);
-    if (!value || typeof value.at !== "number" || !ACCESS_LOG_TYPES.includes(value.type)) return null;
+    if (!value || !Number.isFinite(value.at) || Math.abs(value.at) > 8.64e15 || !ACCESS_LOG_TYPES.includes(value.type)) return null;
     return compactEntry(value);
   } catch {
     return null;
   }
 }
 
+// Merge on read so the other process keeps sole responsibility for its log and its rotation.
+function createAccessLogHistory(local: ReturnType<typeof createAccessLog>, source: AccessLogSource) {
+  const peerSource = source === "plugin" ? "standalone" : "plugin";
+  const peer = defaultAccessLogPath(peerSource, dirname(local.filePath));
+  const legacy = local.filePath === defaultAccessLogPath(source) ? legacyPluginAccessLogPath() : undefined;
+
+  async function readHistory() {
+    const cutoff = Date.now() - DEFAULT_MAX_AGE_MS;
+    async function read(path: string, from: AccessLogSource) {
+      if (resolve(path) === resolve(local.filePath)) return [];
+      const text: string = await readFile(path, "utf8").catch(() => "");
+      return text.split("\n").flatMap((line): AccessLogEntry[] => {
+        const entry = parseEntry(line);
+        return entry && entry.at >= cutoff ? [{ ...entry, source: from }] : [];
+      }).slice(-DEFAULT_MAX_ENTRIES);
+    }
+    const [, peerEntries, legacyEntries] = await Promise.all([
+      local.load(),
+      read(peer, peerSource),
+      legacy ? read(legacy, "plugin") : [],
+    ]);
+    const ownEntries = local.entries({ limit: Number.MAX_SAFE_INTEGER }).reverse().map((entry) => ({ ...entry, source }));
+    return [...ownEntries, ...peerEntries, ...legacyEntries]
+      .sort((a, b) => a.at - b.at || Number(a.source === "standalone") - Number(b.source === "standalone"));
+  }
+
+  return {
+    async summary({ range, ...query }: EntriesOptions & { range: AccessLogRange }) {
+      const history = await readHistory();
+      return { ...local.summary({ range }, history), recent: local.entries(query, history) };
+    },
+    entries: readHistory,
+    async clear() {
+      if (source === "plugin" && legacy) await rm(legacy, { force: true });
+      await local.clear();
+    },
+  };
+}
+
 function accessLogCsv(entries: AccessLogEntry[]) {
   const columns: Array<keyof AccessLogEntry> = ["at", "type", "event", "ip", "user", "method", "path", "libraryId", "itemId", "fields", "ext", "size", "status"];
+  if (entries.some((entry) => entry.source)) columns.push("source");
   const cell = (value: unknown) => {
     let text = String(value ?? "");
     // User names and paths come from clients; a leading quote keeps a spreadsheet from running them as formulas.
@@ -460,5 +512,6 @@ function accessLogCsv(entries: AccessLogEntry[]) {
 module.exports = {
   accessLogCsv,
   createAccessLog,
+  createAccessLogHistory,
   defaultAccessLogPath,
 };

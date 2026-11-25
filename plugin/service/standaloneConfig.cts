@@ -13,6 +13,7 @@ const { homedir } = require("os");
 const { isAbsolute, join, resolve } = require("path");
 const { isIP } = require("net");
 const { randomBytes } = require("crypto");
+const { defaultAccessLogPath: accessLogPathFor } = require("./accessLog.cjs");
 const { libraryNameFromPath, libraryPathKey } = require("./libraryAccess.cjs");
 const { defaultSettingsPath, libraryUserRules, normalizeSettings, sharedLibraryPaths, withLoadableCustomDomain } = require("./runtime.cjs");
 
@@ -54,7 +55,7 @@ function defaultConfigPath() {
 }
 
 function defaultAccessLogPath() {
-  return join(stateDir(), "standalone-access-log.jsonl");
+  return accessLogPathFor("standalone");
 }
 
 // JSON has no shell to expand "~", so a leading "~/" is taken as the home folder.

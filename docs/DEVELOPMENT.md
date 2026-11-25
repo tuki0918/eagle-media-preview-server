@@ -57,7 +57,7 @@ It reads the plugin's `~/.eagle-media-preview-server/settings.json` (read only w
 }
 ```
 
-A server whose port is taken (the plugin is running in Eagle, say) is skipped; the others run. Advanced Sort is on or off as in the plugin (`experimentalSort` in settings.json). The access log goes to `~/.eagle-media-preview-server/standalone-access-log.jsonl`. Run `npm run standalone -- --help` for every option. Options go after `--`, which passes them on to `bin/eagle-media-server.cjs`.
+A server whose port is taken (the plugin is running in Eagle, say) is skipped; the others run. Advanced Sort is on or off as in the plugin (`experimentalSort` in settings.json). The standalone server writes to `~/.eagle-media-preview-server/standalone-access-log.jsonl`. The Eagle plugin writes to `~/.eagle-media-preview-server/plugin-access-log.jsonl`. Run `npm run standalone -- --help` for every option. Options go after `--`, which passes them on to `bin/eagle-media-server.cjs`.
 
 Run `--panel` to start the local management panel. The panel uses the default `settings.json` and its shared library list. CLI options such as `--config`, `--library`, `--settings` and `-f` are for terminal mode.
 
@@ -67,7 +67,7 @@ Open the complete URL printed in the terminal on the machine running the CLI. Th
 
 Start or stop the viewer server and check its endpoint and QR code in the panel. **Auto start** decides whether the viewer server starts with the CLI: on starts it right away, off leaves it stopped until you start it in the panel. It is the plugin's `autoStart` in `settings.json`, so it also applies when Eagle launches the plugin. The switches under **Server Status** save Auto start, Password protection, Public Network, and HTTPS immediately. Changing Auto start doesn't restart a running viewer; the other switches restart it to apply the change. While the viewer runs, the Settings form is locked and, with Advanced Sort on, Server Status shows the library scan as the Advanced Sort Index. Save user passwords in **Settings → Access** and certificate and key paths in **Settings → Security** before enabling their switches. The file icon in the panel header shows the settings file in use.
 
-Activity shows the access log and supports search, filters, CSV export, and clearing the log. The panel stays open while the viewer server is stopped or fails to start. Use Ctrl+C to stop the CLI and close its management endpoint.
+Activity in both panels shows the combined history with an Eagle plugin or Standalone label on each event. Search, filters, and exports cover both modes. The connected count tracks the current server, and clearing the log deletes the current mode’s history. Recent plugin entries from its previous temporary-folder log are included when that file is available. The panel stays open while the viewer server is stopped or fails to start. Use Ctrl+C to stop the CLI and close its management endpoint.
 
 The **Settings** form edits the default `settings.json` shared with the Eagle plugin. Stop the viewer before saving. In the Libraries tab, enter the path to a `.library` folder, click **Add library**, and save. The viewer can serve all selected libraries through one server. Enable library protection to set per-user access. A fresh panel starts with a stopped viewer so you can add the first library. Saved settings take effect when you next start the viewer from the panel.
 

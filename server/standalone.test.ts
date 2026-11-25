@@ -717,3 +717,63 @@ test("the panel keeps its chosen port, rotates its token, and reports port confl
     await second.stop();
   }
 });
+
+test("both management panels read and export shared history while clearing only their own log", async () => {
+  const dir = await workspace();
+  const { createAccessLog, defaultAccessLogPath } = require("../dist/.generated/plugin-service/accessLog.cjs");
+  const { createServerManager } = require("../dist/.generated/plugin-service/runtime.cjs");
+  const pluginLog = createAccessLog({ filePath: defaultAccessLogPath("plugin", dir) });
+  const standaloneLog = createAccessLog({ filePath: defaultAccessLogPath("standalone", dir) });
+  const at = Date.now();
+  pluginLog.record({ at: at - 100, type: "view", event: "view", ip: "192.0.2.1", user: "plugin-user" });
+  standaloneLog.record({ at, type: "view", event: "view", ip: "192.0.2.2", user: "standalone-user" });
+  await Promise.all([pluginLog.flush(), standaloneLog.flush()]);
+  const manager = createServerManager({ accessLog: pluginLog });
+  await writeFile(join(dir, "index.html"), "<title>Media Preview Server</title>");
+  await writeFile(join(dir, "app.js"), "");
+
+  const running = await runStandalone(["--panel", "--panel-port", "0"], { log: () => {}, panelAssets: dir, panelStateDir: dir });
+  try {
+    const url = new URL(running.panelUrl);
+    const headers = { Authorization: `Bearer ${url.hash.slice(1)}`, Origin: url.origin };
+    const request = (path: string, method = "GET") => fetch(url.origin + path, { method, headers });
+    const recentSources = (summary: { recent: { source: string }[] }) => summary.recent.map((entry) => entry.source);
+    const plugin = await manager.accessLogSummary({ range: "24h" });
+    const standalone = await (await request("/api/activity")).json();
+    assert.deepEqual(recentSources(plugin), ["standalone", "plugin"]);
+    assert.deepEqual(recentSources(standalone), ["standalone", "plugin"]);
+    assert.equal(plugin.totals.view, 2);
+    assert.equal(standalone.totals.view, 2);
+    assert.equal(plugin.activeClients, 1);
+    assert.equal(standalone.activeClients, 0);
+
+    pluginLog.record({ at: at + 100, type: "auth", event: "login_success", ip: "192.0.2.3" });
+    await pluginLog.flush();
+    const updated = await (await request("/api/activity?search=Eagle%20plugin")).json();
+    assert.deepEqual(recentSources(updated), ["plugin", "plugin"]);
+    assert.equal(updated.recent[0].event, "login_success");
+
+    const exported = await (await request("/api/activity/export")).text();
+    assert.match(exported, /status,source\n/);
+    assert.match(exported, /plugin-user.*plugin\n/);
+    assert.match(exported, /standalone-user.*standalone\n/);
+    const pluginExportPath = join(dir, "export.jsonl");
+    await manager.exportAccessLog(pluginExportPath, "jsonl");
+    const exportedEvents = (await readFile(pluginExportPath, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+    assert.deepEqual(exportedEvents.map((entry) => entry.source), ["plugin", "standalone", "plugin"]);
+
+    await manager.clearAccessLog();
+    await pluginLog.flush();
+    const afterPluginClear = await (await request("/api/activity")).json();
+    assert.equal(afterPluginClear.totals.view, 1);
+    assert.ok(afterPluginClear.recent.some((entry: { user?: string }) => entry.user === "standalone-user"));
+    assert.ok(!afterPluginClear.recent.some((entry: { user?: string }) => entry.user === "plugin-user"));
+
+    assert.equal((await request("/api/activity/clear", "POST")).status, 200);
+    const afterStandaloneClear = await (await request("/api/activity")).json();
+    assert.equal(afterStandaloneClear.totals.view, 0);
+    assert.deepEqual(recentSources(afterStandaloneClear).sort(), ["plugin", "standalone"]);
+  } finally {
+    await running.stop();
+  }
+});

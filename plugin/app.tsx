@@ -497,8 +497,8 @@ function App() {
   }
 
   async function clearAccessLog() {
-    const message = "Clear the access log?";
-    const detail = "All recorded events are deleted. This cannot be undone.";
+    const message = "Clear the Eagle plugin access log?";
+    const detail = "The Eagle plugin history will be permanently deleted.";
     const showMessageBox = globalThis.eagle?.dialog?.showMessageBox;
     let confirmed = false;
     try {

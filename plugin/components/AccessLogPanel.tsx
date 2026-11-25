@@ -48,7 +48,6 @@ interface AccessLogPanelProps {
   /** Selects the item in Eagle's main window; omitted when Eagle has no item selection API. */
   onSelectItem?: (itemId: string) => void;
   onUnblock?: (address: string) => void;
-  retentionNote?: string;
 }
 
 // Categorical slots 1–4 of the reference palette, in fixed order (validated as adjacent stack
@@ -167,7 +166,6 @@ export function AccessLogPanel({
   onRevealFile,
   onSelectItem,
   onUnblock,
-  retentionNote = "Kept in your computer's temporary folder for up to 7 days. Still available after the server stops, but may be cleared sooner.",
 }: AccessLogPanelProps) {
   const recent = summary?.recent || [];
   const totals = summary?.totals;
@@ -230,7 +228,7 @@ export function AccessLogPanel({
           </div>
 
           <div className="grid grid-cols-4 gap-2 max-[520px]:grid-cols-2">
-            <StatTile label="Connected" value={activeClients} help="Devices seen in the last 2 minutes" />
+            <StatTile label="Connected" value={activeClients} help="Devices seen by this server in the last 2 minutes" />
             <StatTile label="Views" value={totals?.view ?? 0} />
             <StatTile label="Edits" value={totals?.edit ?? 0} />
             <StatTile label="Failed sign-ins" value={totals?.authFailures ?? 0} />
@@ -301,7 +299,7 @@ export function AccessLogPanel({
           </div>
 
           <p className="m-0 text-[10.5px] leading-snug text-[#9a9ea6]">
-            {retentionNote}
+            Shows up to 7 days of history from Eagle plugin and Standalone. Connected devices are for this server.
           </p>
         </div>
 
@@ -583,10 +581,15 @@ function EventTable({ emptyText, entries, filters, libraryNames, searchedText, o
             <span className="flex min-w-0" role="cell">
               {entry.user ? <FilterButton filter={{ field: "user", value: entry.user }} filters={filters} onFiltersChange={onFiltersChange}><Match query={searchedText} text={entry.user} /></FilterButton> : "—"}
             </span>
-            <span className={`flex min-w-0 ${failed ? "font-semibold text-[#b42318]" : "text-[#171717]"}`} role="cell">
+            <span className={`grid min-w-0 justify-items-start ${failed ? "font-semibold text-[#b42318]" : "text-[#171717]"}`} role="cell">
               <FilterButton filter={{ field: "event", value: entry.event }} filters={filters} onFiltersChange={onFiltersChange}>
                 <Match query={searchedText} text={`${EVENT_LABELS[entry.event] || entry.event}${failed && entry.type !== "auth" && entry.type !== "system" && entry.status ? ` (${entry.status})` : ""}`} />
               </FilterButton>
+              {entry.source && (
+                <span className="max-w-full truncate rounded bg-[#f1f1f3] px-1 text-[9.5px] font-medium text-[#5f6670]">
+                  <Match query={searchedText} text={entry.source === "plugin" ? "Eagle plugin" : "Standalone"} />
+                </span>
+              )}
             </span>
             <span className="flex min-w-0" role="cell">
               {entry.libraryId ? (
@@ -600,7 +603,7 @@ function EventTable({ emptyText, entries, filters, libraryNames, searchedText, o
               {details.length ? <span className="truncate text-[10px] leading-tight text-[#9a9ea6]">{details.map((detail, detailIndex) => <Fragment key={detailIndex}>{detailIndex ? " · " : ""}{detail}</Fragment>)}</span> : null}
             </span>
             <span className="grid place-items-center" role="cell">
-              {entry.itemId && onSelectItem ? (
+              {entry.itemId && entry.source !== "standalone" && onSelectItem ? (
                 <button className="grid h-6 w-6 place-items-center rounded-md border-0 bg-transparent p-0 text-[#8a8f99] transition-colors hover:bg-[#f1f1f3] hover:text-[#171717]" type="button" aria-label={`Select ${entry.itemId} in Eagle`} title="Select in Eagle" onClick={() => onSelectItem(entry.itemId as string)}>
                   <SelectItemIcon className="h-3.5 w-3.5" />
                 </button>
