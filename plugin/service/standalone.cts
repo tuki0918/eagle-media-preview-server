@@ -1,10 +1,13 @@
-import { startStandalonePanel, type PanelActivityQuery, type PanelSnapshot } from "./standalonePanel.cjs";
+import { PanelRequestError, startStandalonePanel, type PanelActivityQuery, type PanelSnapshot } from "./standalonePanel.cjs";
+import { panelSettings, settingsPatch } from "./standaloneSettings.cjs";
+import { changedSettingFields, createSettingsStore } from "./runtime.cjs";
 
 // The standalone server: serves Eagle libraries to the viewer without Eagle, read only
 // (docs/design/standalone-server.md). `node bin/eagle-media-server.cjs` runs the servers listed in
 // standalone.json (or given with --library), on top of the plugin's settings.json.
 const { stat } = require("fs").promises;
 const { join } = require("path");
+const { normalizeBlockedAddress } = require("./addressBlockList.cjs");
 const { createAccessLog } = require("./accessLog.cjs");
 const { createFsBackend } = require("./fsBackend.cjs");
 const { libraryIdFor, libraryPathKey } = require("./libraryAccess.cjs");
@@ -65,7 +68,7 @@ const USAGE = `Usage:
 
 Serves Eagle libraries to the Media Library viewer without Eagle running. Read only: nothing in a
 library is ever changed. Users, sign-in, HTTPS, the port, and the hostname come from the plugin's
-settings.json, which is only read. standalone.json lists servers, each with its libraries, and
+settings.json. Use --panel to edit settings. standalone.json lists servers, each with its libraries, and
 may change where each one listens:
 
   { "servers": [
@@ -161,26 +164,31 @@ async function runStandalone(argv: string[], {
   }
 
   const { allowUnknownFormat } = options;
-  const config: StandaloneConfig = await resolveStandaloneConfig({
+  const overrides = {
     allowAnonymousLan: options.allowAnonymousLan,
     configPath: options.configPath,
     host: options.host,
     libraries: options.libraries,
     port: options.port,
     settingsPath: options.settingsPath,
-  });
+  };
+  let config: StandaloneConfig = await resolveStandaloneConfig(overrides);
+  const settingsStore = createSettingsStore({ filePath: config.settingsPath });
   const libraryName = new Map<string, string>();
   const idOf = (path: string) => libraryIdFor(path, config.common.sessionSecret);
-  for (const server of config.servers) {
-    for (const library of server.libraries) libraryName.set(idOf(library.path), library.name);
+  function rememberLibraryNames() {
+    for (const server of config.servers) {
+      for (const library of server.libraries) libraryName.set(idOf(library.path), library.name);
+    }
   }
+  rememberLibraryNames();
 
   // One backend per library folder, shared by every server that lists it.
   type Backend = ReturnType<typeof createFsBackend>;
   const backends = new Map<string, Backend>();
   const libraryState = new Map<string, LibraryStatus>();
   const running = new Map<number, { url: string; viewer: ReturnType<typeof createViewerServer> }>();
-  const serverStatus = config.servers.map(() => "stopped");
+  let serverStatus = config.servers.map(() => "stopped");
 
   const accessLogPath = options.accessLogPath ? expandPath(options.accessLogPath) : defaultAccessLogPath();
   const accessLog = createAccessLog({ filePath: accessLogPath });
@@ -308,7 +316,7 @@ async function runStandalone(argv: string[], {
   const users = config.common.authUsers.length;
   const anonymousOnNetwork = !users && [...running.keys()].some((index) => !isLoopback(config.servers[index].host));
   log("Eagle Media Server (standalone, read only)");
-  log(`  Settings:   ${config.settingsPath} (read only)`);
+  log(`  Settings:   ${config.settingsPath}${options.panel ? " (editable in panel)" : " (read only)"}`);
   log(`  Servers:    ${config.source}`);
   log(`  Sign-in:    ${users ? `required (${users} user${users === 1 ? "" : "s"})` : anonymousOnNetwork ? "not required — anyone on the network can browse" : "not required"}`);
   log(`  Sorting:    ${config.common.experimentalSort ? "Advanced Sort on" : "Advanced Sort off (experimentalSort in settings.json)"}`);
@@ -365,7 +373,7 @@ async function runStandalone(argv: string[], {
         error: state === "error" ? serverStatus[index] : "",
         url: entry?.url || "",
         port: entry?.viewer.status().boundPort || server.port,
-        authEnabled: Boolean(users),
+        authEnabled: config.common.authUsers.length > 0,
         httpsEnabled: server.httpsEnabled,
         publicNetwork: !isLoopback(server.host),
         libraries: server.libraries.map(({ name, path }) => ({ name, status: describeLibrary(path) })),
@@ -373,16 +381,78 @@ async function runStandalone(argv: string[], {
     }),
   });
 
+  function queueCommand<T>(task: () => Promise<T>) {
+    const command = commands.then(() => {
+      if (closing) throw new PanelRequestError("The standalone server is shutting down", 503);
+      return task();
+    });
+    commands = command.then(() => {}, () => {});
+    return command;
+  }
+
   function setPower(index: number, enabled: boolean) {
-    const command = commands.then(async () => {
-      if (closing) return;
+    return queueCommand(async () => {
+      if (index >= config.servers.length) throw new PanelRequestError("Server not found", 404);
       if (enabled) await startServer(index);
       else await stopServer(index);
       await releaseUnusedBackends();
       void scanLibraries();
     });
-    commands = command.catch(() => {});
-    return command;
+  }
+
+  async function getSettings() {
+    const current = await settingsStore.read();
+    return panelSettings(current, config.servers.flatMap((server) => server.libraries));
+  }
+
+  function saveSettings(payload: Record<string, unknown>) {
+    return queueCommand(async () => {
+      if (running.size) throw new PanelRequestError("Stop all viewer servers before saving settings", 409);
+      const { before, settings, revision, result } = await settingsStore.update((current) => {
+        if (payload.revision !== current.revision) {
+          throw new PanelRequestError("Settings changed on disk. Reload settings and try again.", 409);
+        }
+        return {
+          ...settingsPatch(payload.settings, current.settings),
+          sessionSecret: current.settings.sessionSecret || config.common.sessionSecret,
+        };
+      }, async (next) => {
+        const proposed: StandaloneConfig = await resolveStandaloneConfig(overrides, next);
+        const newAnonymousListener = !proposed.common.authUsers.length && proposed.servers.some((server, index) => {
+          if (isLoopback(server.host)) return false;
+          const previous = config.servers[index];
+          return config.common.authUsers.length > 0 || !previous || isLoopback(previous.host);
+        });
+        if (newAnonymousListener && payload.allowAnonymousLan !== true) {
+          throw new PanelRequestError("Confirm public network access without password protection before saving.", 400);
+        }
+        return proposed;
+      });
+      config = result;
+      serverStatus = config.servers.map(() => "stopped");
+      libraryState.clear();
+      rememberLibraryNames();
+      const fields = changedSettingFields(before, settings);
+      if (fields.length) recorder.record({ type: "system", event: "settings_changed", ip: "this computer", fields });
+      return panelSettings({ revision, settings }, config.servers.flatMap((server) => server.libraries));
+    });
+  }
+
+  function setBlockedAddress(address: unknown, blocked: boolean) {
+    return queueCommand(async () => {
+      const normalized: string = normalizeBlockedAddress(address);
+      const { before, settings } = await settingsStore.update(({ settings }) => ({
+        blockedAddresses: blocked
+          ? [...settings.blockedAddresses, { address: normalized, addedAt: Date.now() }]
+          : settings.blockedAddresses.filter((entry) => entry.address !== normalized),
+        sessionSecret: settings.sessionSecret || config.common.sessionSecret,
+      }), async () => {});
+      config.common.blockedAddresses = settings.blockedAddresses;
+      for (const { viewer } of running.values()) viewer.setBlockedAddresses(settings.blockedAddresses);
+      if (JSON.stringify(before.blockedAddresses) !== JSON.stringify(settings.blockedAddresses)) {
+        recorder.record({ type: "system", event: blocked ? "address_blocked" : "address_unblocked", ip: "this computer", path: normalized });
+      }
+    });
   }
 
   let panel: Awaited<ReturnType<typeof startStandalonePanel>> | undefined;
@@ -390,7 +460,9 @@ async function runStandalone(argv: string[], {
     if (options.panel) {
       panel = await startStandalonePanel({
         snapshot,
-        serverCount: config.servers.length,
+        getSettings,
+        saveSettings,
+        setBlockedAddress,
         setPower,
         activity: (query: PanelActivityQuery) => ({
           ...accessLog.summary({ range: query.range }),

@@ -204,7 +204,8 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(uiSource, /onChange=\{\(event\) => onUserPasswordDraftChange\(index, event\.currentTarget\.value\)\}/);
   assert.match(uiSource, /key=\{`\$\{passwordDraftRevision\}-\$\{index\}`\}/);
   assert.match(app, /function togglePasswordVisible\(index: number\)/);
-  assert.match(uiSource, /const canTogglePasswordVisible = !user\.passwordHash;/);
+  assert.match(uiSource, /const hasSavedPassword = Boolean\(user\.passwordHash \|\| user\.hasPassword\);/);
+  assert.match(uiSource, /const canTogglePasswordVisible = !hasSavedPassword;/);
   assert.match(uiSource, /const passwordVisible = canTogglePasswordVisible && passwordVisibleByIndex\[String\(index\)\];/);
   assert.match(uiSource, /type=\{passwordVisible \? "text" : "password"\}/);
   assert.match(uiSource, /aria-label=\{canTogglePasswordVisible \? \(passwordVisible \? `Hide password for \$\{user\.username \|\| `user \$\{index \+ 1\}`\}` : `Show password for \$\{user\.username \|\| `user \$\{index \+ 1\}`\}`\) : `Saved password for \$\{user\.username \|\| `user \$\{index \+ 1\}`\} is hidden`\}/);
@@ -228,7 +229,7 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(uiSource, /value=\{settings\.port \?\? DEFAULT_PORT\}/);
   assert.match(uiSource, /disabled=\{settingsInputDisabled\}/);
   assert.match(uiSource, /flex min-h-9 items-center justify-between gap-3 border-t border-\[#efeff1\] pt-3/);
-  assert.match(uiSource, /<p className=\{`min-w-0 flex-1 truncate px-0\.5 text-\[10px\] \$\{messageIsError \? "text-\[#d92d20\]" : "text-\[#178c35\]"\}`\} aria-live="polite" hidden=\{!message\}>/);
+  assert.match(uiSource, /<p className=\{`min-w-0 flex-1 [^\n]+aria-live="polite" hidden=\{!message\}>/);
   assert.match(uiSource, /messageIsError \? "text-\[#d92d20\]" : "text-\[#178c35\]"/);
   assert.doesNotMatch(app, /onBlur=\{\(\) => saveSettings\(\)\}\s*\/>\s*<button className=\{`grid h-7 w-7 place-items-center rounded-md \$\{authActionButtonClassName\}`\}/);
   assert.doesNotMatch(app, /passwordDrafts: nextUserPasswords/);
@@ -2225,7 +2226,7 @@ test("the plugin package leaves out the standalone server's own modules, and not
   const viteConfig = await readFile(new URL("../vite.config.ts", import.meta.url), "utf8");
   const pattern = viteConfig.match(/const STANDALONE_ONLY_MODULE = (\/.+\/);/)?.[1];
   assert.ok(pattern, "vite.config.ts filters the standalone modules");
-  const standaloneOnly = ["fsBackend", "standalone", "standaloneConfig", "standaloneLog", "standalonePanel"];
+  const standaloneOnly = ["fsBackend", "standalone", "standaloneConfig", "standaloneLog", "standalonePanel", "standaloneSettings"];
   const shipped = ["accessLog", "addressBlockList", "auth", "connection", "customDomain", "eagleClient", "libraryAccess", "libraryBackend", "libraryIndex", "media", "runtime", "static", "upload", "viewerServer"];
   for (const name of shipped) {
     const source = await readFile(new URL(`${name}.cjs`, generatedServiceUrl), "utf8");

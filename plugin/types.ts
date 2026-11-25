@@ -10,6 +10,8 @@ export interface AuthUser {
   rowKey?: string;
   /** Editors only: admins can always upload and viewers never can. */
   canUpload?: boolean;
+  /** The standalone panel receives this flag instead of the saved hash. */
+  hasPassword?: boolean;
   passwordHash?: string;
   role?: UserRole;
   username?: string;

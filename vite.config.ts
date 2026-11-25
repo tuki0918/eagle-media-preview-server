@@ -6,7 +6,7 @@ import { build as esbuild } from "esbuild";
 
 const distDir = resolve("dist");
 const generatedPluginServiceDir = resolve(distDir, ".generated", "plugin-service");
-const STANDALONE_ONLY_MODULE = /[\\/](?:fsBackend|standalone|standaloneConfig|standaloneLog|standalonePanel)\.cjs$/;
+const STANDALONE_ONLY_MODULE = /[\\/](?:fsBackend|standalone|standaloneConfig|standaloneLog|standalonePanel|standaloneSettings)\.cjs$/;
 
 function copyPluginPackageAssets() {
   const includeRuntimeAsset = (sourcePath: string) => !/\.test\.(?:cjs|js|ts|tsx)$/.test(sourcePath)

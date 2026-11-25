@@ -8,6 +8,8 @@ interface SettingsFormProps {
   busy: boolean;
   httpsEnabled: boolean;
   libraries: LibraryList | null;
+  networkOptions?: ReactNode;
+  standalone?: boolean;
   message: string;
   messageIsError: boolean;
   passwordDraftRevision: number;
@@ -29,7 +31,7 @@ interface SettingsFormProps {
   /** "all" lets every user open the library; "selected" only the given users (admins always can). */
   onLibraryUsersChange: (library: LibraryCandidate, access: "all" | "selected", users: string[]) => void;
   /** Asks Eagle to open the library. Not a setting, so it stays available while the server runs. */
-  onSwitchLibrary: (library: LibraryCandidate) => void;
+  onSwitchLibrary?: (library: LibraryCandidate) => void;
   onPortChange: (value: string) => void;
   onExperimentalSortChange: (checked: boolean) => void;
   onReloadLibraries: () => void;
@@ -82,6 +84,8 @@ export function SettingsForm({
   busy,
   httpsEnabled,
   libraries,
+  networkOptions,
+  standalone = false,
   message,
   messageIsError,
   passwordDraftRevision,
@@ -123,7 +127,7 @@ export function SettingsForm({
       className="rounded-2xl border border-[#e6e6e9] bg-white px-4 pb-3 pt-3.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)]"
       onSubmit={(event) => {
         event.preventDefault();
-        if (!busy) onSaveSettings();
+        if (!busy && !settingsInputDisabled) onSaveSettings();
       }}
     >
       <button
@@ -150,6 +154,7 @@ export function SettingsForm({
         </div>
 
         <div id="generalSettingsPanel" role="tabpanel" aria-labelledby="generalSettingsTab" hidden={settingsTab !== "general"}>
+          {networkOptions}
           <SettingRow label="Hostname" help="Optional. Used for the endpoint URL and QR code.">
             <input
               className={`${settingInputClassName} w-full`}
@@ -195,7 +200,8 @@ export function SettingsForm({
                 </span>
               </div>
               {authUsers.map((user, index) => {
-                const canTogglePasswordVisible = !user.passwordHash;
+                const hasSavedPassword = Boolean(user.passwordHash || user.hasPassword);
+                const canTogglePasswordVisible = !hasSavedPassword;
                 const passwordVisible = canTogglePasswordVisible && passwordVisibleByIndex[String(index)];
                 return (
                   <div key={index} className="grid min-h-10 grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)_28px_124px_28px] items-center gap-1 border-b border-[#efeff1] py-1 pl-1.5 pr-1.5 last:border-b-0" role="row">
@@ -219,7 +225,7 @@ export function SettingsForm({
                         aria-label={`Password for ${user.username || `user ${index + 1}`}`}
                         autoComplete="new-password"
                         disabled={settingsInputDisabled}
-                        placeholder={user.passwordHash ? "••••••••" : "Password"}
+                        placeholder={hasSavedPassword ? "••••••••" : "Password"}
                         defaultValue={userPasswords[String(index)] || ""}
                         onChange={(event) => onUserPasswordDraftChange(index, event.currentTarget.value)}
                       />
@@ -253,7 +259,7 @@ export function SettingsForm({
                       <ChevronIcon className="pointer-events-none absolute right-1.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8a8f99]" />
                     </div>
                     <div className="grid place-items-center" role="cell">
-                      <button className={`grid h-7 w-7 place-items-center rounded-lg ${tableIconButtonClassName} hover:text-[#d92d20]`} type="button" aria-label={`Remove ${user.username || "user"}`} title="Remove user" disabled={settingsInputDisabled || authUsers.length <= 1} onClick={() => onRemoveAuthUser(index)}>
+                      <button className={`grid h-7 w-7 place-items-center rounded-lg ${tableIconButtonClassName} hover:text-[#d92d20]`} type="button" aria-label={`Remove ${user.username || "user"}`} title="Remove user" disabled={settingsInputDisabled || (!standalone && authUsers.length <= 1)} onClick={() => onRemoveAuthUser(index)}>
                         <MinusIcon className="h-[14px] w-[14px]" />
                       </button>
                     </div>
@@ -280,7 +286,7 @@ export function SettingsForm({
         </div>
 
         <div id="librariesSettingsPanel" role="tabpanel" aria-labelledby="librariesSettingsTab" hidden={settingsTab !== "libraries"}>
-          <SettingRow label="Protection" help="When on, the viewer serves only the libraries checked below. While another library is open in Eagle, viewers see it as offline.">
+          <SettingRow label="Protection" help={standalone ? "When on, the viewer serves only the configured libraries checked below." : "When on, the viewer serves only the libraries checked below. While another library is open in Eagle, viewers see it as offline."}>
             <label className="inline-flex items-center gap-2 text-[12px] text-[#171717] has-[:disabled]:opacity-60">
               <input
                 type="checkbox"
@@ -308,8 +314,8 @@ export function SettingsForm({
                     <button
                       className="-m-1 inline-flex h-6 w-6 items-center justify-center rounded-full text-[#5f6670] hover:bg-[#e6e6e9] hover:text-[#171717] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
                       type="button"
-                      aria-label="Reload libraries"
-                      title="Reload libraries"
+                      aria-label={standalone ? "Reload settings" : "Reload libraries"}
+                      title={standalone ? "Reload settings" : "Reload libraries"}
                       disabled={busy}
                       onClick={onReloadLibraries}
                     >
@@ -319,7 +325,7 @@ export function SettingsForm({
                     <span aria-hidden="true">Library</span>
                   </div>
                   {/* Ends where the badge text ends, inside the badges' 8px side padding. */}
-                  <span className="pr-2 text-right" aria-hidden="true">Status</span>
+                  <span className="pr-2 text-right" aria-hidden="true">{standalone ? "Saved" : "Status"}</span>
                   <span className="text-center" aria-hidden="true">Users</span>
                 </div>
                 <ul className="m-0 grid list-none gap-0 p-0" aria-label="Libraries">
@@ -347,8 +353,10 @@ export function SettingsForm({
                         </div>
                         {/* Two fixed slots, so the folder icons line up whether or not the row has a status badge. */}
                         <span className="grid grid-cols-[24px_minmax(0,1fr)] items-center gap-1 py-2">
-                          {library.current ? <LibraryOpenIcon /> : <LibrarySwitchButton disabled={busy} libraryName={library.name} onClick={() => onSwitchLibrary(library)} />}
-                          {library.shared ? <LibraryStatusBadge online={serverRunning && library.current} /> : null}
+                          {library.current ? <LibraryOpenIcon /> : onSwitchLibrary ? <LibrarySwitchButton disabled={busy} libraryName={library.name} onClick={() => onSwitchLibrary(library)} /> : null}
+                          {library.shared && (standalone
+                            ? <span className="justify-self-end pr-2 text-[10px] font-semibold text-[#16803a]">Shared</span>
+                            : <LibraryStatusBadge online={serverRunning && library.current} />)}
                         </span>
                         <span className="flex justify-center py-2">
                           {shared ? (
@@ -373,7 +381,7 @@ export function SettingsForm({
           </SettingRow>
           <SettingRow
             label="Advanced Sort"
-            help="Adds a Sort menu to the viewer. The first sort scans every item in the library open in Eagle into memory, which takes a while for large libraries."
+            help={standalone ? "Adds a Sort menu to the viewer for configured libraries." : "Adds a Sort menu to the viewer. The first sort scans every item in the library open in Eagle into memory, which takes a while for large libraries."}
           >
             <label className="inline-flex items-center gap-2 text-[12px] text-[#171717] has-[:disabled]:opacity-60">
               <input
@@ -415,7 +423,7 @@ export function SettingsForm({
         </div>
 
         <div className="flex min-h-9 items-center justify-between gap-3 border-t border-[#efeff1] pt-3">
-          <p className={`min-w-0 flex-1 truncate px-0.5 text-[10px] ${messageIsError ? "text-[#d92d20]" : "text-[#178c35]"}`} aria-live="polite" hidden={!message}>
+          <p className={`min-w-0 flex-1 px-0.5 text-[10px] ${standalone ? "break-words" : "truncate"} ${messageIsError ? "text-[#d92d20]" : "text-[#178c35]"}`} aria-live="polite" hidden={!message}>
             {message}
           </p>
           <button className={`ml-auto inline-flex h-8 items-center rounded-full px-4 text-[12px] font-semibold ${primaryButtonClassName}`} type="submit" disabled={settingsInputDisabled}>

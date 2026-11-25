@@ -366,3 +366,111 @@ test("the local management panel stays available through listener failures and s
     if (busy.listening) await new Promise<void>((resolveClose) => busy.close(() => resolveClose()));
   }
 });
+
+test("the management panel saves shared settings, applies overrides and blocks viewers live", async () => {
+  const dir = await workspace();
+  const library = await createLibrary(dir, "Photos");
+  const { hashPassword } = require("../dist/.generated/plugin-service/runtime.cjs");
+  const existingHash = hashPassword("existing password");
+  const settingsPath = await writeSettings(dir, {
+    authUsers: [{ username: "alice", passwordHash: existingHash, role: "viewer" }],
+    autoStart: true,
+    customField: "retained",
+    trustForwardedFor: true,
+    libraryProtectionEnabled: true,
+    sharedLibraries: [{ path: library, name: "Photos", access: "selected", users: ["alice"] }],
+  });
+  const configPath = await writeConfig(dir, { servers: [{ libraries: [library], port: 0 }] });
+  const before = await readFile(settingsPath, "utf8");
+  const configBefore = await readFile(configPath, "utf8");
+  await writeFile(join(dir, "index.html"), "<title>Media Preview Server</title>");
+  await writeFile(join(dir, "app.js"), "");
+  const running = await runStandalone([
+    "--panel", "--settings", settingsPath, "--config", configPath, "--access-log", join(dir, "access.jsonl"),
+  ], { log: () => {}, panelAssets: dir });
+  try {
+    const url = new URL(running.panelUrl);
+    const authorization = { Authorization: `Bearer ${url.hash.slice(1)}` };
+    const read = (path: string) => fetch(url.origin + path, { headers: authorization });
+    const post = (path: string, input?: unknown, origin = url.origin) => fetch(url.origin + path, {
+      method: "POST",
+      headers: { ...authorization, Origin: origin, ...(input === undefined ? {} : { "Content-Type": "application/json" }) },
+      body: input === undefined ? undefined : JSON.stringify(input),
+    });
+
+    assert.equal((await fetch(url.origin + "/api/settings")).status, 401);
+    const formText = await (await read("/api/settings")).text();
+    const { revision, settings, libraries } = JSON.parse(formText);
+    assert.equal(settings.authUsers[0].hasPassword, true);
+    assert.equal(libraries[0].path, library);
+    assert.ok(!formText.includes(existingHash));
+    assert.doesNotMatch(formText, /passwordHash|sessionSecret/);
+    const change = {
+      revision,
+      settings: {
+        authEnabled: true,
+        authUsers: [
+          { username: "alicia", rowKey: "alice", role: "viewer" },
+          { username: "bob", password: "new password", role: "admin" },
+        ],
+        customDomain: "preview.local",
+        port: "41444",
+        sessionDurationDays: "12",
+        sharedLibraries: [{ path: library, name: "Photos", access: "selected", users: ["alicia"] }],
+      },
+    };
+    assert.equal((await post("/api/settings", change, "http://example.test")).status, 403);
+    assert.equal((await post("/api/settings", change)).status, 409);
+    assert.equal(await readFile(settingsPath, "utf8"), before);
+
+    assert.equal((await post("/api/servers/0/stop")).status, 200);
+    const invalid = await post("/api/settings", { revision, settings: { port: 0 } });
+    assert.equal(invalid.ok, false);
+    assert.equal(await readFile(settingsPath, "utf8"), before);
+    const response = await post("/api/settings", change);
+    assert.equal(response.status, 200);
+    const saved = await response.json();
+    assert.notEqual(saved.form.revision, revision);
+    assert.equal(saved.form.settings.port, 41444);
+    assert.equal(saved.snapshot.servers[0].port, 0);
+    assert.equal(saved.snapshot.servers[0].authEnabled, true);
+    assert.equal(saved.form.settings.authUsers[1].hasPassword, true);
+    const persistedText = await readFile(settingsPath, "utf8");
+    const persisted = JSON.parse(persistedText);
+    assert.equal(persisted.authUsers[0].passwordHash, existingHash);
+    assert.equal(persisted.sessionSecret, SECRET);
+    assert.equal(persisted.autoStart, true);
+    assert.equal(persisted.customField, "retained");
+    assert.equal(persisted.trustForwardedFor, true);
+    assert.deepEqual(persisted.sharedLibraries[0].users, ["alicia"]);
+    assert.doesNotMatch(persistedText, /new password|existing password/);
+    assert.equal(await readFile(configPath, "utf8"), configBefore);
+    assert.equal((await post("/api/settings", change)).status, 409);
+
+    const started = await (await post("/api/servers/0/start")).json();
+    assert.equal(started.servers[0].state, "running");
+    assert.match(started.servers[0].url, /preview\.local/);
+    const viewer = new URL(started.servers[0].url);
+    viewer.hostname = "127.0.0.1";
+    const login = (username: string, password: string) => fetch(viewer.origin + "/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: viewer.origin },
+      body: JSON.stringify({ username, password }),
+    });
+    assert.equal((await login("alicia", "existing password")).status, 200);
+    assert.equal((await login("bob", "new password")).status, 200);
+
+    const address = "198.51.100.7";
+    const proxied = () => fetch(viewer.origin + "/api/auth/status", { headers: { "X-Forwarded-For": address } });
+    assert.equal((await proxied()).status, 200);
+    const blocked = await post("/api/settings/block", { address });
+    assert.equal(blocked.status, 200);
+    assert.equal((await blocked.json()).blockedAddresses[0].address, address);
+    assert.equal(JSON.parse(await readFile(settingsPath, "utf8")).blockedAddresses[0].address, address);
+    assert.equal((await proxied()).status, 403);
+    assert.equal((await post("/api/settings/unblock", { address })).status, 200);
+    assert.equal((await proxied()).status, 200);
+  } finally {
+    await running.stop();
+  }
+});

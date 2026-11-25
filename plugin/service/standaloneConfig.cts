@@ -1,11 +1,13 @@
 // What the standalone server serves, and where (docs/design/standalone-server.md, "Configuration").
 //
-// The plugin's settings.json is the base and is only ever read: users, roles, the session secret,
+// The plugin's settings.json is the base: users, roles, the session secret,
 // the block list, library protection, and the default port, host, hostname, and HTTPS all come
 // from it, so the standalone server answers at the same address, with the same sign-ins, as the
 // plugin. standalone.json, next to it, lists servers: each one names its libraries and may change
 // only where it listens (port, host, hostname, HTTPS). Users stay those of settings.json, so a
 // library opened through Eagle or the standalone server lets in the same people.
+import type { PluginSettings } from "./runtime.cjs";
+
 const { readFile } = require("fs").promises;
 const { homedir } = require("os");
 const { isAbsolute, join, resolve } = require("path");
@@ -119,11 +121,12 @@ function serverFrom(base: Record<string, unknown>, override: Record<string, unkn
  * Reads settings.json (never writes it) and standalone.json, and works out the servers to run.
  * `--library` given on the command line replaces standalone.json's servers with a single server.
  */
-async function resolveStandaloneConfig(cli: CliOverrides = {}) {
+async function resolveStandaloneConfig(cli: CliOverrides = {}, proposed?: PluginSettings) {
   const settingsPath = cli.settingsPath ? expandPath(cli.settingsPath) : defaultSettingsPath();
   const configPath = cli.configPath ? expandPath(cli.configPath) : defaultConfigPath();
-  const rawSettings = (await readJsonFile(settingsPath, { optional: !cli.settingsPath })) ?? {};
-  const settings = normalizeSettings(withLoadableCustomDomain(rawSettings));
+  const settings = proposed ?? normalizeSettings(withLoadableCustomDomain(
+    (await readJsonFile(settingsPath, { optional: !cli.settingsPath })) ?? {},
+  ));
   const base: Record<string, unknown> = {};
   for (const field of SERVER_FIELDS) base[field] = settings[field];
 

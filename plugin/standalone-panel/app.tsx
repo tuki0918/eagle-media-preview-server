@@ -6,28 +6,10 @@ import { createQrDataUrl } from "../qrCode";
 import type { PanelServer, PanelSnapshot } from "../service/standalonePanel.cjs";
 import type { AccessLogEventFilter, AccessLogFilter, AccessLogRange, AccessLogSummary } from "../types";
 
-const tokenKey = "standalone-panel-token";
-const launchToken = location.hash.slice(1);
-if (launchToken) {
-  sessionStorage.setItem(tokenKey, launchToken);
-  history.replaceState(null, "", location.pathname);
-}
-const token = launchToken || sessionStorage.getItem(tokenKey);
+import { errorMessage, postJson, request } from "./panelApi";
+import { StandaloneSettings } from "./StandaloneSettings";
 
-async function request(path: string, init?: RequestInit) {
-  const response = await fetch(path, { ...init, headers: { Authorization: `Bearer ${token || ""}` } });
-  if (!response.ok) {
-    const result = await response.json();
-    throw new Error(result.error);
-  }
-  return response;
-}
-
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function Activity({ snapshot }: { snapshot: PanelSnapshot }) {
+function Activity({ snapshot, onSnapshot }: { snapshot: PanelSnapshot; onSnapshot(snapshot: PanelSnapshot): void }) {
   const [summary, setSummary] = useState<AccessLogSummary | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(false);
@@ -106,6 +88,20 @@ function Activity({ snapshot }: { snapshot: PanelSnapshot }) {
     }
   }
 
+  async function changeBlockedAddress(address: string, blocked: boolean) {
+    if (blocked && !window.confirm(`Block ${address} from all viewer servers?`)) return false;
+    setError(null);
+    try {
+      const response = await postJson(blocked ? "/api/settings/block" : "/api/settings/unblock", { address });
+      onSnapshot(await response.json());
+      refresh();
+      return true;
+    } catch (error) {
+      setError({ source: "action", message: errorMessage(error) });
+      return false;
+    }
+  }
+
   return (
     <AccessLogPanel
       activeClients={snapshot.activeClients}
@@ -118,7 +114,9 @@ function Activity({ snapshot }: { snapshot: PanelSnapshot }) {
       loading={loading}
       notice={error ? { isError: true, text: error.message } : null}
       onAutoRefreshChange={setAutoRefresh}
+      onBlock={(address) => changeBlockedAddress(address, true)}
       onClear={() => void clearLog()}
+      onUnblock={(address) => void changeBlockedAddress(address, false)}
       onDismissNotice={() => setError(null)}
       onEventFilterChange={setEventFilter}
       onExpandedChange={setExpanded}
@@ -136,9 +134,10 @@ function Activity({ snapshot }: { snapshot: PanelSnapshot }) {
   );
 }
 
-function SelectedServer({ server, pending, onPower }: {
+function SelectedServer({ server, pending, saving, onPower }: {
   server: PanelServer;
   pending: "Starting" | "Stopping" | null;
+  saving: boolean;
   onPower(checked: boolean): void;
 }) {
   const [copied, setCopied] = useState(false);
@@ -166,7 +165,7 @@ function SelectedServer({ server, pending, onPower }: {
       {(server.error || copyError) && <p className="m-0 rounded-xl bg-[#fef2f2] px-3 py-2 text-[13px] text-[#b42318]" role="alert">{server.error || copyError}</p>}
       <ServerStatusPanel
         authEnabled={server.authEnabled}
-        formDisabled={pending !== null}
+        formDisabled={pending !== null || saving}
         httpsEnabled={server.httpsEnabled}
         publicNetwork={server.publicNetwork}
         qrSrc={qrSrc}
@@ -198,10 +197,11 @@ function App() {
   const [snapshot, setSnapshot] = useState<PanelSnapshot | null>(null);
   const [selected, setSelected] = useState(0);
   const [pending, setPending] = useState<"Starting" | "Stopping" | null>(null);
+  const [saving, setSaving] = useState(false);
   const [statusError, setStatusError] = useState("");
   const statusRequest = useRef<AbortController | null>(null);
   const powerPending = useRef(false);
-  const server = snapshot?.servers[selected];
+  const server = snapshot?.servers[selected] ?? snapshot?.servers[0];
 
   useEffect(() => {
     async function refresh() {
@@ -229,6 +229,12 @@ function App() {
       statusRequest.current?.abort();
     };
   }, []);
+
+  function applySnapshot(next: PanelSnapshot) {
+    statusRequest.current?.abort();
+    setSnapshot(next);
+    setSelected((current) => current < next.servers.length ? current : 0);
+  }
 
   async function setPower(checked: boolean) {
     if (!server || powerPending.current) return;
@@ -270,10 +276,11 @@ function App() {
                 </select>
               </label>
             )}
-            <SelectedServer key={selected} server={server} pending={pending} onPower={(checked) => void setPower(checked)} />
-            <Activity snapshot={snapshot} />
+            <SelectedServer key={server.index} server={server} pending={pending} saving={saving} onPower={(checked) => void setPower(checked)} />
+            <StandaloneSettings snapshot={snapshot} powerPending={pending !== null} onSavingChange={setSaving} onSnapshot={applySnapshot} />
+            <Activity snapshot={snapshot} onSnapshot={applySnapshot} />
             <dl className="m-0 grid gap-1 break-all text-[11.5px] text-[#5f6670]">
-              <div><dt className="inline font-semibold">Settings (read only) </dt><dd className="inline">{snapshot.settingsPath}</dd></div>
+              <div><dt className="inline font-semibold">Settings </dt><dd className="inline">{snapshot.settingsPath}</dd></div>
               <div><dt className="inline font-semibold">Servers </dt><dd className="inline">{snapshot.source}</dd></div>
             </dl>
           </>

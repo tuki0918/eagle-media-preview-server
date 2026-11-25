@@ -1,3 +1,4 @@
+import type { PanelSettings } from "./standaloneSettings.cjs";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { access } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -45,7 +46,9 @@ interface PanelControls {
   activity(query: PanelActivityQuery): unknown;
   clearLog(): Promise<void>;
   exportLog(): unknown[];
-  serverCount: number;
+  getSettings(): Promise<PanelSettings>;
+  saveSettings(payload: Record<string, unknown>): Promise<PanelSettings>;
+  setBlockedAddress(address: unknown, blocked: boolean): Promise<void>;
   setPower(index: number, enabled: boolean): Promise<void>;
   snapshot(): PanelSnapshot;
 }
@@ -59,6 +62,33 @@ function activityQuery(query: URLSearchParams): PanelActivityQuery {
     searchKeys: { events: query.getAll("eventKey"), fields: query.getAll("fieldKey") },
     filters: filterFields.flatMap((field) => query.getAll(field).map((value) => ({ field, value }))),
   };
+}
+
+export class PanelRequestError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
+
+async function readPayload(req: IncomingMessage): Promise<Record<string, unknown>> {
+  if (req.headers["content-type"]?.split(";")[0].trim() !== "application/json") {
+    throw new PanelRequestError("Expected application/json", 415);
+  }
+  const maxBytes = 1024 * 1024;
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of req.iterator({ destroyOnReturn: false })) {
+    size += chunk.length;
+    if (size > maxBytes) throw new PanelRequestError("Settings request is too large", 413);
+    chunks.push(chunk);
+  }
+  try {
+    const value: unknown = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    if (value && typeof value === "object" && !Array.isArray(value)) return value as Record<string, unknown>;
+  } catch {
+    // The same error covers invalid JSON and bodies that are not objects.
+  }
+  throw new PanelRequestError("Expected a JSON object", 400);
 }
 
 export async function startStandalonePanel(controls: PanelControls, assets = panelDir) {
@@ -104,6 +134,7 @@ export async function startStandalonePanel(controls: PanelControls, assets = pan
     if (supplied.length !== authorization.length || !timingSafeEqual(supplied, authorization)) {
       return json(res, 401, { error: "Open the management panel using the URL printed by the CLI." });
     }
+    if (req.method === "GET" && path === "/api/settings") return json(res, 200, await controls.getSettings());
     if (req.method === "GET" && path === "/api/status") return json(res, 200, controls.snapshot());
     if (req.method === "GET" && path === "/api/activity") {
       return json(res, 200, controls.activity(activityQuery(new URLSearchParams(query))));
@@ -117,12 +148,21 @@ export async function startStandalonePanel(controls: PanelControls, assets = pan
     }
     if (req.method === "POST") {
       if (req.headers.origin !== origin) return json(res, 403, { error: "Forbidden" });
+      if (path === "/api/settings") {
+        const form = await controls.saveSettings(await readPayload(req));
+        return json(res, 200, { form, snapshot: controls.snapshot() });
+      }
+      if (path === "/api/settings/block" || path === "/api/settings/unblock") {
+        const { address } = await readPayload(req);
+        await controls.setBlockedAddress(address, path.endsWith("/block"));
+        return json(res, 200, controls.snapshot());
+      }
       if (path === "/api/activity/clear") {
         await controls.clearLog();
         return json(res, 200, {});
       }
       const power = /^\/api\/servers\/(\d+)\/(start|stop)$/.exec(path);
-      if (power && Number(power[1]) < controls.serverCount) {
+      if (power) {
         await controls.setPower(Number(power[1]), power[2] === "start");
         return json(res, 200, controls.snapshot());
       }
@@ -133,7 +173,7 @@ export async function startStandalonePanel(controls: PanelControls, assets = pan
   const server = createServer((req, res) => {
     void handle(req, res).catch((error: unknown) => {
       if (res.headersSent) res.destroy();
-      else json(res, 500, { error: error instanceof Error ? error.message : String(error) });
+      else json(res, error instanceof PanelRequestError ? error.status : 500, { error: error instanceof Error ? error.message : String(error) });
     });
   });
   await new Promise<void>((resolveListen, rejectListen) => {

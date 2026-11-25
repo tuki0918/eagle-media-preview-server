@@ -1,5 +1,5 @@
-const { chmod, mkdir, readFile, stat, writeFile } = require("fs").promises;
-const { createPrivateKey, createPublicKey, pbkdf2Sync, randomBytes, X509Certificate } = require("crypto");
+const { chmod, mkdir, readFile, realpath, rename, rm, stat, writeFile } = require("fs").promises;
+const { createHash, createPrivateKey, createPublicKey, pbkdf2Sync, randomBytes, X509Certificate } = require("crypto");
 const { dirname, join } = require("path");
 const { homedir, networkInterfaces } = require("os");
 const { createEagleLibrarySwitcher } = require("./eagleClient.cjs");
@@ -34,7 +34,7 @@ interface BlockedAddress {
   addedAt: number;
 }
 
-interface PluginSettings {
+export interface PluginSettings {
   blockedAddresses: BlockedAddress[];
   customDomain: string;
   allowMetadataEditing: boolean;
@@ -60,7 +60,7 @@ interface PluginSettings {
   uploadTimeoutMinutes: number;
 }
 
-type SettingsInput = Partial<Omit<PluginSettings, "port">> & {
+export type SettingsInput = Partial<Omit<PluginSettings, "port">> & {
   port?: unknown;
   userPasswords?: unknown;
 };
@@ -179,7 +179,7 @@ function defaultSettingsPath() {
   return join(homedir(), ".eagle-media-preview-server", "settings.json");
 }
 
-function createSettingsStore({ filePath = defaultSettingsPath() }: { filePath?: string } = {}) {
+export function createSettingsStore({ filePath = defaultSettingsPath() }: { filePath?: string } = {}) {
   // save() reads the file, merges and writes it back, and load() writes it when migrating or
   // creating it. Either running alongside a save could write back stale settings over the save, so
   // all file access runs one at a time.
@@ -212,47 +212,63 @@ function createSettingsStore({ filePath = defaultSettingsPath() }: { filePath?: 
     }
   }
 
+  const revisionOf = (text: string) => createHash("sha256").update(text).digest("base64url") as string;
+
+  async function readCurrent() {
+    const text: string | null = await readFile(filePath, "utf8").catch((error: unknown) => {
+      if (isNodeError(error) && error.code === "ENOENT") return null;
+      throw error;
+    });
+    const raw: unknown = text === null ? {} : JSON.parse(text) ?? {};
+    return {
+      revision: text === null ? "missing" : revisionOf(text),
+      raw,
+      settings: normalizeSettings(withLoadableCustomDomain(raw as SettingsInput)),
+    };
+  }
+
   const store = {
     filePath,
+    // The standalone panel can inspect a legacy file without migrating it until a save succeeds.
+    read: () => queued(readCurrent),
+    update<T>(
+      makeInput: (current: Awaited<ReturnType<typeof readCurrent>>) => SettingsInput,
+      validate: (settings: PluginSettings) => Promise<T>,
+    ) {
+      return queued(async () => {
+        const current = await readCurrent();
+        const next = await prepareSettings(current.settings, makeInput(current));
+        const result = await validate(next);
+        const target: string = await realpath(filePath).catch((error: unknown) => {
+          if (isNodeError(error) && error.code === "ENOENT") return filePath;
+          throw error;
+        });
+        const dir = dirname(target);
+        await mkdir(dir, { recursive: true, mode: 0o700 });
+        const temporary = join(dir, `.settings-${randomBytes(12).toString("hex")}.tmp`);
+        // Retain hand-written fields and remove the migrated single-user credentials.
+        const raw = current.raw && typeof current.raw === "object" && !Array.isArray(current.raw)
+          ? current.raw as Record<string, unknown>
+          : {};
+        const { allowMetadataEditing: _editing, basicAuthUser: _user, passwordHash: _hash, userPasswords: _passwords, ...retained } = raw;
+        const text = serializeSettings(next, retained);
+        try {
+          await writeFile(temporary, text, { encoding: "utf8", flag: "wx", mode: 0o600 });
+          if ((await readCurrent()).revision !== current.revision) throw new Error("Settings changed on disk. Reload settings and try again.");
+          await rename(temporary, target);
+        } finally {
+          await rm(temporary, { force: true });
+        }
+        return { before: current.settings, settings: next, revision: revisionOf(text), result };
+      });
+    },
     load: () => queued(loadNow),
     save: (input: SettingsInput = {}) => queued(() => saveNow(input)),
   };
 
   async function saveNow(input: SettingsInput) {
     const current = await loadNow();
-    validateAuthUsersInput(input.authUsers);
-    const next = withSessionSecret(normalizeSettings({ ...current, ...input }));
-    const userPasswords = normalizeUserPasswords(input.userPasswords);
-
-    if (userPasswords.size) {
-      next.authUsers = next.authUsers.map((user) => {
-        const password = userPasswords.get(user.username);
-        return password ? { ...user, passwordHash: hashPassword(password) } : user;
-      });
-    }
-
-    if (next.authEnabled && authUsersMissingPassword(next.authUsers)) {
-      throw new Error("Password is required for every enabled user");
-    }
-    if (next.httpsEnabled && (!next.httpsCertPath || !next.httpsKeyPath)) {
-      throw new Error("HTTPS requires certificate and key paths");
-    }
-    if (next.httpsEnabled) {
-      await validateHttpsCredentials(next.httpsCertPath, next.httpsKeyPath);
-    }
-    if (!next.authEnabled) {
-      if (input.allowMetadataEditing === true) {
-        throw new Error("Password protection is required when metadata editing is enabled");
-      }
-      next.passwordHash = "";
-      next.allowMetadataEditing = false;
-    }
-    if (next.authUsers.length) {
-      next.basicAuthUser = next.authUsers[0].username;
-      next.passwordHash = next.authEnabled ? next.authUsers[0].passwordHash : "";
-      next.allowMetadataEditing = next.authEnabled && authUsersCanEditMetadata(next.authUsers);
-    }
-
+    const next = await prepareSettings(current, input);
     await writeSettingsFile(filePath, next);
     return next;
   }
@@ -260,11 +276,52 @@ function createSettingsStore({ filePath = defaultSettingsPath() }: { filePath?: 
   return store;
 }
 
+async function prepareSettings(current: PluginSettings, input: SettingsInput) {
+  validateAuthUsersInput(input.authUsers);
+  const next = withSessionSecret(normalizeSettings({ ...current, ...input }));
+  const userPasswords = normalizeUserPasswords(input.userPasswords);
+
+  if (userPasswords.size) {
+    next.authUsers = next.authUsers.map((user) => {
+      const password = userPasswords.get(user.username);
+      return password ? { ...user, passwordHash: hashPassword(password) } : user;
+    });
+  }
+
+  if (next.authEnabled && authUsersMissingPassword(next.authUsers)) {
+    throw new Error("Password is required for every enabled user");
+  }
+  if (next.httpsEnabled && (!next.httpsCertPath || !next.httpsKeyPath)) {
+    throw new Error("HTTPS requires certificate and key paths");
+  }
+  if (next.httpsEnabled) {
+    await validateHttpsCredentials(next.httpsCertPath, next.httpsKeyPath);
+  }
+  if (!next.authEnabled) {
+    if (input.allowMetadataEditing === true) {
+      throw new Error("Password protection is required when metadata editing is enabled");
+    }
+    next.passwordHash = "";
+    next.allowMetadataEditing = false;
+  }
+  if (next.authUsers.length) {
+    next.basicAuthUser = next.authUsers[0].username;
+    next.passwordHash = next.authEnabled ? next.authUsers[0].passwordHash : "";
+    next.allowMetadataEditing = next.authEnabled && authUsersCanEditMetadata(next.authUsers);
+  }
+
+  return next;
+}
+
+function serializeSettings(settings: PluginSettings, retained: Record<string, unknown> = {}) {
+  return `${JSON.stringify({ ...retained, ...canonicalSettings(settings) }, null, 2)}\n`;
+}
+
 async function writeSettingsFile(filePath: string, settings: PluginSettings) {
   const settingsDir = dirname(filePath);
   await mkdir(settingsDir, { recursive: true, mode: 0o700 });
   await chmod(settingsDir, 0o700);
-  await writeFile(filePath, `${JSON.stringify(canonicalSettings(settings), null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+  await writeFile(filePath, serializeSettings(settings), { encoding: "utf8", mode: 0o600 });
   await chmod(filePath, 0o600);
 }
 
@@ -371,7 +428,7 @@ function canonicalSettings(settings: PluginSettings) {
 // out, and blocked addresses have their own events.
 const LOGGED_SETTING_FIELDS = ["authEnabled", "authUsers", "autoStart", "customDomain", "host", "httpsCertPath", "httpsEnabled", "httpsKeyPath", "libraryProtectionEnabled", "port", "sessionDurationDays", "sharedLibraries", "trustForwardedFor", "experimentalSort", "uploadMaxSizeMB", "uploadTimeoutMinutes"] as const;
 
-function changedSettingFields(before: PluginSettings, after: PluginSettings) {
+export function changedSettingFields(before: PluginSettings, after: PluginSettings) {
   return LOGGED_SETTING_FIELDS.filter((field) => JSON.stringify(before[field]) !== JSON.stringify(after[field]));
 }
 
@@ -878,6 +935,7 @@ module.exports = {
   buildAccessUrl,
   createServerManager,
   createSettingsStore,
+  changedSettingFields,
   defaultSettingsPath,
   getLanAddresses,
   hashPassword,
