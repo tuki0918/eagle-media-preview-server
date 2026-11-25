@@ -1,6 +1,7 @@
 import { afterEach, test } from "vitest";
 import assert from "node:assert/strict";
 import { appendFile, mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { get as httpGet } from "node:http";
 import { createServer } from "node:net";
 import { createRequire } from "node:module";
 import { join } from "node:path";
@@ -60,10 +61,19 @@ test("parses the serve options and the logs command", () => {
     help: false,
     host: "",
     libraries: ["/a.library"],
+    panel: false,
     port: "8080",
     settingsPath: "",
   });
   assert.deepEqual(parseArgs(["logs", "-f", "-n", "10"]), { accessLogPath: "", command: "logs", configPath: "", follow: true, help: false, lines: 10, settingsPath: "" });
+  assert.equal(parseArgs(["--panel"]).panel, true);
+  assert.equal(parseArgs(["--panel", "--panel-port", "0"]).panelPort, 0);
+  assert.equal(parseArgs(["--panel-port=41080", "--panel"]).panelPort, 41080);
+  assert.throws(() => parseArgs(["--panel-port", "41080"]), /--panel-port requires --panel/);
+  for (const port of ["", "65536", "-1", "4.5"]) {
+    assert.throws(() => parseArgs(["--panel", `--panel-port=${port}`]), /--panel-port must be an integer from 0-65535/);
+  }
+  assert.throws(() => parseArgs(["logs", "--panel"]), /Unknown option: --panel/);
   assert.throws(() => parseArgs(["--library"]), /--library needs a value/);
   assert.throws(() => parseArgs(["logs", "--library", "/a"]), /Unknown option: --library/);
 });
@@ -255,6 +265,514 @@ test("a server whose HTTPS certificate can't be read is skipped; the others run"
     assert.equal(running.servers.length, 1);
     assert.match(lines.join("\n"), /Server 1: not started: .*missing-cert\.pem/);
     assert.match(lines.join("\n"), /running\s+http:\/\/localhost:\d+\s+Work/);
+  } finally {
+    await running.stop();
+  }
+});
+
+test("the local management panel stays available through listener failures and stop/start", async () => {
+  const dir = await workspace();
+  const first = await createLibrary(dir, "Photos");
+  const second = join(dir, "Work.library");
+  const busy = createServer();
+  await new Promise<void>((resolveListen, rejectListen) => {
+    busy.once("error", rejectListen);
+    busy.listen(0, "127.0.0.1", () => {
+      busy.off("error", rejectListen);
+      resolveListen();
+    });
+  });
+  const port = (busy.address() as { port: number }).port;
+  const settingsPath = await writeSettings(dir, {
+    port,
+    autoStart: true,
+    sharedLibraries: [{ path: first, name: "Photos" }, { path: second, name: "Work" }],
+  });
+  const before = await readFile(settingsPath, "utf8");
+  await writeFile(join(dir, "index.html"), "<title>Media Preview Server</title>");
+  await writeFile(join(dir, "app.js"), "");
+  const lines: string[] = [];
+
+  let stop: (() => Promise<void>) | undefined;
+  try {
+    const running = await runStandalone(["--panel", "--panel-port", "0"], {
+      log: (line: string) => lines.push(line),
+      panelAssets: dir,
+      panelStateDir: dir,
+    });
+    stop = () => running.stop();
+    const url = new URL(running.panelUrl);
+    assert.equal(url.hostname, "127.0.0.1");
+    assert.equal(url.hash.length, 44);
+    assert.deepEqual(lines, [`Management panel: ${running.panelUrl}`]);
+    const headers = { Authorization: `Bearer ${url.hash.slice(1)}` };
+    const get = (path: string) => fetch(url.origin + path, { headers });
+    const post = (path: string) => fetch(url.origin + path, { method: "POST", headers: { ...headers, Origin: url.origin } });
+
+    assert.match(await (await fetch(url.origin)).text(), /Media Preview Server/);
+    assert.equal((await fetch(url.origin + "/api/status")).status, 401);
+    for (const host of ["other.test", `localhost:${url.port}`]) {
+      const { status, body } = await new Promise<{ status: number | undefined; body: string }>((resolve, reject) => {
+        const request = httpGet(url.origin, { headers: { Host: host } }, async (response) => {
+          try {
+            const chunks = [];
+            for await (const chunk of response) chunks.push(chunk);
+            resolve({ status: response.statusCode, body: Buffer.concat(chunks).toString() });
+          } catch (error) {
+            reject(error);
+          }
+        });
+        request.once("error", reject);
+      });
+      assert.equal(status, 403);
+      assert.match(JSON.parse(body).error, /127\.0\.0\.1.*printed by the CLI/);
+      assert.ok(!body.includes(url.hash.slice(1)));
+    }
+    assert.equal((await fetch(url.origin + "/api/servers/0/start", { method: "POST", headers: { ...headers, Origin: "http://other.test" } })).status, 403);
+    assert.equal((await fetch(url.origin + "/api/servers/0/start", { method: "POST", headers })).status, 403);
+    assert.equal((await get("/settings.json")).status, 404);
+
+    const initial = await (await get("/api/status")).json();
+    assert.equal(initial.servers[0].state, "error");
+    assert.match(initial.servers[0].error, /port in use/);
+    assert.equal(initial.servers.length, 1);
+    assert.match(initial.servers[0].libraries[1].status, /not found/);
+    assert.equal(running.servers.length, 0);
+
+    await new Promise<void>((resolveClose) => busy.close(() => resolveClose()));
+    await createLibrary(dir, "Work");
+    const started = await (await post("/api/servers/0/start")).json();
+    assert.equal(started.servers[0].state, "running");
+    const viewerOrigin = started.servers[0].url.replace("localhost", "127.0.0.1");
+    assert.equal((await fetch(viewerOrigin + "/api/health")).status, 200);
+    assert.equal((await post("/api/servers/1/start")).status, 404);
+    const stopped = await (await post("/api/servers/0/stop")).json();
+    assert.equal(stopped.servers[0].state, "stopped");
+    const restarted = await (await post("/api/servers/0/start")).json();
+    assert.equal(restarted.servers[0].state, "running");
+
+    const activity = await (await get("/api/activity?range=1h&type=system&search=stopped&eventKey=server_stop")).json();
+    assert.equal(activity.range, "1h");
+    assert.deepEqual(activity.recent.map(({ event }: { event: string }) => event), ["server_stop"]);
+    assert.match(await (await get("/api/activity/export")).text(), /server_start_failed/);
+    assert.equal((await post("/api/activity/clear")).status, 200);
+    const cleared = await (await get("/api/activity")).json();
+    assert.deepEqual(cleared.recent.map(({ event }: { event: string }) => event), ["log_cleared"]);
+
+    await running.stop();
+    await assert.rejects(fetch(url.origin));
+    assert.equal(await readFile(settingsPath, "utf8"), before);
+    assert.deepEqual(lines, [`Management panel: ${running.panelUrl}`]);
+  } finally {
+    await stop?.();
+    if (busy.listening) await new Promise<void>((resolveClose) => busy.close(() => resolveClose()));
+  }
+});
+
+test("the management panel saves shared settings, preserves editable drafts and blocks viewers live", async () => {
+  const dir = await workspace();
+  const library = await createLibrary(dir, "Photos");
+  const reservation = createServer();
+  await new Promise<void>((resolve, reject) => {
+    reservation.once("error", reject);
+    reservation.listen(0, "127.0.0.1", resolve);
+  });
+  const port = (reservation.address() as { port: number }).port;
+  await new Promise<void>((resolve) => reservation.close(() => resolve()));
+  const { hashPassword } = require("../dist/.generated/plugin-service/runtime.cjs");
+  const existingHash = hashPassword("existing password");
+  const settingsPath = await writeSettings(dir, {
+    port,
+    authUsers: [{ username: "alice", passwordHash: existingHash, role: "viewer" }],
+    autoStart: true,
+    customField: "retained",
+    trustForwardedFor: true,
+    libraryProtectionEnabled: true,
+    sharedLibraries: [{ path: library, name: "Photos", access: "selected", users: ["alice"] }],
+  });
+  const before = await readFile(settingsPath, "utf8");
+  await writeFile(join(dir, "index.html"), "<title>Media Preview Server</title>");
+  await writeFile(join(dir, "app.js"), "");
+  const running = await runStandalone(["--panel", "--panel-port", "0"], { log: () => {}, panelAssets: dir, panelStateDir: dir });
+  try {
+    const url = new URL(running.panelUrl);
+    const authorization = { Authorization: `Bearer ${url.hash.slice(1)}` };
+    const read = (path: string) => fetch(url.origin + path, { headers: authorization });
+    const post = (path: string, input?: unknown, origin = url.origin) => fetch(url.origin + path, {
+      method: "POST",
+      headers: { ...authorization, Origin: origin, ...(input === undefined ? {} : { "Content-Type": "application/json" }) },
+      body: input === undefined ? undefined : JSON.stringify(input),
+    });
+
+    assert.equal((await fetch(url.origin + "/api/settings")).status, 401);
+    const formText = await (await read("/api/settings")).text();
+    const { revision, settings, libraries } = JSON.parse(formText);
+    assert.equal(settings.authUsers[0].hasPassword, true);
+    assert.equal(libraries[0].path, library);
+    assert.ok(!formText.includes(existingHash));
+    assert.doesNotMatch(formText, /passwordHash|sessionSecret/);
+    const change = {
+      revision,
+      settings: {
+        authEnabled: true,
+        authUsers: [
+          { username: "alicia", rowKey: "alice", role: "viewer" },
+          { username: "bob", password: "new password", role: "admin" },
+        ],
+        customDomain: "preview.local",
+        port: String(port),
+        sessionDurationDays: "12",
+        sharedLibraries: [{ path: library, name: "Photos", access: "selected", users: ["alicia"] }],
+      },
+    };
+    assert.equal((await post("/api/settings", change, "http://example.test")).status, 403);
+    assert.equal((await post("/api/settings", change)).status, 409);
+    assert.equal(await readFile(settingsPath, "utf8"), before);
+
+    assert.equal((await post("/api/servers/0/stop")).status, 200);
+    const invalid = await post("/api/settings", { revision, settings: { port: 0 } });
+    assert.equal(invalid.status, 400);
+    assert.equal(await readFile(settingsPath, "utf8"), before);
+    assert.equal((await post("/api/settings/block", { address: "invalid" })).status, 400);
+    const draftAddress = "198.51.100.8";
+    assert.equal((await post("/api/settings/block", { address: draftAddress })).status, 200);
+    assert.equal((await (await read("/api/settings")).json()).revision, revision);
+    assert.equal((await post("/api/settings/unblock", { address: draftAddress })).status, 200);
+    assert.equal((await (await read("/api/settings")).json()).revision, revision);
+    assert.equal((await post("/api/settings/block", { address: draftAddress })).status, 200);
+    const response = await post("/api/settings", change);
+    assert.equal(response.status, 200);
+    const saved = await response.json();
+    assert.notEqual(saved.form.revision, revision);
+    assert.equal(saved.form.settings.port, port);
+    assert.equal(saved.snapshot.servers[0].port, port);
+    assert.equal(saved.snapshot.servers[0].authEnabled, true);
+    assert.equal(saved.form.settings.authUsers[1].hasPassword, true);
+    const persistedText = await readFile(settingsPath, "utf8");
+    const persisted = JSON.parse(persistedText);
+    assert.equal(persisted.authUsers[0].passwordHash, existingHash);
+    assert.equal(persisted.sessionSecret, SECRET);
+    assert.equal(persisted.autoStart, true);
+    assert.equal(persisted.customField, "retained");
+    assert.equal(persisted.trustForwardedFor, true);
+    assert.deepEqual(persisted.sharedLibraries[0].users, ["alicia"]);
+    assert.doesNotMatch(persistedText, /new password|existing password/);
+    assert.deepEqual(persisted.blockedAddresses.map(({ address }: { address: string }) => address), [draftAddress]);
+    assert.equal((await post("/api/settings", change)).status, 409);
+
+    const started = await (await post("/api/servers/0/start")).json();
+    assert.equal(started.servers[0].state, "running");
+    assert.match(started.servers[0].url, /preview\.local/);
+    const viewer = new URL(started.servers[0].url);
+    viewer.hostname = "127.0.0.1";
+    const login = (username: string, password: string) => fetch(viewer.origin + "/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: viewer.origin },
+      body: JSON.stringify({ username, password }),
+    });
+    assert.equal((await login("alicia", "existing password")).status, 200);
+    assert.equal((await login("bob", "new password")).status, 200);
+
+    const address = "198.51.100.7";
+    const proxied = () => fetch(viewer.origin + "/api/auth/status", { headers: { "X-Forwarded-For": address } });
+    assert.equal((await proxied()).status, 200);
+    const blocked = await post("/api/settings/block", { address });
+    assert.equal(blocked.status, 200);
+    assert.ok((await blocked.json()).blockedAddresses.some((entry: { address: string }) => entry.address === address));
+    assert.ok(JSON.parse(await readFile(settingsPath, "utf8")).blockedAddresses.some((entry: { address: string }) => entry.address === address));
+    assert.equal((await proxied()).status, 403);
+    assert.equal((await post("/api/settings/unblock", { address })).status, 200);
+    assert.equal((await proxied()).status, 200);
+
+    const revisionAfterSave = saved.form.revision;
+    const invalidHttps = await post("/api/settings/switch", { revision: revisionAfterSave, field: "httpsEnabled", checked: true });
+    assert.equal(invalidHttps.status, 400);
+    assert.match((await invalidHttps.json()).error, /certificate and key/);
+    assert.equal((await (await proxied()).json()).required, true);
+
+    const passwordOff = await post("/api/settings/switch", {
+      revision: revisionAfterSave,
+      field: "authEnabled",
+      checked: false,
+      settings: { port: 1 },
+    });
+    assert.equal(passwordOff.status, 200);
+    const switched = await passwordOff.json();
+    assert.equal(switched.snapshot.servers[0].state, "running");
+    assert.equal(switched.snapshot.servers[0].authEnabled, false);
+    const diskSettings = JSON.parse(await readFile(settingsPath, "utf8"));
+    assert.equal(diskSettings.authEnabled, false);
+    assert.equal(diskSettings.port, port);
+    assert.equal((await (await proxied()).json()).required, false);
+
+    const passwordOn = await post("/api/settings/switch", { revision: switched.form.revision, field: "authEnabled", checked: true });
+    assert.equal(passwordOn.status, 200);
+    assert.equal((await passwordOn.json()).snapshot.servers[0].state, "running");
+    assert.equal((await login("alicia", "existing password")).status, 200);
+  } finally {
+    await running.stop();
+  }
+});
+
+test("panel mode rejects viewer CLI options and can configure its first library", async () => {
+  const dir = await workspace();
+  const library = await createLibrary(dir, "Photos");
+  await writeFile(join(dir, "index.html"), "<title>Media Preview Server</title>");
+  await writeFile(join(dir, "app.js"), "");
+  const options = { log: () => {}, panelAssets: dir, panelStateDir: dir };
+  for (const flags of [
+    ["--config", "standalone.json"], ["--library", library], ["--settings", "other.json"],
+    ["--access-log", "other.jsonl"], ["-f"], ["--port", "0"],
+  ]) {
+    await assert.rejects(runStandalone(["--panel", ...flags], options), /--panel can only be combined with --panel-port/);
+  }
+  const running = await runStandalone(["--panel", "--panel-port", "0"], options);
+  try {
+    const url = new URL(running.panelUrl);
+    const headers = { Authorization: `Bearer ${url.hash.slice(1)}`, Origin: url.origin };
+    const get = (path: string) => fetch(url.origin + path, { headers });
+    const save = (body: unknown) => fetch(url.origin + "/api/settings", {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const status = await (await get("/api/status")).json();
+    assert.deepEqual(status.servers.map((server: { state: string; libraries: unknown[] }) => [server.state, server.libraries]), [["stopped", []]]);
+    const form = await (await get("/api/settings")).json();
+    const draft = { revision: form.revision, settings: { host: "0.0.0.0", sharedLibraries: [{ path: library, name: "Photos" }] } };
+    const unconfirmed = await save(draft);
+    assert.equal(unconfirmed.status, 400);
+    assert.equal((await unconfirmed.json()).code, "confirm_anonymous_lan");
+    await assert.rejects(stat(join(dir, "settings.json")), { code: "ENOENT" });
+    const confirmed = await save({ ...draft, allowAnonymousLan: true });
+    assert.equal(confirmed.status, 200);
+    const { snapshot } = await confirmed.json();
+    assert.equal(snapshot.servers[0].publicNetwork, true);
+    assert.equal(snapshot.servers[0].libraries[0].name, "Photos");
+    const onDisk = JSON.parse(await readFile(join(dir, "settings.json"), "utf8"));
+    assert.equal(onDisk.sharedLibraries[0].path, library);
+  } finally {
+    await running.stop();
+  }
+});
+
+test("panel mode starts the viewer with the CLI only when Auto start is on", async () => {
+  const dir = await workspace();
+  const library = await createLibrary(dir, "Photos");
+  const reservation = createServer();
+  await new Promise<void>((resolve, reject) => {
+    reservation.once("error", reject);
+    reservation.listen(0, "127.0.0.1", resolve);
+  });
+  const port = (reservation.address() as { port: number }).port;
+  await new Promise<void>((resolve) => reservation.close(() => resolve()));
+  await writeSettings(dir, { port, sharedLibraries: [{ path: library, name: "Photos" }] });
+  await writeFile(join(dir, "index.html"), "<title>Media Preview Server</title>");
+  await writeFile(join(dir, "app.js"), "");
+  const options = { log: () => {}, panelAssets: dir, panelStateDir: dir };
+
+  const first = await runStandalone(["--panel", "--panel-port", "0"], options);
+  try {
+    const url = new URL(first.panelUrl);
+    const headers = { Authorization: `Bearer ${url.hash.slice(1)}`, Origin: url.origin };
+    const get = (path: string) => fetch(url.origin + path, { headers });
+    const status = await (await get("/api/status")).json();
+    assert.equal(status.servers[0].state, "stopped");
+    assert.equal(first.servers.length, 0);
+
+    const form = await (await get("/api/settings")).json();
+    assert.equal(form.settings.autoStart, false);
+    const started = await (await fetch(url.origin + "/api/servers/0/start", { method: "POST", headers })).json();
+    assert.equal(started.servers[0].state, "running");
+    const before = started.servers[0].url;
+    const switched = await fetch(url.origin + "/api/settings/switch", {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ revision: form.revision, field: "autoStart", checked: true }),
+    });
+    assert.equal(switched.status, 200);
+    const saved = await switched.json();
+    assert.equal(saved.form.settings.autoStart, true);
+    // Turning Auto start on saves it for the next CLI start without restarting the running viewer.
+    assert.equal(saved.snapshot.servers[0].state, "running");
+    assert.equal(saved.snapshot.servers[0].url, before);
+    assert.equal(JSON.parse(await readFile(join(dir, "settings.json"), "utf8")).autoStart, true);
+  } finally {
+    await first.stop();
+  }
+
+  const second = await runStandalone(["--panel", "--panel-port", "0"], options);
+  try {
+    assert.equal(second.servers.length, 1);
+  } finally {
+    await second.stop();
+  }
+});
+
+test("the standalone panel reports Advanced Sort progress separately for each library", async () => {
+  const dir = await workspace();
+  const photos = await createLibrary(dir, "Photos");
+  const legacy = await createLibrary(dir, "Legacy");
+  await writeFile(join(legacy, "metadata.json"), JSON.stringify({ applicationVersion: "999.0.0" }));
+  const reservation = createServer();
+  await new Promise<void>((resolve, reject) => {
+    reservation.once("error", reject);
+    reservation.listen(0, "127.0.0.1", resolve);
+  });
+  const port = (reservation.address() as { port: number }).port;
+  await new Promise<void>((resolve) => reservation.close(() => resolve()));
+  await writeSettings(dir, {
+    port,
+    autoStart: true,
+    experimentalSort: true,
+    sharedLibraries: [
+      { path: photos, name: "Photos" },
+      { path: legacy, name: "Legacy" },
+      { path: join(dir, "Missing.library"), name: "Missing" },
+    ],
+  });
+  await writeFile(join(dir, "index.html"), "<title>Media Preview Server</title>");
+  await writeFile(join(dir, "app.js"), "");
+
+  const running = await runStandalone(["--panel", "--panel-port", "0"], { log: () => {}, panelAssets: dir, panelStateDir: dir });
+  try {
+    await running.ready;
+    const url = new URL(running.panelUrl);
+    const headers = { Authorization: `Bearer ${url.hash.slice(1)}`, Origin: url.origin };
+    const response = await fetch(url.origin + "/api/status", { headers });
+    assert.equal(response.status, 200);
+    const { servers } = await response.json();
+    assert.equal(servers[0].state, "running");
+    const [ready, failed, unavailable] = servers[0].sortIndexes;
+    assert.deepEqual(ready, { id: libraryIdFor(photos, SECRET), name: "Photos", status: "ready", loaded: 1, total: 1 });
+    assert.equal(failed.name, "Legacy");
+    assert.equal(failed.status, "failed");
+    assert.match(failed.reason, /999/);
+    assert.equal(unavailable.name, "Missing");
+    assert.equal(unavailable.status, "unavailable");
+    assert.match(unavailable.reason, /not found/);
+
+    const stopped = await fetch(url.origin + "/api/servers/0/stop", { method: "POST", headers });
+    assert.equal(stopped.status, 200);
+    assert.equal((await stopped.json()).servers[0].sortIndexes, undefined);
+  } finally {
+    await running.stop();
+  }
+});
+
+test("the panel keeps its chosen port, rotates its token, and reports port conflicts", async () => {
+  const dir = await workspace();
+  const library = await createLibrary(dir, "Photos");
+  const reservation = createServer();
+  await new Promise<void>((resolve, reject) => {
+    reservation.once("error", reject);
+    reservation.listen(0, "127.0.0.1", resolve);
+  });
+  const port = (reservation.address() as { port: number }).port;
+  const args = ["--panel", "--panel-port", String(port)];
+  const options = { log: () => {}, panelAssets: dir, panelStateDir: dir };
+
+  try {
+    await writeSettings(dir, { port, autoStart: true, sharedLibraries: [{ path: library, name: "Photos" }] });
+    await writeFile(join(dir, "index.html"), "<title>Media Preview Server</title>");
+    await writeFile(join(dir, "app.js"), "");
+    await assert.rejects(
+      runStandalone(args, options),
+      new RegExp(`Management panel port ${port} is already in use.*--panel-port`),
+    );
+  } finally {
+    await new Promise<void>((resolve) => reservation.close(() => resolve()));
+  }
+
+  const first = await runStandalone(args, options);
+  const firstUrl = new URL(first.panelUrl);
+  try {
+    assert.equal(firstUrl.hostname, "127.0.0.1");
+    assert.equal(firstUrl.port, String(port));
+    const status = await fetch(firstUrl.origin + "/api/status", {
+      headers: { Authorization: `Bearer ${firstUrl.hash.slice(1)}` },
+    });
+    assert.equal(status.status, 200);
+    const { servers } = await status.json();
+    assert.equal(servers[0].state, "error");
+    assert.match(servers[0].error, /Choose a different viewer port/);
+  } finally {
+    await first.stop();
+  }
+
+  const second = await runStandalone(args, options);
+  try {
+    const secondUrl = new URL(second.panelUrl);
+    assert.equal(secondUrl.origin, firstUrl.origin);
+    assert.notEqual(secondUrl.hash, firstUrl.hash);
+    const rejected = await fetch(secondUrl.origin + "/api/status", {
+      headers: { Authorization: `Bearer ${firstUrl.hash.slice(1)}` },
+    });
+    assert.equal(rejected.status, 401);
+    const authorized = await fetch(secondUrl.origin + "/api/status", {
+      headers: { Authorization: `Bearer ${secondUrl.hash.slice(1)}` },
+    });
+    assert.equal(authorized.status, 200);
+  } finally {
+    await second.stop();
+  }
+});
+
+test("both management panels display, search, export, and clear only their own access log", async () => {
+  const dir = await workspace();
+  const { createAccessLog, defaultAccessLogPath } = require("../dist/.generated/plugin-service/accessLog.cjs");
+  const { createServerManager } = require("../dist/.generated/plugin-service/runtime.cjs");
+  const pluginLogPath = defaultAccessLogPath("plugin", dir);
+  assert.equal(pluginLogPath, join(dir, "access-log.jsonl"));
+  const pluginLog = createAccessLog({ filePath: pluginLogPath });
+  const standaloneLog = createAccessLog({ filePath: defaultAccessLogPath("standalone", dir) });
+  const at = Date.now();
+  pluginLog.record({ at: at - 100, type: "view", event: "view", ip: "192.0.2.1", user: "plugin-user" });
+  standaloneLog.record({ at, type: "view", event: "view", ip: "192.0.2.2", user: "standalone-user" });
+  await Promise.all([pluginLog.flush(), standaloneLog.flush()]);
+  const manager = createServerManager({ accessLog: createAccessLog({ filePath: pluginLogPath }) });
+  await writeFile(join(dir, "index.html"), "<title>Media Preview Server</title>");
+  await writeFile(join(dir, "app.js"), "");
+
+  const running = await runStandalone(["--panel", "--panel-port", "0"], { log: () => {}, panelAssets: dir, panelStateDir: dir });
+  try {
+    const url = new URL(running.panelUrl);
+    const headers = { Authorization: `Bearer ${url.hash.slice(1)}`, Origin: url.origin };
+    const request = (path: string, method = "GET") => fetch(url.origin + path, { method, headers });
+    const recentUsers = (summary: { recent: { user?: string }[] }) => summary.recent.map((entry) => entry.user);
+    const plugin = await manager.accessLogSummary({ range: "24h" });
+    const standalone = await (await request("/api/activity")).json();
+    assert.deepEqual(recentUsers(plugin), ["plugin-user"]);
+    assert.deepEqual(recentUsers(standalone), ["standalone-user"]);
+    assert.equal(plugin.totals.view, 1);
+    assert.equal(standalone.totals.view, 1);
+    assert.deepEqual(recentUsers(await manager.accessLogSummary({ search: "standalone-user" })), []);
+    assert.deepEqual(recentUsers(await (await request("/api/activity?search=plugin-user")).json()), []);
+
+    const exportResponse = await request("/api/activity/export");
+    assert.match(
+      exportResponse.headers.get("content-disposition") ?? "",
+      /^attachment; filename="standalone-access-log-\d{4}(?:-\d{2}){5}\.csv"$/,
+    );
+    const exported = await exportResponse.text();
+    assert.match(exported, /status\n/);
+    assert.match(exported, /standalone-user/);
+    assert.doesNotMatch(exported, /plugin-user/);
+    const pluginExportPath = join(dir, "export.jsonl");
+    await manager.exportAccessLog(pluginExportPath, "jsonl");
+    const exportedEvents = (await readFile(pluginExportPath, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+    assert.deepEqual(exportedEvents.map((entry) => entry.user), ["plugin-user"]);
+    assert.ok(exportedEvents.every((entry) => !("source" in entry)));
+
+    await manager.clearAccessLog();
+    assert.equal((await manager.accessLogSummary()).totals.view, 0);
+    assert.match(await readFile(standaloneLog.filePath, "utf8"), /standalone-user/);
+
+    assert.equal((await request("/api/activity/clear", "POST")).status, 200);
+    const afterStandaloneClear = await (await request("/api/activity")).json();
+    assert.equal(afterStandaloneClear.totals.view, 0);
+    assert.deepEqual(afterStandaloneClear.recent.map((entry: { event: string }) => entry.event), ["log_cleared"]);
+    assert.deepEqual((await manager.accessLogSummary()).recent.map((entry: { event: string }) => entry.event), ["log_cleared"]);
   } finally {
     await running.stop();
   }

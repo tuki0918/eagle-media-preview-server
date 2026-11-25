@@ -1,16 +1,19 @@
 // What the standalone server serves, and where (docs/design/standalone-server.md, "Configuration").
 //
-// The plugin's settings.json is the base and is only ever read: users, roles, the session secret,
+// The plugin's settings.json is the base: users, roles, the session secret,
 // the block list, library protection, and the default port, host, hostname, and HTTPS all come
 // from it, so the standalone server answers at the same address, with the same sign-ins, as the
 // plugin. standalone.json, next to it, lists servers: each one names its libraries and may change
 // only where it listens (port, host, hostname, HTTPS). Users stay those of settings.json, so a
 // library opened through Eagle or the standalone server lets in the same people.
+import type { PluginSettings } from "./runtime.cjs";
+
 const { readFile } = require("fs").promises;
 const { homedir } = require("os");
 const { isAbsolute, join, resolve } = require("path");
 const { isIP } = require("net");
 const { randomBytes } = require("crypto");
+const { defaultAccessLogPath: accessLogPathFor } = require("./accessLog.cjs");
 const { libraryNameFromPath, libraryPathKey } = require("./libraryAccess.cjs");
 const { defaultSettingsPath, libraryUserRules, normalizeSettings, sharedLibraryPaths, withLoadableCustomDomain } = require("./runtime.cjs");
 
@@ -36,6 +39,8 @@ interface CliOverrides {
   libraries?: string[];
   port?: string;
   settingsPath?: string;
+  panel?: boolean;
+  panelStateDir?: string;
 }
 
 // Only where a server listens may differ from settings.json.
@@ -50,7 +55,7 @@ function defaultConfigPath() {
 }
 
 function defaultAccessLogPath() {
-  return join(stateDir(), "standalone-access-log.jsonl");
+  return accessLogPathFor("standalone");
 }
 
 // JSON has no shell to expand "~", so a leading "~/" is taken as the home folder.
@@ -119,17 +124,22 @@ function serverFrom(base: Record<string, unknown>, override: Record<string, unkn
  * Reads settings.json (never writes it) and standalone.json, and works out the servers to run.
  * `--library` given on the command line replaces standalone.json's servers with a single server.
  */
-async function resolveStandaloneConfig(cli: CliOverrides = {}) {
-  const settingsPath = cli.settingsPath ? expandPath(cli.settingsPath) : defaultSettingsPath();
+async function resolveStandaloneConfig(cli: CliOverrides = {}, proposed?: PluginSettings) {
+  const settingsPath = cli.panel && cli.panelStateDir ? join(cli.panelStateDir, "settings.json")
+    : cli.settingsPath ? expandPath(cli.settingsPath) : defaultSettingsPath();
   const configPath = cli.configPath ? expandPath(cli.configPath) : defaultConfigPath();
-  const rawSettings = (await readJsonFile(settingsPath, { optional: !cli.settingsPath })) ?? {};
-  const settings = normalizeSettings(withLoadableCustomDomain(rawSettings));
+  const settings = proposed ?? normalizeSettings(withLoadableCustomDomain(
+    (await readJsonFile(settingsPath, { optional: !cli.settingsPath })) ?? {},
+  ));
   const base: Record<string, unknown> = {};
   for (const field of SERVER_FIELDS) base[field] = settings[field];
 
   let servers: ServerPlan[];
   let source: string;
-  if (cli.libraries?.length) {
+  if (cli.panel) {
+    servers = [serverFrom(base, {}, settings.sharedLibraries.map((library: ServedLibrary) => ({ path: library.path, name: library.name })), settingsPath)];
+    source = `${settingsPath} (shared libraries)`;
+  } else if (cli.libraries?.length) {
     const override: Record<string, unknown> = {};
     if (cli.port) override.port = cli.port;
     if (cli.host) override.host = cli.host;
@@ -185,6 +195,8 @@ async function resolveStandaloneConfig(cli: CliOverrides = {}) {
     // whichever one answers. Without one in settings.json, sign-ins last until this server stops.
     common: {
       authUsers,
+      // With --panel, the viewer starts with the CLI only when this is on (shared with the plugin).
+      autoStart: settings.autoStart,
       blockedAddresses: settings.blockedAddresses,
       // Advanced Sort is on or off as in the plugin (settings.json's experimentalSort).
       experimentalSort: settings.experimentalSort,

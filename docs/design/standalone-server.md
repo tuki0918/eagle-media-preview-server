@@ -49,7 +49,7 @@ Two entry points share one server:
 | Backend | `EagleApiBackend` | `FsBackend` |
 | Libraries | The one open in Eagle (switchable) | All configured, at the same time |
 | Writes | Yes (by role) | No |
-| Settings | `~/.eagle-media-preview-server/settings.json` | The plugin's `settings.json`, only read, plus `standalone.json` for the servers (as built; see [Configuration and operation](#configuration-and-operation-as-built)) |
+| Settings | `~/.eagle-media-preview-server/settings.json` | The plugin's `settings.json`, editable with `--panel`. Terminal mode also accepts `standalone.json` for server definitions (as built; see [Configuration and operation](#configuration-and-operation-as-built)) |
 
 ## 4. The backend seam
 
@@ -159,7 +159,7 @@ Folders can have a `password` in the library's `metadata.json`. Eagle hides thei
 
 ### 6.1 Configuration
 
-Proposed: the standalone config uses the plugin's settings file format with one addition, the libraries to serve. (**As built**, this was replaced: the plugin's `settings.json` is only read, and `standalone.json` lists servers; see [Configuration and operation](#configuration-and-operation-as-built).)
+Proposed: the standalone config uses the plugin's settings file format with one addition, the libraries to serve. (**As built**, this was replaced: the plugin's `settings.json` supplies defaults, and `standalone.json` lists servers; see [Configuration and operation](#configuration-and-operation-as-built).)
 
 ```jsonc
 {
@@ -295,7 +295,7 @@ Superseded by [Configuration and operation](#configuration-and-operation-as-buil
 
 This replaces the `--config` file of P2, which was the plugin's settings format plus `libraries`.
 
-**settings.json is the base, and only read.** Users, roles, sign-in, the session secret, the block list, library protection (shared libraries and per-library users), and the default port, host, hostname, and HTTPS come from the plugin's `~/.eagle-media-preview-server/settings.json` (`--settings` for another). The plugin rewrites that file with only the fields it knows whenever its settings are saved, so nothing of the standalone server's is kept in it.
+**settings.json supplies the shared defaults.** Users, roles, sign-in, the session secret, the block list, library protection (shared libraries and per-library users), and the default port, host, hostname, and HTTPS come from the plugin's `~/.eagle-media-preview-server/settings.json` (`--settings` for another). The CLI reads it on startup. With `--panel`, the management panel can also save shared settings using the plugin's format. Panel mode uses the default settings file and its shared libraries for a single viewer server. Terminal mode can load separate server definitions from `standalone.json`.
 
 Sharing the session secret is what makes switching seamless: sign-in cookies and library ids are both derived from it, so a viewer stays signed in and keeps its library when the plugin answers instead of the standalone server, or the other way round. To edit a library, stop the standalone server for it, open Eagle, and use the same URL.
 
@@ -336,7 +336,7 @@ PORT    STATUS        URL                         LIBRARY   LIBRARY STATUS
 
 and the table again once every library is read. A library only on servers that didn't start isn't read.
 
-**Access log.** Written by default, in the plugin's format (`accessLog.cts`), to `~/.eagle-media-preview-server/standalone-access-log.jsonl` (`--access-log` for another): a file of its own, since the plugin may be writing its log at the same time. It records what the plugin's does (sign-ins, file views, failures, edits refused) plus `server_start`, `server_start_failed`, and `server_stop`; status polls and item lists only mark a device as connected, as in the plugin. `-f` streams entries below the table as they happen; `eagle-media-server logs [-f] [-n N]` prints the file from another terminal (useful when the server runs as a service), naming libraries from the current configuration.
+**Access log.** Written by default, in the plugin's format (`accessLog.cts`), to `~/.eagle-media-preview-server/standalone-access-log.jsonl` (`--access-log` for another): a file of its own, since the plugin may be writing `~/.eagle-media-preview-server/access-log.jsonl` at the same time. Each management panel shows and manages its own log. It records what the plugin's does (sign-ins, file views, failures, edits refused) plus `server_start`, `server_start_failed`, and `server_stop`; status polls and item lists only mark a device as connected, as in the plugin. `-f` streams entries below the table as they happen; `eagle-media-server logs [-f] [-n N]` prints the file from another terminal (useful when the server runs as a service), naming libraries from the current configuration.
 
 ## 11. Open questions
 

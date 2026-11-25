@@ -2,11 +2,13 @@ import {
   Activity,
   Ban,
   Check,
+  CircleAlert,
   ChevronDown,
   Copy,
   Download,
   Eye,
   EyeOff,
+  FileText,
   FolderOpen,
   Globe,
   KeyRound,
@@ -34,6 +36,7 @@ function iconComponent(Icon: LucideIcon, defaultClassName = "h-6 w-6") {
 }
 
 export const ActivityIcon = iconComponent(Activity);
+export const AlertIcon = iconComponent(CircleAlert);
 export const BanIcon = iconComponent(Ban);
 export const CloseIcon = iconComponent(X);
 export const DownloadIcon = iconComponent(Download);
@@ -42,6 +45,7 @@ export const TrashIcon = iconComponent(Trash2);
 export const UsersIcon = iconComponent(UsersRound);
 export const CheckIcon = iconComponent(Check);
 export const CopyIcon = iconComponent(Copy);
+export const FileTextIcon = iconComponent(FileText);
 export const FolderOpenIcon = iconComponent(FolderOpen);
 export const EmptyQrIcon = iconComponent(QrCode);
 export const EyeIcon = iconComponent(Eye);

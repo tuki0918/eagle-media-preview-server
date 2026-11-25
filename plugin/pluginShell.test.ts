@@ -204,7 +204,8 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(uiSource, /onChange=\{\(event\) => onUserPasswordDraftChange\(index, event\.currentTarget\.value\)\}/);
   assert.match(uiSource, /key=\{`\$\{passwordDraftRevision\}-\$\{index\}`\}/);
   assert.match(app, /function togglePasswordVisible\(index: number\)/);
-  assert.match(uiSource, /const canTogglePasswordVisible = !user\.passwordHash;/);
+  assert.match(uiSource, /const hasSavedPassword = Boolean\(user\.passwordHash \|\| user\.hasPassword\);/);
+  assert.match(uiSource, /const canTogglePasswordVisible = !hasSavedPassword;/);
   assert.match(uiSource, /const passwordVisible = canTogglePasswordVisible && passwordVisibleByIndex\[String\(index\)\];/);
   assert.match(uiSource, /type=\{passwordVisible \? "text" : "password"\}/);
   assert.match(uiSource, /aria-label=\{canTogglePasswordVisible \? \(passwordVisible \? `Hide password for \$\{user\.username \|\| `user \$\{index \+ 1\}`\}` : `Show password for \$\{user\.username \|\| `user \$\{index \+ 1\}`\}`\) : `Saved password for \$\{user\.username \|\| `user \$\{index \+ 1\}`\} is hidden`\}/);
@@ -228,7 +229,7 @@ test("plugin window uses per-user roles for metadata permissions", async () => {
   assert.match(uiSource, /value=\{settings\.port \?\? DEFAULT_PORT\}/);
   assert.match(uiSource, /disabled=\{settingsInputDisabled\}/);
   assert.match(uiSource, /flex min-h-9 items-center justify-between gap-3 border-t border-\[#efeff1\] pt-3/);
-  assert.match(uiSource, /<p className=\{`min-w-0 flex-1 truncate px-0\.5 text-\[10px\] \$\{messageIsError \? "text-\[#d92d20\]" : "text-\[#178c35\]"\}`\} aria-live="polite" hidden=\{!message\}>/);
+  assert.match(uiSource, /<p className=\{`m-0 min-w-0 flex-1 [^\n]+aria-live="polite" hidden=\{!message\}>/);
   assert.match(uiSource, /messageIsError \? "text-\[#d92d20\]" : "text-\[#178c35\]"/);
   assert.doesNotMatch(app, /onBlur=\{\(\) => saveSettings\(\)\}\s*\/>\s*<button className=\{`grid h-7 w-7 place-items-center rounded-md \$\{authActionButtonClassName\}`\}/);
   assert.doesNotMatch(app, /passwordDrafts: nextUserPasswords/);
@@ -251,7 +252,7 @@ test("plugin app keeps Eagle Node API compatibility with a classic script", asyn
   assert.match(app, /typeof window\.require !== "function"/);
   assert.match(app, /window\.require\(runtimePath\)/);
   assert.doesNotMatch(app, /window\.require\(qrcodePath\)/);
-  assert.match(app, /import qrcodeFactory from "qrcode-generator"/);
+  assert.match(app, /import \{ createQrDataUrl \} from "\.\/qrCode"/);
 });
 
 test("settings can collapse and endpoint opens externally", async () => {
@@ -1560,10 +1561,12 @@ test("manifest uses a frameless window for custom chrome", async () => {
 test("plugin QR rendering uses the bundled QR library instead of custom matrix code", async () => {
   const app = await readPluginAppSource();
 
-  assert.match(app, /qrcode-generator/);
+  const qr = await readFile(new URL("./qrCode.ts", import.meta.url), "utf8");
+
   assert.match(app, /createQrDataUrl/);
-  assert.doesNotMatch(app, /function createQrMatrix/);
-  assert.doesNotMatch(app, /function reedSolomon/);
+  assert.match(qr, /import qrcodeFactory from "qrcode-generator"/);
+  assert.doesNotMatch(qr, /function createQrMatrix/);
+  assert.doesNotMatch(qr, /function reedSolomon/);
 });
 
 test("plugin component styles are embedded as Tailwind classes", async () => {
@@ -2223,11 +2226,90 @@ test("the plugin package leaves out the standalone server's own modules, and not
   const viteConfig = await readFile(new URL("../vite.config.ts", import.meta.url), "utf8");
   const pattern = viteConfig.match(/const STANDALONE_ONLY_MODULE = (\/.+\/);/)?.[1];
   assert.ok(pattern, "vite.config.ts filters the standalone modules");
-  const standaloneOnly = ["fsBackend", "standalone", "standaloneConfig", "standaloneLog"];
+  const standaloneOnly = ["fsBackend", "standalone", "standaloneConfig", "standaloneLog", "standalonePanel", "standaloneSettings"];
   const shipped = ["accessLog", "addressBlockList", "auth", "connection", "customDomain", "eagleClient", "libraryAccess", "libraryBackend", "libraryIndex", "media", "runtime", "static", "upload", "viewerServer"];
   for (const name of shipped) {
     const source = await readFile(new URL(`${name}.cjs`, generatedServiceUrl), "utf8");
     for (const excluded of standaloneOnly) assert.doesNotMatch(source, new RegExp(`require\\("\\./${excluded}\\.cjs"\\)`), `${name}.cjs requires ${excluded}.cjs`);
   }
   for (const excluded of standaloneOnly) assert.match(viteConfig, new RegExp(`\\b${excluded}\\b`));
+});
+
+test("plugin separates startup and restart alerts from settings save errors", async () => {
+  const bundle = await esbuild({
+    bundle: true,
+    define: { "process.env.NODE_ENV": JSON.stringify("test") },
+    entryPoints: [new URL("./app.tsx", import.meta.url).pathname],
+    format: "iife",
+    platform: "browser",
+    write: false,
+  });
+  const dom = new JSDOM('<!doctype html><div id="root"></div>', {
+    runScripts: "outside-only",
+    url: "file:///tmp/eagle-plugin/plugin/index.html",
+  });
+  const win = dom.window as unknown as Window & { require(id: string): unknown; eval(source: string): void };
+  const stopped = { state: "stopped", url: "http://localhost:41532", port: 41532, settings: { host: "127.0.0.1", port: 41532, authEnabled: false } };
+  const portConflict = { ...stopped, state: "error", lastError: "listen EADDRINUSE: address already in use 0.0.0.0:41532" };
+  let rejectSave = true;
+  let rejectStart = true;
+  let failRestart = false;
+  win.require = (id) => id === "path" ? path : {
+    createServerManager: () => ({
+      init: () => stopped,
+      start: () => rejectStart ? portConflict : { ...stopped, state: "running" },
+      saveSettings(payload: Record<string, unknown>) {
+        if (rejectSave) throw new Error("Could not write settings.json");
+        return failRestart ? portConflict : { ...stopped, settings: { ...stopped.settings, ...payload } };
+      },
+    }),
+  };
+  try {
+    win.eval(bundle.outputFiles[0].text);
+    const doc = dom.window.document;
+    const submit = () => doc.querySelector<HTMLButtonElement>('form button[type="submit"]')!;
+    const power = () => doc.querySelector<HTMLInputElement>('[aria-label="Start or stop server"] input')!;
+    const banner = () => doc.querySelector<HTMLElement>('[role="alert"]');
+    const footer = () => doc.querySelector('form [aria-live="polite"]')!.textContent || "";
+    await waitFor(() => Boolean(submit() && !submit().disabled));
+
+    submit().click();
+    await waitFor(() => footer().includes("Could not write settings.json"));
+    assert.equal(banner(), null);
+
+    rejectSave = false;
+    doc.querySelector<HTMLButtonElement>("#settingsToggleButton")!.click();
+    await waitFor(() => Boolean(doc.querySelector("#settingsPanel")?.hasAttribute("hidden")));
+    doc.querySelector<HTMLButtonElement>('[aria-label="Copy endpoint URL"]')!.click();
+    await waitFor(() => Boolean(banner()?.textContent?.includes("Could not copy the endpoint URL")));
+    assert.equal(doc.querySelector("#settingsPanel")?.hasAttribute("hidden"), true);
+
+    power().click();
+    await waitFor(() => Boolean(banner()?.textContent?.includes("Port 41532 is already in use")));
+    assert.match(banner()?.textContent || "", /choose a different port/);
+    assert.equal(banner()?.closest("form"), null);
+    assert.doesNotMatch(footer(), /EADDRINUSE|Port 41532/);
+
+    rejectStart = false;
+    power().click();
+    await waitFor(() => power().checked && !power().disabled);
+    assert.equal(banner(), null);
+
+    failRestart = true;
+    doc.querySelector<HTMLInputElement>('input[aria-label="Public Network"]')!.click();
+    await waitFor(() => Boolean(banner()?.textContent?.includes("Port 41532 is already in use")));
+    assert.doesNotMatch(footer(), /EADDRINUSE|Port 41532/);
+
+    failRestart = false;
+    const network = () => doc.querySelector<HTMLInputElement>('input[aria-label="Public Network"]')!;
+    network().click();
+    await waitFor(() => network().checked && !network().disabled);
+    Object.defineProperty(win, "confirm", { value: undefined });
+    power().click();
+    await waitFor(() => Boolean(banner()?.textContent?.includes("Enable password protection or disable Public Network")));
+    network().click();
+    await waitFor(() => !network().checked && !network().disabled && banner() === null);
+  } finally {
+    dom.window.close();
+  }
 });

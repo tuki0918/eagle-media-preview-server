@@ -33,7 +33,7 @@ interface AccessLogPanelProps {
   onFiltersChange: (filters: AccessLogFilter[]) => void;
   onAutoRefreshChange: (checked: boolean) => void;
   /** Resolves true once the address is blocked (the admin may cancel the confirmation). */
-  onBlock: (address: string) => Promise<boolean>;
+  onBlock?: (address: string) => Promise<boolean>;
   onClear: () => void;
   onDismissNotice?: () => void;
   onDismissSelectNotice?: () => void;
@@ -47,7 +47,7 @@ interface AccessLogPanelProps {
   onRevealFile?: () => void;
   /** Selects the item in Eagle's main window; omitted when Eagle has no item selection API. */
   onSelectItem?: (itemId: string) => void;
-  onUnblock: (address: string) => void;
+  onUnblock?: (address: string) => void;
 }
 
 // Categorical slots 1–4 of the reference palette, in fixed order (validated as adjacent stack
@@ -197,17 +197,17 @@ export function AccessLogPanel({
       </button>
 
       <div id="activityPanel" className="mt-4 grid gap-3" hidden={!expanded}>
-        <div className="grid grid-cols-2 rounded-full bg-[#f1f1f3] p-1" role="tablist" aria-label="Activity sections">
+        {onBlock && onUnblock ? <div className="grid grid-cols-2 rounded-full bg-[#f1f1f3] p-1" role="tablist" aria-label="Activity sections">
           <TabButton active={tab === "overview"} controls="activityOverviewPanel" id="activityOverviewTab" onClick={() => setTab("overview")}>Overview</TabButton>
           <TabButton active={tab === "blocked"} controls="activityBlockedPanel" id="activityBlockedTab" onClick={() => setTab("blocked")}>
             Blocked addresses
             {blockedAddresses.length ? <span className="ml-1.5 rounded-full bg-[#e6e6e9] px-1.5 py-px text-[10px] font-semibold tabular-nums text-[#737373]">{blockedAddresses.length}</span> : null}
           </TabButton>
-        </div>
+        </div> : null}
 
         {notice ? <NoticeBanner notice={notice} onDismiss={onDismissNotice} /> : null}
 
-        <div id="activityOverviewPanel" className="grid gap-3" role="tabpanel" aria-labelledby="activityOverviewTab" hidden={tab !== "overview"}>
+        <div id="activityOverviewPanel" className="grid gap-3" role={onBlock && onUnblock ? "tabpanel" : undefined} aria-labelledby={onBlock && onUnblock ? "activityOverviewTab" : undefined} hidden={tab !== "overview"}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="grid grid-cols-3 rounded-full bg-[#f1f1f3] p-1" role="group" aria-label="Time range">
               {RANGE_OPTIONS.map((option) => (
@@ -228,7 +228,7 @@ export function AccessLogPanel({
           </div>
 
           <div className="grid grid-cols-4 gap-2 max-[520px]:grid-cols-2">
-            <StatTile label="Connected" value={activeClients} help="Devices seen in the last 2 minutes" />
+            <StatTile label="Connected" value={activeClients} help="Devices seen by this server in the last 2 minutes" />
             <StatTile label="Views" value={totals?.view ?? 0} />
             <StatTile label="Edits" value={totals?.edit ?? 0} />
             <StatTile label="Failed sign-ins" value={totals?.authFailures ?? 0} />
@@ -299,13 +299,13 @@ export function AccessLogPanel({
           </div>
 
           <p className="m-0 text-[10.5px] leading-snug text-[#9a9ea6]">
-            Kept in your computer's temporary folder for up to 7 days. Still available after the server stops, but may be cleared sooner.
+            Shows up to 7 days of access history.
           </p>
         </div>
 
-        <div id="activityBlockedPanel" role="tabpanel" aria-labelledby="activityBlockedTab" hidden={tab !== "blocked"}>
+        {onBlock && onUnblock ? <div id="activityBlockedPanel" role="tabpanel" aria-labelledby="activityBlockedTab" hidden={tab !== "blocked"}>
           <BlockedAddressList blockedAddresses={blockedAddresses} onBlock={onBlock} onUnblock={onUnblock} />
-        </div>
+        </div> : null}
       </div>
     </section>
   );
@@ -466,7 +466,7 @@ function clientFailures(client: AccessLogClient) {
   return client.authFailures + (client.editFailures ?? 0);
 }
 
-function ClientTable({ blocked, filters, summary, onBlock, onFiltersChange }: { blocked: Set<string>; filters: AccessLogFilter[]; summary: AccessLogSummary | null; onBlock: (address: string) => Promise<boolean>; onFiltersChange: (filters: AccessLogFilter[]) => void }) {
+function ClientTable({ blocked, filters, summary, onBlock, onFiltersChange }: { blocked: Set<string>; filters: AccessLogFilter[]; summary: AccessLogSummary | null; onBlock?: (address: string) => Promise<boolean>; onFiltersChange: (filters: AccessLogFilter[]) => void }) {
   const clients = summary?.clients || [];
   const hidden = Math.max(0, (summary?.clientCount ?? clients.length) - clients.length);
   if (!clients.length) return <EmptyRow>No devices have connected yet.</EmptyRow>;
@@ -503,11 +503,11 @@ function ClientTable({ blocked, filters, summary, onBlock, onFiltersChange }: { 
           <span className="grid place-items-center" role="cell">
             {blocked.has(client.ip) ? (
               <span title="Blocked"><BanIcon className="h-3.5 w-3.5 text-[#b42318]" /><span className="sr-only">Blocked</span></span>
-            ) : isLoopback(client.ip) ? null : (
+            ) : onBlock && !isLoopback(client.ip) ? (
               <button className="grid h-6 w-6 place-items-center rounded-md border-0 bg-transparent p-0 text-[#8a8f99] transition-colors hover:bg-[#fef2f2] hover:text-[#b42318]" type="button" aria-label={`Block ${client.ip}`} title={`Block ${client.ip}`} onClick={() => void onBlock(client.ip)}>
                 <BanIcon className="h-3.5 w-3.5" />
               </button>
-            )}
+            ) : null}
           </span>
         </div>
         );
@@ -581,7 +581,7 @@ function EventTable({ emptyText, entries, filters, libraryNames, searchedText, o
             <span className="flex min-w-0" role="cell">
               {entry.user ? <FilterButton filter={{ field: "user", value: entry.user }} filters={filters} onFiltersChange={onFiltersChange}><Match query={searchedText} text={entry.user} /></FilterButton> : "—"}
             </span>
-            <span className={`flex min-w-0 ${failed ? "font-semibold text-[#b42318]" : "text-[#171717]"}`} role="cell">
+            <span className={`grid min-w-0 justify-items-start ${failed ? "font-semibold text-[#b42318]" : "text-[#171717]"}`} role="cell">
               <FilterButton filter={{ field: "event", value: entry.event }} filters={filters} onFiltersChange={onFiltersChange}>
                 <Match query={searchedText} text={`${EVENT_LABELS[entry.event] || entry.event}${failed && entry.type !== "auth" && entry.type !== "system" && entry.status ? ` (${entry.status})` : ""}`} />
               </FilterButton>

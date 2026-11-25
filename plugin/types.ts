@@ -10,6 +10,8 @@ export interface AuthUser {
   rowKey?: string;
   /** Editors only: admins can always upload and viewers never can. */
   canUpload?: boolean;
+  /** The standalone panel receives this flag instead of the saved hash. */
+  hasPassword?: boolean;
   passwordHash?: string;
   role?: UserRole;
   username?: string;
@@ -78,6 +80,7 @@ export interface SortIndexStatus {
 
 export interface PluginStatus {
   lastError?: string;
+  port?: number;
   /** Present only while the server runs with Advanced Sort on. */
   sortIndex?: SortIndexStatus | null;
   settings?: PluginSettings;

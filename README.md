@@ -186,7 +186,7 @@ Block a device from its row or by entering an address or CIDR range under **Bloc
 
 ![](docs/server_panel_activity_blocked.png)
 
-The log is kept in your computer's temporary folder for up to 7 days and can be exported as CSV.
+Each management panel shows up to 7 days of its own access history and can export it as CSV. By default, the Eagle plugin writes to `~/.eagle-media-preview-server/access-log.jsonl` and the standalone server writes to `~/.eagle-media-preview-server/standalone-access-log.jsonl`.
 
 </details>
 
@@ -230,7 +230,7 @@ The standalone server lets the viewer browse Eagle libraries **without Eagle run
 <summary><strong>Overview and usage</strong></summary>
 
 - **Read only.** Starring, editing, uploading, and moving to the trash need the plugin in Eagle.
-- **Same users and address as the plugin.** It reads the plugin's `settings.json` (users, sign-in, HTTPS, port, and hostname) and never writes it. A server whose port is in use, by the running plugin for example, is skipped.
+- **Same users and address as the plugin.** It uses the plugin's `settings.json` for users, sign-in, HTTPS, port, and hostname. Use the optional management panel to edit those settings. A server whose port is in use, by the running plugin for example, is skipped.
 - **Limits.** Smart folders aren't shown, each start reads the whole library (about 16 s per 300,000 items), and it runs with Node.js from this repository; there's no app or installer yet.
 
 ```sh
@@ -239,6 +239,14 @@ npm run standalone -- -f
 ```
 
 Without `--library`, it runs the servers listed in `~/.eagle-media-preview-server/standalone.json`, or, without that file, serves the libraries the plugin shares. `-f` also prints each access log entry in the terminal as it happens; leave it out to run quietly.
+
+Run `--panel` to start the local management panel, then open the printed URL in a browser on that machine. Its default port is `41531`. Use `--panel-port` to change it. It uses the default `settings.json` and displays the access log under **Activity**. Start and stop the viewer server from the panel and add libraries under **Settings → Libraries**. With **Auto start** on, the viewer server starts with the CLI; with it off, start it from the panel. Auto start is the same setting as the plugin's.
+
+```sh
+npm run standalone -- --panel
+# Or use a different management port
+npm run standalone -- --panel --panel-port 41080
+```
 
 To serve specific libraries instead:
 

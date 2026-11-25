@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import qrcodeFactory from "qrcode-generator";
+import { createQrDataUrl } from "./qrCode";
 import { AccessLogPanel, accessLogSearchKeys, RECENT_EVENT_LIMIT } from "./components/AccessLogPanel";
 import { CloseIcon } from "./components/Icons";
+import { ServerAlert, ServerStartAlert } from "./components/ServerAlert";
 import { ServerStatusPanel } from "./components/ServerStatusPanel";
 import { authUserKey, SettingsForm, type HttpsFileField } from "./components/SettingsForm";
 import { serverRestartSettingsChanged, settingsPayloadChanged } from "./settingsChange";
@@ -90,6 +91,9 @@ function App() {
   const managerRef = useRef<ServerManager | null>(null);
   const [busy, setBusy] = useState(false);
   const [busyAction, setBusyAction] = useState<BusyAction | null>(null);
+  const [serverCommandError, setServerCommandError] = useState<{ action: BusyAction | null; message: string } | null>(null);
+  const [startWarning, setStartWarning] = useState<"anonymous-lan" | "insecure-http" | null>(null);
+  const [panelError, setPanelError] = useState<{ title: string; message: string } | null>(null);
   const [message, setMessageState] = useState("");
   const [messageIsError, setMessageIsError] = useState(false);
   const [urlCopied, setUrlCopied] = useState(false);
@@ -181,7 +185,7 @@ function App() {
         init();
       }
     } catch (error) {
-      setErrorMessage(error);
+      setServerCommandError({ action: null, message: errorMessage(error) });
     }
   }, []);
 
@@ -257,20 +261,21 @@ function App() {
     }
   }
 
-  async function runCommand(command: () => Promise<PluginStatus> | PluginStatus | null | undefined, { action = null, quiet = false }: { action?: BusyAction | null; quiet?: boolean } = {}) {
+  async function runCommand(command: () => Promise<PluginStatus> | PluginStatus | null | undefined, { action = null, quiet = false, savingSettings = false }: { action?: BusyAction | null; quiet?: boolean; savingSettings?: boolean } = {}) {
+    if (!savingSettings) {
+      setServerCommandError(null);
+      setPanelError(null);
+    }
     setBusy(true);
     setBusyAction(action);
     try {
       const nextStatus = await command();
       if (nextStatus) setStatus(nextStatus);
-      if (nextStatus?.state === "error") {
-        setMessage(nextStatus.lastError || "Server failed to start", true);
-      } else if (!quiet) {
-        setMessage("");
-      }
+      if (!quiet && !savingSettings) setMessage("");
       return true;
     } catch (error) {
-      setErrorMessage(error);
+      if (savingSettings) setErrorMessage(error);
+      else setServerCommandError({ action, message: errorMessage(error) });
       return false;
     } finally {
       setBusy(false);
@@ -324,15 +329,27 @@ function App() {
       return true;
     }
 
+    function clearResolvedStartWarning() {
+      setStartWarning((warning) => {
+        if (!nextPublicNetwork) return null;
+        if (warning === "anonymous-lan" && nextAuthEnabled) return null;
+        if (warning === "insecure-http" && nextHttpsEnabled) return null;
+        return warning;
+      });
+    }
+
     if (restartRunning) {
       const previousStatus = status;
       const restarting = willRestartServer(status, payload);
       if (restarting) {
         setStatus((current) => ({ ...current, state: "stopped" }));
       }
-      const saved = await runCommand(() => managerRef.current?.saveSettings(payload), { action: restarting ? "restarting" : null, quiet: true });
+      const saved = await runCommand(() => managerRef.current?.saveSettings(payload), { action: restarting ? "restarting" : null, quiet: true, savingSettings: true });
       if (!saved) setStatus(previousStatus);
-      if (saved) unsharedLibrariesRef.current.clear();
+      if (saved) {
+        clearResolvedStartWarning();
+        unsharedLibrariesRef.current.clear();
+      }
       if (saved && hasUserPasswords) clearUserPasswordDrafts();
       if (saved) setMessage(successMessage);
       // The status badges follow the saved settings, so refresh them after every save.
@@ -342,6 +359,7 @@ function App() {
     try {
       const nextStatus = await managerRef.current?.saveSettings(payload);
       if (nextStatus) setStatus(nextStatus);
+      clearResolvedStartWarning();
       unsharedLibrariesRef.current.clear();
       if (hasUserPasswords) clearUserPasswordDrafts();
       setMessage(successMessage);
@@ -479,8 +497,8 @@ function App() {
   }
 
   async function clearAccessLog() {
-    const message = "Clear the access log?";
-    const detail = "All recorded events are deleted. This cannot be undone.";
+    const message = "Clear the Eagle plugin access log?";
+    const detail = "The Eagle plugin history will be permanently deleted.";
     const showMessageBox = globalThis.eagle?.dialog?.showMessageBox;
     let confirmed = false;
     try {
@@ -529,6 +547,7 @@ function App() {
   }
 
   function setMessage(value: string, isError = false) {
+    if (isError) setSettingsExpanded(true);
     setMessageState(value);
     setMessageIsError(isError);
   }
@@ -620,6 +639,7 @@ function App() {
     if (busy) return;
     if (checked) {
       if (!confirmUnsafePublicStart()) return;
+      setStartWarning(null);
       const saved = await saveSettings({ restartRunning: false });
       if (!saved) return;
       await runCommand(() => managerRef.current?.start(), { action: "starting" });
@@ -654,7 +674,7 @@ function App() {
 
   function confirmUnsafePublicNetwork() {
     if (typeof window.confirm !== "function") {
-      setMessage("Enable password protection or disable Public Network before starting the server.", true);
+      setStartWarning("anonymous-lan");
       return false;
     }
     return window.confirm(PUBLIC_NETWORK_WITHOUT_PASSWORD_MESSAGE);
@@ -662,7 +682,7 @@ function App() {
 
   function confirmInsecurePublicHttp() {
     if (typeof window.confirm !== "function") {
-      setMessage("Enable HTTPS or disable Public Network before starting the server.", true);
+      setStartWarning("insecure-http");
       return false;
     }
     return window.confirm(PUBLIC_NETWORK_HTTP_WITH_PASSWORD_MESSAGE);
@@ -670,20 +690,21 @@ function App() {
 
   async function copyAccessUrl() {
     if (busy || !status.url) return;
+    setPanelError(null);
     try {
       if (!globalThis.eagle?.clipboard?.writeText) {
         throw new Error("Clipboard API is unavailable in this Eagle window");
       }
       await globalThis.eagle.clipboard.writeText(status.url);
-      setMessage("");
       setUrlCopied(true);
     } catch (error) {
-      setErrorMessage(error);
+      setPanelError({ title: "Could not copy the endpoint URL", message: errorMessage(error) });
     }
   }
 
   async function openEndpointUrl() {
     if (busy || !status.url) return;
+    setPanelError(null);
     try {
       if (globalThis.eagle?.shell?.openExternal) {
         await globalThis.eagle.shell.openExternal(status.url);
@@ -691,7 +712,7 @@ function App() {
       }
       window.open(status.url, "_blank", "noopener");
     } catch (error) {
-      setErrorMessage(error);
+      setPanelError({ title: "Could not open the endpoint URL", message: errorMessage(error) });
     }
   }
 
@@ -718,6 +739,7 @@ function App() {
   }
 
   async function openHttpsDocs() {
+    setPanelError(null);
     try {
       if (globalThis.eagle?.shell?.openExternal) {
         await globalThis.eagle.shell.openExternal(HTTPS_DOCS_URL);
@@ -725,11 +747,12 @@ function App() {
       }
       window.open(HTTPS_DOCS_URL, "_blank", "noopener");
     } catch (error) {
-      setErrorMessage(error);
+      setPanelError({ title: "Could not open the HTTPS documentation", message: errorMessage(error) });
     }
   }
 
   function closeWindow() {
+    setPanelError(null);
     try {
       if (globalThis.eagle?.window?.hide) {
         globalThis.eagle.window.hide();
@@ -740,7 +763,7 @@ function App() {
         return;
       }
     } catch (error) {
-      setErrorMessage(error);
+      setPanelError({ title: "Could not close the panel", message: errorMessage(error) });
     }
     window.close();
   }
@@ -759,6 +782,18 @@ function App() {
       </header>
 
       <div className="grid gap-3 p-3">
+        {panelError && <ServerAlert title={panelError.title} message={panelError.message} />}
+        {serverCommandError ? (
+          serverCommandError.action === "starting"
+            ? <ServerStartAlert message={serverCommandError.message} port={status.port || settings.port} />
+            : <ServerAlert title={serverCommandError.action === "stopping" ? "Could not stop the server" : "Could not load server status"} message={serverCommandError.message} />
+        ) : serverState === "error" && !busyAction ? (
+          <ServerStartAlert message={status.lastError} port={status.port || settings.port} />
+        ) : startWarning ? (
+          <ServerStartAlert message={startWarning === "anonymous-lan"
+            ? "Enable password protection or disable Public Network before starting the server."
+            : "Enable HTTPS or disable Public Network before starting the server."} />
+        ) : null}
         <ServerStatusPanel
           authEnabled={authEnabled}
           formDisabled={formDisabled}
@@ -877,20 +912,6 @@ function App() {
       </div>
     </main>
   );
-}
-
-interface QrCodeFactoryResult {
-  addData(value: string): void;
-  createSvgTag(options: { alt: string; cellSize: number; margin: number; scalable: boolean }): string;
-  make(): void;
-}
-
-function createQrDataUrl(value: string) {
-  const qr = qrcodeFactory(0, "M") as QrCodeFactoryResult;
-  qr.addData(value);
-  qr.make();
-  const svg = qr.createSvgTag({ cellSize: 4, margin: 16, scalable: true, alt: value });
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 function willRestartServer(status: PluginStatus, nextSettings: Record<string, unknown>) {

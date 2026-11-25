@@ -6,11 +6,12 @@ import { build as esbuild } from "esbuild";
 
 const distDir = resolve("dist");
 const generatedPluginServiceDir = resolve(distDir, ".generated", "plugin-service");
-const STANDALONE_ONLY_MODULE = /[\\/](?:fsBackend|standalone|standaloneConfig|standaloneLog)\.cjs$/;
+const STANDALONE_ONLY_MODULE = /[\\/](?:fsBackend|standalone|standaloneConfig|standaloneLog|standalonePanel|standaloneSettings)\.cjs$/;
 
 function copyPluginPackageAssets() {
   const includeRuntimeAsset = (sourcePath: string) => !/\.test\.(?:cjs|js|ts|tsx)$/.test(sourcePath)
     && !/\.(?:cts|mts|ts|tsx)$/.test(sourcePath)
+    && !/[\\/]standalone-panel$/.test(sourcePath)
     && !/plugin[\\/]app\.(?:js|tsx)$/.test(sourcePath);
 
   return {
@@ -40,13 +41,19 @@ function copyPluginPackageAssets() {
         define: {
           "process.env.NODE_ENV": JSON.stringify("production"),
         },
-        entryPoints: ["plugin/app.tsx"],
+        entryPoints: {
+          "plugin/app": "plugin/app.tsx",
+          ".generated/standalone-panel/app": "plugin/standalone-panel/app.tsx",
+        },
         format: "iife",
         jsx: "automatic",
-        outfile: resolve(distDir, "plugin/app.js"),
+        outdir: distDir,
         platform: "browser",
       });
-      await cp(resolve(distDir, "public/styles.css"), resolve(distDir, "plugin/styles.css"));
+      await Promise.all([
+        cp(resolve(distDir, "public/styles.css"), resolve(distDir, "plugin/styles.css")),
+        cp("plugin/standalone-panel/index.html", resolve(distDir, ".generated/standalone-panel/index.html")),
+      ]);
     },
   };
 }

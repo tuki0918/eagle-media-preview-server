@@ -7,26 +7,29 @@ interface ServerStatusPanelProps {
   formDisabled: boolean;
   httpsEnabled: boolean;
   publicNetwork: boolean;
+  powerDisabled?: boolean;
   qrSrc: string;
   serverState: ServerState;
-  settings: {
+  settings?: {
     autoStart?: boolean;
   };
   /** The Advanced Sort index; undefined hides the row (sort off or server stopped). */
   sortIndex?: SortIndexStatus | null;
+  sortIndexDetails?: ReactNode;
   statusLabel: string;
   /** A start/stop/restart is in flight; the badge shows its label instead of the settled state. */
   statusPending?: boolean;
   url: string;
   urlCopied?: boolean;
   settingsLocked?: boolean;
-  onAutoStartChange: (checked: boolean) => void;
+  onAutoStartChange?: (checked: boolean) => void;
+  autoStartDescription?: string;
   onCopyAccessUrl: () => void;
-  onHttpsDocsOpen: () => void;
-  onHttpsEnabledChange: (checked: boolean) => void;
+  onHttpsDocsOpen?: () => void;
+  onHttpsEnabledChange?: (checked: boolean) => void;
   onOpenEndpointUrl: () => void;
-  onPasswordProtectionChange: (checked: boolean) => void;
-  onPublicNetworkChange: (checked: boolean) => void;
+  onPasswordProtectionChange?: (checked: boolean) => void;
+  onPublicNetworkChange?: (checked: boolean) => void;
   onServerPowerChange: (checked: boolean) => void;
 }
 
@@ -35,16 +38,19 @@ export function ServerStatusPanel({
   formDisabled,
   httpsEnabled,
   publicNetwork,
+  powerDisabled = false,
   qrSrc,
   serverState,
-  settings,
+  settings = {},
   sortIndex,
+  sortIndexDetails,
   statusLabel,
   statusPending = false,
   url,
   urlCopied = false,
   settingsLocked = false,
   onAutoStartChange,
+  autoStartDescription = "Start server automatically when app launches.",
   onCopyAccessUrl,
   onHttpsDocsOpen,
   onHttpsEnabledChange,
@@ -65,7 +71,7 @@ export function ServerStatusPanel({
         </div>
         <div className="inline-flex shrink-0 items-center gap-2.5">
           <StatusBadge state={serverState} label={statusLabel} pending={statusPending} />
-          <PowerSwitch checked={running} disabled={formDisabled} onChange={onServerPowerChange} />
+          <PowerSwitch checked={running} disabled={formDisabled || powerDisabled} onChange={onServerPowerChange} />
         </div>
       </div>
 
@@ -82,14 +88,14 @@ export function ServerStatusPanel({
           </div>
 
           <div className="grid overflow-hidden rounded-xl border border-[#e6e6e9]">
-            <OptionRow
+            {onAutoStartChange ? <OptionRow
               checked={Boolean(settings.autoStart)}
               disabled={formDisabled}
               icon={<PowerIcon />}
               title="Auto start"
-              description="Start server automatically when app launches."
+              description={autoStartDescription}
               onChange={onAutoStartChange}
-            />
+            /> : null}
             <OptionRow
               checked={authEnabled}
               disabled={formDisabled}
@@ -135,12 +141,12 @@ export function ServerStatusPanel({
           <span>Settings are locked while the server is running. Stop the server to edit them.</span>
         </p>
       ) : null}
-      {running && sortIndex !== undefined ? <SortIndexProgress sortIndex={sortIndex} /> : null}
+      {running && (sortIndexDetails ?? (sortIndex !== undefined ? <SortIndexProgress sortIndex={sortIndex} /> : null))}
     </section>
   );
 }
 
-export function SortIndexProgress({ sortIndex }: { sortIndex: SortIndexStatus | null }) {
+export function SortIndexProgress({ sortIndex, libraryName }: { sortIndex: SortIndexStatus | null; libraryName?: string }) {
   const status = sortIndex?.status ?? "building";
   const loaded = sortIndex?.loaded ?? 0;
   const total = sortIndex?.total ?? 0;
@@ -155,15 +161,17 @@ export function SortIndexProgress({ sortIndex }: { sortIndex: SortIndexStatus | 
     ? `Scanning library… ${loaded.toLocaleString()} / ${total.toLocaleString()} (${percent}%)`
     : "Scanning library…";
   return (
-    <div className="mt-4 grid min-w-0 gap-1.5 rounded-xl border border-[#e6e6e9] px-3 py-2.5" data-testid="sortIndexProgress">
-      <div className="flex min-w-0 items-center justify-between gap-3">
-        <span className={`${fieldLabelClassName} shrink-0 whitespace-nowrap`}>Advanced Sort Index</span>
+    <div className={`grid min-w-0 gap-1.5 ${libraryName === undefined ? "mt-4 rounded-xl border border-[#e6e6e9] px-3 py-2.5" : ""}`} data-testid="sortIndexProgress">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        {libraryName === undefined
+          ? <span className={`${fieldLabelClassName} shrink-0 whitespace-nowrap`}>Advanced Sort Index</span>
+          : <span className="min-w-0 break-words text-[12px] font-semibold text-[#171717]">{libraryName}</span>}
         <span title={detail} className={`min-w-0 truncate text-[11.5px] ${status === "failed" ? "text-[#b42318]" : "text-[#5f6670]"}`}>{detail}</span>
       </div>
       <div
         className="h-1.5 overflow-hidden rounded-full bg-[#ececef]"
         role="progressbar"
-        aria-label="Advanced Sort Index"
+        aria-label={libraryName === undefined ? "Advanced Sort Index" : `Advanced Sort Index for ${libraryName}`}
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={status === "building" && !known ? undefined : percent}
@@ -230,7 +238,7 @@ function OptionRow({ actionLabel, checked, description, disabled, icon, onAction
   disabled: boolean;
   icon: ReactNode;
   onAction?: () => void;
-  onChange: (checked: boolean) => void;
+  onChange?: (checked: boolean) => void;
   title: string;
 }) {
   return (
@@ -250,7 +258,9 @@ function OptionRow({ actionLabel, checked, description, disabled, icon, onAction
           ) : null}
         </small>
       </span>
-      <ToggleSwitch checked={checked} disabled={disabled} label={title} onChange={onChange} />
+      {onChange ? <ToggleSwitch checked={checked} disabled={disabled} label={title} onChange={onChange} /> : (
+        <span className="text-[11.5px] font-medium text-[#5f6670]">{checked ? "On" : "Off"}</span>
+      )}
     </div>
   );
 }

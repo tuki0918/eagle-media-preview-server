@@ -1,10 +1,12 @@
-const { appendFile, mkdir, readFile, rm, writeFile } = require("fs/promises");
-const { tmpdir } = require("os");
-const { join } = require("path");
+const { appendFile, mkdir, readFile, rename, rm, writeFile } = require("fs/promises");
+const { homedir } = require("os");
+const { dirname, join } = require("path");
+const { randomUUID } = require("crypto");
 
 // "browse" holds only failed requests; "system" is what the admin or the server itself did.
 type AccessLogType = "auth" | "browse" | "edit" | "system" | "view";
 type AccessLogRange = "1h" | "24h" | "7d";
+type AccessLogSource = "plugin" | "standalone";
 
 interface AccessLogEntry {
   at: number;
@@ -87,8 +89,6 @@ const RANGE_BUCKETS: Record<AccessLogRange, { bucketMs: number; count: number }>
   "7d": { bucketMs: 24 * 60 * 60 * 1000, count: 7 },
 };
 
-// The log lives in the OS temp directory: it outlives a server stop or an Eagle restart for
-// investigation, but is not meant to be kept, so a reboot (or the age limit) may drop it.
 function entryMatchesSearch(entry: AccessLogEntry, term: string, eventKeys: Set<string>, fieldKeys: Set<string>, libraryNames?: ReadonlyMap<string, string>) {
   if (eventKeys.has(entry.event) || entry.fields?.some((field) => fieldKeys.has(field))) return true;
   const libraryLabel = entry.libraryId && (libraryNames?.get(entry.libraryId) || entry.libraryId);
@@ -96,8 +96,8 @@ function entryMatchesSearch(entry: AccessLogEntry, term: string, eventKeys: Set<
   return texts.some((text) => text !== undefined && String(text).toLowerCase().includes(term));
 }
 
-function defaultAccessLogPath() {
-  return join(tmpdir(), "eagle-media-preview-server", "access-log.jsonl");
+function defaultAccessLogPath(source: AccessLogSource = "plugin", directory = process.env.EAGLE_MEDIA_PREVIEW_LOG_DIR || join(homedir(), ".eagle-media-preview-server")) {
+  return join(directory, source === "plugin" ? "access-log.jsonl" : "standalone-access-log.jsonl");
 }
 
 function createAccessLog({
@@ -145,7 +145,7 @@ function createAccessLog({
 
   // Memory already holds every entry still waiting to be appended, so those lines are dropped here;
   // appending them later as well would write them twice.
-  function rewriteFromMemory() {
+  async function rewriteFromMemory() {
     const body = entries.map((entry) => `${JSON.stringify(entry)}\n`).join("");
     const bodyBytes = Buffer.byteLength(body);
     pendingLines = [];
@@ -153,9 +153,14 @@ function createAccessLog({
       clearTimeout(flushTimer);
       flushTimer = null;
     }
-    return writeFile(filePath, body, "utf8").then(() => {
+    const temporary = `${filePath}.${randomUUID()}.tmp`;
+    try {
+      await writeFile(temporary, body, { encoding: "utf8", mode: 0o600, flag: "wx" });
+      await rename(temporary, filePath);
       fileBytes = bodyBytes;
-    });
+    } finally {
+      await rm(temporary, { force: true });
+    }
   }
 
   function load() {
@@ -202,7 +207,7 @@ function createAccessLog({
       if (!lines.length) return;
       const chunk = lines.join("");
       const chunkBytes = Buffer.byteLength(chunk);
-      await mkdir(join(filePath, ".."), { recursive: true });
+      await mkdir(dirname(filePath), { recursive: true, mode: 0o700 });
       // Cleared while waiting: these lines were cleared too, and memory now holds only later events.
       if (queuedIn !== generation) return;
       if (fileBytes + chunkBytes > maxFileBytes) {
@@ -211,7 +216,7 @@ function createAccessLog({
         await rewriteFromMemory();
         return;
       }
-      await appendFile(filePath, chunk, "utf8");
+      await appendFile(filePath, chunk, { encoding: "utf8", mode: 0o600 });
       fileBytes += chunkBytes;
     });
   }
@@ -219,7 +224,7 @@ function createAccessLog({
   return {
     filePath,
 
-    // Restores what an earlier run (or a previous plugin window) left in the temp file.
+    // Restores what an earlier run (or a previous plugin window) left in the history file.
     load,
 
     record(input: Omit<AccessLogEntry, "at"> & { at?: number }) {
@@ -434,7 +439,7 @@ function parseEntry(line: string): AccessLogEntry | null {
   if (!line.trim()) return null;
   try {
     const value = JSON.parse(line);
-    if (!value || typeof value.at !== "number" || !ACCESS_LOG_TYPES.includes(value.type)) return null;
+    if (!value || !Number.isFinite(value.at) || Math.abs(value.at) > 8.64e15 || !ACCESS_LOG_TYPES.includes(value.type)) return null;
     return compactEntry(value);
   } catch {
     return null;
