@@ -32,6 +32,30 @@ npm test
 
 Run `npm run verify` before committing when you need the full TypeScript, Vite build, and Vitest check in one command.
 
+## Documentation diagrams
+
+Edit the Mermaid sources in [docs/use-cases](use-cases), then regenerate the README images with the pinned `tui-mermaid-diagram` version. PNG export requires Chrome or Chromium. Set `CHROME_PATH` if the browser is installed in a custom location. On Apple Silicon, use native builds of Node.js and Chrome if rendering under Rosetta times out.
+
+```sh
+npm run diagram:images -- personal family business upload
+npm run diagram:images -- family
+```
+
+Keep the use-case diagrams consistent:
+
+- Title: `CASE: short description`, e.g. `FAMILY: a home media library on a NAS`. Do not use `·` as a separator.
+- Three columns, left to right: client devices, `HOST MACHINE (<where>)` (server above Eagle), and storage.
+- One box per person, titled `WHO (Role) ── Device`, e.g. `PARTNER (Editor) ── Phone`, then a concrete activity such as `Rate and tag favorite photos`. Use `PC`, `Phone`, `Tablet` or `Tablet or TV` for the device. The PNG script puts the text after `──` on the right end of the top border.
+- Settings go only in the server box, as `✓` lines with the exact UI names, in this order: Public Network, HTTPS, Password protection, Share only selected libraries, Auto start. Put case details in parentheses, e.g. `Password protection (3 users)`. List only what the case turns on, then a sample endpoint URL in italic with the default port 41532: `*e.g. https://media-server.lan:41532*` with HTTPS (a hostname, since the certificate must match it), or `*e.g. http://192.168.1.20:41532*` without HTTPS (a private IP address). Use the hostname examples from the README (`studio-mac.local`, `media-server.lan`). The client arrow label names the protocol, e.g. `HTTPS` or `HTTP (office LAN)`.
+- The Eagle box says which library to keep open. Each library box ends with `✓ shared` or `✕ not shared`.
+- Do not draw setup steps (how-to) in the diagram. The README text explains them.
+- Arrow labels in lowercase: `HTTPS` (or the network) from clients, `library info, edits` (`library info` for Viewer only, `import` for uploads) to Eagle, `opens` (or `saves`) to the library.
+- Arrows between people and the server follow the role: two-way (`you <-->|HTTPS| server`) for Admin, Editor + Upload and Editor, one-way from the server (`server -->|HTTPS| kids`) for Viewer. Give one-way arrows the client color with `linkStyle <index> stroke:#7fd8e8`, since an arrow takes its source's color. If arrows cross, reorder the edge lines and update the `linkStyle` indexes.
+- Colors: gray frames (`#aeb7c6`), cyan for people and browsers (`#7fd8e8`), purple for the server (`#b9a0f0`), green for Eagle (`#7fd99a`), yellow for shared libraries (`#e8c86e`), red (`#f08080`) for excluded libraries or people without access.
+- `accDescr` has at most three lines: what the case does, then tips or caveats. Do not repeat the settings there.
+
+`npm run diagram:images` renders all diagrams. The existing `overview`, `architecture`, and `standalone` targets use [scripts/diagram.mjs](../scripts/diagram.mjs). To adopt the Mermaid workflow for one of those targets, add its source path as the third entry in the corresponding row in [scripts/diagram-images.mjs](../scripts/diagram-images.mjs) and keep its PNG path.
+
 ## Standalone server (experimental)
 
 Serves libraries to the viewer without Eagle, read only. See [docs/design/standalone-server.md](design/standalone-server.md).

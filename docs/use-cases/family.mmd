@@ -1,40 +1,40 @@
 ---
-title: USE CASE 2  ·  FAMILY  (a home media library)
+title: "FAMILY: a home media library on a NAS"
 ---
 block-beta
-    accDescr: The library lives on the NAS; an always-on host machine opens it in Eagle and serves it to the family.<br>Give each person their own account so that only grown-ups can change ratings and tags.
+    accDescr: An always-on host machine opens the library on the NAS and serves it to the family.<br>Give each person their own account so that only grown-ups can change ratings and tags.
     columns 3
 
-    block:family["FAMILY DEVICES"]
+    block:clients["FAMILY DEVICES"]
         columns 1
-        you("YOU  ·  Admin<br>laptop<br>organize everything")
-        partner("PARTNER  ·  Editor<br>phone<br>rate and tag photos")
-        kids("KIDS  ·  Viewer<br>tablet / TV browser<br>*browse and play only*")
+        you("YOU (Admin) ── PC<br>Move unwanted photos to Trash")
+        partner("PARTNER (Editor) ── Phone<br>Rate and tag favorite photos")
+        kids("KIDS (Viewer) ── Tablet or TV<br>Watch home videos")
     end
-    block:host["HOST MACHINE  (always on)"]
+    block:host["HOST MACHINE (always on)"]
         columns 1
-        server["MEDIA PREVIEW SERVER<br>✓ Auto start with Eagle<br>✓ Password + 3 users<br>✓ Share only selected libraries<br>*https://media-server.lan:41532*"]
-        eagle("EAGLE APP<br>opens the family library")
+        server["MEDIA PREVIEW SERVER<br>✓ Public Network<br>✓ HTTPS<br>✓ Password protection (3 users)<br>✓ Share only selected libraries<br>*e.g. https://media-server.lan:41532*"]
+        eagle("EAGLE APP<br>keep Family.library open")
     end
     block:storage["NAS"]
         columns 1
-        photos[("FAMILY LIBRARY<br>Family.library<br>photos, home videos<br>✓ shared")]
+        library[("FAMILY LIBRARY<br>Family.library<br>photos, home videos<br>✓ shared")]
         work[("WORK LIBRARY<br>Work.library<br>✕ not shared")]
     end
 
     you <-->|HTTPS| server
     partner <-->|HTTPS| server
-    kids <-->|HTTPS| server
-    server -->|edits| eagle
-    eagle -->|opens| photos
+    server -->|HTTPS| kids
+    server -->|"library info, edits"| eagle
+    eagle -->|opens| library
 
-    style family stroke:#7fd8e8
-    style host stroke:#b9a0f0
-    style storage stroke:#e8c86e
+    linkStyle 2 stroke:#7fd8e8
+    classDef frame stroke:#aeb7c6
+    class clients,host,storage frame
+    style server stroke:#b9a0f0
+    style eagle stroke:#7fd99a
+    style library stroke:#e8c86e
     style you stroke:#7fd8e8
     style partner stroke:#7fd8e8
     style kids stroke:#7fd8e8
-    style server stroke:#b9a0f0
-    style eagle stroke:#7fd99a
-    style photos stroke:#e8c86e
     style work stroke:#f08080

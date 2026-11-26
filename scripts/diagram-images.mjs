@@ -1,11 +1,12 @@
-// Captures the colored `npm run diagram` output as dark-mode PNGs for docs/ using headless Chrome.
-// Usage: node scripts/diagram-images.mjs [overview|architecture|standalone ...]   (no argument makes all)
+// Renders architecture and Mermaid diagrams as dark-mode PNGs for docs/ using headless Chrome.
+// Usage: node scripts/diagram-images.mjs [overview|architecture|standalone|personal|family|business|upload ...]
+// With no arguments, render every diagram.
 // Set CHROME_PATH when Chrome or Chromium is not installed in a standard location.
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { findChrome } from "./find-chrome.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
@@ -13,6 +14,10 @@ const IMAGES = [
   ["overview", "docs/architecture_overview.png"],
   ["architecture", "docs/architecture.png"],
   ["standalone", "docs/architecture_standalone.png"],
+  ["personal", "docs/use_case_personal.png", "docs/use-cases/personal.mmd"],
+  ["family", "docs/use_case_family.png", "docs/use-cases/family.mmd"],
+  ["business", "docs/use_case_business.png", "docs/use-cases/business.mmd"],
+  ["upload", "docs/use_case_upload.png", "docs/use-cases/upload.mmd"],
 ];
 const requested = process.argv.slice(2);
 const unknown = requested.filter((view) => !IMAGES.some(([name]) => name === view));
@@ -55,25 +60,79 @@ pre { margin: 0; padding: ${PAD_Y}px ${PAD_X}px; font: 14px/${LINE_HEIGHT}px Men
   };
 }
 
+// A box title written as "YOU (Admin) ── PC" puts "PC" on the right end of the box's top border.
+const RIGHT_LABEL = /\s*──\s*/;
+
+async function renderMermaidImage(source) {
+  const { drawScene, layoutBlocks, layoutGraph, parseMermaid } = await import("tui-mermaid-diagram");
+  const graph = parseMermaid(source);
+  if (graph.warnings.length) throw new Error(graph.warnings.join("\n"));
+  const rightLabels = new Map();
+  for (const node of graph.nodes.values()) {
+    // The layout makes the first of several label lines the box title.
+    if (!(node.lines?.length > 1)) continue;
+    const [left, right] = node.lines[0].split(RIGHT_LABEL);
+    if (!right) continue;
+    rightLabels.set(node, { left, right });
+    // Reserve room for both labels and the border between them.
+    node.lines[0] = `${left}${" ".repeat(4)}${right}`;
+  }
+  const scene = graph.type === "block" ? layoutBlocks(graph) : layoutGraph(graph);
+  const canvas = drawScene(scene, { title: graph.title, footer: graph.footer });
+  for (const { node, x, y, w } of scene.boxes) {
+    const labels = rightLabels.get(node);
+    if (!labels) continue;
+    const [corner, line] = [canvas.cells[y][x], canvas.cells[y][x + 1]];
+    canvas.put(x + 1, y, line.ch.repeat(w - 2), corner.color);
+    canvas.put(x + 2, y, ` ${labels.left} `, corner.color, true);
+    canvas.put(x + w - labels.right.length - 4, y, ` ${labels.right} `, corner.color, true);
+  }
+  return canvas;
+}
+
+async function renderImage(view, source, env) {
+  if (source) {
+    const { toSvg } = await import("tui-mermaid-diagram");
+    let canvas;
+    try {
+      canvas = await renderMermaidImage(readFileSync(join(root, source), "utf8"));
+    } catch (error) {
+      throw new Error(`${source}: ${error.message}`);
+    }
+    const { width, height, svg } = toSvg([canvas]);
+    const html = `<!doctype html><meta charset="utf-8"><style>
+html, body { margin: 0; background: ${BACKGROUND}; }
+svg { display: block; }
+</style>${svg}`;
+    return { width, height, html };
+  }
+  const ansi = execFileSync(process.execPath, [join(root, "scripts/diagram.mjs"), view], { env }).toString();
+  return toHtml(ansi);
+}
+
 const chrome = findChrome();
 const { NO_COLOR, ...inheritedEnv } = process.env;
 const colorEnv = { ...inheritedEnv, FORCE_COLOR: "1" };
 const workDir = mkdtempSync(join(tmpdir(), "diagram-images-"));
 try {
-  for (const [view, output] of IMAGES.filter(([name]) => !requested.length || requested.includes(name))) {
-    const ansi = execFileSync(process.execPath, [join(root, "scripts/diagram.mjs"), view], { env: colorEnv }).toString();
-    const { width, height, html } = toHtml(ansi);
+  for (const [view, output, source] of IMAGES.filter(([name]) => !requested.length || requested.includes(name))) {
+    const { width, height, html } = await renderImage(view, source, colorEnv);
     const page = join(workDir, `${view}.html`);
+    const screenshot = join(workDir, `${view}.png`);
     writeFileSync(page, html);
     execFileSync(chrome, [
       "--headless",
       "--disable-gpu",
       "--hide-scrollbars",
+      "--no-first-run",
+      "--no-default-browser-check",
+      `--user-data-dir=${join(workDir, "chrome-profile")}`,
       "--force-device-scale-factor=2",
       `--window-size=${width},${height}`,
-      `--screenshot=${join(root, output)}`,
-      `file://${page}`,
-    ], { stdio: "ignore" });
+      `--screenshot=${screenshot}`,
+      pathToFileURL(page).href,
+    ], { timeout: 45_000, stdio: "pipe" });
+    copyFileSync(screenshot, join(root, output));
     console.log(`${output}  ${width * 2}x${height * 2}`);
   }
 } finally {

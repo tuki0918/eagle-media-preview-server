@@ -196,6 +196,8 @@ Each management panel shows up to 7 days of its own access history and can expor
 
 ## Use Cases
 
+To open the viewer on another device, use the URL or scan the QR code shown in **Server Status**.
+
 #### Personal: browse your own library from your laptop and phone
 
 Keep Eagle running on your desk and open the library from your laptop or phone on the home Wi-Fi. Turn on **Public Network** and **Password protection**, and set up **HTTPS** if you want to install the viewer as a PWA.
@@ -210,7 +212,7 @@ An always-on host machine opens a library stored on the NAS and serves it to the
 
 #### Business: a quick share with a teammate
 
-A shares one project library with B for a review, then stops the server. B only needs a browser. Eagle and a copy of the files are not required.
+In **Libraries**, turn on **Share only selected libraries** and select the project for review. Give your teammate a **Viewer** account to browse and preview files, or an **Editor** account if they should also rate and tag files. Turn on **Public Network** and **Password protection** in **Server Status**. Keep the project library open in Eagle, start the server, and send your teammate the viewer URL. They can sign in from a browser. Stop the server when the review ends.
 
 ![Use case: business](docs/use_case_business.png)
 

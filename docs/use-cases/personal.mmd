@@ -1,33 +1,34 @@
 ---
-title: USE CASE 1  ·  PERSONAL  (just you, at home)
+title: "PERSONAL: browse your own library"
 ---
 block-beta
-    accDescr: Browse your own library from the sofa or in bed while Eagle keeps running on your desk.
+    accDescr: Keep Eagle running on your desk. Open the URL on your PC, or scan the QR code in Server Status with your phone.<br>HTTPS lets you install the viewer as a PWA.
     columns 3
 
-    block:desk["YOUR DESK"]
+    block:clients["HOME WI-FI"]
         columns 1
-        host["HOST MACHINE<br>Eagle + Media Preview Server<br>*open: localhost:41532*"]
-        library[("EAGLE LIBRARY<br>your reference images,<br>videos and music")]
+        laptop("YOU (Admin) ── PC<br>Browse reference images")
+        phone("YOU (Admin) ── Phone<br>Watch videos or listen to music")
     end
-    block:wifi["HOME WI-FI  (your devices)"]
+    block:host["HOST MACHINE (your desk)"]
         columns 1
-        laptop("LAPTOP<br>open the endpoint URL<br>install as a PWA")
-        phone("PHONE<br>scan the QR code<br>background audio, PiP")
+        server["MEDIA PREVIEW SERVER<br>✓ Public Network<br>✓ HTTPS<br>✓ Password protection<br>*e.g. https://studio-mac.local:41532*"]
+        eagle("EAGLE APP<br>keep My.library open")
     end
-    block:conf["SETTINGS"]
-        settings["RECOMMENDED<br>✓ Public Network<br>✓ Password protection<br>✓ HTTPS  (needed for PWA)<br>*one user: you (Admin)*"]
+    block:storage["LOCAL STORAGE"]
+        columns 1
+        library[("EAGLE LIBRARY<br>My.library<br>reference images, videos, music<br>✓ shared")]
     end
 
-    host -->|reads| library
-    laptop <-->|"HTTPS :41532"| host
-    phone <-->|"HTTPS :41532"| host
+    laptop <-->|HTTPS| server
+    phone <-->|HTTPS| server
+    server -->|"library info, edits"| eagle
+    eagle -->|opens| library
 
-    style desk stroke:#7fd99a
-    style wifi stroke:#7fd8e8
-    style conf stroke:#e8c86e
-    style host stroke:#7fd99a
+    classDef frame stroke:#aeb7c6
+    class clients,host,storage frame
+    style server stroke:#b9a0f0
+    style eagle stroke:#7fd99a
     style library stroke:#e8c86e
     style laptop stroke:#7fd8e8
     style phone stroke:#7fd8e8
-    style settings stroke:#e8c86e
