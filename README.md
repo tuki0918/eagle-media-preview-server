@@ -51,9 +51,9 @@ Experimental:
 <details>
 <summary><strong>PWA Installation</strong></summary>
 
-The browser viewer can be installed from a supported desktop or mobile browser. Service workers require a secure context, so use HTTPS when opening the viewer from another device on your LAN. Loopback addresses such as `localhost` are also treated as secure by browsers.
+Install **Media Library** as a progressive web app (PWA) from a supported browser. For access over your LAN, use HTTPS with a certificate your device trusts. On the host, `localhost` also works.
 
-The PWA caches only the application shell. Eagle API responses and library media are intentionally excluded from the service-worker cache, so browsing library content still requires a connection to the running plugin server.
+The PWA caches the app interface. Browsing the library still requires a connection to the server.
 
 On iPhone and iPad, open the viewer in Safari, tap **Share → Add to Home Screen**, and keep **Open as Web App** turned on.
 
@@ -200,19 +200,19 @@ To open the viewer on another device, use the URL or scan the QR code shown in *
 
 #### Personal: browse your own library from your laptop and phone
 
-Keep Eagle running on your desk and open the library from your laptop or phone on the home Wi-Fi. Turn on **Public Network** and **Password protection**, and set up **HTTPS** if you want to install the viewer as a PWA.
+With **HTTPS** set up, you can install the viewer as a **PWA** and open it like an app.
 
 ![Use case: personal](docs/use_case_personal.png)
 
 #### Family: a home media library on a NAS
 
-An always-on host machine opens a library stored on the NAS and serves it to the whole family. Give each person their own user and role, and use **Share only selected libraries** so your other libraries stay private.
+Give each person their own account and choose **Share only selected libraries** to share just the family library.
 
 ![Use case: family](docs/use_case_family.png)
 
 #### Business: a quick share with a teammate
 
-In **Libraries**, turn on **Share only selected libraries** and select the project for review. Give your teammate a **Viewer** account to browse and preview files, or an **Editor** account if they should also rate and tag files. Turn on **Public Network** and **Password protection** in **Server Status**. Keep the project library open in Eagle, start the server, and send your teammate the viewer URL. They can sign in from a browser. Stop the server when the review ends.
+Share the project library over **HTTP** on the office LAN and give your teammate a **Viewer** account to preview the files. Stop the server after the review.
 
 ![Use case: business](docs/use_case_business.png)
 

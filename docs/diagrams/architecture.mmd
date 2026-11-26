@@ -13,7 +13,7 @@ block-beta
     block:host["HOST MACHINE (runs Eagle)"]
         columns 1
         window("PLUGIN WINDOW ── settings UI<br>On / off, URL, QR code<br>Password, Public Network, HTTPS<br>Users and shared libraries<br>*Locked while the server runs*")
-        service("BACKGROUND SERVICE ── no UI<br>Runs the preview server<br>Loads and saves settings<br>Relays library switches")
+        service("BACKGROUND SERVICE ── no UI<br>Runs the preview server<br>Loads and saves settings<br>Follows library switches in Eagle")
         server["MEDIA PREVIEW SERVER<br>**Listens on**<br>127.0.0.1:41532 (default)<br>0.0.0.0:41532 (Public Network)<br>**Access control**<br>✓ Origin check for writes<br>✓ Session cookie (Password protection)<br>✓ Roles: Viewer, Editor, Editor + Upload, Admin<br>✓ Shared libraries only<br>**File access**<br>✓ Media files are read only<br>✓ Edits and uploads go through Eagle's API<br>✓ Viewers get item ids, never paths"]
         eagle("EAGLE APP<br>Opens one library at a time<br>Writes rating, tags, folders, trash<br>Imports uploads<br>*API: http://localhost:41595*")
     end
@@ -22,7 +22,7 @@ block-beta
         settings[("SETTINGS FILE<br>~/.eagle-media-preview-server/settings.json<br>✓ Owner-only access (700/600)<br>Users, password hashes<br>Port, hostname, HTTPS, shared libraries")]
         space
         other[("EAGLE LIBRARY ── not open<br>Work.library<br>✕ Not served until opened in Eagle")]
-        library[("EAGLE LIBRARY ── open in Eagle<br>Photos.library/images/ID.info/<br>Original, thumbnail, metadata.json<br>Internal disk, external drive or NAS<br>✓ Only shared libraries are served<br>✓ ../ path escapes are rejected")]
+        library[("EAGLE LIBRARY ── open in Eagle<br>Photos.library/images/ID.info/<br>Original, thumbnail, metadata.json<br>Internal disk, external drive or NAS<br>✓ ../ path escapes are rejected")]
     end
 
     browser <-->|"HTTPS :41532"| server
@@ -32,7 +32,7 @@ block-beta
     service -->|"start, stop"| server
     server <-->|"/api/v2/*"| eagle
     eagle <-->|"read, write"| library
-    server -->|"reads files (HTTP Range)"| library
+    server -->|"reads files"| library
 
     classDef frame stroke:#aeb7c6
     class clients,host,storage frame
