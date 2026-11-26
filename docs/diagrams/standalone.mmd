@@ -1,0 +1,44 @@
+---
+title: "STANDALONE: browse libraries without Eagle (experimental)"
+---
+block-beta
+    accDescr: The standalone server reads library folders directly, so **Eagle doesn't need to run**. It is **read only**: rating, tagging, uploads and trash need the plugin.<br>With several libraries, choose one with **Switch library** in the viewer's side menu. If the plugin already uses the same port, that server doesn't start.<br>Without **--panel**, it shares the libraries in standalone.json, or, without that file, those selected under **Share only selected libraries**.
+    columns 3
+
+    block:clients["OTHER DEVICES"]
+        columns 1
+        browser("BROWSER ── Phone, Tablet, PC / PWA<br>Browse, play and slideshow<br>Switch between libraries<br>✕ No edits, uploads or trash")
+    end
+    block:host["HOST MACHINE (Eagle not needed)"]
+        columns 1
+        panel("MANAGEMENT PANEL ── (--panel)<br>Start and stop the server<br>Users, libraries, access log<br>*http://127.0.0.1:41531*")
+        server["STANDALONE SERVER ── CLI<br>✓ Sign-in and roles<br>✓ Several libraries<br>✕ No edits to libraries<br>*e.g. https://media-server.lan:41532*"]
+        space
+        eagle("EAGLE APP<br>✕ Not needed to browse")
+    end
+    block:storage["STORAGE"]
+        columns 1
+        settings[("SETTINGS FILE<br>settings.json<br>shared with the plugin")]
+        serverlist[("SERVER LIST ── (optional)<br>standalone.json<br>servers and their libraries")]
+        library[("EAGLE LIBRARY ── internal disk<br>Photos.library<br>✓ read only")]
+        library2[("EAGLE LIBRARY ── NAS<br>Work.library<br>✓ read only")]
+    end
+
+    server -->|HTTPS| browser
+    panel -->|"start, stop"| server
+    panel <-->|"read, write"| settings
+    server -->|read| serverlist
+    server -->|"reads files"| library2
+    server -->|"reads files"| library
+
+    linkStyle 0 stroke:#7fd8e8
+    classDef frame stroke:#aeb7c6
+    class clients,host,storage frame
+    style browser stroke:#7fd8e8
+    style panel stroke:#b9a0f0
+    style server stroke:#b9a0f0
+    style eagle stroke:#8a93a6
+    style settings stroke:#e8c86e
+    style serverlist stroke:#e8c86e
+    style library stroke:#e8c86e
+    style library2 stroke:#e8c86e

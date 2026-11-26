@@ -46,7 +46,7 @@ The preview server, plugin window, and settings file are provided by this plugin
 - The library folder may be on an internal disk, an external HDD / SSD, or a NAS / network drive mounted on the computer running Eagle; the plugin never shares the folder itself
 - Media files are read-only to the preview server; rating, tags, folders, trash changes, and uploads go through Eagle's API
 
-`npm run diagram` prints these diagrams in the terminal (`overview` or `architecture` prints one). The images above are its colored output on a dark background, captured by `npm run diagram:images`. The routes are listed under HTTP/HTTPS Server.
+The images are drawn from the Mermaid sources in [docs/diagrams](diagrams) by `npm run diagram:images`; `npm run diagram -- overview architecture` prints them in the terminal. The routes are listed under HTTP/HTTPS Server.
 
 Defaults and how to change them:
 
@@ -121,10 +121,12 @@ The source is managed as a TypeScript / React / Vite / Tailwind CSS / Vitest pro
   - Compiled by `tsconfig.plugin-service.json` to `dist/.generated/plugin-service/*.cjs` files for Eagle's `require` runtime
 - `server/viewerServer.ts`
   - ESM wrapper that reuses the generated plugin service runtime for tests and local imports
+- `scripts/diagrams.mjs`
+  - Lists the documentation diagrams (Mermaid sources in `docs/diagrams/` and `docs/use-cases/`) and renders them with `tui-mermaid-diagram`
 - `scripts/diagram.mjs`
-  - Prints the overview and architecture diagrams for `npm run diagram`
+  - Prints those diagrams in the terminal for `npm run diagram`
 - `scripts/diagram-images.mjs`
-  - Captures those diagrams as dark-mode PNGs in `docs/` for `npm run diagram:images`
+  - Saves those diagrams as dark-mode PNGs in `docs/` for `npm run diagram:images`
 - `scripts/settings-screenshots.mjs`, `scripts/settings-screenshots.entry.tsx`
   - Captures the Settings tabs as README images for `npm run screenshot:settings`
 - `scripts/activity-screenshots.mjs`, `scripts/activity-screenshots.entry.tsx`
@@ -597,9 +599,9 @@ NO_COLOR=1 npm run -s diagram
 npm run diagram:images
 ```
 
-`npm run diagram` prints the overview and architecture diagrams; pass `overview` or `architecture` to print one. Set `NO_COLOR=1` for plain text. It does not need a build.
+`npm run diagram` prints every documentation diagram; pass names such as `overview` or `architecture` to print some. Set `NO_COLOR=1` for plain text. It does not need a build.
 
-`npm run diagram:images` captures the colored output as dark-mode PNGs into `docs/architecture_overview.png` and `docs/architecture.png` with headless Chrome. Run it after changing `scripts/diagram.mjs`. Set `CHROME_PATH` when Chrome or Chromium is not in a standard location.
+`npm run diagram:images` saves the diagrams as dark-mode PNGs in `docs/` (for example `docs/architecture_overview.png` and `docs/architecture.png`) with headless Chrome. Run it after changing a source in `docs/diagrams/` or `docs/use-cases/`. See [Documentation diagrams in DEVELOPMENT.md](DEVELOPMENT.md#documentation-diagrams). Set `CHROME_PATH` when Chrome or Chromium is not in a standard location.
 
 Screenshot commands:
 

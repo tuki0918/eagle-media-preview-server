@@ -1,0 +1,40 @@
+---
+title: "ARCHITECTURE: the plugin runs the server inside Eagle"
+---
+block-beta
+    accDescr: Browsers connect only to the **preview server**, never to Eagle or the library folder directly. The server shares only the **library open in Eagle**.
+    columns 3
+
+    block:clients["OTHER DEVICES"]
+        columns 1
+        browser("BROWSER ── Phone, Tablet, PC / PWA<br>Browse, play and slideshow<br>Rate, tag, upload, trash by role")
+    end
+    block:host["HOST MACHINE (runs Eagle)"]
+        columns 1
+        window("PLUGIN WINDOW<br>Start and stop the server<br>URL and QR code<br>Users, libraries, HTTPS")
+        server["MEDIA PREVIEW SERVER<br>✓ Sign-in and roles<br>✓ Shared libraries only<br>✓ Streams media files<br>*e.g. https://media-server.lan:41532*"]
+        eagle("EAGLE APP<br>Opens one library at a time<br>*API: localhost:41595*")
+    end
+    block:storage["STORAGE"]
+        columns 1
+        settings[("SETTINGS FILE<br>settings.json<br>users, password hashes, HTTPS")]
+        other[("EAGLE LIBRARY ── not open<br>Work.library<br>✕ not served")]
+        library[("EAGLE LIBRARY ── open in Eagle<br>Photos.library<br>originals, thumbnails, metadata")]
+    end
+
+    browser <-->|HTTPS| server
+    window -->|"start, stop"| server
+    window <-->|"read, write"| settings
+    server -->|"library info, edits"| eagle
+    server -->|"reads files"| library
+    eagle -->|opens| library
+
+    classDef frame stroke:#aeb7c6
+    class clients,host,storage frame
+    style browser stroke:#7fd8e8
+    style window stroke:#b9a0f0
+    style server stroke:#b9a0f0
+    style eagle stroke:#7fd99a
+    style settings stroke:#e8c86e
+    style library stroke:#e8c86e
+    style other stroke:#8a93a6

@@ -34,14 +34,17 @@ Run `npm run verify` before committing when you need the full TypeScript, Vite b
 
 ## Documentation diagrams
 
-Edit the Mermaid sources in [docs/use-cases](use-cases), then regenerate the README images with the pinned `tui-mermaid-diagram` version. PNG export requires Chrome or Chromium. Set `CHROME_PATH` if the browser is installed in a custom location. On Apple Silicon, use native builds of Node.js and Chrome if rendering under Rosetta times out.
+Every diagram is a Mermaid `block-beta` source drawn with the pinned `tui-mermaid-diagram` version: the architecture diagrams in [docs/diagrams](diagrams) and the use cases in [docs/use-cases](use-cases). [scripts/diagrams.mjs](../scripts/diagrams.mjs) lists them. Edit a source, then print it in the terminal or regenerate its PNG. PNG export requires Chrome or Chromium. Set `CHROME_PATH` if the browser is installed in a custom location. On Apple Silicon, use native builds of Node.js and Chrome if rendering under Rosetta times out.
 
 ```sh
-npm run diagram:images -- personal family business upload
+npm run diagram -- family
 npm run diagram:images -- family
+npm run diagram:images
 ```
 
-Keep the use-case diagrams consistent:
+Keep the diagrams consistent. The architecture diagrams use the same columns, colors and box styles, with plugin parts in purple and files in yellow.
+
+For use cases:
 
 - Title: `CASE: short description`, e.g. `FAMILY: a home media library on a NAS`. Do not use `·` as a separator.
 - Three columns, left to right: client devices, `HOST MACHINE (<where>)` (server above Eagle), and storage.
@@ -52,9 +55,11 @@ Keep the use-case diagrams consistent:
 - Arrow labels in lowercase: `HTTPS` (or the network) from clients, `library info, edits` (`library info` for Viewer only, `import` for uploads) to Eagle, `opens` (or `saves`) to the library.
 - Arrows between people and the server follow the role: two-way (`you <-->|HTTPS| server`) for Admin, Editor + Upload and Editor, one-way from the server (`server -->|HTTPS| kids`) for Viewer. Give one-way arrows the client color with `linkStyle <index> stroke:#7fd8e8`, since an arrow takes its source's color. If arrows cross, reorder the edge lines and update the `linkStyle` indexes.
 - Colors: gray frames (`#aeb7c6`), cyan for people and browsers (`#7fd8e8`), purple for the server (`#b9a0f0`), green for Eagle (`#7fd99a`), yellow for shared libraries (`#e8c86e`), red (`#f08080`) for excluded libraries or people without access.
-- `accDescr` has at most three lines: what the case does, then tips or caveats. Do not repeat the settings there.
+- `accDescr` explains what the boxes can't. Architecture diagrams: two or three sentences on how the parts work. Use cases: one or two instructions specific to the case. Do not repeat the settings in the server box.
+- Write for viewers, not developers: plain words such as `the computer running Eagle` and `add to your home screen`, not internal or technical names (library picker, PWA, session cookies, browser cache). Use UI names exactly as the UI shows them, such as `Share only selected libraries` and `Switch library`.
+- Wrap one or two key terms per line in `**…**`; the scripts draw them in white among the gray text.
 
-`npm run diagram:images` renders all diagrams. The existing `overview`, `architecture`, and `standalone` targets use [scripts/diagram.mjs](../scripts/diagram.mjs). To adopt the Mermaid workflow for one of those targets, add its source path as the third entry in the corresponding row in [scripts/diagram-images.mjs](../scripts/diagram-images.mjs) and keep its PNG path.
+To add a diagram, add a row with its name, PNG path and source to `DIAGRAMS` in [scripts/diagrams.mjs](../scripts/diagrams.mjs).
 
 ## Standalone server (experimental)
 
